@@ -1,0 +1,191 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap");
+@import "tailwindcss";
+@import "locomotive-scroll/dist/locomotive-scroll.css";
+
+@theme {
+  --font-sans: "DM Sans", system-ui, sans-serif;
+
+  /* Neon brand palette */
+  --color-neon-blue: #3b82f6;
+  --color-neon-blue-500: #60a5fa;
+  --color-neon-purple: #a855f7;
+  --color-neon-purple-500: #c084fc;
+  --color-neon-cyan: #22d3ee;
+
+  /* Dark surface palette */
+  --color-surface-950: #050510;
+  --color-surface-900: #0b0b1a;
+  --color-surface-800: #111127;
+  --color-surface-700: #1a1a34;
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  width: 100%;
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+  color: #e5e7eb;
+  background-color: #050510;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 10% -10%, rgba(59, 130, 246, 0.18), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 100% 0%, rgba(168, 85, 247, 0.18), transparent 60%),
+    radial-gradient(ellipse 90% 70% at 50% 110%, rgba(34, 211, 238, 0.08), transparent 60%),
+    linear-gradient(180deg, #050510 0%, #07071a 60%, #050510 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* Thinner dark scrollbars globally */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.35);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(168, 85, 247, 0.6);
+}
+
+/* Shimmer animation for skeletons */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite linear;
+}
+
+/* Floating orbs for ambient background */
+@keyframes float-slow {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(20px, -30px); }
+}
+
+.animate-float-slow {
+  animation: float-slow 12s ease-in-out infinite;
+}
+
+/* Pulse glow for badges / accents */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+/* Smooth focus transitions with neon ring */
+*:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+/* Prevent FOUC */
+.js-loaded {
+  opacity: 1;
+}
+
+.animated-card {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
+/* Custom selection color */
+::selection {
+  background-color: rgba(168, 85, 247, 0.35);
+  color: #ffffff;
+}
+
+/* ----- Reusable utility classes ----- */
+
+/* Glassmorphism card */
+.glass-card {
+  background-color: rgba(17, 17, 39, 0.55);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow:
+    0 8px 32px 0 rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+}
+
+.glass-card-strong {
+  background-color: rgba(11, 11, 26, 0.75);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow:
+    0 12px 40px 0 rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Neon gradient accent (blue -> purple) */
+.gradient-neon {
+  background-image: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #a855f7 100%);
+}
+
+.gradient-neon-text {
+  background-image: linear-gradient(135deg, #60a5fa 0%, #c084fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Soft neon border (top) */
+.border-gradient-neon {
+  position: relative;
+}
+.border-gradient-neon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.6), rgba(192, 132, 252, 0.6));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

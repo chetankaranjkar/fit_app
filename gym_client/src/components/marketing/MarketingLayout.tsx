@@ -1,0 +1,45 @@
+import { useEffect } from 'react'
+import type { ReactNode } from 'react'
+import { MarketingNav } from './MarketingNav'
+import { MarketingFooter } from './MarketingFooter'
+import { WhatsAppFloatingCTA } from './WhatsAppFloatingCTA'
+import { useSmoothScroll } from '../../lib/animations/useSmoothScroll'
+
+export function MarketingLayout({ children }: { children: ReactNode }) {
+  useSmoothScroll(true)
+
+  useEffect(() => {
+    // Prevent horizontal overflow from GSAP translates
+    const prev = document.body.style.overflowX
+    document.body.style.overflowX = 'hidden'
+    return () => {
+      document.body.style.overflowX = prev
+    }
+  }, [])
+
+  return (
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#05060e] text-white antialiased">
+      {/* Ambient background beams */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 size-[60rem] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.18),transparent_60%)] blur-2xl" />
+        <div className="absolute top-[50%] -right-40 size-[45rem] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(168,85,247,0.14),transparent_60%)] blur-2xl" />
+        <div className="absolute bottom-[-10%] -left-40 size-[50rem] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.12),transparent_60%)] blur-2xl" />
+
+        {/* Subtle grid */}
+        <div
+          className="absolute inset-0 opacity-[0.035]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.6) 1px, transparent 1px)',
+            backgroundSize: '56px 56px',
+          }}
+        />
+      </div>
+
+      <MarketingNav />
+      <main className="relative">{children}</main>
+      <MarketingFooter />
+      <WhatsAppFloatingCTA />
+    </div>
+  )
+}

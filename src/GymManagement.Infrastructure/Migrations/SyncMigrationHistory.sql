@@ -1,0 +1,4 @@
+-- Migration history sync script (legacy).
+-- The project now uses a single initial migration: Initial (20260215154000_Initial).
+-- To apply the schema: dotnet ef database update --project GymManagement.Infrastructure --startup-project GymManagement.API
+-- To start fresh: drop database GymManagementDb and run the API (or database update) to create it with the Initial migration.

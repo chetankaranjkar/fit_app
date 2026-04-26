@@ -1,0 +1,53 @@
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+coverage/
+playwright-report/
+test-results/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# .NET / Visual Studio
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal
+gymmanagement.db
+
+# IDE / OS
+.vs/
+.vscode/
+!.vscode/extensions.json
+.idea/
+.cursor/
+.claude/
+.DS_Store
+Thumbs.db
+
+# Environment / machine-local
+*.local

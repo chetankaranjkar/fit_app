@@ -25,6 +25,9 @@ const DashboardPage = lazy(() =>
 const UsersPage = lazy(() =>
   import('../pages/UsersPage').then((m) => ({ default: m.UsersPage })),
 )
+const AttendancePage = lazy(() =>
+  import('../pages/AttendancePage').then((m) => ({ default: m.AttendancePage })),
+)
 const UserDetailPage = lazy(() =>
   import('../pages/UserDetailPage').then((m) => ({ default: m.UserDetailPage })),
 )
@@ -51,9 +54,19 @@ const ExercisesPage = lazy(() =>
     default: m.ExercisesPage,
   })),
 )
+const ExerciseManagementPage = lazy(() =>
+  import('../modules/exercise-management').then((m) => ({
+    default: m.ExerciseManagementPage,
+  })),
+)
 const WorkoutPlansPage = lazy(() =>
   import('../pages/training/WorkoutPlansPage').then((m) => ({
     default: m.WorkoutPlansPage,
+  })),
+)
+const WorkoutAssignmentsPage = lazy(() =>
+  import('../pages/training/WorkoutAssignmentsPage').then((m) => ({
+    default: m.WorkoutAssignmentsPage,
   })),
 )
 const RolesPage = lazy(() =>
@@ -139,6 +152,7 @@ const router = createBrowserRouter([
   { path: '/login', element: withSuspense(<LoginPage />) },
   { path: '/dashboard', element: withSuspense(<DashboardPage />) },
   { path: '/dashboard/users', element: withSuspense(<UsersPage />) },
+  { path: '/dashboard/attendance', element: withSuspense(<AttendancePage />) },
   { path: '/dashboard/users/:userId', element: withSuspense(<UserDetailPage />) },
   { path: '/dashboard/membership-plans', element: withSuspense(<MembershipPlansPage />) },
   { path: '/dashboard/user-memberships', element: withSuspense(<UserMembershipsPage />) },
@@ -150,7 +164,9 @@ const router = createBrowserRouter([
   { path: '/dashboard/profile', element: withSuspense(<DashboardPage />) },
   { path: '/dashboard/training/body-parts', element: withSuspense(<BodyPartsPage />) },
   { path: '/dashboard/training/exercises', element: withSuspense(<ExercisesPage />) },
+  { path: '/dashboard/training/exercises-premium', element: withSuspense(<ExerciseManagementPage />) },
   { path: '/dashboard/training/workout-plans', element: withSuspense(<WorkoutPlansPage />) },
+  { path: '/dashboard/training/workout-assignments', element: withSuspense(<WorkoutAssignmentsPage />) },
   { path: '/dashboard/diet-plans', element: withSuspense(<DietPlansDashboardPage />) },
   { path: '/dashboard/diet-plans/list', element: withSuspense(<DietPlansPage />) },
   { path: '/dashboard/diet-plans/assign', element: withSuspense(<AssignDietPlansPage />) },

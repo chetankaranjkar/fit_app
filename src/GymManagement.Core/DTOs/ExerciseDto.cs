@@ -39,5 +39,13 @@ namespace GymManagement.Core.DTOs
         public int? BodyPartId { get; set; }
         public List<CreateExerciseStepDto>? ExerciseSteps { get; set; }
     }
+
+    public class PagedExercisesDto
+    {
+        public List<ExerciseDto> Items { get; set; } = new List<ExerciseDto>();
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+    }
 }
 

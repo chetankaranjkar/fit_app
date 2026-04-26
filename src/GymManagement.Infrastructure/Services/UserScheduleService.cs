@@ -58,6 +58,41 @@ namespace GymManagement.Infrastructure.Services
             return dtos.First();
         }
 
+        public async Task<UserScheduleDto> AssignWorkoutPlanAsync(AssignWorkoutPlanDto assignWorkoutPlanDto)
+        {
+            if (assignWorkoutPlanDto.DeactivateExistingAssignments)
+            {
+                var existingActiveSchedules = await _unitOfWork.UserSchedules
+                    .FindAsync(s => s.UserId == assignWorkoutPlanDto.UserId && s.IsActive);
+
+                foreach (var existing in existingActiveSchedules)
+                {
+                    existing.IsActive = false;
+                    existing.UpdatedDate = DateTime.UtcNow;
+                    _unitOfWork.UserSchedules.Update(existing);
+                }
+            }
+
+            var schedule = new UserSchedule
+            {
+                UserId = assignWorkoutPlanDto.UserId,
+                TrainerId = assignWorkoutPlanDto.TrainerId,
+                WorkoutPlanId = assignWorkoutPlanDto.WorkoutPlanId,
+                ScheduleType = assignWorkoutPlanDto.ScheduleType,
+                DayOfWeek = assignWorkoutPlanDto.DayOfWeek,
+                StartTime = assignWorkoutPlanDto.StartTime,
+                EndTime = assignWorkoutPlanDto.EndTime,
+                IsActive = true
+            };
+
+            await _unitOfWork.UserSchedules.AddAsync(schedule);
+            await _unitOfWork.SaveChangesAsync();
+
+            var schedules = new[] { schedule };
+            var dtos = await MapSchedulesToDtoAsync(schedules);
+            return dtos.First();
+        }
+
         public async Task<bool> GenerateDefaultScheduleAsync(GenerateDefaultScheduleDto generateScheduleDto)
         {
             var user = await _unitOfWork.Users.GetByIdAsync(generateScheduleDto.UserId);
@@ -213,7 +248,9 @@ namespace GymManagement.Infrastructure.Services
                     DayOfWeek = schedule.DayOfWeek,
                     StartTime = schedule.StartTime,
                     EndTime = schedule.EndTime,
-                    IsActive = schedule.IsActive
+                    IsActive = schedule.IsActive,
+                    AssignedAt = schedule.CreatedDate,
+                    LastUpdatedAt = schedule.UpdatedDate
                 });
             }
 

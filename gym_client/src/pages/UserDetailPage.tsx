@@ -20,6 +20,8 @@ import { attendanceService } from '../services/attendance.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
 import { trainersService } from '../services/trainers.service'
 import { userTypesService } from '../services/userTypes.service'
+import { workoutPlansService } from '../services/workoutPlans.service'
+import { userSchedulesService } from '../services/userSchedules.service'
 import type { User, UpdateUserDto } from '../types/user'
 import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
 import type {
@@ -29,6 +31,9 @@ import type {
   UpdateBodyMetricsDto,
 } from '../types/bodyMetrics'
 import type { AttendanceLogDto } from '../types/attendance'
+import type { WorkoutPlan } from '../types/workoutPlan'
+import type { CreateUserScheduleDto, ScheduleType, UserScheduleDto } from '../types/userSchedule'
+import type { Trainer } from '../types/trainer'
 
 function getDashboardUser() {
   try {
@@ -169,6 +174,17 @@ export function UserDetailPage() {
   })
   const [metricsError, setMetricsError] = useState<string | null>(null)
   const [editingMetricsId, setEditingMetricsId] = useState<number | null>(null)
+  const [assignWorkoutOpen, setAssignWorkoutOpen] = useState(false)
+  const [assignWorkoutError, setAssignWorkoutError] = useState<string | null>(null)
+  const [scheduleForm, setScheduleForm] = useState<CreateUserScheduleDto>({
+    userId: id,
+    trainerId: undefined,
+    workoutPlanId: 0,
+    scheduleType: 'Custom',
+    dayOfWeek: 1,
+    startTime: '06:00:00',
+    endTime: '07:00:00',
+  })
   const metricsFormBmi = useMemo(
     () => calculateBmi(metricsForm.weightKg, metricsForm.heightCm),
     [metricsForm.weightKg, metricsForm.heightCm],
@@ -241,6 +257,24 @@ export function UserDetailPage() {
       return Array.isArray(data) ? data : []
     },
     enabled: editProfileOpen,
+  })
+
+  const { data: workoutPlans = [] } = useQuery({
+    queryKey: ['workoutPlans'],
+    queryFn: async () => {
+      const { data } = await workoutPlansService.getAll()
+      return Array.isArray(data) ? (data as WorkoutPlan[]) : []
+    },
+    enabled: assignWorkoutOpen,
+  })
+
+  const { data: userSchedules = [] } = useQuery({
+    queryKey: ['userSchedules', id],
+    queryFn: async () => {
+      const { data } = await userSchedulesService.getByUserId(id)
+      return Array.isArray(data) ? (data as UserScheduleDto[]) : []
+    },
+    enabled: Number.isInteger(id) && id > 0 && (activeTab === 'Details' || viewMode),
   })
 
   const {
@@ -352,6 +386,32 @@ export function UserDetailPage() {
       setProfileError(null)
     },
     onError: (err: Error) => setProfileError(err.message || 'Failed to update profile'),
+  })
+
+  const createScheduleMutation = useMutation({
+    mutationFn: (dto: CreateUserScheduleDto) => userSchedulesService.create(dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userSchedules', id] })
+      setAssignWorkoutOpen(false)
+      setAssignWorkoutError(null)
+      setScheduleForm({
+        userId: id,
+        trainerId: undefined,
+        workoutPlanId: 0,
+        scheduleType: 'Custom',
+        dayOfWeek: 1,
+        startTime: '06:00:00',
+        endTime: '07:00:00',
+      })
+    },
+    onError: (err: Error) => setAssignWorkoutError(err.message || 'Failed to assign workout plan'),
+  })
+
+  const deleteScheduleMutation = useMutation({
+    mutationFn: (scheduleId: number) => userSchedulesService.delete(scheduleId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userSchedules', id] })
+    },
   })
 
   // Computed stats for hero strip — depends on user/details/attendanceLogs
@@ -497,6 +557,35 @@ export function UserDetailPage() {
     })
     setAddMetricsOpen(true)
     setMetricsError(null)
+  }
+
+  const handleOpenAssignWorkout = () => {
+    setAssignWorkoutError(null)
+    setScheduleForm({
+      userId: id,
+      trainerId: undefined,
+      workoutPlanId: 0,
+      scheduleType: 'Custom',
+      dayOfWeek: 1,
+      startTime: '06:00:00',
+      endTime: '07:00:00',
+    })
+    setAssignWorkoutOpen(true)
+  }
+
+  const handleSubmitAssignWorkout = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (scheduleForm.workoutPlanId <= 0) {
+      setAssignWorkoutError('Select a workout plan.')
+      return
+    }
+    setAssignWorkoutError(null)
+    createScheduleMutation.mutate({ ...scheduleForm, userId: id })
+  }
+
+  const handleDeleteSchedule = (schedule: UserScheduleDto) => {
+    if (!window.confirm(`Remove workout assignment "${schedule.workoutPlanName}"?`)) return
+    deleteScheduleMutation.mutate(schedule.id)
   }
 
   const handleSubmitMetrics = (e: React.FormEvent) => {
@@ -671,10 +760,15 @@ export function UserDetailPage() {
             user={user}
             details={details}
             metricsList={metricsList}
+            userSchedules={userSchedules}
+            workoutPlans={workoutPlans}
+            trainers={trainers as Trainer[]}
             detailsLoading={detailsLoading}
             viewMode={viewMode}
             onEditProfile={handleOpenEditProfile}
             onAddDetail={handleOpenAddDetail}
+            onAssignWorkout={handleOpenAssignWorkout}
+            onDeleteSchedule={handleDeleteSchedule}
           />
         )}
         {activeTab === 'Body Metrics' && (
@@ -1248,6 +1342,124 @@ export function UserDetailPage() {
           </div>
         </form>
       </Modal>
+
+      <Modal
+        open={assignWorkoutOpen}
+        onClose={() => setAssignWorkoutOpen(false)}
+        title="Assign workout plan"
+      >
+        <form onSubmit={handleSubmitAssignWorkout} className="space-y-4">
+          {assignWorkoutError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+              {assignWorkoutError}
+            </div>
+          )}
+          <div>
+            <label className={labelClass}>Workout plan</label>
+            <select
+              value={scheduleForm.workoutPlanId}
+              onChange={(e) =>
+                setScheduleForm((f) => ({ ...f, workoutPlanId: Number(e.target.value) }))
+              }
+              className={selectClass}
+            >
+              <option value={0} className="bg-slate-900">
+                Select plan
+              </option>
+              {workoutPlans.map((plan) => (
+                <option key={plan.id} value={plan.id} className="bg-slate-900">
+                  {plan.name} ({plan.workoutType})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>Schedule type</label>
+              <select
+                value={scheduleForm.scheduleType}
+                onChange={(e) =>
+                  setScheduleForm((f) => ({
+                    ...f,
+                    scheduleType: e.target.value as ScheduleType,
+                  }))
+                }
+                className={selectClass}
+              >
+                <option value="OneMusclePerDay" className="bg-slate-900">One muscle per day</option>
+                <option value="TwoMusclesPerDay" className="bg-slate-900">Two muscles per day</option>
+                <option value="ThreeMusclesPerDay" className="bg-slate-900">Three muscles per day</option>
+                <option value="FullBody" className="bg-slate-900">Full body</option>
+                <option value="Custom" className="bg-slate-900">Custom</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Trainer</label>
+              <select
+                value={scheduleForm.trainerId ?? ''}
+                onChange={(e) =>
+                  setScheduleForm((f) => ({
+                    ...f,
+                    trainerId: e.target.value ? Number(e.target.value) : undefined,
+                  }))
+                }
+                className={selectClass}
+              >
+                <option value="" className="bg-slate-900">Unassigned</option>
+                {trainers.map((trainer) => (
+                  <option key={trainer.id} value={trainer.id} className="bg-slate-900">
+                    {trainer.firstName} {trainer.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Day of week</label>
+              <select
+                value={scheduleForm.dayOfWeek}
+                onChange={(e) =>
+                  setScheduleForm((f) => ({ ...f, dayOfWeek: Number(e.target.value) }))
+                }
+                className={selectClass}
+              >
+                <option value={1} className="bg-slate-900">Monday</option>
+                <option value={2} className="bg-slate-900">Tuesday</option>
+                <option value={3} className="bg-slate-900">Wednesday</option>
+                <option value={4} className="bg-slate-900">Thursday</option>
+                <option value={5} className="bg-slate-900">Friday</option>
+                <option value={6} className="bg-slate-900">Saturday</option>
+                <option value={0} className="bg-slate-900">Sunday</option>
+              </select>
+            </div>
+            <Input
+              label="Start time"
+              type="time"
+              step="1"
+              value={scheduleForm.startTime.slice(0, 8)}
+              onChange={(e) =>
+                setScheduleForm((f) => ({ ...f, startTime: `${e.target.value}:00`.slice(0, 8) }))
+              }
+            />
+            <Input
+              label="End time"
+              type="time"
+              step="1"
+              value={scheduleForm.endTime.slice(0, 8)}
+              onChange={(e) =>
+                setScheduleForm((f) => ({ ...f, endTime: `${e.target.value}:00`.slice(0, 8) }))
+              }
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setAssignWorkoutOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={createScheduleMutation.isPending}>
+              Assign plan
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </DashboardLayout>
   )
 }
@@ -1495,18 +1707,28 @@ function DetailsTab({
   user,
   details,
   metricsList,
+  userSchedules,
+  workoutPlans,
+  trainers,
   detailsLoading,
   viewMode,
   onEditProfile,
   onAddDetail,
+  onAssignWorkout,
+  onDeleteSchedule,
 }: {
   user: User
   details: UserDetailDto[]
   metricsList: BodyMetricsDto[]
+  userSchedules: UserScheduleDto[]
+  workoutPlans: WorkoutPlan[]
+  trainers: Trainer[]
   detailsLoading: boolean
   viewMode: boolean
   onEditProfile: () => void
   onAddDetail: () => void
+  onAssignWorkout: () => void
+  onDeleteSchedule: (schedule: UserScheduleDto) => void
 }) {
   return (
     <div className="space-y-6">
@@ -1639,6 +1861,124 @@ function DetailsTab({
           )}
         </div>
       </section>
+
+      <section className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.55)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+              Workout assignments
+            </p>
+            <h2 className="text-base font-semibold text-white">Assigned plans & weekly schedule</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-slate-400 ring-1 ring-white/10">
+              {userSchedules.length} assignment{userSchedules.length !== 1 ? 's' : ''}
+            </span>
+            {!viewMode && (
+              <Button size="sm" onClick={onAssignWorkout}>
+                + Assign workout plan
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="px-6 py-5">
+          {userSchedules.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
+              <p className="text-sm text-slate-400">
+                No workout plans assigned yet. Assign one to start a structured member routine.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {userSchedules.map((schedule) => (
+                <div
+                  key={schedule.id}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-white">{schedule.workoutPlanName}</p>
+                        <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200 ring-1 ring-blue-400/30">
+                          {schedule.scheduleType}
+                        </span>
+                        {schedule.isActive && (
+                          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-200 ring-1 ring-emerald-400/30">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-400 sm:grid-cols-3">
+                        <span>
+                          Day:{' '}
+                          <strong className="text-slate-200">
+                            {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][schedule.dayOfWeek] ?? schedule.dayOfWeek}
+                          </strong>
+                        </span>
+                        <span>
+                          Time:{' '}
+                          <strong className="text-slate-200">
+                            {schedule.startTime.slice(0, 5)} - {schedule.endTime.slice(0, 5)}
+                          </strong>
+                        </span>
+                        <span>
+                          Trainer:{' '}
+                          <strong className="text-slate-200">{schedule.trainerName || 'Unassigned'}</strong>
+                        </span>
+                      </div>
+                    </div>
+                    {!viewMode && (
+                      <Button
+                        variant="soft"
+                        size="sm"
+                        className="!bg-rose-500/10 !text-rose-300 hover:!bg-rose-500/20"
+                        onClick={() => onDeleteSchedule(schedule)}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <QuickStatCard
+              label="Available workout plans"
+              value={workoutPlans.length.toString()}
+              sublabel="Templates ready to assign"
+            />
+            <QuickStatCard
+              label="Trainers available"
+              value={trainers.filter((trainer) => trainer.isActive).length.toString()}
+              sublabel="Active coaches"
+            />
+            <QuickStatCard
+              label="Current assigned plans"
+              value={userSchedules.filter((schedule) => schedule.isActive).length.toString()}
+              sublabel="Live schedule entries"
+            />
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function QuickStatCard({
+  label,
+  value,
+  sublabel,
+}: {
+  label: string
+  value: string
+  sublabel: string
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
+      <p className="mt-0.5 text-[11px] text-slate-500">{sublabel}</p>
     </div>
   )
 }

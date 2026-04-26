@@ -3,16 +3,19 @@ using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
 
 namespace GymManagement.Infrastructure.Services
 {
     public class ExerciseService : IExerciseService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ApplicationDbContext _context;
 
-        public ExerciseService(IUnitOfWork unitOfWork)
+        public ExerciseService(IUnitOfWork unitOfWork, ApplicationDbContext context)
         {
             _unitOfWork = unitOfWork;
+            _context = context;
         }
 
         public async Task<IEnumerable<ExerciseDto>> GetAllExercisesAsync()
@@ -30,6 +33,75 @@ namespace GymManagement.Infrastructure.Services
             }
 
             return result;
+        }
+
+        public async Task<PagedExercisesDto> GetPagedExercisesAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            string? difficulty = null,
+            int? bodyPartId = null,
+            string? sortBy = null,
+            string? sortDir = null
+        )
+        {
+            var query = _context.Exercises
+                .AsNoTracking()
+                .Include(e => e.BodyPart)
+                .Include(e => e.ExerciseSteps)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var q = search.Trim().ToLower();
+                query = query.Where(
+                    e =>
+                        e.Name.ToLower().Contains(q)
+                        || (e.Description != null && e.Description.ToLower().Contains(q))
+                        || (e.EquipmentRequired != null && e.EquipmentRequired.ToLower().Contains(q))
+                        || e.BodyPart.Name.ToLower().Contains(q)
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(difficulty) && !difficulty.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(e => e.DifficultyLevel == difficulty);
+            }
+
+            if (bodyPartId.HasValue && bodyPartId.Value > 0)
+            {
+                query = query.Where(e => e.BodyPartId == bodyPartId.Value);
+            }
+
+            var isAsc = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
+            query = (sortBy ?? string.Empty).Trim().ToLower() switch
+            {
+                "name" => isAsc ? query.OrderBy(e => e.Name) : query.OrderByDescending(e => e.Name),
+                "difficulty" => isAsc ? query.OrderBy(e => e.DifficultyLevel) : query.OrderByDescending(e => e.DifficultyLevel),
+                "bodypart" => isAsc ? query.OrderBy(e => e.BodyPart.Name) : query.OrderByDescending(e => e.BodyPart.Name),
+                "created" => isAsc ? query.OrderBy(e => e.Id) : query.OrderByDescending(e => e.Id),
+                _ => query.OrderByDescending(e => e.Id)
+            };
+
+            var totalCount = await query.CountAsync();
+            var skip = (page - 1) * pageSize;
+
+            var pageItems = await query
+                .Skip(skip)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var mappedItems = pageItems
+                .Select(exercise => MapToDto(exercise, exercise.BodyPart, exercise.ExerciseSteps))
+                .ToList();
+
+            return new PagedExercisesDto
+            {
+                Items = mappedItems,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
         }
 
         public async Task<ExerciseDto?> GetExerciseByIdAsync(int id)

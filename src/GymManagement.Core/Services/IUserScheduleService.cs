@@ -8,6 +8,7 @@ namespace GymManagement.Core.Services
         Task<IEnumerable<UserScheduleDto>> GetSchedulesByUserIdAsync(int userId);
         Task<UserScheduleDto?> GetScheduleByIdAsync(int id);
         Task<UserScheduleDto> CreateScheduleAsync(CreateUserScheduleDto createScheduleDto);
+        Task<UserScheduleDto> AssignWorkoutPlanAsync(AssignWorkoutPlanDto assignWorkoutPlanDto);
         Task<bool> GenerateDefaultScheduleAsync(GenerateDefaultScheduleDto generateScheduleDto);
         Task<bool> DeleteScheduleAsync(int id);
         Task<bool> UpdateScheduleAsync(int id, CreateUserScheduleDto updateScheduleDto);

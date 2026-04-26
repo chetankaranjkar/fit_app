@@ -9,6 +9,7 @@ namespace GymManagement.Core.Services
         Task<WorkoutPlanDto?> GetWorkoutPlanByIdAsync(int id);
         Task<IEnumerable<WorkoutPlanDto>> GetWorkoutPlansByTypeAsync(WorkoutType workoutType);
         Task<WorkoutPlanDto> CreateWorkoutPlanAsync(CreateWorkoutPlanDto createWorkoutPlanDto);
+        Task<WorkoutPlanDto?> UpdateWorkoutPlanAsync(int id, CreateWorkoutPlanDto updateWorkoutPlanDto);
         Task<bool> DeleteWorkoutPlanAsync(int id);
     }
 }

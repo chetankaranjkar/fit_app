@@ -51,6 +51,15 @@ namespace GymManagement.API.Controllers
             return CreatedAtAction(nameof(GetWorkoutPlan), new { id = workoutPlan.Id }, workoutPlan);
         }
 
+        [HttpPut("{id}")]
+        public async Task<ActionResult<WorkoutPlanDto>> UpdateWorkoutPlan(int id, CreateWorkoutPlanDto updateWorkoutPlanDto)
+        {
+            var workoutPlan = await _workoutPlanService.UpdateWorkoutPlanAsync(id, updateWorkoutPlanDto);
+            if (workoutPlan == null)
+                return NotFound();
+            return Ok(workoutPlan);
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteWorkoutPlan(int id)
         {

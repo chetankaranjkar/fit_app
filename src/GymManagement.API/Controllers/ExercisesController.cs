@@ -28,6 +28,31 @@ namespace GymManagement.API.Controllers
             return Ok(exercises);
         }
 
+        [HttpGet("paged")]
+        public async Task<ActionResult<PagedExercisesDto>> GetPagedExercises(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? difficulty = null,
+            [FromQuery] int? bodyPartId = null,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] string? sortDir = null
+        )
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 100);
+            var result = await _exerciseService.GetPagedExercisesAsync(
+                safePage,
+                safePageSize,
+                search,
+                difficulty,
+                bodyPartId,
+                sortBy,
+                sortDir
+            );
+            return Ok(result);
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<ExerciseDto>> GetExercise(int id)
         {

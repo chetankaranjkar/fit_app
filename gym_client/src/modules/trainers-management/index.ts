@@ -1,0 +1,1 @@
+export { TrainersManagementPage } from './TrainersManagementPage'

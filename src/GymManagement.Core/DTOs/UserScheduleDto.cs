@@ -16,6 +16,8 @@ namespace GymManagement.Core.DTOs
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
         public bool IsActive { get; set; }
+        public DateTime AssignedAt { get; set; }
+        public DateTime? LastUpdatedAt { get; set; }
     }
 
     public class CreateUserScheduleDto
@@ -36,6 +38,18 @@ namespace GymManagement.Core.DTOs
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
         public int? TrainerId { get; set; }
+    }
+
+    public class AssignWorkoutPlanDto
+    {
+        public int UserId { get; set; }
+        public int? TrainerId { get; set; }
+        public int WorkoutPlanId { get; set; }
+        public ScheduleType ScheduleType { get; set; } = ScheduleType.Custom;
+        public DayOfWeek DayOfWeek { get; set; } = DayOfWeek.Monday;
+        public TimeSpan StartTime { get; set; } = new TimeSpan(6, 0, 0);
+        public TimeSpan EndTime { get; set; } = new TimeSpan(7, 0, 0);
+        public bool DeactivateExistingAssignments { get; set; } = true;
     }
 }
 

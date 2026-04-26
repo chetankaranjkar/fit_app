@@ -51,6 +51,13 @@ namespace GymManagement.API.Controllers
             return CreatedAtAction(nameof(GetSchedule), new { id = schedule.Id }, schedule);
         }
 
+        [HttpPost("assign-workout-plan")]
+        public async Task<ActionResult<UserScheduleDto>> AssignWorkoutPlan(AssignWorkoutPlanDto assignWorkoutPlanDto)
+        {
+            var schedule = await _userScheduleService.AssignWorkoutPlanAsync(assignWorkoutPlanDto);
+            return CreatedAtAction(nameof(GetSchedule), new { id = schedule.Id }, schedule);
+        }
+
         [HttpPost("generate-default")]
         public async Task<IActionResult> GenerateDefaultSchedule(GenerateDefaultScheduleDto generateScheduleDto)
         {

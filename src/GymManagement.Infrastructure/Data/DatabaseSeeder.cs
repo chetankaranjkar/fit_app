@@ -63,7 +63,7 @@ namespace GymManagement.Infrastructure.Data
             await SeedBodyPartMusclesAsync(bodyParts);
 
             // Seed Exercises
-            await SeedExercisesAsync(bodyParts);
+            var seededExerciseCount = await SeedExercisesAsync(bodyParts);
 
             // Seed Workout Plans
             await SeedWorkoutPlansAsync();
@@ -72,6 +72,7 @@ namespace GymManagement.Infrastructure.Data
             await SeedDietPlansAsync();
 
             await _unitOfWork.SaveChangesAsync();
+            Console.WriteLine($"[Seeder] Exercises inserted in this run: {seededExerciseCount}");
 
             // Seed Gym Operations demo data (Equipment + MaintenanceLogs).
             // Kept isolated in GymOps tables; idempotent.
@@ -500,295 +501,105 @@ namespace GymManagement.Infrastructure.Data
             }
         }
 
-        private async Task SeedExercisesAsync(Dictionary<string, BodyPart> bodyParts)
+        private async Task<int> SeedExercisesAsync(Dictionary<string, BodyPart> bodyParts)
         {
+            var now = DateTime.UtcNow;
             var exercises = new List<Exercise>();
+            var insertedCount = 0;
 
-            // Chest Exercises
-            if (bodyParts.ContainsKey("Chest"))
+            void AddExercise(string bodyPartName, string name, string description, string steps, string difficulty, string equipment)
             {
-                exercises.AddRange(new[]
+                if (!bodyParts.TryGetValue(bodyPartName, out var bodyPart))
+                    return;
+
+                exercises.Add(new Exercise
                 {
-                    new Exercise
-                    {
-                        Name = "Push-ups",
-                        Description = "Basic bodyweight chest exercise",
-                        Steps = "1. Start in plank position\n2. Lower your body until chest nearly touches floor\n3. Push back up to starting position\n4. Repeat for desired reps",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "None",
-                        BodyPartId = bodyParts["Chest"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Bench Press",
-                        Description = "Classic chest strength exercise",
-                        Steps = "1. Lie on bench with barbell at chest level\n2. Lower bar to chest with control\n3. Press bar up until arms are fully extended\n4. Repeat",
-                        DifficultyLevel = "Intermediate",
-                        EquipmentRequired = "Barbell, Bench, Weights",
-                        BodyPartId = bodyParts["Chest"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Incline Dumbbell Press",
-                        Description = "Upper chest development",
-                        Steps = "1. Set bench to 30-45 degree incline\n2. Hold dumbbells at shoulder level\n3. Press up and slightly forward\n4. Lower with control",
-                        DifficultyLevel = "Intermediate",
-                        EquipmentRequired = "Dumbbells, Incline Bench",
-                        BodyPartId = bodyParts["Chest"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    }
+                    Name = name,
+                    Description = description,
+                    Steps = steps,
+                    DifficultyLevel = difficulty,
+                    EquipmentRequired = equipment,
+                    BodyPartId = bodyPart.Id,
+                    CreatedDate = now
                 });
             }
 
-            // Back Exercises
-            if (bodyParts.ContainsKey("Back"))
-            {
-                exercises.AddRange(new[]
-                {
-                    new Exercise
-                    {
-                        Name = "Pull-ups",
-                        Description = "Upper body strength exercise",
-                        Steps = "1. Hang from bar with overhand grip\n2. Pull body up until chin clears bar\n3. Lower with control\n4. Repeat",
-                        DifficultyLevel = "Intermediate",
-                        EquipmentRequired = "Pull-up Bar",
-                        BodyPartId = bodyParts["Back"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Bent-Over Row",
-                        Description = "Back muscle development",
-                        Steps = "1. Bend forward at waist with slight knee bend\n2. Pull barbell to lower chest\n3. Squeeze shoulder blades together\n4. Lower with control",
-                        DifficultyLevel = "Intermediate",
-                        EquipmentRequired = "Barbell, Weights",
-                        BodyPartId = bodyParts["Back"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Lat Pulldown",
-                        Description = "Targets latissimus dorsi",
-                        Steps = "1. Sit at lat pulldown machine\n2. Pull bar to upper chest\n3. Squeeze lats at bottom\n4. Return to starting position",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "Lat Pulldown Machine",
-                        BodyPartId = bodyParts["Back"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    }
-                });
-            }
+            // Chest (7)
+            AddExercise("Chest", "Push-ups", "Basic bodyweight chest exercise", "1. Start in plank position\n2. Lower chest with control\n3. Push back up\n4. Repeat", "Beginner", "None");
+            AddExercise("Chest", "Bench Press", "Classic chest strength exercise", "1. Lie flat on bench\n2. Lower bar to chest\n3. Press to lockout\n4. Repeat", "Intermediate", "Barbell, Bench");
+            AddExercise("Chest", "Incline Dumbbell Press", "Upper chest development", "1. Set incline bench\n2. Press dumbbells upward\n3. Control descent\n4. Repeat", "Intermediate", "Dumbbells, Incline Bench");
+            AddExercise("Chest", "Decline Bench Press", "Lower chest emphasis", "1. Set decline bench\n2. Lower bar to chest\n3. Press upward\n4. Repeat", "Intermediate", "Barbell, Decline Bench");
+            AddExercise("Chest", "Cable Fly", "Isolation for chest fibers", "1. Stand between pulleys\n2. Bring handles together\n3. Squeeze chest\n4. Return slowly", "Beginner", "Cable Machine");
+            AddExercise("Chest", "Dumbbell Fly", "Chest stretch and contraction", "1. Lie on bench with slight elbow bend\n2. Open arms wide\n3. Bring back together\n4. Repeat", "Beginner", "Dumbbells, Bench");
+            AddExercise("Chest", "Chest Dips", "Bodyweight chest and triceps movement", "1. Lean forward on dip bars\n2. Lower body\n3. Press up\n4. Repeat", "Advanced", "Dip Bars");
 
-            // Shoulder Exercises
-            if (bodyParts.ContainsKey("Shoulders"))
-            {
-                exercises.AddRange(new[]
-                {
-                    new Exercise
-                    {
-                        Name = "Overhead Press",
-                        Description = "Shoulder strength exercise",
-                        Steps = "1. Stand with feet shoulder-width apart\n2. Press barbell overhead until arms are straight\n3. Lower to shoulder level\n4. Repeat",
-                        DifficultyLevel = "Intermediate",
-                        EquipmentRequired = "Barbell, Weights",
-                        BodyPartId = bodyParts["Shoulders"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Lateral Raises",
-                        Description = "Shoulder width development",
-                        Steps = "1. Hold dumbbells at sides\n2. Raise arms out to sides until parallel to floor\n3. Lower with control\n4. Repeat",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "Dumbbells",
-                        BodyPartId = bodyParts["Shoulders"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    }
-                });
-            }
+            // Back (7)
+            AddExercise("Back", "Pull-ups", "Upper back and lat strength", "1. Hang from bar\n2. Pull chin above bar\n3. Lower with control\n4. Repeat", "Intermediate", "Pull-up Bar");
+            AddExercise("Back", "Bent-Over Row", "Back thickness development", "1. Hinge at hips\n2. Row bar to torso\n3. Squeeze shoulder blades\n4. Lower", "Intermediate", "Barbell");
+            AddExercise("Back", "Lat Pulldown", "Lat-focused pulling exercise", "1. Sit at machine\n2. Pull bar to upper chest\n3. Squeeze lats\n4. Return", "Beginner", "Lat Pulldown Machine");
+            AddExercise("Back", "Seated Cable Row", "Mid-back and rhomboid emphasis", "1. Sit with neutral spine\n2. Pull handle to torso\n3. Pause and squeeze\n4. Return", "Beginner", "Cable Row Machine");
+            AddExercise("Back", "Deadlift", "Posterior chain strength builder", "1. Set stance and grip\n2. Drive through floor\n3. Stand tall\n4. Lower safely", "Advanced", "Barbell, Plates");
+            AddExercise("Back", "Single Arm Dumbbell Row", "Unilateral back development", "1. Support body on bench\n2. Pull dumbbell to hip\n3. Squeeze lat\n4. Lower", "Beginner", "Dumbbell, Bench");
+            AddExercise("Back", "Face Pull", "Rear shoulder and upper back health", "1. Set rope at face height\n2. Pull rope to forehead\n3. Rotate thumbs back\n4. Return", "Beginner", "Cable Machine, Rope");
 
-            // Biceps Exercises
-            if (bodyParts.ContainsKey("Biceps"))
-            {
-                exercises.AddRange(new[]
-                {
-                    new Exercise
-                    {
-                        Name = "Bicep Curls",
-                        Description = "Biceps development",
-                        Steps = "1. Hold dumbbells with arms at sides\n2. Curl weights up to shoulders\n3. Squeeze biceps at top\n4. Lower with control",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "Dumbbells",
-                        BodyPartId = bodyParts["Biceps"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Hammer Curls",
-                        Description = "Biceps and forearms",
-                        Steps = "1. Hold dumbbells with neutral grip\n2. Curl weights up\n3. Keep wrists straight\n4. Lower with control",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "Dumbbells",
-                        BodyPartId = bodyParts["Biceps"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    }
-                });
-            }
+            // Shoulders (6)
+            AddExercise("Shoulders", "Overhead Press", "Shoulder strength and stability", "1. Brace core\n2. Press weight overhead\n3. Lock elbows softly\n4. Lower", "Intermediate", "Barbell or Dumbbells");
+            AddExercise("Shoulders", "Lateral Raises", "Side deltoid isolation", "1. Raise dumbbells to shoulder height\n2. Keep slight elbow bend\n3. Lower slowly\n4. Repeat", "Beginner", "Dumbbells");
+            AddExercise("Shoulders", "Front Raises", "Anterior deltoid isolation", "1. Raise weight in front\n2. Stop at shoulder level\n3. Lower with control\n4. Repeat", "Beginner", "Dumbbells or Plate");
+            AddExercise("Shoulders", "Rear Delt Fly", "Posterior deltoid focus", "1. Hinge hips\n2. Open arms laterally\n3. Squeeze rear delts\n4. Lower", "Beginner", "Dumbbells");
+            AddExercise("Shoulders", "Arnold Press", "Full shoulder pressing range", "1. Start palms facing you\n2. Rotate and press overhead\n3. Reverse motion\n4. Repeat", "Intermediate", "Dumbbells");
+            AddExercise("Shoulders", "Upright Row", "Trap and shoulder engagement", "1. Hold bar close grip\n2. Pull to chest height\n3. Keep elbows high\n4. Lower", "Intermediate", "Barbell or EZ Bar");
 
-            // Triceps Exercises
-            if (bodyParts.ContainsKey("Triceps"))
-            {
-                exercises.AddRange(new[]
-                {
-                    new Exercise
-                    {
-                        Name = "Tricep Dips",
-                        Description = "Triceps and shoulders",
-                        Steps = "1. Sit on edge of bench\n2. Lower body by bending arms\n3. Press back up\n4. Repeat",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "Bench",
-                        BodyPartId = bodyParts["Triceps"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Overhead Tricep Extension",
-                        Description = "Triceps isolation",
-                        Steps = "1. Hold dumbbell overhead\n2. Lower behind head by bending elbows\n3. Extend back up\n4. Repeat",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "Dumbbell",
-                        BodyPartId = bodyParts["Triceps"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    }
-                });
-            }
+            // Biceps (5)
+            AddExercise("Biceps", "Bicep Curls", "Basic biceps growth movement", "1. Curl weights up\n2. Keep elbows fixed\n3. Squeeze at top\n4. Lower slowly", "Beginner", "Dumbbells");
+            AddExercise("Biceps", "Hammer Curls", "Biceps and brachialis focus", "1. Use neutral grip\n2. Curl upward\n3. Pause briefly\n4. Lower", "Beginner", "Dumbbells");
+            AddExercise("Biceps", "Preacher Curl", "Strict biceps isolation", "1. Set upper arms on pad\n2. Curl bar up\n3. Squeeze biceps\n4. Lower fully", "Intermediate", "Preacher Bench, EZ Bar");
+            AddExercise("Biceps", "Concentration Curl", "Single-arm peak contraction", "1. Brace elbow on thigh\n2. Curl dumbbell up\n3. Squeeze top\n4. Lower", "Beginner", "Dumbbell");
+            AddExercise("Biceps", "Cable Curl", "Constant tension biceps exercise", "1. Stand at cable station\n2. Curl handle upward\n3. Control descent\n4. Repeat", "Beginner", "Cable Machine");
 
-            // Leg Exercises
-            if (bodyParts.ContainsKey("Legs"))
-            {
-                exercises.AddRange(new[]
-                {
-                    new Exercise
-                    {
-                        Name = "Squats",
-                        Description = "Full leg development",
-                        Steps = "1. Stand with feet shoulder-width apart\n2. Lower as if sitting in chair\n3. Keep knees behind toes\n4. Return to standing",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "None (or Barbell for weighted)",
-                        BodyPartId = bodyParts["Legs"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Lunges",
-                        Description = "Legs and glutes",
-                        Steps = "1. Step forward into lunge position\n2. Lower back knee toward ground\n3. Push back to starting position\n4. Alternate legs",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "None (or Dumbbells for weighted)",
-                        BodyPartId = bodyParts["Legs"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Leg Press",
-                        Description = "Quadriceps and glutes",
-                        Steps = "1. Sit in leg press machine\n2. Lower weight by bending knees\n3. Press back up\n4. Repeat",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "Leg Press Machine",
-                        BodyPartId = bodyParts["Legs"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    }
-                });
-            }
+            // Triceps (5)
+            AddExercise("Triceps", "Tricep Dips", "Bodyweight triceps movement", "1. Set hands on bench\n2. Lower body by elbow bend\n3. Press up\n4. Repeat", "Beginner", "Bench");
+            AddExercise("Triceps", "Overhead Tricep Extension", "Long head triceps emphasis", "1. Hold weight overhead\n2. Lower behind head\n3. Extend elbows\n4. Repeat", "Beginner", "Dumbbell");
+            AddExercise("Triceps", "Tricep Pushdown", "Cable triceps isolation", "1. Keep elbows tucked\n2. Push bar down\n3. Fully extend arms\n4. Return", "Beginner", "Cable Machine");
+            AddExercise("Triceps", "Close Grip Bench Press", "Pressing movement for triceps", "1. Grip bar narrow\n2. Lower to chest\n3. Press up\n4. Repeat", "Intermediate", "Barbell, Bench");
+            AddExercise("Triceps", "Skull Crushers", "Elbow extension strength", "1. Lie on bench\n2. Lower bar toward forehead\n3. Extend elbows\n4. Repeat", "Intermediate", "EZ Bar, Bench");
 
-            // Abs Exercises
-            if (bodyParts.ContainsKey("Abs"))
-            {
-                exercises.AddRange(new[]
-                {
-                    new Exercise
-                    {
-                        Name = "Crunches",
-                        Description = "Upper abdominals",
-                        Steps = "1. Lie on back with knees bent\n2. Lift shoulders toward knees\n3. Contract abs\n4. Lower with control",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "None",
-                        BodyPartId = bodyParts["Abs"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Plank",
-                        Description = "Core strength",
-                        Steps = "1. Hold plank position\n2. Keep body straight\n3. Engage core\n4. Hold for desired time",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "None",
-                        BodyPartId = bodyParts["Abs"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Leg Raises",
-                        Description = "Lower abdominals",
-                        Steps = "1. Lie on back\n2. Raise legs until perpendicular to floor\n3. Lower with control\n4. Repeat",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "None",
-                        BodyPartId = bodyParts["Abs"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    }
-                });
-            }
+            // Legs (10)
+            AddExercise("Legs", "Squats", "Foundational leg strength movement", "1. Brace core\n2. Sit hips back and down\n3. Drive through feet\n4. Stand", "Beginner", "Bodyweight or Barbell");
+            AddExercise("Legs", "Lunges", "Unilateral legs and glutes", "1. Step forward\n2. Lower rear knee\n3. Push to start\n4. Alternate", "Beginner", "Bodyweight or Dumbbells");
+            AddExercise("Legs", "Leg Press", "Machine-based quad/glute load", "1. Set feet on platform\n2. Lower by knee bend\n3. Press out\n4. Repeat", "Beginner", "Leg Press Machine");
+            AddExercise("Legs", "Romanian Deadlift", "Hamstring and glute hinge", "1. Hinge from hips\n2. Lower bar to mid-shin\n3. Keep back neutral\n4. Stand", "Intermediate", "Barbell or Dumbbells");
+            AddExercise("Legs", "Leg Extension", "Quadriceps isolation", "1. Sit in machine\n2. Extend knees\n3. Squeeze quads\n4. Lower", "Beginner", "Leg Extension Machine");
+            AddExercise("Legs", "Leg Curl", "Hamstring isolation", "1. Set machine position\n2. Curl heels toward glutes\n3. Pause\n4. Lower", "Beginner", "Leg Curl Machine");
+            AddExercise("Legs", "Calf Raises", "Calf hypertrophy movement", "1. Raise heels up\n2. Pause at top\n3. Lower below neutral\n4. Repeat", "Beginner", "Calf Raise Machine");
+            AddExercise("Legs", "Bulgarian Split Squat", "Single-leg strength and balance", "1. Rear foot elevated\n2. Lower under control\n3. Drive up\n4. Repeat", "Intermediate", "Bench, Dumbbells");
+            AddExercise("Legs", "Hip Thrust", "Glute-dominant strength lift", "1. Upper back on bench\n2. Drive hips upward\n3. Squeeze glutes\n4. Lower", "Intermediate", "Barbell, Bench");
+            AddExercise("Legs", "Goblet Squat", "Beginner-friendly squat pattern", "1. Hold dumbbell at chest\n2. Squat down\n3. Keep chest tall\n4. Stand", "Beginner", "Dumbbell or Kettlebell");
 
-            // Cardio Exercises
-            if (bodyParts.ContainsKey("Cardio"))
-            {
-                exercises.AddRange(new[]
-                {
-                    new Exercise
-                    {
-                        Name = "Jumping Jacks",
-                        Description = "Full body cardio",
-                        Steps = "1. Stand with feet together\n2. Jump while raising arms and spreading legs\n3. Return to start\n4. Repeat continuously",
-                        DifficultyLevel = "Beginner",
-                        EquipmentRequired = "None",
-                        BodyPartId = bodyParts["Cardio"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Burpees",
-                        Description = "High intensity cardio",
-                        Steps = "1. Squat down and place hands on floor\n2. Jump back to plank position\n3. Do a push-up\n4. Jump back to squat and jump up",
-                        DifficultyLevel = "Intermediate",
-                        EquipmentRequired = "None",
-                        BodyPartId = bodyParts["Cardio"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    },
-                    new Exercise
-                    {
-                        Name = "Mountain Climbers",
-                        Description = "Cardio and core",
-                        Steps = "1. Start in plank position\n2. Alternate bringing knees to chest\n3. Keep core engaged\n4. Move quickly",
-                        DifficultyLevel = "Intermediate",
-                        EquipmentRequired = "None",
-                        BodyPartId = bodyParts["Cardio"].Id,
-                        CreatedDate = DateTime.UtcNow
-                    }
-                });
-            }
+            // Abs (5)
+            AddExercise("Abs", "Crunches", "Upper ab exercise", "1. Lie on back\n2. Curl shoulders up\n3. Exhale and squeeze\n4. Lower", "Beginner", "None");
+            AddExercise("Abs", "Plank", "Core isometric strength", "1. Set forearm plank\n2. Keep body straight\n3. Brace core\n4. Hold", "Beginner", "None");
+            AddExercise("Abs", "Leg Raises", "Lower abs exercise", "1. Lie flat\n2. Raise legs up\n3. Lower with control\n4. Repeat", "Beginner", "None");
+            AddExercise("Abs", "Russian Twist", "Oblique rotation exercise", "1. Sit with torso leaned back\n2. Rotate side to side\n3. Keep core tight\n4. Repeat", "Intermediate", "Bodyweight or Plate");
+            AddExercise("Abs", "Bicycle Crunch", "Dynamic oblique and rectus work", "1. Alternate elbow-to-knee\n2. Extend opposite leg\n3. Keep tempo steady\n4. Repeat", "Intermediate", "None");
 
-            // Add exercises if they don't exist
+            // Cardio (5)
+            AddExercise("Cardio", "Jumping Jacks", "Simple full-body cardio warmup", "1. Jump feet out and arms up\n2. Return to start\n3. Maintain rhythm\n4. Repeat", "Beginner", "None");
+            AddExercise("Cardio", "Burpees", "High-intensity full-body cardio", "1. Squat down\n2. Kick to plank\n3. Push-up optional\n4. Jump up", "Intermediate", "None");
+            AddExercise("Cardio", "Mountain Climbers", "Core + cardio drill", "1. Start in plank\n2. Drive knees alternately\n3. Keep hips level\n4. Continue", "Intermediate", "None");
+            AddExercise("Cardio", "High Knees", "Cardio conditioning movement", "1. Run in place\n2. Lift knees to hip height\n3. Pump arms\n4. Maintain pace", "Beginner", "None");
+            AddExercise("Cardio", "Jump Rope", "Coordination and endurance cardio", "1. Hold rope handles\n2. Jump minimally each turn\n3. Keep elbows close\n4. Continue", "Beginner", "Jump Rope");
+
             foreach (var exercise in exercises)
             {
-                var exists = await _unitOfWork.Exercises
-                    .ExistsAsync(e => e.Name == exercise.Name && e.BodyPartId == exercise.BodyPartId);
-                
+                var exists = await _unitOfWork.Exercises.ExistsAsync(e => e.Name == exercise.Name && e.BodyPartId == exercise.BodyPartId);
                 if (!exists)
                 {
                     await _unitOfWork.Exercises.AddAsync(exercise);
+                    insertedCount++;
                 }
             }
+            return insertedCount;
         }
 
         private async Task SeedDietPlansAsync()

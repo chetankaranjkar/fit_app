@@ -151,6 +151,66 @@ namespace GymManagement.Infrastructure.Services
             return await MapToDtoAsync(workoutPlan, instructor, exerciseDtos, instructorDict, userDict);
         }
 
+        public async Task<WorkoutPlanDto?> UpdateWorkoutPlanAsync(int id, CreateWorkoutPlanDto updateWorkoutPlanDto)
+        {
+            var workoutPlan = await _unitOfWork.WorkoutPlans.GetByIdAsync(id);
+            if (workoutPlan == null) return null;
+
+            workoutPlan.Name = updateWorkoutPlanDto.Name;
+            workoutPlan.Description = updateWorkoutPlanDto.Description;
+            workoutPlan.WorkoutType = updateWorkoutPlanDto.WorkoutType;
+            workoutPlan.Duration = updateWorkoutPlanDto.Duration;
+            workoutPlan.DifficultyLevel = updateWorkoutPlanDto.DifficultyLevel;
+            workoutPlan.TrainerId = updateWorkoutPlanDto.TrainerId;
+            workoutPlan.CreatedById = updateWorkoutPlanDto.CreatedById;
+            workoutPlan.CreatorType = updateWorkoutPlanDto.CreatorType;
+            workoutPlan.IsPublic = updateWorkoutPlanDto.IsPublic;
+            workoutPlan.UpdatedDate = DateTime.UtcNow;
+            _unitOfWork.WorkoutPlans.Update(workoutPlan);
+
+            var existingExercises = await _unitOfWork.WorkoutPlanExercises
+                .FindAsync(wpe => wpe.WorkoutPlanId == id && !wpe.IsDeleted);
+            foreach (var existing in existingExercises)
+            {
+                _unitOfWork.WorkoutPlanExercises.Delete(existing);
+            }
+
+            var newExercises = updateWorkoutPlanDto.Exercises.Select((exerciseDto, index) => new WorkoutPlanExercise
+            {
+                WorkoutPlanId = id,
+                ExerciseId = exerciseDto.ExerciseId,
+                Sets = exerciseDto.Sets,
+                Reps = exerciseDto.Reps,
+                RestBetweenSets = exerciseDto.RestBetweenSets,
+                Order = index + 1,
+                Weight = exerciseDto.Weight
+            }).ToList();
+
+            if (newExercises.Count > 0)
+            {
+                await _unitOfWork.WorkoutPlanExercises.AddRangeAsync(newExercises);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+
+            var activeExercises = await _unitOfWork.WorkoutPlanExercises
+                .FindAsync(wpe => wpe.WorkoutPlanId == id && !wpe.IsDeleted);
+            var exerciseDtos = await MapExercisesAsync(activeExercises.OrderBy(e => e.Order).ToList());
+
+            Trainer? instructor = null;
+            if (workoutPlan.TrainerId.HasValue)
+            {
+                instructor = await _unitOfWork.Trainers.GetByIdAsync(workoutPlan.TrainerId.Value);
+            }
+
+            var instructors = await _unitOfWork.Trainers.GetAllAsync();
+            var users = await _unitOfWork.Users.GetAllAsync();
+            var instructorDict = instructors.ToDictionary(i => i.Id);
+            var userDict = users.ToDictionary(u => u.Id);
+
+            return await MapToDtoAsync(workoutPlan, instructor, exerciseDtos, instructorDict, userDict);
+        }
+
         public async Task<bool> DeleteWorkoutPlanAsync(int id)
         {
             var workoutPlan = await _unitOfWork.WorkoutPlans.GetByIdAsync(id);

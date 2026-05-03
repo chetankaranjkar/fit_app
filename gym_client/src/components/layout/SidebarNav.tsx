@@ -23,6 +23,8 @@ const trainingSubItems = [
   { path: '/dashboard/training/body-parts', label: 'Body Parts' },
   { path: '/dashboard/training/exercises', label: 'Exercises' },
   { path: '/dashboard/training/exercises-premium', label: 'Exercises Premium' },
+  { path: '/dashboard/training/workout-plan-builder', label: 'Workout Plan Builder' },
+  { path: '/dashboard/training/workout-studio', label: 'Workout Studio (AI + 3D)' },
   { path: '/dashboard/training/workout-plans', label: 'Workout Plans' },
   { path: '/dashboard/training/workout-assignments', label: 'Workout Assignments' },
 ] as const
@@ -49,6 +51,18 @@ const lockerMgmtSubItems = [
   { path: '/dashboard/locker-management/maintenance', label: 'Maintenance' },
   { path: '/dashboard/locker-management/reports', label: 'Reports' },
 ] as const
+
+/** Door / QR entry (scan = all; owner console = ADMIN + STAFF). */
+const accessNavItems: ReadonlyArray<{
+  path: string
+  label: string
+  /** When true, visible only to ADMIN + STAFF (owner QR console). */
+  requiresQrConsole?: boolean
+}> = [
+  { path: '/dashboard/access/branches', label: 'Branches', requiresQrConsole: true },
+  { path: '/dashboard/access/owner-qr', label: 'Owner QR', requiresQrConsole: true },
+  { path: '/dashboard/access/scan', label: 'Scan to enter' },
+]
 
 const iconMap = {
   dashboard: (
@@ -125,6 +139,16 @@ const iconMap = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 15l3-3 3 3 5-6" />
     </svg>
   ),
+  qrDoor: (
+    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 17H7a5 5 0 010-10h4M13 17h4a5 5 0 001-9.87M13 17l-4-4 4-4M9 7l4 4-4 4"
+      />
+    </svg>
+  ),
 }
 
 interface SidebarNavProps {
@@ -164,11 +188,18 @@ export function SidebarNav({
   const isLockerMgmtPath = lockerMgmtSubItems.some(
     (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
   )
+  const visibleAccessNav = accessNavItems.filter(
+    (item) => !item.requiresQrConsole || authService.hasQrOwnerAccess(),
+  )
+  const isAccessPath = visibleAccessNav.some(
+    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/'),
+  )
   const [userOpen, setUserOpen] = useState(isUserPath)
   const [trainingOpen, setTrainingOpen] = useState(isTrainingPath)
   const [dietOpen, setDietOpen] = useState(isDietPath)
   const [gymOpsOpen, setGymOpsOpen] = useState(isGymOpsPath)
   const [lockerMgmtOpen, setLockerMgmtOpen] = useState(isLockerMgmtPath)
+  const [accessOpen, setAccessOpen] = useState(isAccessPath)
   const visibleNavItems = navItems.filter((item) => item.path !== '/dashboard/security')
 
   useEffect(() => {
@@ -186,6 +217,14 @@ export function SidebarNav({
   useEffect(() => {
     if (isLockerMgmtPath) setLockerMgmtOpen(true)
   }, [isLockerMgmtPath])
+  useEffect(() => {
+    if (isAccessPath) setAccessOpen(true)
+  }, [isAccessPath])
+
+  const collapsedAccessHref =
+    visibleAccessNav.find((p) => p.path.endsWith('/scan'))?.path ??
+    visibleAccessNav[0]?.path ??
+    '/dashboard/access/scan'
 
   const handleLogout = async () => {
     try {
@@ -733,6 +772,69 @@ export function SidebarNav({
               </div>
             )}
 
+            {/* Door / QR entry */}
+            {collapsed ? (
+              <Link
+                to={collapsedAccessHref}
+                {...linkPrefetchProps(collapsedAccessHref)}
+                onClick={handleNavClick}
+                title="Access & QR"
+                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
+                  isAccessPath ? activeBase : inactiveBase
+                }`}
+              >
+                <span
+                  className={
+                    isAccessPath ? 'text-white' : 'text-slate-400 group-hover:text-white'
+                  }
+                >
+                  {iconMap.qrDoor}
+                </span>
+              </Link>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setAccessOpen((o) => !o)}
+                  onMouseEnter={() => prefetchRoute(collapsedAccessHref)}
+                  onFocus={() => prefetchRoute(collapsedAccessHref)}
+                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="text-slate-400 group-hover:text-white">
+                      {iconMap.qrDoor}
+                    </span>
+                    <span>Access</span>
+                  </span>
+                  <svg
+                    className={`size-4 shrink-0 text-slate-500 transition-transform ${
+                      accessOpen ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {accessOpen && (
+                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
+                    {visibleAccessNav.map(({ path, label }) => (
+                      <Link
+                        key={path}
+                        to={path}
+                        {...linkPrefetchProps(path)}
+                        onClick={handleNavClick}
+                        className={subLinkClass(path)}
+                      >
+                        {label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Owner Analytics (isolated module, single page with drill-down drawer) */}
             <Link
               to="/dashboard/owner-analytics"
@@ -754,8 +856,33 @@ export function SidebarNav({
             </Link>
           </div>
 
-          {/* Bottom: Profile + Logout */}
+          {/* Bottom: Help Center + Profile + Logout */}
           <div className="mt-2 flex shrink-0 flex-col gap-1 border-t border-white/5 pt-3">
+            <Link
+              to="/help"
+              {...linkPrefetchProps('/help')}
+              onClick={handleNavClick}
+              title={collapsed ? 'Help Center' : undefined}
+              className={linkClass('/help')}
+            >
+              <span
+                className={
+                  location.pathname.startsWith('/help')
+                    ? 'text-white'
+                    : 'text-slate-400 group-hover:text-white'
+                }
+              >
+                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                  />
+                </svg>
+              </span>
+              {!collapsed && <span>Help Center</span>}
+            </Link>
             <Link
               to="/dashboard/profile"
               {...linkPrefetchProps('/dashboard/profile')}

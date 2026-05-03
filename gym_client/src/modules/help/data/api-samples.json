@@ -1,0 +1,50 @@
+{
+  "tooltip": {
+    "helpKey": "members.search",
+    "text": "Filter the member list by name, email, or phone."
+  },
+  "moduleArticle": {
+    "moduleKey": "members",
+    "title": "Members (Users)",
+    "description": "Your central directory of gym members and their profiles.",
+    "bullets": [
+      "Search and filter to find someone quickly.",
+      "Open a row to view full profile, memberships, and history.",
+      "Use Add Member to onboard new clients."
+    ]
+  },
+  "walkthrough": {
+    "moduleKey": "members",
+    "steps": [
+      {
+        "order": 0,
+        "selector": "[data-walkthrough=\"members-header\"]",
+        "title": "Member directory",
+        "body": "This is your live list of gym members."
+      }
+    ]
+  },
+  "categories": [
+    {
+      "id": "getting-started",
+      "name": "Getting started",
+      "description": "Orientation for gym owners",
+      "sortOrder": 0
+    }
+  ],
+  "articles": [
+    {
+      "id": "welcome",
+      "categoryId": "getting-started",
+      "title": "Welcome to your gym console",
+      "summary": "Layout, roles, and where to start."
+    }
+  ],
+  "articleDetail": {
+    "id": "welcome",
+    "categoryId": "getting-started",
+    "title": "Welcome to your gym console",
+    "summary": "Layout, roles, and where to start.",
+    "bodyMarkdown": "## Overview\n\nThe sidebar groups modules by area.\n\n## Tips\n\nPress **?** for contextual help."
+  }
+}

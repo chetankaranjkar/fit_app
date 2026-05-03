@@ -36,6 +36,7 @@ namespace GymManagement.Core.Interfaces
         IRepository<UserUserType> UserUserTypes { get; }
         IRepository<UserRole> UserRoles { get; }
         IRepository<DietPlan> DietPlans { get; }
+        IRepository<GymQrCode> GymQrCodes { get; }
 
         Task<int> SaveChangesAsync();
         Task BeginTransactionAsync();

@@ -39,6 +39,7 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<Exercise> Exercises { get; set; }
         public DbSet<ExerciseStep> ExerciseSteps { get; set; }
         public DbSet<WorkoutPlan> WorkoutPlans { get; set; }
+        public DbSet<WorkoutPlanDay> WorkoutPlanDays { get; set; }
         public DbSet<WorkoutPlanExercise> WorkoutPlanExercises { get; set; }
         public DbSet<UserSchedule> UserSchedules { get; set; }
         public DbSet<WorkoutSession> WorkoutSessions { get; set; }
@@ -76,6 +77,10 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<UserMedicalLog> UserMedicalLogs { get; set; }
         public DbSet<UserAchievement> UserAchievements { get; set; }
         public DbSet<Organization> Organizations { get; set; }
+        public DbSet<GymQrCode> GymQrCodes { get; set; }
+        /// <summary>QR-driven gym-floor workout sessions (not plan-based <see cref="WorkoutSession"/>).</summary>
+        public DbSet<GymQrWorkoutSession> GymQrWorkoutSessions { get; set; }
+        public DbSet<GymQrWorkoutLog> GymQrWorkoutLogs { get; set; }
         public DbSet<MemberActivitySummary> MemberActivitySummaries { get; set; }
 
         // Gym Operations module (isolated in GymOps namespace, own tables).
@@ -227,6 +232,23 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany(ex => ex.WorkoutPlanExercises)
                     .HasForeignKey(e => e.ExerciseId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.WorkoutPlanDay)
+                    .WithMany(d => d.WorkoutPlanExercises)
+                    .HasForeignKey(e => e.WorkoutPlanDayId)
+                    .OnDelete(DeleteBehavior.NoAction);
+            });
+
+            // Configure WorkoutPlanDay
+            modelBuilder.Entity<WorkoutPlanDay>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(80);
+                entity.HasOne(e => e.WorkoutPlan)
+                    .WithMany(wp => wp.WorkoutPlanDays)
+                    .HasForeignKey(e => e.WorkoutPlanId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(e => new { e.WorkoutPlanId, e.OrderIndex });
+                entity.HasIndex(e => new { e.WorkoutPlanId, e.DayNumber });
             });
 
             // Configure UserSchedule
@@ -699,11 +721,28 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.BranchName).IsRequired().HasMaxLength(200);
                 entity.Property(e => e.ContactNumber).HasMaxLength(50);
+                entity.Property(e => e.Latitude).HasPrecision(12, 8);
+                entity.Property(e => e.Longitude).HasPrecision(12, 8);
+                entity.Property(e => e.Esp32DoorBaseUrl).HasMaxLength(500);
                 entity.HasOne(e => e.Organization)
                     .WithMany(o => o.Branches)
                     .HasForeignKey(e => e.OrganizationId)
                     .OnDelete(DeleteBehavior.SetNull);
                 entity.ToTable("Branches");
+            });
+
+            modelBuilder.Entity<GymQrCode>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.QrToken).IsRequired().HasMaxLength(64);
+                entity.HasIndex(e => e.QrToken).IsUnique();
+                entity.Property(e => e.ExpiryDate).IsRequired();
+                entity.HasOne(e => e.Branch)
+                    .WithMany(b => b.GymQrCodes)
+                    .HasForeignKey(e => e.BranchId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(e => new { e.BranchId, e.IsActive });
+                entity.ToTable("GymQrCodes");
             });
 
             // Configure Message
@@ -868,6 +907,7 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<UserDetail>().HasQueryFilter(ud => ud.User != null && !ud.User.IsDeleted);
             modelBuilder.Entity<UserSchedule>().HasQueryFilter(us => us.User != null && !us.User.IsDeleted);
             modelBuilder.Entity<WorkoutPlanExercise>().HasQueryFilter(wpe => wpe.Exercise != null && !wpe.Exercise.IsDeleted);
+            modelBuilder.Entity<WorkoutPlanDay>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<ExerciseStep>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<WorkoutSession>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<WorkoutPlan>().HasQueryFilter(e => !e.IsDeleted);
@@ -879,6 +919,7 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<TrainerCertification>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<BodyMetricsLog>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<AttendanceLog>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<GymQrCode>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<LoginActivity>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<UserBodyImage>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<MembershipPlan>().HasQueryFilter(e => !e.IsDeleted);
@@ -1051,6 +1092,39 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<LockerAssignment>().HasQueryFilter(e => !e.IsDeleted && e.Locker != null && !e.Locker.IsDeleted);
             modelBuilder.Entity<LockerAccessLog>().HasQueryFilter(e => !e.IsDeleted && e.Locker != null && !e.Locker.IsDeleted);
             modelBuilder.Entity<LockerMaintenance>().HasQueryFilter(e => !e.IsDeleted && e.Locker != null && !e.Locker.IsDeleted);
+
+            modelBuilder.Entity<GymQrWorkoutSession>(entity =>
+            {
+                entity.ToTable("GymQrWorkoutSessions");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Status).HasMaxLength(32).IsRequired();
+                entity.Property(e => e.StartTimeUtc).HasColumnName("StartTimeUtc");
+                entity.Property(e => e.EndTimeUtc).HasColumnName("EndTimeUtc");
+                entity.Property(e => e.LastActivityAtUtc).HasColumnName("LastActivityAtUtc");
+                entity.HasIndex(e => new { e.MemberUserId, e.BranchId, e.Status });
+                entity.HasIndex(e => e.LastActivityAtUtc);
+                entity.HasOne(e => e.Member)
+                    .WithMany()
+                    .HasForeignKey(e => e.MemberUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Branch)
+                    .WithMany()
+                    .HasForeignKey(e => e.BranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<GymQrWorkoutLog>(entity =>
+            {
+                entity.ToTable("GymQrWorkoutLogs");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.ExerciseName).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Weight).HasPrecision(12, 3);
+                entity.HasOne(e => e.Session)
+                    .WithMany(s => s.Logs)
+                    .HasForeignKey(e => e.SessionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(e => e.SessionId);
+            });
         }
 
         public override int SaveChanges()

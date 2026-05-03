@@ -94,13 +94,61 @@ namespace GymManagement.Infrastructure.Services
             return await ResolveRoleLegacyAsync(unitOfWork, authUser);
         }
 
+        /// <summary>
+        /// ADMIN/STAFF role names to add to JWT when <c>UserRoles</c> does not already include either (fixes accounts that only
+        /// have MEMBER/TRAINER rows but Staff/Admin user types, or default admin without <c>UserRoles</c> yet).
+        /// </summary>
+        public static async Task<List<string>> GetQrConsoleJwtRoleSupplementsAsync(
+            IUnitOfWork unitOfWork,
+            AuthUser authUser)
+        {
+            var extras = new List<string>();
+            if (IsDefaultAdmin(authUser))
+                extras.Add("ADMIN");
+            if (!authUser.UserId.HasValue)
+                return extras.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            // Match in memory — EF Core often cannot translate StringComparison / ToUpper on UserType.Name reliably.
+            var userTypesAll = (await unitOfWork.UserTypes.GetAllAsync()).ToList();
+            static string? CanonicalUserTypeName(string? name)
+            {
+                var t = name?.Trim();
+                return string.IsNullOrEmpty(t) ? null : t.ToUpperInvariant();
+            }
+
+            var adminType = userTypesAll.FirstOrDefault(ut => CanonicalUserTypeName(ut.Name) == "ADMIN");
+            if (adminType != null)
+            {
+                var isOrgAdminType = await unitOfWork.UserUserTypes.ExistsAsync(uut =>
+                    uut.UserId == authUser.UserId.Value && uut.UserTypeId == adminType.Id);
+                if (isOrgAdminType)
+                    extras.Add("ADMIN");
+            }
+
+            var staffType = userTypesAll.FirstOrDefault(ut => CanonicalUserTypeName(ut.Name) == "STAFF");
+            if (staffType != null)
+            {
+                var isStaffType = await unitOfWork.UserUserTypes.ExistsAsync(uut =>
+                    uut.UserId == authUser.UserId.Value && uut.UserTypeId == staffType.Id);
+                if (isStaffType)
+                    extras.Add("STAFF");
+            }
+
+            return extras.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
         private static async Task<Role> ResolveRoleLegacyAsync(IUnitOfWork unitOfWork, AuthUser authUser)
         {
             if (IsDefaultAdmin(authUser))
                 return Role.Admin;
             if (authUser.UserId.HasValue)
             {
-                var adminType = await unitOfWork.UserTypes.FirstOrDefaultAsync(ut => ut.Name == "Admin");
+                var userTypesAll = (await unitOfWork.UserTypes.GetAllAsync()).ToList();
+                var adminType = userTypesAll.FirstOrDefault(ut =>
+                {
+                    var t = ut.Name?.Trim();
+                    return !string.IsNullOrEmpty(t) && t.ToUpperInvariant() == "ADMIN";
+                });
                 if (adminType != null)
                 {
                     var isStaffAdmin = await unitOfWork.UserUserTypes.ExistsAsync(uut =>

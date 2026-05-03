@@ -158,7 +158,7 @@ namespace GymManagement.Infrastructure.Services
             }
 
             var fullName = ResolveFullName(authUser, rbac.Profile, role);
-            var roleNames = await GetRoleNamesForProfileAsync(authUser.UserId);
+            var roleNames = await GetJwtRoleClaimNamesAsync(authUser);
 
             var sessionId = Guid.NewGuid().ToString();
             var permissionCodes = ExtractPermissionCodes(rbac.Permissions);
@@ -282,8 +282,8 @@ namespace GymManagement.Infrastructure.Services
             if (userId.HasValue && role == Role.User)
                 await LogAttendanceOnLoginAsync(userId.Value, "System Login");
 
-            // JWT role claims: UserRoles → Roles.Name only.
-            var roleNames = await GetRoleNamesForProfileAsync(authUser.UserId);
+            // JWT role claims: UserRoles first; legacy fallback matches ResolveRoleAsync (see GetJwtRoleClaimNamesAsync).
+            var roleNames = await GetJwtRoleClaimNamesAsync(authUser);
 
             var permissionCodes = ExtractPermissionCodes(rbac.Permissions);
             var (token, sessionId) = CreateSessionJwtToken(authUser, roleNames, permissionCodes);
@@ -311,15 +311,57 @@ namespace GymManagement.Infrastructure.Services
             };
         }
 
-        /// <summary>Role names from <c>UserRoles</c> → <c>Roles</c> for JWT claims (same source as your login flow).</summary>
-        private async Task<List<string>> GetRoleNamesForProfileAsync(int? profileUserId)
+        /// <summary>
+        /// JWT <c>role</c> claims: <c>UserRoles</c> → <c>Roles.Name</c> when present; otherwise the same legacy resolution as
+        /// <see cref="AuthUserRoleHelper.ResolveRoleAsync"/> so default-admin / Admin user-type accounts are not excluded from
+        /// <c>[Authorize(Roles = "ADMIN,...")]</c> while the UI still treats them as admin via <see cref="Role"/>.
+        /// </summary>
+        private async Task<List<string>> GetJwtRoleClaimNamesAsync(AuthUser authUser)
         {
-            if (!profileUserId.HasValue)
-                return new List<string>();
-            return await _db.UserRoles
-                .Where(ur => ur.UserId == profileUserId.Value)
-                .Select(ur => ur.Role.Name)
-                .ToListAsync();
+            var merged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (authUser.UserId.HasValue)
+            {
+                var fromUserRoles = await _db.UserRoles
+                    .AsNoTracking()
+                    .Where(ur => ur.UserId == authUser.UserId.Value)
+                    .Select(ur => ur.Role.Name)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+                foreach (var n in fromUserRoles)
+                {
+                    if (!string.IsNullOrWhiteSpace(n))
+                        merged.Add(n.Trim());
+                }
+            }
+
+            static bool HasAdminOrStaff(IEnumerable<string> names) =>
+                names.Any(n =>
+                    string.Equals(n, "ADMIN", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n, "STAFF", StringComparison.OrdinalIgnoreCase));
+
+            if (!HasAdminOrStaff(merged))
+            {
+                foreach (var extra in await AuthUserRoleHelper
+                             .GetQrConsoleJwtRoleSupplementsAsync(_unitOfWork, authUser)
+                             .ConfigureAwait(false))
+                    merged.Add(extra);
+            }
+
+            if (!HasAdminOrStaff(merged))
+            {
+                var resolved = await AuthUserRoleHelper.ResolveRoleAsync(_unitOfWork, authUser).ConfigureAwait(false);
+                string? canon = resolved switch
+                {
+                    Role.Admin => "ADMIN",
+                    Role.Instructor => "TRAINER",
+                    _ => null
+                };
+                if (!string.IsNullOrEmpty(canon))
+                    merged.Add(canon);
+            }
+
+            return merged.ToList();
         }
 
         /// <summary>Opaque refresh token stored as-is on <paramref name="authUser"/> (lookup by equality in <see cref="RefreshAsync"/>).</summary>

@@ -2,11 +2,13 @@ using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using System.Text.Json;
 
 namespace GymManagement.Infrastructure.Services
 {
     public class WorkoutPlanService : IWorkoutPlanService
     {
+        private const string WorkoutPlanMetaPrefix = "[WPMETA]";
         private readonly IUnitOfWork _unitOfWork;
 
         public WorkoutPlanService(IUnitOfWork unitOfWork)
@@ -35,7 +37,7 @@ namespace GymManagement.Infrastructure.Services
                     ? instructorDict.GetValueOrDefault(plan.TrainerId.Value)
                     : null;
 
-                result.Add(await MapToDtoAsync(plan, instructor, exerciseDtos, instructorDict, userDict));
+                result.Add(MapToDto(plan, instructor, exerciseDtos, instructorDict, userDict));
             }
 
             return result;
@@ -62,7 +64,7 @@ namespace GymManagement.Infrastructure.Services
             var instructorDict = instructors.ToDictionary(i => i.Id);
             var userDict = users.ToDictionary(u => u.Id);
 
-            return await MapToDtoAsync(workoutPlan, instructor, exerciseDtos, instructorDict, userDict);
+            return MapToDto(workoutPlan, instructor, exerciseDtos, instructorDict, userDict);
         }
 
         public async Task<IEnumerable<WorkoutPlanDto>> GetWorkoutPlansByTypeAsync(WorkoutType workoutType)
@@ -89,7 +91,7 @@ namespace GymManagement.Infrastructure.Services
                 var instructorDict = instructors.ToDictionary(i => i.Id);
                 var userDict = users.ToDictionary(u => u.Id);
 
-                result.Add(await MapToDtoAsync(plan, instructor, exerciseDtos, instructorDict, userDict));
+                result.Add(MapToDto(plan, instructor, exerciseDtos, instructorDict, userDict));
             }
 
             return result;
@@ -148,7 +150,7 @@ namespace GymManagement.Infrastructure.Services
             var instructorDict = instructors.ToDictionary(i => i.Id);
             var userDict = users.ToDictionary(u => u.Id);
 
-            return await MapToDtoAsync(workoutPlan, instructor, exerciseDtos, instructorDict, userDict);
+            return MapToDto(workoutPlan, instructor, exerciseDtos, instructorDict, userDict);
         }
 
         public async Task<WorkoutPlanDto?> UpdateWorkoutPlanAsync(int id, CreateWorkoutPlanDto updateWorkoutPlanDto)
@@ -208,7 +210,7 @@ namespace GymManagement.Infrastructure.Services
             var instructorDict = instructors.ToDictionary(i => i.Id);
             var userDict = users.ToDictionary(u => u.Id);
 
-            return await MapToDtoAsync(workoutPlan, instructor, exerciseDtos, instructorDict, userDict);
+            return MapToDto(workoutPlan, instructor, exerciseDtos, instructorDict, userDict);
         }
 
         public async Task<bool> DeleteWorkoutPlanAsync(int id)
@@ -219,6 +221,38 @@ namespace GymManagement.Infrastructure.Services
             _unitOfWork.WorkoutPlans.Delete(workoutPlan);
             await _unitOfWork.SaveChangesAsync();
             return true;
+        }
+
+        private static string? NormalizeDescription(string? rawDescription)
+        {
+            if (string.IsNullOrWhiteSpace(rawDescription))
+            {
+                return rawDescription;
+            }
+
+            var trimmed = rawDescription.Trim();
+            if (!trimmed.StartsWith(WorkoutPlanMetaPrefix, StringComparison.Ordinal))
+            {
+                return rawDescription;
+            }
+
+            var payload = trimmed[WorkoutPlanMetaPrefix.Length..];
+            try
+            {
+                using var doc = JsonDocument.Parse(payload);
+                if (doc.RootElement.TryGetProperty("goal", out var goalProp) &&
+                    goalProp.ValueKind == JsonValueKind.String)
+                {
+                    var goal = goalProp.GetString();
+                    return string.IsNullOrWhiteSpace(goal) ? null : goal.Trim();
+                }
+            }
+            catch
+            {
+                return rawDescription;
+            }
+
+            return rawDescription;
         }
 
         private async Task<List<WorkoutPlanExerciseDto>> MapExercisesAsync(IEnumerable<WorkoutPlanExercise> exercises)
@@ -246,7 +280,7 @@ namespace GymManagement.Infrastructure.Services
             return result;
         }
 
-        private async Task<WorkoutPlanDto> MapToDtoAsync(
+        private static WorkoutPlanDto MapToDto(
             WorkoutPlan workoutPlan, 
             Trainer? instructor, 
             List<WorkoutPlanExerciseDto> exercises,
@@ -277,7 +311,7 @@ namespace GymManagement.Infrastructure.Services
             {
                 Id = workoutPlan.Id,
                 Name = workoutPlan.Name,
-                Description = workoutPlan.Description,
+                Description = NormalizeDescription(workoutPlan.Description),
                 WorkoutType = workoutPlan.WorkoutType,
                 Duration = workoutPlan.Duration,
                 DifficultyLevel = workoutPlan.DifficultyLevel,

@@ -16,7 +16,11 @@ using GymManagement.Core.Options;
 using GymManagement.Core.Services;
 using GymManagement.Infrastructure.Services;
 using GymManagement.API.Middleware;
+using StackExchange.Redis;
+using HealthChecks.Redis;
 using GymManagement.API.Swagger;
+
+using GymManagement.API;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,11 +34,6 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddHealthChecks()
-    .AddDbContextCheck<ApplicationDbContext>(
-        name: "database",
-        failureStatus: HealthStatus.Unhealthy,
-        tags: new[] { "ready" });
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
@@ -154,9 +153,10 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(o => o.AddAppAuthorizationPolicies());
 
 builder.Services.Configure<NotificationWebhookOptions>(builder.Configuration.GetSection(NotificationWebhookOptions.SectionName));
+builder.Services.Configure<DoorDeviceOptions>(builder.Configuration.GetSection(DoorDeviceOptions.SectionName));
 builder.Services.PostConfigure<NotificationWebhookOptions>(opts =>
 {
     if (string.IsNullOrWhiteSpace(opts.EmailWebhookUrl))
@@ -171,8 +171,15 @@ builder.Services.AddHttpClient("notification-webhooks", (sp, client) =>
     var sec = o.TimeoutSeconds > 0 ? o.TimeoutSeconds : 15;
     client.Timeout = TimeSpan.FromSeconds(sec);
 });
+builder.Services.AddHttpClient("door-device", (sp, client) =>
+{
+    var o = sp.GetRequiredService<IOptions<DoorDeviceOptions>>().Value;
+    var sec = o.TimeoutSeconds > 0 ? o.TimeoutSeconds : 5;
+    client.Timeout = TimeSpan.FromSeconds(sec);
+});
 builder.Services.AddScoped<INotificationWebhookDispatcher, NotificationWebhookDispatcher>();
 builder.Services.AddHostedService<MembershipExpiryReminderHostedService>();
+builder.Services.AddHostedService<GymQrExpiryReminderHostedService>();
 
 // Register Unit of Work
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -218,6 +225,51 @@ builder.Services.AddScoped<GymManagement.Core.Services.LockerMgmt.ILockerService
 builder.Services.AddScoped<GymManagement.Core.Services.LockerMgmt.ILockerAssignmentService, GymManagement.Infrastructure.Services.LockerMgmt.LockerAssignmentService>();
 builder.Services.AddScoped<GymManagement.Core.Services.LockerMgmt.ILockerAccessLogService, GymManagement.Infrastructure.Services.LockerMgmt.LockerAccessLogService>();
 builder.Services.AddScoped<GymManagement.Core.Services.LockerMgmt.ILockerMaintenanceService, GymManagement.Infrastructure.Services.LockerMgmt.LockerMaintenanceService>();
+
+builder.Services.AddScoped<IBranchCrudService, BranchCrudService>();
+builder.Services.AddScoped<IBranchQrAccessService, BranchQrAccessService>();
+builder.Services.AddScoped<IGymQrService, GymQrService>();
+builder.Services.AddScoped<IDoorUnlockService, DoorUnlockService>();
+builder.Services.AddScoped<IQrExpiryReminderService, QrExpiryReminderService>();
+
+builder.Services.AddScoped<IGymQrFloorWorkoutService, GymQrFloorWorkoutService>();
+builder.Services.AddScoped<IAttendanceScanOrchestrator, AttendanceScanOrchestrator>();
+
+var redisConn = builder.Configuration["Redis:ConnectionString"]?.Trim();
+if (!string.IsNullOrEmpty(redisConn))
+{
+    builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConn));
+    builder.Services.AddSingleton<IRedisGymSecurityService, RedisGymSecurityService>();
+}
+else
+{
+    builder.Services.AddSingleton<IRedisGymSecurityService, NoOpRedisGymSecurityService>();
+}
+
+var healthChecksBuilder = builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>(
+        name: "database",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: new[] { "ready" });
+
+if (!string.IsNullOrEmpty(redisConn))
+{
+    healthChecksBuilder.AddRedis(
+        redisConnectionString: redisConn,
+        name: "redis",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: new[] { "ready" });
+}
+else
+{
+    healthChecksBuilder.AddCheck(
+        "redis",
+        () => HealthCheckResult.Healthy(
+            "Redis not configured — QR replay and rate limiting are disabled."),
+        tags: new[] { "ready" });
+}
+
+builder.Services.AddHostedService<GymQrSessionExpiryHostedService>();
 
 var app = builder.Build();
 

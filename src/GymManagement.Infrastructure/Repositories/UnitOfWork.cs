@@ -42,6 +42,7 @@ namespace GymManagement.Infrastructure.Repositories
         private IRepository<UserUserType>? _userUserTypes;
         private IRepository<UserRole>? _userRoles;
         private IRepository<DietPlan>? _dietPlans;
+        private IRepository<GymQrCode>? _gymQrCodes;
 
         public UnitOfWork(ApplicationDbContext context)
         {
@@ -143,6 +144,9 @@ namespace GymManagement.Infrastructure.Repositories
 
         public IRepository<DietPlan> DietPlans => 
             _dietPlans ??= new Repository<DietPlan>(_context);
+
+        public IRepository<GymQrCode> GymQrCodes =>
+            _gymQrCodes ??= new Repository<GymQrCode>(_context);
 
         public async Task<int> SaveChangesAsync()
         {

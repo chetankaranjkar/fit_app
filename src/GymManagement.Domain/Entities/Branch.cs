@@ -7,9 +7,16 @@ namespace GymManagement.Domain.Entities
         public string BranchName { get; set; } = string.Empty;
         public string? Address { get; set; }
         public string? ContactNumber { get; set; }
+        /// <summary>WGS84 latitude for QR scan proximity checks (degrees).</summary>
+        public double? Latitude { get; set; }
+        /// <summary>WGS84 longitude for QR scan proximity checks (degrees).</summary>
+        public double? Longitude { get; set; }
+        /// <summary>Optional dedicated ESP32 base URL (<c>http://ip</c>) when each branch runs its own device; appended with <c>/unlock</c>.</summary>
+        public string? Esp32DoorBaseUrl { get; set; }
         public bool IsActive { get; set; } = true;
 
         public Organization? Organization { get; set; }
         public ICollection<Announcement> Announcements { get; set; } = new List<Announcement>();
+        public ICollection<GymQrCode> GymQrCodes { get; set; } = new List<GymQrCode>();
     }
 }

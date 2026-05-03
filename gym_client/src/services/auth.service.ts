@@ -5,6 +5,7 @@ import type {
   LoginCredentials,
   LoginResponse,
 } from '../types/auth'
+import { Role } from '../types/auth'
 
 const AUTH_KEYS = {
   token: 'token',
@@ -35,6 +36,13 @@ function normalizeLoginResponse(raw: Record<string, unknown>): LoginResponse {
         .filter((p) => p.code.trim().length > 0)
     : undefined
 
+  const rolesRaw = (raw.roles ?? raw.Roles) as unknown
+  const appRoles = Array.isArray(rolesRaw)
+    ? (rolesRaw as Array<Record<string, unknown>>)
+        .map((r) => String(r.name ?? r.Name ?? '').trim())
+        .filter((n) => n.length > 0)
+    : undefined
+
   return {
     token: String(raw.token ?? raw.Token ?? ''),
     refreshToken: (raw.refreshToken ?? raw.RefreshToken) as string | undefined,
@@ -49,6 +57,7 @@ function normalizeLoginResponse(raw: Record<string, unknown>): LoginResponse {
     trainerId: (raw.trainerId ?? raw.TrainerId) as number | undefined,
     adminId: (raw.adminId ?? raw.AdminId) as number | undefined,
     permissions,
+    appRoles,
   }
 }
 
@@ -102,6 +111,18 @@ export const authService = {
   canConfigAccess: () => authService.hasPermission(AUTH_PERMISSION_CODES.config),
   canPaymentsAccess: () => authService.hasPermission(AUTH_PERMISSION_CODES.payments),
   canTrainerAccess: () => authService.hasPermission(AUTH_PERMISSION_CODES.trainerAccess),
+  hasAppRole: (roleName: string) => {
+    const n = roleName.trim().toUpperCase()
+    if (!n) return false
+    const u = authService.getCurrentUser()
+    if (!u) return false
+    if (u.appRoles?.some((r) => r.toUpperCase() === n)) return true
+    if (n !== 'ADMIN') return false
+    return u.role === Role.Admin || u.role === 'Admin' || u.role === 'ADMIN'
+  },
+  /** ADMIN or STAFF (JWT Roles claims) can manage venue QR & branch entry settings. */
+  hasQrOwnerAccess: (): boolean =>
+    authService.hasAppRole('ADMIN') || authService.hasAppRole('STAFF'),
   getRefreshToken: () => {
     const user = getStoredUserRaw()
     const token = user?.refreshToken ?? user?.RefreshToken

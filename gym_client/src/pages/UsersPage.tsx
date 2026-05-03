@@ -8,6 +8,8 @@ import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
+import { HelpTooltip } from '../modules/help/components/HelpTooltip'
+import { useWalkthrough } from '../modules/help/hooks/useWalkthrough'
 import { usersService } from '../services/users.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
 import { trainersService } from '../services/trainers.service'
@@ -187,6 +189,7 @@ const defaultCreateForm: CreateUserDto = {
 }
 
 export function UsersPage() {
+  const { start: startMembersTour } = useWalkthrough('members')
   const navigate = useNavigate()
   const location = useLocation()
   const { userName } = getDashboardUser()
@@ -542,7 +545,10 @@ export function UsersPage() {
     <DashboardLayout userName={userName}>
       <div ref={contentRef} className="min-w-0 max-w-[100%] space-y-6">
         {/* Match DashboardPage header: eyebrow, gradient title, actions */}
-        <div className="users-dashboard-header flex flex-wrap items-end justify-between gap-4">
+        <div
+          className="users-dashboard-header flex flex-wrap items-end justify-between gap-4"
+          data-walkthrough="members-header"
+        >
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Members</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-white">
@@ -558,17 +564,31 @@ export function UsersPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
+              onClick={() => startMembersTour()}
+              className="rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-500/20"
             >
-              Export
+              Tour
             </button>
-            <button
-              type="button"
-              onClick={handleStartAdd}
-              className="rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-500/20 transition hover:brightness-110"
-            >
-              + Add Member
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
+              >
+                Export
+              </button>
+              <HelpTooltip helpKey="members.export" label="Help for export" />
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleStartAdd}
+                data-walkthrough="members-add"
+                className="rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-500/20 transition hover:brightness-110"
+              >
+                + Add Member
+              </button>
+              <HelpTooltip helpKey="members.add" label="Help for add member" />
+            </div>
           </div>
         </div>
 
@@ -625,7 +645,11 @@ export function UsersPage() {
         </div>
 
         {/* Members table — glass card like dashboard widgets */}
-        <section ref={tableSectionRef} className="glass-card dashboard-card min-w-0 rounded-2xl">
+        <section
+          ref={tableSectionRef}
+          data-walkthrough="members-table"
+          className="glass-card dashboard-card min-w-0 rounded-2xl"
+        >
           <div className="border-b border-white/5 px-6 py-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>

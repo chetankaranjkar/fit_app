@@ -17,6 +17,7 @@ namespace GymManagement.Domain.Entities
         // Navigation properties
         public Trainer? Trainer { get; set; }
         public Organization? Organization { get; set; }
+        public ICollection<WorkoutPlanDay> WorkoutPlanDays { get; set; } = new List<WorkoutPlanDay>();
         public ICollection<WorkoutPlanExercise> WorkoutPlanExercises { get; set; } = new List<WorkoutPlanExercise>();
         public ICollection<UserSchedule> UserSchedules { get; set; } = new List<UserSchedule>();
     }

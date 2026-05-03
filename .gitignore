@@ -39,6 +39,9 @@ bld/
 *.db-wal
 gymmanagement.db
 
+# Local build / verify output (not source)
+objcheck/
+
 # IDE / OS
 .vs/
 .vscode/
@@ -51,3 +54,7 @@ Thumbs.db
 
 # Environment / machine-local
 *.local
+.env
+.env.*
+!.env.example
+exercise_management_api/.env

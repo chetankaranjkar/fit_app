@@ -33,6 +33,8 @@ export interface LoginResponse {
   adminId?: number
   fullName: string
   permissions?: AuthPermission[]
+  /** App role names from <c>Roles</c> (e.g. ADMIN, MEMBER). */
+  appRoles?: string[]
 }
 
 export interface CompromisedSession {

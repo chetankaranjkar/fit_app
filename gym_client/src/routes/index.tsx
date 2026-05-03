@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { AppLoader } from '../components/ui/AppLoader'
+import { HelpAppShell } from '../modules/help/HelpAppShell'
 
 /**
  * All route components are code-split via `React.lazy` so Vite's dev server
@@ -57,6 +58,16 @@ const ExercisesPage = lazy(() =>
 const ExerciseManagementPage = lazy(() =>
   import('../modules/exercise-management').then((m) => ({
     default: m.ExerciseManagementPage,
+  })),
+)
+const WorkoutStudioPage = lazy(() =>
+  import('../modules/workout-studio').then((m) => ({
+    default: m.WorkoutStudioPage,
+  })),
+)
+const WorkoutPlanBuilderPage = lazy(() =>
+  import('../modules/workout-plan-builder').then((m) => ({
+    default: m.WorkoutPlanBuilderPage,
   })),
 )
 const WorkoutPlansPage = lazy(() =>
@@ -142,49 +153,77 @@ const LockerReportsPage = lazy(() =>
 const OwnerAnalyticsPage = lazy(() =>
   import('../modules/owner-analytics').then((m) => ({ default: m.OwnerAnalyticsPage })),
 )
+const BranchesPage = lazy(() =>
+  import('../pages/BranchesPage').then((m) => ({ default: m.BranchesPage })),
+)
+const OwnerQrDashboard = lazy(() =>
+  import('../pages/OwnerQrDashboard').then((m) => ({ default: m.OwnerQrDashboard })),
+)
+const ScanPage = lazy(() =>
+  import('../pages/scan/ScanPage').then((m) => ({ default: m.ScanPage })),
+)
+const HelpCenterPage = lazy(() =>
+  import('../modules/help/pages/HelpCenterPage').then((m) => ({ default: m.HelpCenterPage })),
+)
+const HelpCategoryPage = lazy(() =>
+  import('../modules/help/pages/HelpCategoryPage').then((m) => ({ default: m.HelpCategoryPage })),
+)
+const HelpArticlePage = lazy(() =>
+  import('../modules/help/pages/HelpArticlePage').then((m) => ({ default: m.HelpArticlePage })),
+)
 
 function withSuspense(node: ReactNode) {
   return <Suspense fallback={<AppLoader />}>{node}</Suspense>
 }
 
 const router = createBrowserRouter([
-  { path: '/', element: withSuspense(<LandingPage />) },
-  { path: '/login', element: withSuspense(<LoginPage />) },
-  { path: '/dashboard', element: withSuspense(<DashboardPage />) },
-  { path: '/dashboard/users', element: withSuspense(<UsersPage />) },
-  { path: '/dashboard/attendance', element: withSuspense(<AttendancePage />) },
-  { path: '/dashboard/users/:userId', element: withSuspense(<UserDetailPage />) },
-  { path: '/dashboard/membership-plans', element: withSuspense(<MembershipPlansPage />) },
-  { path: '/dashboard/user-memberships', element: withSuspense(<UserMembershipsPage />) },
-  { path: '/dashboard/payments', element: withSuspense(<PaymentsPage />) },
-  { path: '/dashboard/roles', element: withSuspense(<RolesPage />) },
-  { path: '/dashboard/security', element: withSuspense(<SecurityPage />) },
-  { path: '/dashboard/trainers', element: withSuspense(<TrainersPage />) },
-  { path: '/dashboard/trainers/:trainerId', element: withSuspense(<TrainerDetailPage />) },
-  { path: '/dashboard/profile', element: withSuspense(<DashboardPage />) },
-  { path: '/dashboard/training/body-parts', element: withSuspense(<BodyPartsPage />) },
-  { path: '/dashboard/training/exercises', element: withSuspense(<ExercisesPage />) },
-  { path: '/dashboard/training/exercises-premium', element: withSuspense(<ExerciseManagementPage />) },
-  { path: '/dashboard/training/workout-plans', element: withSuspense(<WorkoutPlansPage />) },
-  { path: '/dashboard/training/workout-assignments', element: withSuspense(<WorkoutAssignmentsPage />) },
-  { path: '/dashboard/diet-plans', element: withSuspense(<DietPlansDashboardPage />) },
-  { path: '/dashboard/diet-plans/list', element: withSuspense(<DietPlansPage />) },
-  { path: '/dashboard/diet-plans/assign', element: withSuspense(<AssignDietPlansPage />) },
-  // Gym Operations module (isolated; all routes mount under /dashboard)
-  { path: '/dashboard/gym-operations/equipment', element: withSuspense(<EquipmentPage />) },
-  { path: '/dashboard/gym-operations/maintenance', element: withSuspense(<MaintenancePage />) },
-  { path: '/dashboard/gym-operations/expenses', element: withSuspense(<ExpensesPage />) },
-  { path: '/dashboard/gym-operations/cleaning', element: withSuspense(<CleaningPage />) },
-  { path: '/dashboard/gym-operations/vendors', element: withSuspense(<VendorsPage />) },
-  { path: '/dashboard/gym-operations/reports', element: withSuspense(<GymOpsReportsPage />) },
-  // Locker Management module (isolated; all routes mount under /dashboard)
-  { path: '/dashboard/locker-management/lockers', element: withSuspense(<LockersPage />) },
-  { path: '/dashboard/locker-management/assignments', element: withSuspense(<AssignmentsPage />) },
-  { path: '/dashboard/locker-management/access-logs', element: withSuspense(<AccessLogsPage />) },
-  { path: '/dashboard/locker-management/maintenance', element: withSuspense(<LockerMaintenancePage />) },
-  { path: '/dashboard/locker-management/reports', element: withSuspense(<LockerReportsPage />) },
-  // Owner Analytics module (isolated; drill-down drawer UX)
-  { path: '/dashboard/owner-analytics', element: withSuspense(<OwnerAnalyticsPage />) },
+  {
+    element: <HelpAppShell />,
+    children: [
+      { path: '/', element: withSuspense(<LandingPage />) },
+      { path: '/login', element: withSuspense(<LoginPage />) },
+      { path: '/help', element: withSuspense(<HelpCenterPage />) },
+      { path: '/help/category/:categoryId', element: withSuspense(<HelpCategoryPage />) },
+      { path: '/help/article/:articleId', element: withSuspense(<HelpArticlePage />) },
+      { path: '/dashboard', element: withSuspense(<DashboardPage />) },
+      { path: '/dashboard/users', element: withSuspense(<UsersPage />) },
+      { path: '/dashboard/attendance', element: withSuspense(<AttendancePage />) },
+      { path: '/dashboard/users/:userId', element: withSuspense(<UserDetailPage />) },
+      { path: '/dashboard/membership-plans', element: withSuspense(<MembershipPlansPage />) },
+      { path: '/dashboard/user-memberships', element: withSuspense(<UserMembershipsPage />) },
+      { path: '/dashboard/payments', element: withSuspense(<PaymentsPage />) },
+      { path: '/dashboard/roles', element: withSuspense(<RolesPage />) },
+      { path: '/dashboard/security', element: withSuspense(<SecurityPage />) },
+      { path: '/dashboard/trainers', element: withSuspense(<TrainersPage />) },
+      { path: '/dashboard/trainers/:trainerId', element: withSuspense(<TrainerDetailPage />) },
+      { path: '/dashboard/profile', element: withSuspense(<DashboardPage />) },
+      { path: '/dashboard/training/body-parts', element: withSuspense(<BodyPartsPage />) },
+      { path: '/dashboard/training/exercises', element: withSuspense(<ExercisesPage />) },
+      { path: '/dashboard/training/exercises-premium', element: withSuspense(<ExerciseManagementPage />) },
+      { path: '/dashboard/training/workout-studio', element: withSuspense(<WorkoutStudioPage />) },
+      { path: '/dashboard/training/workout-plan-builder', element: withSuspense(<WorkoutPlanBuilderPage />) },
+      { path: '/dashboard/training/workout-plans', element: withSuspense(<WorkoutPlansPage />) },
+      { path: '/dashboard/training/workout-assignments', element: withSuspense(<WorkoutAssignmentsPage />) },
+      { path: '/dashboard/diet-plans', element: withSuspense(<DietPlansDashboardPage />) },
+      { path: '/dashboard/diet-plans/list', element: withSuspense(<DietPlansPage />) },
+      { path: '/dashboard/diet-plans/assign', element: withSuspense(<AssignDietPlansPage />) },
+      { path: '/dashboard/gym-operations/equipment', element: withSuspense(<EquipmentPage />) },
+      { path: '/dashboard/gym-operations/maintenance', element: withSuspense(<MaintenancePage />) },
+      { path: '/dashboard/gym-operations/expenses', element: withSuspense(<ExpensesPage />) },
+      { path: '/dashboard/gym-operations/cleaning', element: withSuspense(<CleaningPage />) },
+      { path: '/dashboard/gym-operations/vendors', element: withSuspense(<VendorsPage />) },
+      { path: '/dashboard/gym-operations/reports', element: withSuspense(<GymOpsReportsPage />) },
+      { path: '/dashboard/locker-management/lockers', element: withSuspense(<LockersPage />) },
+      { path: '/dashboard/locker-management/assignments', element: withSuspense(<AssignmentsPage />) },
+      { path: '/dashboard/locker-management/access-logs', element: withSuspense(<AccessLogsPage />) },
+      { path: '/dashboard/locker-management/maintenance', element: withSuspense(<LockerMaintenancePage />) },
+      { path: '/dashboard/locker-management/reports', element: withSuspense(<LockerReportsPage />) },
+      { path: '/dashboard/owner-analytics', element: withSuspense(<OwnerAnalyticsPage />) },
+      { path: '/dashboard/access/branches', element: withSuspense(<BranchesPage />) },
+      { path: '/dashboard/access/owner-qr', element: withSuspense(<OwnerQrDashboard />) },
+      { path: '/dashboard/access/scan', element: withSuspense(<ScanPage />) },
+    ],
+  },
 ])
 
 export function AppRoutes() {

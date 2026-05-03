@@ -61,6 +61,10 @@ const loaders: Record<string, Loader> = {
 
   // Owner Analytics module
   '/dashboard/owner-analytics': () => import('../modules/owner-analytics'),
+
+  '/dashboard/access/branches': () => import('../pages/BranchesPage'),
+  '/dashboard/access/owner-qr': () => import('../pages/OwnerQrDashboard'),
+  '/dashboard/access/scan': () => import('../pages/scan/ScanPage'),
 }
 
 const inflight = new Map<string, Promise<unknown>>()

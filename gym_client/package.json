@@ -15,6 +15,9 @@
     "e2e:regression:ci": "playwright test --config=playwright.config.ts --grep @regression --reporter=line"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.0",
     "@tailwindcss/vite": "^4.1.18",
@@ -23,8 +26,10 @@
     "date-fns": "^4.1.0",
     "framer-motion": "^12.38.0",
     "gsap": "^3.13.0",
+    "html5-qrcode": "^2.3.8",
     "locomotive-scroll": "^5.0.1",
     "lucide-react": "^0.468.0",
+    "qrcode": "^1.5.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hot-toast": "^2.4.1",
@@ -40,6 +45,7 @@
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.56.1",
     "@types/node": "^24.10.1",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.3",

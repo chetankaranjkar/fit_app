@@ -47,6 +47,8 @@ public sealed class BranchQrAccessPutDto
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public string? Esp32DoorBaseUrl { get; set; }
+    /// <summary>Added to the default 100 m radius; omit or null to leave unchanged.</summary>
+    public int? CheckInRadiusOffsetMeters { get; set; }
 }
 
 public sealed class QrScanLogDto
@@ -68,6 +70,10 @@ public sealed class QrOwnerDashboardDto
     public bool BranchDoorUrlConfigured { get; set; }
     public double? BranchLatitude { get; set; }
     public double? BranchLongitude { get; set; }
+    /// <summary>Added to default 100 m; e.g. +50 → 150 m effective (subject to clamp).</summary>
+    public int CheckInRadiusOffsetMeters { get; set; }
+    /// <summary>Resolved max distance for QR check-in for this branch (10…10,000 m).</summary>
+    public int EffectiveCheckInRadiusMeters { get; set; }
     public string? Esp32DoorBaseUrl { get; set; }
     public string? BranchName { get; set; }
     public IReadOnlyList<QrScanLogDto> RecentScans { get; set; } = Array.Empty<QrScanLogDto>();

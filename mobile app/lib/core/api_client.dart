@@ -1,0 +1,102 @@
+import 'package:dio/dio.dart';
+import 'api_exception.dart';
+import 'app_config.dart';
+import 'secure_storage.dart';
+
+/// HTTP client with auth header injection and 401-on-refresh handling.
+class ApiClient {
+  ApiClient._() {
+    _dio = Dio(BaseOptions(
+      baseUrl: AppConfig.apiRoot,
+      connectTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 20),
+      headers: const {'Content-Type': 'application/json'},
+      validateStatus: (status) => status != null && status >= 200 && status < 600,
+    ));
+
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) async {
+        final token = await SecureStorage.readAccessToken();
+        if (token != null && token.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+        return handler.next(options);
+      },
+    ));
+  }
+
+  static final ApiClient instance = ApiClient._();
+  late final Dio _dio;
+
+  /// Configure listeners/handlers (e.g. force logout on auth failure).
+  void Function()? onUnauthorized;
+
+  Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) async {
+    try {
+      final res = await _dio.get<T>(path, queryParameters: query);
+      _ensureOk(res);
+      return res;
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  Future<Response<T>> post<T>(String path, {Object? body}) async {
+    try {
+      final res = await _dio.post<T>(path, data: body);
+      _ensureOk(res);
+      return res;
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  Future<Response<T>> put<T>(String path, {Object? body}) async {
+    try {
+      final res = await _dio.put<T>(path, data: body);
+      _ensureOk(res);
+      return res;
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  void _ensureOk(Response res) {
+    final status = res.statusCode ?? 0;
+    if (status >= 200 && status < 300) return;
+
+    if (status == 401 || status == 403) {
+      onUnauthorized?.call();
+    }
+
+    final message = _extractMessage(res.data) ?? 'Request failed (status $status)';
+    throw ApiException(message, statusCode: status, data: res.data);
+  }
+
+  ApiException _mapDioError(DioException e) {
+    if (e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.sendTimeout) {
+      return const ApiException(
+        'Cannot reach server. On a real phone, rebuild with '
+        '--dart-define=API_BASE_URL=http://<YOUR_PC_LAN_IP>:5104 '
+        '(same Wi‑Fi as your PC). Run the API with the http-lan profile so it listens on all interfaces.',
+      );
+    }
+    return ApiException(_extractMessage(e.response?.data) ?? e.message ?? 'Network error',
+        statusCode: e.response?.statusCode, data: e.response?.data);
+  }
+
+  String? _extractMessage(dynamic data) {
+    if (data is String && data.trim().isNotEmpty) return data;
+    if (data is Map) {
+      for (final key in const ['message', 'Message', 'detail', 'title', 'error']) {
+        final value = data[key];
+        if (value is String && value.trim().isNotEmpty) return value;
+      }
+    }
+    return null;
+  }
+}

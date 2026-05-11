@@ -39,6 +39,18 @@ public sealed class BranchQrAccessService : IBranchQrAccessService
             ? null
             : dto.Esp32DoorBaseUrl.Trim().TrimEnd('/');
 
+        if (dto.CheckInRadiusOffsetMeters.HasValue)
+        {
+            var o = dto.CheckInRadiusOffsetMeters.Value;
+            if (o < GymQrService.CheckInRadiusOffsetMin || o > GymQrService.CheckInRadiusOffsetMax)
+            {
+                throw new InvalidOperationException(
+                    $"Check-in radius offset must be between {GymQrService.CheckInRadiusOffsetMin} and {GymQrService.CheckInRadiusOffsetMax} meters.");
+            }
+
+            branch.CheckInRadiusOffsetMeters = o;
+        }
+
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 

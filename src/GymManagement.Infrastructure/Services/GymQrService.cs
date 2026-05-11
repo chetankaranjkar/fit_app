@@ -10,11 +10,23 @@ namespace GymManagement.Infrastructure.Services;
 
 public sealed class GymQrService : IGymQrService
 {
+    public const int DefaultCheckInRadiusMeters = 100;
+    public const int CheckInRadiusOffsetMin = -90;
+    public const int CheckInRadiusOffsetMax = 9900;
+    private const int MinCheckInRadiusMeters = 10;
+    private const int MaxCheckInRadiusMeters = 10_000;
+
     private readonly ApplicationDbContext _db;
     private readonly IUnitOfWork _uow;
     private readonly IDoorUnlockService _doorUnlock;
     private readonly ILogger<GymQrService> _logger;
-    private const double MaxDistanceMeters = 100;
+
+    /// <summary>Default 100 m plus per-branch offset, clamped to 10…10,000 m.</summary>
+    public static int EffectiveCheckInRadiusMeters(int checkInRadiusOffsetMeters) =>
+        Math.Clamp(
+            DefaultCheckInRadiusMeters + checkInRadiusOffsetMeters,
+            MinCheckInRadiusMeters,
+            MaxCheckInRadiusMeters);
 
     public GymQrService(
         ApplicationDbContext db,
@@ -117,14 +129,15 @@ public sealed class GymQrService : IGymQrService
             request.Latitude,
             request.Longitude);
 
-        if (meters > MaxDistanceMeters || double.IsNaN(meters) || double.IsInfinity(meters))
+        var maxDistanceMeters = EffectiveCheckInRadiusMeters(branch.CheckInRadiusOffsetMeters);
+        if (meters > maxDistanceMeters || double.IsNaN(meters) || double.IsInfinity(meters))
         {
             _logger.LogInformation(
                 "QR scan rejected for user {MemberId}: distance {Meters:F1}m (max {Max}m).",
                 memberUserId,
                 meters,
-                MaxDistanceMeters);
-            return Fail($"You must be within {MaxDistanceMeters} meters of the branch to check in.");
+                maxDistanceMeters);
+            return Fail($"You must be within {maxDistanceMeters} meters of the branch to check in.");
         }
 
         var duplicate = await _db.AttendanceLogs.AsNoTracking()
@@ -264,6 +277,7 @@ public sealed class GymQrService : IGymQrService
                 break;
         }
 
+        var offset = branchRow.CheckInRadiusOffsetMeters;
         return new QrOwnerDashboardDto
         {
             ActiveQr = qrDto,
@@ -273,6 +287,8 @@ public sealed class GymQrService : IGymQrService
             BranchDoorUrlConfigured = branchDoorConfigured,
             BranchLatitude = branchRow.Latitude,
             BranchLongitude = branchRow.Longitude,
+            CheckInRadiusOffsetMeters = offset,
+            EffectiveCheckInRadiusMeters = EffectiveCheckInRadiusMeters(offset),
             Esp32DoorBaseUrl = branchRow.Esp32DoorBaseUrl,
             BranchName = branchRow.BranchName,
             RecentScans = filteredScans

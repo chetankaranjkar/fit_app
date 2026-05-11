@@ -103,10 +103,11 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = (error.config ?? {}) as RetryableRequestConfig
     const requestUrl = String(originalRequest.url ?? '')
+    const requestUrlLower = requestUrl.toLowerCase()
     const isAuthRequest =
-      requestUrl.includes('/Auth/login') ||
-      requestUrl.includes('/Auth/refresh') ||
-      requestUrl.includes('/Auth/logout')
+      requestUrlLower.includes('/auth/login') ||
+      requestUrlLower.includes('/auth/refresh') ||
+      requestUrlLower.includes('/auth/logout')
 
     if (error.response?.status === 401 && !isAuthRequest && !originalRequest._retry) {
       if (isRefreshing) {
@@ -145,7 +146,8 @@ api.interceptors.response.use(
       // Do not redirect when 401 is from the login endpoint itself (failed credentials)
       const isLoginRequest =
         typeof error.config?.url === 'string' &&
-        (error.config.url.includes('/Auth/login') || error.config.url.endsWith('Auth/login'))
+        (error.config.url.toLowerCase().includes('/auth/login') ||
+          error.config.url.toLowerCase().endsWith('auth/login'))
       if (!isLoginRequest) {
         clearSession('Your session expired. Please login again.')
         window.location.href = '/login'

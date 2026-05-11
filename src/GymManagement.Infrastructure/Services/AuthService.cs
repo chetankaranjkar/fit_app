@@ -55,10 +55,27 @@ namespace GymManagement.Infrastructure.Services
             var loginId = ResolveLoginEmailInput(loginDto).Trim();
             var loginIdLower = loginId.ToLowerInvariant();
             var emailLower = NormalizeLoginEmail(loginIdLower);
+            var tryUsernameLookup = !loginIdLower.Contains("@");
+            var normalizedLoginDigits = NormalizePhoneDigits(loginId);
 
             var authUser = await _db.AuthUsers
                 .Include(a => a.User)
-                .FirstOrDefaultAsync(a => a.Email.ToLower() == emailLower);
+                .FirstOrDefaultAsync(a =>
+                    a.Email.ToLower() == emailLower
+                    || (tryUsernameLookup
+                        && a.Email.ToLower().StartsWith(loginIdLower + "@")));
+
+            // Phone fallback: allow login with mobile number from linked User.Phone.
+            if (authUser == null && normalizedLoginDigits.Length >= 7)
+            {
+                var phoneCandidates = await _db.AuthUsers
+                    .Include(a => a.User)
+                    .Where(a => a.User != null && a.User.Phone != null)
+                    .ToListAsync();
+
+                authUser = phoneCandidates.FirstOrDefault(a =>
+                    PhoneMatches(a.User!.Phone, normalizedLoginDigits));
+            }
 
             // Self-heal: if login failed with default admin credentials, ensure admin exists and retry (in case seeding was skipped)
             if (authUser == null && IsDefaultAdminCredentials(loginIdLower, loginDto.Password))
@@ -68,7 +85,21 @@ namespace GymManagement.Infrastructure.Services
                     await EnsureDefaultAdminExistsAsync();
                     authUser = await _db.AuthUsers
                         .Include(a => a.User)
-                        .FirstOrDefaultAsync(a => a.Email.ToLower() == emailLower);
+                        .FirstOrDefaultAsync(a =>
+                            a.Email.ToLower() == emailLower
+                            || (tryUsernameLookup
+                                && a.Email.ToLower().StartsWith(loginIdLower + "@")));
+
+                    if (authUser == null && normalizedLoginDigits.Length >= 7)
+                    {
+                        var phoneCandidates = await _db.AuthUsers
+                            .Include(a => a.User)
+                            .Where(a => a.User != null && a.User.Phone != null)
+                            .ToListAsync();
+
+                        authUser = phoneCandidates.FirstOrDefault(a =>
+                            PhoneMatches(a.User!.Phone, normalizedLoginDigits));
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -192,6 +223,29 @@ namespace GymManagement.Infrastructure.Services
         /// <summary>Maps legacy login id <c>admin</c> to the seeded admin email.</summary>
         private static string NormalizeLoginEmail(string loginIdLower) =>
             loginIdLower == "admin" ? "admin@gym.com" : loginIdLower;
+
+        private static string NormalizePhoneDigits(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+            var chars = value.Where(char.IsDigit).ToArray();
+            return new string(chars);
+        }
+
+        private static bool PhoneMatches(string? storedPhone, string loginDigits)
+        {
+            var storedDigits = NormalizePhoneDigits(storedPhone);
+            if (string.IsNullOrEmpty(storedDigits) || string.IsNullOrEmpty(loginDigits))
+                return false;
+
+            if (storedDigits == loginDigits)
+                return true;
+
+            // Allow matching local 10-digit mobile against numbers stored with country code (e.g. +91xxxxxxxxxx).
+            var localLogin = loginDigits.Length > 10 ? loginDigits[^10..] : loginDigits;
+            var localStored = storedDigits.Length > 10 ? storedDigits[^10..] : storedDigits;
+            return localStored == localLogin;
+        }
 
         /// <summary>Prefer <see cref="LoginDto.Email"/>; otherwise <see cref="LoginDto.Username"/>.</summary>
         private static string ResolveLoginEmailInput(LoginDto loginDto)

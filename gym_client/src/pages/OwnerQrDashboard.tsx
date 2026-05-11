@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceStrict, intervalToDuration } from 'date-fns'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { AlertTriangle, Download, Loader2, QrCode, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Download, Loader2, Minus, Plus, QrCode, RefreshCw } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../components/layout/DashboardSubpageShell'
@@ -43,6 +43,14 @@ function formatCountdownMs(diffMs: number) {
   const d = intervalToDuration({ start: base, end: new Date(base.getTime() + diffMs) })
   const pad = (n: number) => String(Math.max(0, n)).padStart(2, '0')
   return `${Math.max(0, d.days ?? 0)}d ${pad(d.hours ?? 0)}:${pad(d.minutes ?? 0)}:${pad(d.seconds ?? 0)}`
+}
+
+/** Must match API `GymQrService` offset bounds; effective radius is clamped to 10–10,000 m. */
+const CHECK_IN_RADIUS_OFFSET_MIN = -90
+const CHECK_IN_RADIUS_OFFSET_MAX = 9900
+
+function effectiveCheckInRadiusMeters(offset: number): number {
+  return Math.min(10_000, Math.max(10, 100 + offset))
 }
 
 function useCountdownTarget(isoUtc: string | undefined) {
@@ -99,6 +107,7 @@ export function OwnerQrDashboard() {
   const [latInput, setLatInput] = useState('')
   const [lngInput, setLngInput] = useState('')
   const [doorUrlInput, setDoorUrlInput] = useState('')
+  const [radiusOffsetMeters, setRadiusOffsetMeters] = useState(0)
 
   useEffect(() => {
     const d = dashQuery.data
@@ -108,6 +117,11 @@ export function OwnerQrDashboard() {
       d.branchLongitude != null && !Number.isNaN(d.branchLongitude) ? String(d.branchLongitude) : '',
     )
     setDoorUrlInput(d.esp32DoorBaseUrl ?? '')
+    setRadiusOffsetMeters(
+      typeof d.checkInRadiusOffsetMeters === 'number' && !Number.isNaN(d.checkInRadiusOffsetMeters)
+        ? d.checkInRadiusOffsetMeters
+        : 0,
+    )
   }, [dashQuery.data, branchId, branchSelected])
 
   const saveAccessMut = useMutation({
@@ -133,10 +147,20 @@ export function OwnerQrDashboard() {
         toast.error('Longitude must be between -180 and 180.')
         return
       }
+      if (
+        radiusOffsetMeters < CHECK_IN_RADIUS_OFFSET_MIN ||
+        radiusOffsetMeters > CHECK_IN_RADIUS_OFFSET_MAX
+      ) {
+        toast.error(
+          `Radius offset must be between ${CHECK_IN_RADIUS_OFFSET_MIN} and ${CHECK_IN_RADIUS_OFFSET_MAX} meters.`,
+        )
+        return
+      }
       const payload: BranchQrAccessPutDto = {
         latitude: lat,
         longitude: lng,
         esp32DoorBaseUrl: doorUrlInput.trim() || null,
+        checkInRadiusOffsetMeters: radiusOffsetMeters,
       }
       await branchesService.updateQrAccess(branchId, payload)
     },
@@ -306,8 +330,10 @@ export function OwnerQrDashboard() {
             >
               <h3 className="text-lg font-semibold tracking-tight text-white">Branch GPS &amp; door relay</h3>
               <p className="mt-1 text-sm text-slate-400">
-                Geo-fence radius is 100 m. Each branch can pin its own ESP32 (e.g. <code className="rounded bg-black/40 px-1">http://192.168.1.50</code>); otherwise the
-                global <code className="rounded bg-black/40 px-1">DoorDevice:Esp32BaseUrl</code> is used.
+                Default check-in radius is 100 m; use the offset below to widen or tighten (effective range 10–10,000
+                m). Each branch can pin its own ESP32 (e.g.{' '}
+                <code className="rounded bg-black/40 px-1">http://192.168.1.50</code>); otherwise the global{' '}
+                <code className="rounded bg-black/40 px-1">DoorDevice:Esp32BaseUrl</code> is used.
               </p>
               <div className="mt-6 grid gap-4 md:grid-cols-3">
                 <Input
@@ -336,6 +362,126 @@ export function OwnerQrDashboard() {
                   onChange={(e) => setDoorUrlInput(e.target.value)}
                 />
               </div>
+
+              <div className="mt-6 rounded-2xl border border-white/10 bg-black/25 p-4">
+                <p className="text-sm font-medium text-white">Check-in radius offset (meters)</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Applied to the 100 m default: negative tightens (min ~10 m total), positive widens. Current effective
+                  radius:{' '}
+                  <span className="font-mono text-emerald-200/95">
+                    {effectiveCheckInRadiusMeters(radiusOffsetMeters)} m
+                  </span>
+                  {dashQuery.data?.effectiveCheckInRadiusMeters != null ? (
+                    <span className="text-slate-500"> (saved: {dashQuery.data.effectiveCheckInRadiusMeters} m)</span>
+                  ) : null}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 px-3"
+                    onClick={() =>
+                      setRadiusOffsetMeters((v) =>
+                        Math.max(CHECK_IN_RADIUS_OFFSET_MIN, v - 10),
+                      )
+                    }
+                  >
+                    <Minus className="size-4" aria-hidden />
+                    <span className="sr-only">Decrease 10</span>
+                    <span className="ml-1 text-xs">10</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 px-3"
+                    onClick={() =>
+                      setRadiusOffsetMeters((v) =>
+                        Math.max(CHECK_IN_RADIUS_OFFSET_MIN, v - 5),
+                      )
+                    }
+                  >
+                    <Minus className="size-4" aria-hidden />
+                    <span className="ml-1 text-xs">5</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 px-2.5"
+                    onClick={() =>
+                      setRadiusOffsetMeters((v) =>
+                        Math.max(CHECK_IN_RADIUS_OFFSET_MIN, v - 1),
+                      )
+                    }
+                  >
+                    <Minus className="size-4" aria-hidden />
+                  </Button>
+                  <Input
+                    label="Offset"
+                    type="number"
+                    inputMode="numeric"
+                    className="max-w-[120px]"
+                    value={String(radiusOffsetMeters)}
+                    onChange={(e) => {
+                      const t = e.target.value.trim()
+                      if (t === '' || t === '-') {
+                        setRadiusOffsetMeters(0)
+                        return
+                      }
+                      const n = Number(t)
+                      if (!Number.isFinite(n)) return
+                      setRadiusOffsetMeters(
+                        Math.min(
+                          CHECK_IN_RADIUS_OFFSET_MAX,
+                          Math.max(CHECK_IN_RADIUS_OFFSET_MIN, Math.round(n)),
+                        ),
+                      )
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 px-2.5"
+                    onClick={() =>
+                      setRadiusOffsetMeters((v) =>
+                        Math.min(CHECK_IN_RADIUS_OFFSET_MAX, v + 1),
+                      )
+                    }
+                  >
+                    <Plus className="size-4" aria-hidden />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 px-3"
+                    onClick={() =>
+                      setRadiusOffsetMeters((v) =>
+                        Math.min(CHECK_IN_RADIUS_OFFSET_MAX, v + 5),
+                      )
+                    }
+                  >
+                    <Plus className="size-4" aria-hidden />
+                    <span className="ml-1 text-xs">5</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 px-3"
+                    onClick={() =>
+                      setRadiusOffsetMeters((v) =>
+                        Math.min(CHECK_IN_RADIUS_OFFSET_MAX, v + 10),
+                      )
+                    }
+                  >
+                    <Plus className="size-4" aria-hidden />
+                    <span className="ml-1 text-xs">10</span>
+                  </Button>
+                </div>
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Allowed offset {CHECK_IN_RADIUS_OFFSET_MIN}…{CHECK_IN_RADIUS_OFFSET_MAX} m (server clamps effective
+                  radius).
+                </p>
+              </div>
+
               <div className="mt-6 flex flex-wrap gap-3">
                 <Button
                   type="button"
@@ -347,6 +493,12 @@ export function OwnerQrDashboard() {
                     setLatInput(d.branchLatitude != null ? String(d.branchLatitude) : '')
                     setLngInput(d.branchLongitude != null ? String(d.branchLongitude) : '')
                     setDoorUrlInput(d.esp32DoorBaseUrl ?? '')
+                    setRadiusOffsetMeters(
+                      typeof d.checkInRadiusOffsetMeters === 'number' &&
+                        !Number.isNaN(d.checkInRadiusOffsetMeters)
+                        ? d.checkInRadiusOffsetMeters
+                        : 0,
+                    )
                   }}
                 >
                   Reset
@@ -395,8 +547,8 @@ export function OwnerQrDashboard() {
                 <div className="text-sm">
                   <p className="font-medium">Branch coordinates missing</p>
                   <p className="mt-1 text-amber-200/85">
-                    Enter latitude and longitude in the form above (WGS84) so the 100 m check-in gate can be
-                    enforced.
+                    Enter latitude and longitude in the form above (WGS84) so the check-in distance gate can be
+                    enforced (default 100 m radius, adjustable with offset).
                   </p>
                 </div>
               </motion.div>

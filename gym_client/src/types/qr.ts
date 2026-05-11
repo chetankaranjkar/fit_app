@@ -18,6 +18,8 @@ export interface BranchQrAccessPutDto {
   latitude?: number | null
   longitude?: number | null
   esp32DoorBaseUrl?: string | null
+  /** Added to default 100 m; clamped on server so effective radius stays 10–10,000 m. */
+  checkInRadiusOffsetMeters?: number | null
 }
 
 export interface QrScanLogDto {
@@ -37,6 +39,8 @@ export interface QrOwnerDashboardDto {
   branchDoorUrlConfigured?: boolean
   branchLatitude?: number | null
   branchLongitude?: number | null
+  checkInRadiusOffsetMeters?: number
+  effectiveCheckInRadiusMeters?: number
   esp32DoorBaseUrl?: string | null
   branchName?: string | null
   recentScans: QrScanLogDto[]

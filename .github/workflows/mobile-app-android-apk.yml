@@ -1,0 +1,40 @@
+# Build the Flutter app in GitHub Actions (no local Flutter install).
+# Download the APK from the workflow run → Artifacts.
+name: Mobile app — Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "API base URL (no /api). Example: http://192.168.1.19:5104"
+        required: true
+        default: "http://10.0.2.2:5104"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "mobile app"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Build APK (release)
+        run: flutter build apk --release --dart-define=API_BASE_URL=${{ inputs.api_base_url }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsefit-android-release
+          path: "mobile app/build/app/outputs/flutter-apk/app-release.apk"
+          if-no-files-found: error

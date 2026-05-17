@@ -27,9 +27,7 @@
 **/*.db
 **/*.db-shm
 **/*.db-wal
-frontend_not use
 mobile app
-objcheck
 
 # Docs & deploy artifacts on server (compose uses repo)
 deploy/backups

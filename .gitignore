@@ -40,8 +40,6 @@ bld/
 gymmanagement.db
 
 # Local build / verify output (not source)
-objcheck/
-
 # IDE / OS
 .vs/
 .vscode/

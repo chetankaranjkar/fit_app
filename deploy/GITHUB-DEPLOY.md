@@ -59,7 +59,9 @@ If you do not want that, delete the `environment: production` line in `.github/w
 
 ## 4. First deploy on the server
 
-The VPS must already have the repo cloned and `deploy/.env` configured (see [DEPLOYMENT-TESTING.md](./DEPLOYMENT-TESTING.md)):
+The VPS must be a **git clone** (not an FTP upload). For a full wipe and reinstall see **[HOSTINGER-FRESH-START.md](./HOSTINGER-FRESH-START.md)**.
+
+Otherwise configure `deploy/.env` (see [DEPLOYMENT-TESTING.md](./DEPLOYMENT-TESTING.md)):
 
 ```bash
 cd /opt/gym

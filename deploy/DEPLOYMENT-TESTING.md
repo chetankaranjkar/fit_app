@@ -2,6 +2,8 @@
 
 Use this when you only have a **VPS public IP** (Hostinger) and want to try the app over **HTTP** — no DNS, no SSL, no Certbot.
 
+> **Broken or old upload without git?** Use **[HOSTINGER-FRESH-START.md](./HOSTINGER-FRESH-START.md)** — wipe Docker + reinstall from GitHub.
+
 ## 1. Connect to VPS
 
 ```powershell

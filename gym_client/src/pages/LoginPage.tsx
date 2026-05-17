@@ -1,11 +1,20 @@
 import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
 import { LoginForm } from '../features/auth/components/LoginForm'
 import { authService } from '../services/auth.service'
+import { getPostLoginPath, resolveDashboardRole } from '../features/auth/roleRouting'
 
 export function LoginPage() {
   const sessionExpiredMessage = authService.popSessionExpiredMessage()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (authService.getAccessToken()) {
+      const role = resolveDashboardRole(authService.getCurrentUser())
+      navigate(getPostLoginPath(role), { replace: true })
+    }
+  }, [navigate])
 
   useEffect(() => {
     gsap.fromTo(

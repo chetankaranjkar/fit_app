@@ -3,7 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import LocomotiveScroll from 'locomotive-scroll'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { RoleSidebar } from './RoleSidebar'
 import { SidebarNav } from './SidebarNav'
+import { MemberBottomNav } from './MemberBottomNav'
+import { useDashboardRoleOrCurrent } from '../../features/auth/DashboardRoleContext'
 import { TopNavbar } from './TopNavbar'
 import { setupScrollTrigger, cleanupScrollTrigger } from '../../lib/animations/gsapSetup'
 import { setLocomotiveScrollInstance } from '../../lib/scrollInstance'
@@ -44,6 +47,14 @@ export function DashboardLayout({
   const logoutTimerRef = useRef<number | null>(null)
   const { pathname } = useLocation()
   const navigate = useNavigate()
+  const dashboardRole = useDashboardRoleOrCurrent()
+
+  const orbClasses =
+    dashboardRole === 'trainer'
+      ? ['bg-orange-500/20', 'bg-red-500/12', 'bg-amber-400/10']
+      : dashboardRole === 'member'
+        ? ['bg-orange-500/18', 'bg-amber-500/12', 'bg-neutral-500/8']
+        : ['bg-blue-500/20', 'bg-purple-500/15', 'bg-cyan-400/10']
 
   const clearSessionTimers = () => {
     if (warningTimerRef.current != null) {
@@ -115,31 +126,68 @@ export function DashboardLayout({
     const content = wrapper.firstElementChild as HTMLElement | null
     if (!content) return
 
-    // Register GSAP plugin
-    gsap.registerPlugin(ScrollTrigger)
+    const desktopMq = window.matchMedia('(min-width: 1024px)')
 
-    const locomotiveScroll = new LocomotiveScroll({
-      lenisOptions: {
-        wrapper,
-        content,
-        smoothWheel: true,
-        lerp: 0.1,
-      },
-    })
-    scrollInstanceRef.current = locomotiveScroll
-    setLocomotiveScrollInstance(locomotiveScroll)
+    const enableNativeScroll = () => {
+      wrapper.style.overflowY = 'auto'
+      wrapper.style.overflowX = 'hidden'
+      wrapper.style.webkitOverflowScrolling = 'touch'
+    }
 
-    setupScrollTrigger(locomotiveScroll, wrapper)
+    const disableNativeScroll = () => {
+      wrapper.style.overflowY = ''
+      wrapper.style.overflowX = ''
+      wrapper.style.webkitOverflowScrolling = ''
+    }
 
-    setTimeout(() => {
-      ScrollTrigger.refresh()
-    }, 200)
+    const initSmoothScroll = () => {
+      if (!desktopMq.matches) {
+        enableNativeScroll()
+        return undefined
+      }
+
+      disableNativeScroll()
+      gsap.registerPlugin(ScrollTrigger)
+
+      const locomotiveScroll = new LocomotiveScroll({
+        lenisOptions: {
+          wrapper,
+          content,
+          smoothWheel: true,
+          lerp: 0.1,
+        },
+      })
+      scrollInstanceRef.current = locomotiveScroll
+      setLocomotiveScrollInstance(locomotiveScroll)
+      setupScrollTrigger(locomotiveScroll, wrapper)
+
+      const refreshId = window.setTimeout(() => {
+        ScrollTrigger.refresh()
+      }, 200)
+
+      return () => {
+        window.clearTimeout(refreshId)
+        cleanupScrollTrigger()
+        locomotiveScroll.destroy()
+        setLocomotiveScrollInstance(null)
+        scrollInstanceRef.current = null
+        enableNativeScroll()
+      }
+    }
+
+    let teardown = initSmoothScroll()
+
+    const onBreakpointChange = () => {
+      teardown?.()
+      teardown = initSmoothScroll()
+    }
+
+    desktopMq.addEventListener('change', onBreakpointChange)
 
     return () => {
-      cleanupScrollTrigger()
-      locomotiveScroll.destroy()
-      setLocomotiveScrollInstance(null)
-      scrollInstanceRef.current = null
+      desktopMq.removeEventListener('change', onBreakpointChange)
+      teardown?.()
+      enableNativeScroll()
     }
   }, [collapsed])
 
@@ -222,33 +270,42 @@ export function DashboardLayout({
   }
 
   return (
-    <div
-      className="relative flex h-screen max-h-screen overflow-hidden text-slate-100"
-      style={{ width: '100vw', maxWidth: '100vw' }}
-    >
+    <div className="relative flex h-screen max-h-dvh w-full max-w-full overflow-hidden text-slate-100">
       {/* Ambient gradient orbs */}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-32 left-10 size-72 rounded-full bg-blue-500/20 blur-3xl animate-float-slow" />
+        <div className={`absolute -top-32 left-10 size-72 rounded-full blur-3xl animate-float-slow ${orbClasses[0]}`} />
         <div
-          className="absolute right-0 top-1/3 size-[28rem] rounded-full bg-purple-500/15 blur-3xl animate-float-slow"
+          className={`absolute right-0 top-1/3 size-[28rem] rounded-full blur-3xl animate-float-slow ${orbClasses[1]}`}
           style={{ animationDelay: '3s' }}
         />
         <div
-          className="absolute bottom-0 left-1/3 size-80 rounded-full bg-cyan-400/10 blur-3xl animate-float-slow"
+          className={`absolute bottom-0 left-1/3 size-80 rounded-full blur-3xl animate-float-slow ${orbClasses[2]}`}
           style={{ animationDelay: '6s' }}
         />
       </div>
 
-      <SidebarNav
-        userName={userName || ''}
-        userAvatarUrl={userAvatarUrl}
-        collapsed={collapsed}
-        onToggleCollapse={toggleCollapsed}
-        mobileOpen={mobileOpen}
-        onCloseMobile={() => setMobileOpen(false)}
-      />
+      {dashboardRole === 'admin' ? (
+        <SidebarNav
+          userName={userName || ''}
+          userAvatarUrl={userAvatarUrl}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
+          mobileOpen={mobileOpen}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
+      ) : (
+        <RoleSidebar
+          userName={userName || ''}
+          userAvatarUrl={userAvatarUrl}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
+          mobileOpen={mobileOpen}
+          onCloseMobile={() => setMobileOpen(false)}
+          hideOnMobile={dashboardRole === 'member'}
+        />
+      )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col">
         <TopNavbar
           userName={userName || 'User'}
           userAvatarUrl={userAvatarUrl}
@@ -258,11 +315,15 @@ export function DashboardLayout({
 
         <div
           ref={scrollWrapperRef}
-          className="min-h-0 min-w-0 flex-1 overflow-hidden px-4 py-6 sm:px-6 lg:px-8"
+          className={[
+            'dashboard-scroll-area min-h-0 min-w-0 w-full max-w-full flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 lg:overflow-hidden lg:px-8',
+            dashboardRole === 'member' ? 'pb-24 lg:pb-6' : '',
+          ].join(' ')}
         >
           <div className="min-h-full">{children}</div>
         </div>
       </div>
+      {dashboardRole === 'member' ? <MemberBottomNav /> : null}
       <Modal
         open={sessionWarningOpen}
         onClose={() => setSessionWarningOpen(false)}

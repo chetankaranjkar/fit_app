@@ -457,3 +457,111 @@ DateTime? _dt(dynamic v) {
   if (v is String) return DateTime.tryParse(v);
   return null;
 }
+
+class MeDietPlan {
+  final int assignmentId;
+  final int dietPlanId;
+  final String planName;
+  final String goalType;
+  final int calories;
+  final int? proteinGrams;
+  final int? carbsGrams;
+  final int? fatsGrams;
+  final String? description;
+  final DateTime startDate;
+  final DateTime? endDate;
+  final List<MeDietMeal> meals;
+
+  const MeDietPlan({
+    required this.assignmentId,
+    required this.dietPlanId,
+    required this.planName,
+    required this.goalType,
+    required this.calories,
+    required this.startDate,
+    required this.meals,
+    this.proteinGrams,
+    this.carbsGrams,
+    this.fatsGrams,
+    this.description,
+    this.endDate,
+  });
+
+  factory MeDietPlan.fromJson(Map<String, dynamic> json) {
+    return MeDietPlan(
+      assignmentId: _int(json['assignmentId']) ?? 0,
+      dietPlanId: _int(json['dietPlanId']) ?? 0,
+      planName: json['planName']?.toString() ?? '',
+      goalType: json['goalType']?.toString() ?? '',
+      calories: _int(json['calories']) ?? 0,
+      proteinGrams: _int(json['proteinGrams']),
+      carbsGrams: _int(json['carbsGrams']),
+      fatsGrams: _int(json['fatsGrams']),
+      description: json['description']?.toString(),
+      startDate: _dt(json['startDate']) ?? DateTime.now(),
+      endDate: _dt(json['endDate']),
+      meals: (json['meals'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(MeDietMeal.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class MeDietMeal {
+  final int id;
+  final String mealName;
+  final int mealOrder;
+  final List<MeDietMealItem> items;
+
+  const MeDietMeal({
+    required this.id,
+    required this.mealName,
+    required this.mealOrder,
+    required this.items,
+  });
+
+  factory MeDietMeal.fromJson(Map<String, dynamic> json) {
+    return MeDietMeal(
+      id: _int(json['id']) ?? 0,
+      mealName: json['mealName']?.toString() ?? '',
+      mealOrder: _int(json['mealOrder']) ?? 0,
+      items: (json['items'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(MeDietMealItem.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class MeDietMealItem {
+  final int id;
+  final String foodName;
+  final String quantity;
+  final int? calories;
+  final double? proteinGrams;
+  final double? carbsGrams;
+  final double? fatsGrams;
+
+  const MeDietMealItem({
+    required this.id,
+    required this.foodName,
+    required this.quantity,
+    this.calories,
+    this.proteinGrams,
+    this.carbsGrams,
+    this.fatsGrams,
+  });
+
+  factory MeDietMealItem.fromJson(Map<String, dynamic> json) {
+    return MeDietMealItem(
+      id: _int(json['id']) ?? 0,
+      foodName: json['foodName']?.toString() ?? '',
+      quantity: json['quantity']?.toString() ?? '',
+      calories: _int(json['calories']),
+      proteinGrams: _double(json['proteinGrams']),
+      carbsGrams: _double(json['carbsGrams']),
+      fatsGrams: _double(json['fatsGrams']),
+    );
+  }
+}

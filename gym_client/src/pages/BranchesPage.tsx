@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { authService } from '../services/auth.service'
 import { branchesService } from '../services/branches.service'
+import { LocationPreviewMap } from '../components/maps/LocationPreviewMap'
 import type { BranchCrudDto, BranchCreatePayload, BranchUpdatePayload } from '../types/branch'
 
 const selectClass =
@@ -116,6 +117,7 @@ export function BranchesPage() {
   const [form, setForm] = useState<BranchFormFields>(emptyForm())
   const [formError, setFormError] = useState<string | null>(null)
   const [geoBusy, setGeoBusy] = useState(false)
+  const [mapRefreshKey, setMapRefreshKey] = useState(0)
 
   const branchesQuery = useQuery({
     queryKey: ['branches'],
@@ -135,6 +137,12 @@ export function BranchesPage() {
     if (tab === 'inactive') return list.filter((b) => !b.isActive)
     return list
   }, [list, tab])
+
+  const previewCoords = useMemo(() => {
+    const parsed = coordsFromInputs(form.latStr, form.lngStr)
+    if (!parsed.ok || parsed.latitude == null || parsed.longitude == null) return null
+    return { lat: parsed.latitude, lng: parsed.longitude }
+  }, [form.latStr, form.lngStr])
 
   const invalidateBranches = () => {
     queryClient.invalidateQueries({ queryKey: ['branches'] })
@@ -225,8 +233,9 @@ export function BranchesPage() {
           latStr: lat.toFixed(7),
           lngStr: lng.toFixed(7),
         }))
+        setMapRefreshKey((k) => k + 1)
         setGeoBusy(false)
-        toast.success('Latitude and longitude filled from this device.')
+        toast.success('Location set — confirm on the map below.')
       },
       () => {
         setGeoBusy(false)
@@ -429,6 +438,18 @@ export function BranchesPage() {
                     </Link>
                     . You still need to click {isAdding ? 'Create branch' : 'Save changes'}.
                   </p>
+                  {previewCoords ? (
+                    <LocationPreviewMap
+                      latitude={previewCoords.lat}
+                      longitude={previewCoords.lng}
+                      refreshKey={mapRefreshKey}
+                      className="mt-2"
+                    />
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-600">
+                      Enter coordinates or use current location to preview the branch on a map.
+                    </p>
+                  )}
                 </div>
                 <Input
                   className="sm:col-span-2"

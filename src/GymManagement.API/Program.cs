@@ -54,12 +54,18 @@ builder.Services.AddSwaggerGen(options =>
     options.OperationFilter<UnauthorizedAndForbiddenOperationFilter>();
 });
 
-// Add CORS
+// Add CORS — production origins via Cors:AllowedOrigins (env: Cors__AllowedOrigins__0=https://yourdomain.com)
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[]
+    {
+        "http://localhost:3000", "http://localhost:5173", "http://localhost:5174",
+        "http://localhost:4173", "http://127.0.0.1:5173", "http://127.0.0.1:4173"
+    };
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:4173", "http://127.0.0.1:5173", "http://127.0.0.1:4173")
+        policy.WithOrigins(corsOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -719,7 +725,48 @@ SELECT CASE WHEN OBJECT_ID('dbo.Users','U') IS NOT NULL AND OBJECT_ID('dbo.Roles
 else
 {
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("Skipping development-only database auto-migration/bootstrap. Use deployment migrations for this environment.");
+    var autoMigrate = builder.Configuration.GetValue<bool>("Database:AutoMigrate", false);
+    if (autoMigrate && !useSqlite)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            logger.LogInformation("Applying production database migrations (Database:AutoMigrate=true)...");
+            await dbContext.Database.MigrateAsync();
+            logger.LogInformation("Production database migrations applied.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Production database migration failed.");
+            throw;
+        }
+    }
+    else
+    {
+        logger.LogInformation(
+            "Skipping database auto-migration. Set Database:AutoMigrate=true or run deploy/scripts/migrate.sh.");
+    }
+
+    var seedDefaults = builder.Configuration.GetValue<bool>("Database:SeedDefaults", false);
+    if (seedDefaults && !useSqlite)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            logger.LogInformation("Seeding database (Database:SeedDefaults=true)...");
+            var seeder = new GymManagement.Infrastructure.Data.DatabaseSeeder(unitOfWork, dbContext);
+            await seeder.SeedAsync();
+            logger.LogInformation("Database seed completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Database seed failed.");
+            throw;
+        }
+    }
 }
 
 app.Run();

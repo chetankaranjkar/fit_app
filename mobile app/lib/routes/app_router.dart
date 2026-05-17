@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/login_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/diet/diet_screen.dart';
 import '../features/membership/membership_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/progress/progress_screen.dart';
@@ -31,6 +32,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/scanner',
       pageBuilder: (_, __) => _slidePage(const QrScannerScreen()),
+    ),
+    GoRoute(
+      path: '/membership',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const MembershipScreen()),
     ),
     StatefulShellRoute.indexedStack(
       builder: (_, __, navigationShell) => AppShell(navigationShell: navigationShell),
@@ -73,14 +79,14 @@ final appRouter = GoRouter(
         ]),
         StatefulShellBranch(routes: [
           GoRoute(
-            path: '/progress',
-            pageBuilder: (_, __) => _fadePage(const ProgressScreen()),
+            path: '/diet',
+            pageBuilder: (_, __) => _fadePage(const DietScreen()),
           ),
         ]),
         StatefulShellBranch(routes: [
           GoRoute(
-            path: '/membership',
-            pageBuilder: (_, __) => _fadePage(const MembershipScreen()),
+            path: '/progress',
+            pageBuilder: (_, __) => _fadePage(const ProgressScreen()),
           ),
         ]),
         StatefulShellBranch(routes: [

@@ -37,6 +37,8 @@ export interface User {
   username?: string | null
   /** User types (e.g. Admin, Trainer, Staff, Member) - a user can have many */
   userTypes?: { id: number; name: string; description?: string | null }[]
+  /** Assigned trainer (when returned by API). */
+  trainerId?: number | null
 }
 
 export interface CreateUserDto {

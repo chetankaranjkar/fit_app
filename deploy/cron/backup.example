@@ -1,0 +1,2 @@
+# Example crontab entry (run: crontab -e as deploy user)
+0 3 * * * /opt/gym/deploy/scripts/backup.sh >> /var/log/gym-backup.log 2>&1

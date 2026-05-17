@@ -17,6 +17,7 @@ import '../../widgets/section_header.dart';
 import '../../widgets/skeleton_shimmer.dart';
 import '../../widgets/stat_tile.dart';
 import '../../widgets/premium_background.dart';
+import '../shell/shell_layout_metrics.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -51,8 +52,12 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   data: (data) => SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 176),
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.lg,
+                      AppSpacing.lg,
+                      ShellLayoutMetrics.contentBottomPadding(context),
+                    ),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
                         _Greeting(profile: data.profile),
@@ -123,7 +128,7 @@ class HomeScreen extends ConsumerWidget {
           ),
           Positioned(
             right: AppSpacing.lg,
-            bottom: 118,
+            bottom: ShellLayoutMetrics.fabBottomOffset(context),
             child: _ScanAttendanceFab(
               onTap: () => context.push('/scanner'),
             ),
@@ -738,8 +743,13 @@ class _HomeSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 120),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        ShellLayoutMetrics.contentBottomPadding(context),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

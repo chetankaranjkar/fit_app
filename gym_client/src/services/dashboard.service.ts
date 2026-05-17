@@ -16,7 +16,19 @@ export type DashboardNotifications = {
   }
 }
 
+export type DashboardStatistics = {
+  totalUsers: number
+  totalTrainers: number
+  trainersWithUserCount: {
+    trainerId: number
+    trainerName: string
+    trainerEmail: string
+    userCount: number
+  }[]
+}
+
 export const dashboardService = {
   getNotifications: () => api.get<DashboardNotifications>('/Dashboard/notifications'),
+  getStatistics: () => api.get<DashboardStatistics>('/Dashboard/statistics'),
 }
 

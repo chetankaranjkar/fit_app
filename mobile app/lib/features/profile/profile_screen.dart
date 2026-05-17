@@ -14,6 +14,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/premium_background.dart';
+import '../shell/shell_layout_metrics.dart';
 import '../../widgets/skeleton_shimmer.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -40,8 +41,7 @@ class ProfileScreen extends ConsumerWidget {
               onRefresh: () async => ref.refresh(profileProvider),
             ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg, 0, AppSpacing.lg, 120),
+              padding: ShellLayoutMetrics.scrollPadding(context),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   profile.when(

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { Button } from '../components/ui/Button'
@@ -73,6 +74,8 @@ const daysBetween = (start?: string | null, end?: string | null) => {
 export function AssignDietPlansPage() {
   const { userName: dashboardUserName } = getDashboardUser()
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const presetUserId = Number.parseInt(searchParams.get('userId') ?? '', 10)
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(getDefaultForm())
   const [formError, setFormError] = useState<string | null>(null)
@@ -99,14 +102,24 @@ export function AssignDietPlansPage() {
     queryKey: ['user-diet-plans'],
     queryFn: async () => {
       const { data } = await userDietPlansService.getAssignments()
-      return Array.isArray(data) ? data : []
+      return data
     },
   })
 
+  useEffect(() => {
+    if (!Number.isInteger(presetUserId) || presetUserId <= 0) return
+    setForm((f) => ({ ...f, userId: presetUserId }))
+    setModalOpen(true)
+  }, [presetUserId])
+
   const assignMutation = useMutation({
     mutationFn: (dto: CreateUserDietPlanDto) => userDietPlansService.assign(dto),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['user-diet-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['userDietPlans'] })
+      if (variables.userId) {
+        queryClient.invalidateQueries({ queryKey: ['userDietPlans', variables.userId] })
+      }
       setModalOpen(false)
       setForm(getDefaultForm())
       setFormError(null)
@@ -118,6 +131,7 @@ export function AssignDietPlansPage() {
     mutationFn: (id: number) => userDietPlansService.unassign(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-diet-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['userDietPlans'] })
     },
   })
 
@@ -127,6 +141,19 @@ export function AssignDietPlansPage() {
     if (!form.userId || !form.dietPlanId) {
       setFormError('Please select a user and a diet plan.')
       return
+    }
+    const existingForUser = assignments.filter(
+      (a) => a.userId === form.userId && a.isActive,
+    )
+    if (existingForUser.length > 0 && (form.isActive ?? true)) {
+      const name = existingForUser[0]?.dietPlanName ?? 'a diet plan'
+      if (
+        !window.confirm(
+          `This member already has "${name}" active. Assigning will replace it with the new plan. Continue?`,
+        )
+      ) {
+        return
+      }
     }
     assignMutation.mutate({
       userId: form.userId,

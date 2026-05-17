@@ -22,7 +22,8 @@ app.use('/api', workoutPlanBuilderController())
 app.use('/api', aiController())
 
 const port = Number(process.env.PORT ?? 4300)
-app.listen(port, () => {
+const host = process.env.HOST ?? '0.0.0.0'
+app.listen(port, host, () => {
   // eslint-disable-next-line no-console
-  console.log(`exercise-management-api running on http://localhost:${port}`)
+  console.log(`exercise-management-api running on http://${host}:${port}`)
 })

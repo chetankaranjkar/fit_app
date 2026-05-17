@@ -58,3 +58,5 @@ Thumbs.db
 .env.*
 !.env.example
 exercise_management_api/.env
+deploy/.env
+deploy/backups/

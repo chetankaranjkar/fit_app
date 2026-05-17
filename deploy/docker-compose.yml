@@ -1,0 +1,183 @@
+# Gym Management — production Docker Compose
+# Run from repository root: docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+
+name: gym
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: gym-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in deploy/.env}
+      MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-1536}
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - gym_internal
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" -b -o /dev/null || exit 1",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 45s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: ${SQLSERVER_MEMORY_LIMIT:-1800m}
+
+  redis:
+    image: redis:7-alpine
+    container_name: gym-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory ${REDIS_MAXMEMORY:-128mb}
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    networks:
+      - gym_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    mem_limit: 192m
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/docker/api/Dockerfile
+    container_name: gym-api
+    restart: unless-stopped
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: >-
+        Server=sqlserver,1433;Database=${MSSQL_DATABASE:-GymManagementDb};User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=true;Encrypt=False
+      Redis__ConnectionString: redis:6379
+      Jwt__Key: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in deploy/.env}
+      Jwt__Issuer: ${JWT_ISSUER:-GymManagement}
+      Jwt__Audience: ${JWT_AUDIENCE:-GymManagement}
+      Database__AutoMigrate: ${DATABASE_AUTO_MIGRATE:-true}
+      Database__SeedDefaults: ${DATABASE_SEED_DEFAULTS:-false}
+      Cors__AllowedOrigins__0: ${CORS_ORIGIN_0:-http://localhost:5173}
+      Cors__AllowedOrigins__1: ${CORS_ORIGIN_1:-}
+      DoorDevice__Enabled: ${DOOR_DEVICE_ENABLED:-false}
+      DoorDevice__Esp32BaseUrl: ${DOOR_DEVICE_URL:-}
+      Notifications__EmailWebhookUrl: ${NOTIFICATIONS_EMAIL_WEBHOOK:-}
+      Notifications__WhatsAppWebhookUrl: ${NOTIFICATIONS_WHATSAPP_WEBHOOK:-}
+    volumes:
+      - api_uploads:/app/wwwroot/uploads
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-5104}:8080"
+    networks:
+      - gym_internal
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    mem_limit: ${API_MEMORY_LIMIT:-512m}
+
+  exercise-api:
+    build:
+      context: ..
+      dockerfile: deploy/docker/exercise-api/Dockerfile
+    container_name: gym-exercise-api
+    restart: unless-stopped
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      PORT: "4300"
+      DB_SERVER: sqlserver
+      DB_USER: sa
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_NAME: ${MSSQL_DATABASE:-GymManagementDb}
+      DB_ENCRYPT: "false"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      AI_PROVIDER: ${AI_PROVIDER:-auto}
+      HF_API_KEY: ${HF_API_KEY:-}
+      HF_MODEL: ${HF_MODEL:-}
+    ports:
+      - "127.0.0.1:${EXERCISE_API_HOST_PORT:-4300}:4300"
+    networks:
+      - gym_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4300/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 256m
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/docker/frontend/Dockerfile
+      args:
+        VITE_API_URL: /api
+        VITE_EXERCISE_API_URL: /exercise-api/api
+    container_name: gym-frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-8080}:80"
+    networks:
+      - gym_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    mem_limit: 96m
+
+networks:
+  gym_internal:
+    driver: bridge
+    internal: false
+
+volumes:
+  sqlserver_data:
+    name: gym_sqlserver_data
+  api_uploads:
+    name: gym_api_uploads

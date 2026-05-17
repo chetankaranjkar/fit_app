@@ -15,6 +15,7 @@ import '../../widgets/section_header.dart';
 import '../../widgets/skeleton_shimmer.dart';
 import '../../widgets/stat_tile.dart';
 import '../../widgets/premium_background.dart';
+import '../shell/shell_layout_metrics.dart';
 
 class ProgressScreen extends ConsumerWidget {
   const ProgressScreen({super.key});
@@ -45,8 +46,7 @@ class ProgressScreen extends ConsumerWidget {
               },
             ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg, 0, AppSpacing.lg, 120),
+              padding: ShellLayoutMetrics.scrollPadding(context),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   const _ProgressHero(),

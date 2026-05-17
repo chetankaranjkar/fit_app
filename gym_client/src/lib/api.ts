@@ -1,4 +1,6 @@
 import axios from 'axios'
+import toast from 'react-hot-toast'
+import { getForbiddenMessage } from './apiErrors'
 
 // In dev, use relative /api so Vite proxy forwards to the backend (avoids CORS and wrong URL)
 const API_BASE_URL =
@@ -153,6 +155,16 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     }
+
+    if (error.response?.status === 403) {
+      const friendly = getForbiddenMessage(error)
+      ;(error as { userMessage?: string }).userMessage = friendly
+      const method = String(error.config?.method ?? 'get').toLowerCase()
+      if (method !== 'get' && method !== 'head') {
+        toast.error(friendly)
+      }
+    }
+
     return Promise.reject(error)
   }
 )

@@ -169,4 +169,40 @@ namespace GymManagement.Core.DTOs
         public int SessionId { get; set; }
         public int SetsLogged { get; set; }
     }
+
+    /// <summary>Member's currently active assigned diet plan.</summary>
+    public sealed class MeDietPlanDto
+    {
+        public int AssignmentId { get; set; }
+        public int DietPlanId { get; set; }
+        public string PlanName { get; set; } = string.Empty;
+        public string GoalType { get; set; } = string.Empty;
+        public int Calories { get; set; }
+        public int? ProteinGrams { get; set; }
+        public int? CarbsGrams { get; set; }
+        public int? FatsGrams { get; set; }
+        public string? Description { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public IReadOnlyList<MeDietMealDto> Meals { get; set; } = Array.Empty<MeDietMealDto>();
+    }
+
+    public sealed class MeDietMealDto
+    {
+        public int Id { get; set; }
+        public string MealName { get; set; } = string.Empty;
+        public int MealOrder { get; set; }
+        public IReadOnlyList<MeDietMealItemDto> Items { get; set; } = Array.Empty<MeDietMealItemDto>();
+    }
+
+    public sealed class MeDietMealItemDto
+    {
+        public int Id { get; set; }
+        public string FoodName { get; set; } = string.Empty;
+        public string Quantity { get; set; } = string.Empty;
+        public int? Calories { get; set; }
+        public decimal? ProteinGrams { get; set; }
+        public decimal? CarbsGrams { get; set; }
+        public decimal? FatsGrams { get; set; }
+    }
 }

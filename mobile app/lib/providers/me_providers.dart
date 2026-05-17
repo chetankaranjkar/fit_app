@@ -35,3 +35,7 @@ final workoutSessionTemplateProvider =
 final profileProvider = FutureProvider.autoDispose<MeProfile>((ref) async {
   return MeService.instance.getProfile();
 });
+
+final dietPlanProvider = FutureProvider.autoDispose<MeDietPlan?>((ref) async {
+  return MeService.instance.getDietPlan();
+});

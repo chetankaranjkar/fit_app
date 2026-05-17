@@ -22,8 +22,8 @@ const loaders: Record<string, Loader> = {
   // Top-level
   '/': () => import('../pages/LandingPage'),
   '/login': () => import('../pages/LoginPage'),
-  '/dashboard': () => import('../pages/DashboardPage'),
-  '/dashboard/profile': () => import('../pages/DashboardPage'),
+  '/dashboard': () => import('../pages/dashboards/DashboardHubPage'),
+  '/dashboard/profile': () => import('../pages/member/MemberProfilePage'),
   '/dashboard/payments': () => import('../pages/PaymentsPage'),
   '/dashboard/security': () => import('../pages/SecurityPage'),
   '/dashboard/roles': () => import('../pages/RolesPage'),

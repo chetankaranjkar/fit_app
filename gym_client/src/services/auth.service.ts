@@ -18,6 +18,8 @@ const AUTH_PERMISSION_CODES = {
   config: 'Config',
   payments: 'Payments',
   trainerAccess: 'TrainerAccess',
+  usersAccess: 'UsersAccess',
+  createUsers: 'CreateUsers',
 } as const
 
 function normalizeLoginResponse(raw: Record<string, unknown>): LoginResponse {
@@ -111,6 +113,8 @@ export const authService = {
   canConfigAccess: () => authService.hasPermission(AUTH_PERMISSION_CODES.config),
   canPaymentsAccess: () => authService.hasPermission(AUTH_PERMISSION_CODES.payments),
   canTrainerAccess: () => authService.hasPermission(AUTH_PERMISSION_CODES.trainerAccess),
+  canUsersAccess: () => authService.hasPermission(AUTH_PERMISSION_CODES.usersAccess),
+  canCreateUsers: () => authService.hasPermission(AUTH_PERMISSION_CODES.createUsers),
   hasAppRole: (roleName: string) => {
     const n = roleName.trim().toUpperCase()
     if (!n) return false

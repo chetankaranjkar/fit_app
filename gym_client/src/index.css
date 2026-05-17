@@ -178,6 +178,15 @@ body {
   pointer-events: none;
 }
 
+/* Dashboard: native scroll on mobile (Locomotive disabled below lg) */
+@media (max-width: 1023px) {
+  .dashboard-scroll-area > * {
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
 /* Reduce motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
   *,

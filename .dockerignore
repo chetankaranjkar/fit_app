@@ -1,0 +1,36 @@
+# Git / IDE
+.git
+.gitignore
+.cursor
+.vscode
+.idea
+**/.vs
+**/*.user
+**/*.suo
+
+# Dependencies & build output
+**/node_modules
+**/bin
+**/obj
+**/dist
+**/dist-ssr
+**/coverage
+**/playwright-report
+**/test-results
+
+# Local / dev-only
+**/.env
+**/.env.*
+!**/.env.example
+!deploy/.env.production.example
+**/gymmanagement.db
+**/*.db
+**/*.db-shm
+**/*.db-wal
+frontend_not use
+mobile app
+objcheck
+
+# Docs & deploy artifacts on server (compose uses repo)
+deploy/backups
+deploy/logs

@@ -1,24 +1,54 @@
-# Premium Gym User Mobile App (Flutter)
+# PulseFit Member Mobile App (Flutter)
 
-This folder contains a customer-facing Flutter UI app scaffold designed with an iOS-first aesthetic.
+Customer-facing Flutter app for gym members (iOS-first Cupertino UI).
 
-## Included
-- Cupertino-first UI
-- Riverpod state setup
-- go_router navigation
-- Smooth transitions and micro-interactions
-- Splash, Login, Home, Workout, Progress, Profile screens
-- Reusable widgets (glass card, progress ring, button, Cupertino input, list card)
+## Run
 
-## Run Steps
-1. Install Flutter stable: https://docs.flutter.dev/get-started/install
-2. Open terminal in this folder:
-   - `cd "mobile app"`
-3. Fetch packages:
-   - `flutter pub get`
-4. Run app:
-   - `flutter run`
+```bash
+cd "mobile app"
+flutter pub get
+flutter run
+```
+
+**Physical device / VPS testing** — point at your API:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://187.127.169.135
+```
+
+Rebuild the APK after changing the URL:
+
+```bash
+flutter build apk --release --dart-define=API_BASE_URL=http://187.127.169.135
+```
+
+## Member test account workflow (E2E)
+
+Use this checklist to verify Phase 2 flows on a real phone or emulator.
+
+1. **Admin (web)** — Sign in as admin at `/login` (`admin@gym.com` / change default password on VPS).
+2. **Create member** — Dashboard → Members → add user with role **Member** and active membership plan.
+3. **Assign workout** — Training → Workout Assignments (or User detail) → assign an active **Workout plan** to that member with schedule days.
+4. **Assign diet (optional)** — Diet → Assign to Users → assign an active diet plan to the member.
+5. **Mobile login** — Install APK or `flutter run` with `API_BASE_URL` pointing at the same API as web.
+6. **Verify tabs**
+   - **Workouts** — Only assigned plans appear (not every plan in the gym).
+   - **Diet** — Assigned plan with meals, or empty state if none.
+   - **Progress** — Attendance / weight when data exists.
+   - **Home** — Membership card → opens full-screen membership details.
+7. **QR check-in** — Home → scan; test near branch GPS. Expect clear messages for rate limit, replay, distance, and session errors.
+
+## API endpoints used
+
+| Feature | Endpoint |
+|---------|----------|
+| Dashboard | `GET /api/me/dashboard` |
+| Workouts (assigned only) | `GET /api/me/workout-plans` |
+| Diet | `GET /api/me/diet-plan` |
+| QR scan | `POST /api/Attendance/scan` |
+| Token refresh | `POST /api/Auth/refresh` |
 
 ## Notes
-- Uses San Francisco fallback stack (`SF Pro Text`, `Inter`, `San Francisco`).
-- Swap placeholder data in `lib/core/dummy_data.dart` with API-backed models later.
+
+- Bottom nav: Home, Workouts, Diet, Progress, Profile. Membership opens from the home card (`/membership`).
+- Session refresh: on `401`, the app retries once with the refresh token before signing out.

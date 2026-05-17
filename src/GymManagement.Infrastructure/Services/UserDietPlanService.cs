@@ -44,6 +44,21 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<UserDietPlanDto> AssignAsync(CreateUserDietPlanDto dto)
         {
+            // One active diet assignment per member — replace any existing active row.
+            if (dto.IsActive)
+            {
+                var existingActive = await _context.UserDietPlans
+                    .Where(u => u.UserId == dto.UserId && !u.IsDeleted && u.IsActive)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+
+                foreach (var existing in existingActive)
+                {
+                    existing.IsActive = false;
+                    existing.UpdatedDate = DateTime.UtcNow;
+                }
+            }
+
             var entity = new UserDietPlan
             {
                 UserId = dto.UserId,

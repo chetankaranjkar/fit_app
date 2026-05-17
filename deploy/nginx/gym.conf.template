@@ -1,0 +1,126 @@
+# Host Nginx site — copy to /etc/nginx/sites-available/gym and enable.
+# Replace ${DOMAIN} and ${SSL_CERT_PATH} before use (deploy/scripts/setup-nginx.sh does this).
+
+# Rate limiting zones (defined once in http context — see nginx-http-snippet.conf)
+limit_req_zone $binary_remote_addr zone=gym_api_limit:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=gym_login_limit:10m rate=5r/m;
+
+upstream gym_frontend {
+    server 127.0.0.1:${FRONTEND_HOST_PORT};
+    keepalive 8;
+}
+
+upstream gym_api {
+    server 127.0.0.1:${API_HOST_PORT};
+    keepalive 16;
+}
+
+upstream gym_exercise_api {
+    server 127.0.0.1:${EXERCISE_API_HOST_PORT};
+    keepalive 8;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN} www.${DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ${DOMAIN} www.${DOMAIN};
+
+    ssl_certificate     ${SSL_CERT_PATH}/fullchain.pem;
+    ssl_certificate_key ${SSL_CERT_PATH}/privkey.pem;
+    include /etc/nginx/snippets/ssl-params.conf;
+
+    client_max_body_size 50M;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(self), microphone=(), geolocation=()" always;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 5;
+    gzip_min_length 256;
+    gzip_types
+        text/plain text/css text/javascript application/javascript
+        application/json application/xml image/svg+xml;
+
+    # React SPA
+    location / {
+        proxy_pass http://gym_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ASP.NET Core API
+    location /api/ {
+        limit_req zone=gym_api_limit burst=40 nodelay;
+
+        proxy_pass http://gym_api/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    # Uploaded images / static files from API
+    location /uploads/ {
+        proxy_pass http://gym_api/uploads/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+
+    # Exercise / AI microservice (workout studio, plan builder)
+    location /exercise-api/ {
+        rewrite ^/exercise-api/(.*)$ /$1 break;
+        proxy_pass http://gym_exercise_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 180s;
+    }
+
+    # Stricter limit on auth endpoints
+    location ~ ^/api/Auth/(login|refresh) {
+        limit_req zone=gym_login_limit burst=10 nodelay;
+        proxy_pass http://gym_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Block Swagger in production (optional — remove if you need it)
+    location /swagger {
+        return 404;
+    }
+}

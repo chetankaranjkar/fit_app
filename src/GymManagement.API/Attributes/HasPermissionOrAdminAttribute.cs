@@ -1,5 +1,4 @@
-using System.Linq;
-using GymManagement.Core.Services;
+using GymManagement.API.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -32,16 +31,7 @@ public sealed class HasPermissionOrAdminAttribute : Attribute, IAsyncAuthorizati
             return Task.CompletedTask;
 
         var required = Permission?.Trim() ?? string.Empty;
-        if (string.IsNullOrEmpty(required))
-        {
-            context.Result = new ForbidResult();
-            return Task.CompletedTask;
-        }
-
-        var hasClaim = user.FindAll(JwtClaimTypes.Permission)
-            .Any(c => string.Equals(c.Value?.Trim(), required, StringComparison.OrdinalIgnoreCase));
-
-        if (!hasClaim)
+        if (string.IsNullOrEmpty(required) || !context.HttpContext.HasPermission(required))
             context.Result = new ForbidResult();
 
         return Task.CompletedTask;

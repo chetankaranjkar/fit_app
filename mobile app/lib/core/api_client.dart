@@ -2,8 +2,9 @@ import 'package:dio/dio.dart';
 import 'api_exception.dart';
 import 'app_config.dart';
 import 'secure_storage.dart';
+import '../services/auth_service.dart';
 
-/// HTTP client with auth header injection and 401-on-refresh handling.
+/// HTTP client with auth header injection, 401 refresh, and retry.
 class ApiClient {
   ApiClient._() {
     _dio = Dio(BaseOptions(
@@ -22,6 +23,37 @@ class ApiClient {
           options.headers['Authorization'] = 'Bearer $token';
         }
         return handler.next(options);
+      },
+      onResponse: (response, handler) async {
+        if (response.statusCode != 401) {
+          return handler.next(response);
+        }
+
+        final path = response.requestOptions.path;
+        if (path.contains('/Auth/login') ||
+            path.contains('/Auth/refresh') ||
+            response.requestOptions.extra['auth_retry'] == true) {
+          onUnauthorized?.call();
+          return handler.next(response);
+        }
+
+        try {
+          final refreshed = await AuthService.instance.tryRefresh();
+          if (refreshed == null || refreshed.token.isEmpty) {
+            onUnauthorized?.call();
+            return handler.next(response);
+          }
+
+          final opts = response.requestOptions;
+          opts.extra['auth_retry'] = true;
+          opts.headers['Authorization'] = 'Bearer ${refreshed.token}';
+
+          final clone = await _dio.fetch(opts);
+          return handler.resolve(clone);
+        } catch (_) {
+          onUnauthorized?.call();
+          return handler.next(response);
+        }
       },
     ));
   }

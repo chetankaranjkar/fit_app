@@ -143,10 +143,10 @@ class QrAttendanceService {
     final success = data['success'] == true;
     if (!success) {
       final msg = (data['message'] as String?)?.trim();
-      return AttendanceInvalidQr(
-        reason: msg ?? 'Check-in failed.',
-        deviceLatitude: position.latitude,
-        deviceLongitude: position.longitude,
+      return _mapFailureMessage(
+        msg ?? 'Check-in failed.',
+        errorCode: data['errorCode']?.toString(),
+        position: position,
       );
     }
 
@@ -192,6 +192,7 @@ class QrAttendanceService {
     final body = e.data is Map ? Map<String, dynamic>.from(e.data as Map) : const <String, dynamic>{};
     final message =
         (body['message'] as String?)?.trim() ?? (e.message.isNotEmpty ? e.message : null);
+    final errorCode = body['errorCode']?.toString();
 
     if (status == 404) {
       return const AttendanceNetworkError(
@@ -199,21 +200,23 @@ class QrAttendanceService {
       );
     }
 
-    if (status == 429) {
+    if (status == 429 || errorCode == 'rate_limited') {
       return AttendanceNetworkError(
-        message: message ?? 'Too many scans. Try again in a moment.',
+        message: message ?? 'Too many scans. Wait a minute and try again.',
       );
     }
 
-    if (status == 409) {
-      return AttendanceAlreadyScanned(previousCheckIn: DateTime.now());
+    if (status == 409 || errorCode == 'replay') {
+      return AttendanceAlreadyScanned(
+        previousCheckIn: DateTime.now(),
+      );
     }
 
     if (status == 400 || status == 422) {
-      return AttendanceInvalidQr(
-        reason: message ?? 'Could not validate this QR code.',
-        deviceLatitude: position.latitude,
-        deviceLongitude: position.longitude,
+      return _mapFailureMessage(
+        message ?? 'Could not validate this QR code.',
+        errorCode: errorCode,
+        position: position,
       );
     }
 
@@ -227,6 +230,57 @@ class QrAttendanceService {
       message: message ?? 'Could not check you in.',
     );
   }
+
+  AttendanceResult _mapFailureMessage(
+    String message, {
+    String? errorCode,
+    required Position position,
+  }) {
+    final lower = message.toLowerCase();
+
+    if (errorCode == 'rate_limited') {
+      return AttendanceNetworkError(message: message);
+    }
+    if (errorCode == 'replay') {
+      return AttendanceAlreadyScanned(previousCheckIn: DateTime.now());
+    }
+
+    if (_isMembershipMessage(lower)) {
+      return AttendanceMembershipExpired();
+    }
+
+    if (_isLocationMessage(lower)) {
+      return AttendanceLocationIssue(message: message);
+    }
+
+    if (lower.contains('already recorded') ||
+        lower.contains('already checked') ||
+        lower.contains('duplicate')) {
+      return AttendanceAlreadyScanned(previousCheckIn: DateTime.now());
+    }
+
+    if (lower.contains('expired') && lower.contains('qr')) {
+      return const AttendanceInvalidQr(reason: 'This gym QR code has expired. Ask staff for a new code.');
+    }
+
+    return AttendanceInvalidQr(
+      reason: message,
+      deviceLatitude: position.latitude,
+      deviceLongitude: position.longitude,
+    );
+  }
+
+  bool _isMembershipMessage(String lower) =>
+      lower.contains('membership') &&
+      (lower.contains('expired') ||
+          lower.contains('inactive') ||
+          lower.contains('no active') ||
+          lower.contains('not active'));
+
+  bool _isLocationMessage(String lower) =>
+      (lower.contains('within') && lower.contains('meter')) ||
+      lower.contains('gps') ||
+      (lower.contains('location') && lower.contains('venue'));
 
   DateTime? _parseDate(Object? v) {
     if (v is String) return DateTime.tryParse(v)?.toLocal();

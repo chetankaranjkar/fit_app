@@ -2,6 +2,8 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { AppLoader } from '../components/ui/AppLoader'
 import { HelpAppShell } from '../modules/help/HelpAppShell'
+import { RequireAuth } from '../features/auth/components/RequireAuth'
+import { DashboardShell } from '../features/auth/components/DashboardShell'
 
 /**
  * All route components are code-split via `React.lazy` so Vite's dev server
@@ -20,8 +22,20 @@ const LandingPage = lazy(() =>
 const LoginPage = lazy(() =>
   import('../pages/LoginPage').then((m) => ({ default: m.LoginPage })),
 )
-const DashboardPage = lazy(() =>
-  import('../pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+const DashboardHubPage = lazy(() =>
+  import('../pages/dashboards/DashboardHubPage').then((m) => ({ default: m.DashboardHubPage })),
+)
+const MemberWorkoutsPage = lazy(() =>
+  import('../pages/member/MemberWorkoutsPage').then((m) => ({ default: m.MemberWorkoutsPage })),
+)
+const MemberDietPage = lazy(() =>
+  import('../pages/member/MemberDietPage').then((m) => ({ default: m.MemberDietPage })),
+)
+const MemberProgressPage = lazy(() =>
+  import('../pages/member/MemberProgressPage').then((m) => ({ default: m.MemberProgressPage })),
+)
+const MemberProfilePage = lazy(() =>
+  import('../pages/member/MemberProfilePage').then((m) => ({ default: m.MemberProfilePage })),
 )
 const UsersPage = lazy(() =>
   import('../pages/UsersPage').then((m) => ({ default: m.UsersPage })),
@@ -185,43 +199,68 @@ const router = createBrowserRouter([
       { path: '/help', element: withSuspense(<HelpCenterPage />) },
       { path: '/help/category/:categoryId', element: withSuspense(<HelpCategoryPage />) },
       { path: '/help/article/:articleId', element: withSuspense(<HelpArticlePage />) },
-      { path: '/dashboard', element: withSuspense(<DashboardPage />) },
-      { path: '/dashboard/users', element: withSuspense(<UsersPage />) },
-      { path: '/dashboard/attendance', element: withSuspense(<AttendancePage />) },
-      { path: '/dashboard/users/:userId', element: withSuspense(<UserDetailPage />) },
-      { path: '/dashboard/membership-plans', element: withSuspense(<MembershipPlansPage />) },
-      { path: '/dashboard/user-memberships', element: withSuspense(<UserMembershipsPage />) },
-      { path: '/dashboard/payments', element: withSuspense(<PaymentsPage />) },
-      { path: '/dashboard/roles', element: withSuspense(<RolesPage />) },
-      { path: '/dashboard/security', element: withSuspense(<SecurityPage />) },
-      { path: '/dashboard/trainers', element: withSuspense(<TrainersPage />) },
-      { path: '/dashboard/trainers/:trainerId', element: withSuspense(<TrainerDetailPage />) },
-      { path: '/dashboard/profile', element: withSuspense(<DashboardPage />) },
-      { path: '/dashboard/training/body-parts', element: withSuspense(<BodyPartsPage />) },
-      { path: '/dashboard/training/exercises', element: withSuspense(<ExercisesPage />) },
-      { path: '/dashboard/training/exercises-premium', element: withSuspense(<ExerciseManagementPage />) },
-      { path: '/dashboard/training/workout-studio', element: withSuspense(<WorkoutStudioPage />) },
-      { path: '/dashboard/training/workout-plan-builder', element: withSuspense(<WorkoutPlanBuilderPage />) },
-      { path: '/dashboard/training/workout-plans', element: withSuspense(<WorkoutPlansPage />) },
-      { path: '/dashboard/training/workout-assignments', element: withSuspense(<WorkoutAssignmentsPage />) },
-      { path: '/dashboard/diet-plans', element: withSuspense(<DietPlansDashboardPage />) },
-      { path: '/dashboard/diet-plans/list', element: withSuspense(<DietPlansPage />) },
-      { path: '/dashboard/diet-plans/assign', element: withSuspense(<AssignDietPlansPage />) },
-      { path: '/dashboard/gym-operations/equipment', element: withSuspense(<EquipmentPage />) },
-      { path: '/dashboard/gym-operations/maintenance', element: withSuspense(<MaintenancePage />) },
-      { path: '/dashboard/gym-operations/expenses', element: withSuspense(<ExpensesPage />) },
-      { path: '/dashboard/gym-operations/cleaning', element: withSuspense(<CleaningPage />) },
-      { path: '/dashboard/gym-operations/vendors', element: withSuspense(<VendorsPage />) },
-      { path: '/dashboard/gym-operations/reports', element: withSuspense(<GymOpsReportsPage />) },
-      { path: '/dashboard/locker-management/lockers', element: withSuspense(<LockersPage />) },
-      { path: '/dashboard/locker-management/assignments', element: withSuspense(<AssignmentsPage />) },
-      { path: '/dashboard/locker-management/access-logs', element: withSuspense(<AccessLogsPage />) },
-      { path: '/dashboard/locker-management/maintenance', element: withSuspense(<LockerMaintenancePage />) },
-      { path: '/dashboard/locker-management/reports', element: withSuspense(<LockerReportsPage />) },
-      { path: '/dashboard/owner-analytics', element: withSuspense(<OwnerAnalyticsPage />) },
-      { path: '/dashboard/access/branches', element: withSuspense(<BranchesPage />) },
-      { path: '/dashboard/access/owner-qr', element: withSuspense(<OwnerQrDashboard />) },
-      { path: '/dashboard/access/scan', element: withSuspense(<ScanPage />) },
+      {
+        element: <RequireAuth />,
+        children: [
+          {
+            element: <DashboardShell />,
+            children: [
+              { path: '/dashboard', element: withSuspense(<DashboardHubPage />) },
+              { path: '/dashboard/users', element: withSuspense(<UsersPage />) },
+              { path: '/dashboard/attendance', element: withSuspense(<AttendancePage />) },
+              { path: '/dashboard/users/:userId', element: withSuspense(<UserDetailPage />) },
+              { path: '/dashboard/membership-plans', element: withSuspense(<MembershipPlansPage />) },
+              { path: '/dashboard/user-memberships', element: withSuspense(<UserMembershipsPage />) },
+              { path: '/dashboard/payments', element: withSuspense(<PaymentsPage />) },
+              { path: '/dashboard/roles', element: withSuspense(<RolesPage />) },
+              { path: '/dashboard/security', element: withSuspense(<SecurityPage />) },
+              { path: '/dashboard/trainers', element: withSuspense(<TrainersPage />) },
+              { path: '/dashboard/trainers/:trainerId', element: withSuspense(<TrainerDetailPage />) },
+              { path: '/dashboard/profile', element: withSuspense(<MemberProfilePage />) },
+              { path: '/dashboard/member/workouts', element: withSuspense(<MemberWorkoutsPage />) },
+              { path: '/dashboard/member/diet', element: withSuspense(<MemberDietPage />) },
+              { path: '/dashboard/member/progress', element: withSuspense(<MemberProgressPage />) },
+              { path: '/dashboard/training/body-parts', element: withSuspense(<BodyPartsPage />) },
+              { path: '/dashboard/training/exercises', element: withSuspense(<ExercisesPage />) },
+              {
+                path: '/dashboard/training/exercises-premium',
+                element: withSuspense(<ExerciseManagementPage />),
+              },
+              { path: '/dashboard/training/workout-studio', element: withSuspense(<WorkoutStudioPage />) },
+              {
+                path: '/dashboard/training/workout-plan-builder',
+                element: withSuspense(<WorkoutPlanBuilderPage />),
+              },
+              { path: '/dashboard/training/workout-plans', element: withSuspense(<WorkoutPlansPage />) },
+              {
+                path: '/dashboard/training/workout-assignments',
+                element: withSuspense(<WorkoutAssignmentsPage />),
+              },
+              { path: '/dashboard/diet-plans', element: withSuspense(<DietPlansDashboardPage />) },
+              { path: '/dashboard/diet-plans/list', element: withSuspense(<DietPlansPage />) },
+              { path: '/dashboard/diet-plans/assign', element: withSuspense(<AssignDietPlansPage />) },
+              { path: '/dashboard/gym-operations/equipment', element: withSuspense(<EquipmentPage />) },
+              { path: '/dashboard/gym-operations/maintenance', element: withSuspense(<MaintenancePage />) },
+              { path: '/dashboard/gym-operations/expenses', element: withSuspense(<ExpensesPage />) },
+              { path: '/dashboard/gym-operations/cleaning', element: withSuspense(<CleaningPage />) },
+              { path: '/dashboard/gym-operations/vendors', element: withSuspense(<VendorsPage />) },
+              { path: '/dashboard/gym-operations/reports', element: withSuspense(<GymOpsReportsPage />) },
+              { path: '/dashboard/locker-management/lockers', element: withSuspense(<LockersPage />) },
+              { path: '/dashboard/locker-management/assignments', element: withSuspense(<AssignmentsPage />) },
+              { path: '/dashboard/locker-management/access-logs', element: withSuspense(<AccessLogsPage />) },
+              {
+                path: '/dashboard/locker-management/maintenance',
+                element: withSuspense(<LockerMaintenancePage />),
+              },
+              { path: '/dashboard/locker-management/reports', element: withSuspense(<LockerReportsPage />) },
+              { path: '/dashboard/owner-analytics', element: withSuspense(<OwnerAnalyticsPage />) },
+              { path: '/dashboard/access/branches', element: withSuspense(<BranchesPage />) },
+              { path: '/dashboard/access/owner-qr', element: withSuspense(<OwnerQrDashboard />) },
+              { path: '/dashboard/access/scan', element: withSuspense(<ScanPage />) },
+            ],
+          },
+        ],
+      },
     ],
   },
 ])

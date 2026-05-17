@@ -1,4 +1,5 @@
 import '../core/api_client.dart';
+import '../core/api_exception.dart';
 import '../models/me_models.dart';
 
 /// Calls into the backend `/api/me/*` self-service endpoints.
@@ -65,6 +66,16 @@ class MeService {
       query: {'utcOffsetMinutes': offset},
     );
     return MeWorkoutSessionTemplate.fromJson(res.data ?? {});
+  }
+
+  Future<MeDietPlan?> getDietPlan() async {
+    try {
+      final res = await ApiClient.instance.get<Map<String, dynamic>>('/me/diet-plan');
+      return MeDietPlan.fromJson(res.data ?? {});
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   Future<MeWorkoutSessionCompleted> completeWorkoutSession({

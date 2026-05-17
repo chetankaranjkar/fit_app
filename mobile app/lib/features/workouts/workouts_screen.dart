@@ -12,6 +12,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/premium_background.dart';
+import '../shell/shell_layout_metrics.dart';
 import '../../widgets/skeleton_shimmer.dart';
 
 class WorkoutsScreen extends ConsumerWidget {
@@ -39,8 +40,7 @@ class WorkoutsScreen extends ConsumerWidget {
             ),
             plans.when(
               loading: () => SliverPadding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg, 0, AppSpacing.lg, 120),
+                padding: ShellLayoutMetrics.scrollPadding(context),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate.fixed([
                     for (var i = 0; i < 6; i++) ...[
@@ -62,15 +62,15 @@ class WorkoutsScreen extends ConsumerWidget {
                   return const SliverFillRemaining(
                     hasScrollBody: false,
                     child: EmptyState(
-                      title: 'No workout plans yet',
-                      message: 'Plans assigned to you will appear here.',
+                      title: 'No workout assigned',
+                      message:
+                          'Ask your trainer or front desk to assign a workout plan. Contact your gym if you need help.',
                       icon: CupertinoIcons.flame,
                     ),
                   );
                 }
                 return SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg, 0, AppSpacing.lg, 120),
+                  padding: ShellLayoutMetrics.scrollPadding(context),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       _WorkoutsHero(totalPlans: data.length),

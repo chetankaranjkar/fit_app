@@ -2,6 +2,16 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { authService } from '../../services/auth.service'
 import { PermissionGate } from '../auth/PermissionGate'
+import {
+  canAccessAttendanceNav,
+  canAccessConfigNav,
+  canAccessPaymentsNav,
+  canAccessReportsNav,
+  canAccessTrainingNav,
+  canAccessUsersNav,
+  isStaffFrontDeskOnly,
+  STAFF_FRONT_DESK_LINKS,
+} from '../../features/auth/navPermissions'
 import { linkPrefetchProps, prefetchRoute } from '../../routes/prefetch'
 
 const navItems = [
@@ -188,6 +198,7 @@ export function SidebarNav({
   const isLockerMgmtPath = lockerMgmtSubItems.some(
     (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
   )
+  const staffFrontDesk = isStaffFrontDeskOnly()
   const visibleAccessNav = accessNavItems.filter(
     (item) => !item.requiresQrConsole || authService.hasQrOwnerAccess(),
   )
@@ -200,7 +211,21 @@ export function SidebarNav({
   const [gymOpsOpen, setGymOpsOpen] = useState(isGymOpsPath)
   const [lockerMgmtOpen, setLockerMgmtOpen] = useState(isLockerMgmtPath)
   const [accessOpen, setAccessOpen] = useState(isAccessPath)
-  const visibleNavItems = navItems.filter((item) => item.path !== '/dashboard/security')
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.path === '/dashboard/security') return false
+    if (item.path === '/dashboard/attendance') return canAccessAttendanceNav()
+    if (item.path === '/dashboard/payments') return canAccessPaymentsNav()
+    if (item.path === '/dashboard/roles') return canAccessConfigNav()
+    if (item.path === '/dashboard/trainers') return canAccessUsersNav()
+    return true
+  })
+  const staffNavIcon: Record<string, keyof typeof iconMap> = {
+    '/dashboard': 'dashboard',
+    '/dashboard/attendance': 'attendance',
+    '/dashboard/users': 'clients',
+    '/dashboard/user-memberships': 'payments',
+    '/dashboard/access/scan': 'qrDoor',
+  }
 
   useEffect(() => {
     if (isUserPath) setUserOpen(true)
@@ -263,31 +288,14 @@ export function SidebarNav({
     if (mobileOpen && onCloseMobile) onCloseMobile()
   }
 
-  return (
-    <>
-      {/* Mobile backdrop */}
-      {mobileOpen && (
-        <div
-          onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-          aria-hidden="true"
-        />
-      )}
-
-      <aside
-        className={[
-          // Base
-          'relative z-50 flex h-screen shrink-0 flex-col border-r border-white/5 bg-[rgba(7,7,22,0.85)] backdrop-blur-xl transition-[width,transform] duration-300 ease-out',
-          // Mobile: fixed drawer
-          'fixed inset-y-0 left-0 lg:static',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full',
-          'lg:translate-x-0',
-        ].join(' ')}
-        style={{
-          width: collapsed ? '5rem' : '16rem',
-          minWidth: collapsed ? '5rem' : '16rem',
-        }}
-      >
+  const sidebarContent = (
+    <aside
+      className="z-50 flex h-screen shrink-0 flex-col border-r border-white/5 bg-[rgba(7,7,22,0.85)] backdrop-blur-xl transition-[width] duration-300 ease-out"
+      style={{
+        width: collapsed ? '5rem' : '16rem',
+        minWidth: collapsed ? '5rem' : '16rem',
+      }}
+    >
         {/* Brand / user block */}
         <div
           className={`flex flex-col items-center gap-3 px-3 pb-4 pt-6 ${
@@ -311,7 +319,7 @@ export function SidebarNav({
                   PulseFit
                 </p>
                 <p className="truncate text-[10px] uppercase tracking-widest text-slate-500">
-                  Admin Suite
+                  {staffFrontDesk ? 'Front Desk' : 'Admin Suite'}
                 </p>
               </div>
             )}
@@ -391,6 +399,33 @@ export function SidebarNav({
         <nav className="mt-2 flex min-h-0 flex-1 flex-col gap-0.5 px-3 pb-3">
           {/* Scrollable nav links */}
           <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+            {staffFrontDesk ? (
+              STAFF_FRONT_DESK_LINKS.map(({ path, label }) => {
+                const icon = staffNavIcon[path] ?? 'dashboard'
+                return (
+                  <Link
+                    key={path}
+                    to={path}
+                    {...linkPrefetchProps(path)}
+                    onClick={handleNavClick}
+                    title={collapsed ? label : undefined}
+                    className={linkClass(path)}
+                  >
+                    <span
+                      className={
+                        location.pathname === path || location.pathname.startsWith(path + '/')
+                          ? 'text-white'
+                          : 'text-slate-400 group-hover:text-white'
+                      }
+                    >
+                      {iconMap[icon]}
+                    </span>
+                    {!collapsed && <span className="truncate">{label}</span>}
+                  </Link>
+                )
+              })
+            ) : (
+              <>
             {/* Dashboard first */}
             {visibleNavItems.slice(0, 1).map(({ path, label, icon }) => (
               <Link
@@ -415,7 +450,8 @@ export function SidebarNav({
             ))}
 
             {/* Users group */}
-            {collapsed ? (
+            {canAccessUsersNav() &&
+            (collapsed ? (
               <Link
                 to="/dashboard/users"
                 {...linkPrefetchProps('/dashboard/users')}
@@ -473,7 +509,7 @@ export function SidebarNav({
                   </div>
                 )}
               </div>
-            )}
+            ))}
 
             {/* Payments, Roles, Trainers */}
             {visibleNavItems.slice(1).map(({ path, label, icon }) => (
@@ -497,7 +533,7 @@ export function SidebarNav({
                 {!collapsed && <span className="truncate">{label}</span>}
               </Link>
             ))}
-            <PermissionGate permission={authService.permissionCodes.reports}>
+            <PermissionGate permission={authService.permissionCodes.reports} fallback={null}>
               {(() => {
                 const item = navItems.find((n) => n.path === '/dashboard/security')
                 if (!item) return null
@@ -527,7 +563,8 @@ export function SidebarNav({
             </PermissionGate>
 
             {/* Training group */}
-            {collapsed ? (
+            {canAccessTrainingNav() &&
+            (collapsed ? (
               <Link
                 to="/dashboard/training/body-parts"
                 {...linkPrefetchProps('/dashboard/training/body-parts')}
@@ -587,10 +624,11 @@ export function SidebarNav({
                   </div>
                 )}
               </div>
-            )}
+            ))}
 
             {/* Diet group */}
-            {collapsed ? (
+            {canAccessTrainingNav() &&
+            (collapsed ? (
               <Link
                 to="/dashboard/diet-plans"
                 {...linkPrefetchProps('/dashboard/diet-plans')}
@@ -648,10 +686,11 @@ export function SidebarNav({
                   </div>
                 )}
               </div>
-            )}
+            ))}
 
             {/* Gym Operations group (isolated module) */}
-            {collapsed ? (
+            {canAccessReportsNav() &&
+            (collapsed ? (
               <Link
                 to="/dashboard/gym-operations/equipment"
                 {...linkPrefetchProps('/dashboard/gym-operations/equipment')}
@@ -709,10 +748,11 @@ export function SidebarNav({
                   </div>
                 )}
               </div>
-            )}
+            ))}
 
             {/* Locker Management group (isolated module) */}
-            {collapsed ? (
+            {canAccessConfigNav() &&
+            (collapsed ? (
               <Link
                 to="/dashboard/locker-management/lockers"
                 {...linkPrefetchProps('/dashboard/locker-management/lockers')}
@@ -770,7 +810,7 @@ export function SidebarNav({
                   </div>
                 )}
               </div>
-            )}
+            ))}
 
             {/* Door / QR entry */}
             {collapsed ? (
@@ -836,24 +876,28 @@ export function SidebarNav({
             )}
 
             {/* Owner Analytics (isolated module, single page with drill-down drawer) */}
-            <Link
-              to="/dashboard/owner-analytics"
-              {...linkPrefetchProps('/dashboard/owner-analytics')}
-              onClick={handleNavClick}
-              title={collapsed ? 'Owner Analytics' : undefined}
-              className={linkClass('/dashboard/owner-analytics')}
-            >
-              <span
-                className={
-                  location.pathname === '/dashboard/owner-analytics'
-                    ? 'text-white'
-                    : 'text-slate-400 group-hover:text-white'
-                }
+            {canAccessReportsNav() && (
+              <Link
+                to="/dashboard/owner-analytics"
+                {...linkPrefetchProps('/dashboard/owner-analytics')}
+                onClick={handleNavClick}
+                title={collapsed ? 'Owner Analytics' : undefined}
+                className={linkClass('/dashboard/owner-analytics')}
               >
-                {iconMap.analytics}
-              </span>
-              {!collapsed && <span className="truncate">Owner Analytics</span>}
-            </Link>
+                <span
+                  className={
+                    location.pathname === '/dashboard/owner-analytics'
+                      ? 'text-white'
+                      : 'text-slate-400 group-hover:text-white'
+                  }
+                >
+                  {iconMap.analytics}
+                </span>
+                {!collapsed && <span className="truncate">Owner Analytics</span>}
+              </Link>
+            )}
+              </>
+            )}
           </div>
 
           {/* Bottom: Help Center + Profile + Logout */}
@@ -921,7 +965,23 @@ export function SidebarNav({
             </button>
           </div>
         </nav>
-      </aside>
+    </aside>
+  )
+
+  return (
+    <>
+      <div className="hidden h-full shrink-0 lg:flex">{sidebarContent}</div>
+      {mobileOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+            onClick={onCloseMobile}
+          />
+          <div className="fixed inset-y-0 left-0 z-50 lg:hidden">{sidebarContent}</div>
+        </>
+      )}
     </>
   )
 }

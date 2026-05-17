@@ -133,12 +133,25 @@ namespace GymManagement.API.Controllers
             return Ok(notifications.Select(MapNotification).ToList());
         }
 
-        /// <summary>Public/active workout plans available for browse.</summary>
+        /// <summary>Workout plans assigned to the member via active <see cref="UserSchedule"/> rows.</summary>
         [HttpGet("workout-plans")]
         public async Task<ActionResult<IReadOnlyList<MeWorkoutPlanSummaryDto>>> GetWorkoutPlans()
         {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            var assignedPlanIds = await _db.UserSchedules.AsNoTracking()
+                .Where(s => s.UserId == userId.Value && s.IsActive)
+                .Select(s => s.WorkoutPlanId)
+                .Distinct()
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            if (assignedPlanIds.Count == 0)
+                return Ok(Array.Empty<MeWorkoutPlanSummaryDto>());
+
             var rows = await _db.WorkoutPlans.AsNoTracking()
-                .Where(p => p.IsActive && !p.IsDeleted)
+                .Where(p => assignedPlanIds.Contains(p.Id) && p.IsActive && !p.IsDeleted)
                 .OrderBy(p => p.Name)
                 .Select(p => new MeWorkoutPlanSummaryDto
                 {
@@ -148,11 +161,76 @@ namespace GymManagement.API.Controllers
                     DifficultyLevel = p.DifficultyLevel,
                     DurationMinutes = p.Duration,
                     Description = p.Description,
-                    ExerciseCount = p.WorkoutPlanExercises.Count
+                    ExerciseCount = p.WorkoutPlanExercises.Count(e => !e.IsDeleted)
                 })
-                .ToListAsync();
+                .ToListAsync()
+                .ConfigureAwait(false);
 
             return Ok(rows);
+        }
+
+        /// <summary>Active diet plan assigned to the member (meals included).</summary>
+        [HttpGet("diet-plan")]
+        public async Task<ActionResult<MeDietPlanDto>> GetDietPlan()
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            var today = DateTime.UtcNow.Date;
+            var assignment = await _db.UserDietPlans.AsNoTracking()
+                .Include(u => u.DietPlan)
+                    .ThenInclude(d => d.DietMeals)
+                    .ThenInclude(m => m.DietMealItems)
+                .Where(u => u.UserId == userId.Value
+                    && u.IsActive
+                    && !u.IsDeleted
+                    && u.DietPlan.IsActive
+                    && !u.DietPlan.IsDeleted
+                    && u.StartDate.Date <= today
+                    && (u.EndDate == null || u.EndDate.Value.Date >= today))
+                .OrderByDescending(u => u.StartDate)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (assignment?.DietPlan == null)
+                return NotFound();
+
+            var plan = assignment.DietPlan;
+            return Ok(new MeDietPlanDto
+            {
+                AssignmentId = assignment.Id,
+                DietPlanId = plan.Id,
+                PlanName = plan.PlanName,
+                GoalType = plan.GoalType,
+                Calories = plan.Calories,
+                ProteinGrams = plan.ProteinGrams,
+                CarbsGrams = plan.CarbsGrams,
+                FatsGrams = plan.FatsGrams,
+                Description = plan.Description,
+                StartDate = assignment.StartDate,
+                EndDate = assignment.EndDate,
+                Meals = plan.DietMeals
+                    .OrderBy(m => m.MealOrder)
+                    .Select(m => new MeDietMealDto
+                    {
+                        Id = m.Id,
+                        MealName = m.MealName,
+                        MealOrder = m.MealOrder,
+                        Items = m.DietMealItems
+                            .Select(i => new MeDietMealItemDto
+                            {
+                                Id = i.Id,
+                                FoodName = i.FoodName,
+                                Quantity = i.Quantity,
+                                Calories = i.Calories,
+                                ProteinGrams = i.ProteinGrams,
+                                CarbsGrams = i.CarbsGrams,
+                                FatsGrams = i.FatsGrams
+                            })
+                            .ToList()
+                    })
+                    .ToList()
+            });
         }
 
         /// <summary>

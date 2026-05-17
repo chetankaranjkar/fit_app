@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { authService } from '../../../services/auth.service'
+import { getPostLoginPath, resolveDashboardRole } from '../roleRouting'
 import type { LoginCredentials } from '../../../types/auth'
 
 export function useLoginMutation() {
@@ -15,7 +16,8 @@ export function useLoginMutation() {
       const token = data?.token?.trim()
       if (!token) return
       authService.storeSession(data)
-      navigate('/dashboard', { replace: true })
+      const role = resolveDashboardRole(data)
+      navigate(getPostLoginPath(role), { replace: true })
     },
     onError: (error: { response?: { data?: unknown; status?: number }; message?: string }) => {
       console.error('Login failed:', {

@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { authService } from '../services/auth.service'
 import { branchesService } from '../services/branches.service'
+import { organizationsService } from '../services/organizations.service'
 import { LocationPreviewMap } from '../components/maps/LocationPreviewMap'
 import type { BranchCrudDto, BranchCreatePayload, BranchUpdatePayload } from '../types/branch'
 
@@ -118,6 +119,7 @@ export function BranchesPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [geoBusy, setGeoBusy] = useState(false)
   const [mapRefreshKey, setMapRefreshKey] = useState(0)
+  const [newOrgName, setNewOrgName] = useState('')
 
   const branchesQuery = useQuery({
     queryKey: ['branches'],
@@ -175,6 +177,21 @@ export function BranchesPage() {
     onSuccess: () => invalidateBranches(),
   })
 
+  const createOrgMut = useMutation({
+    mutationFn: (name: string) =>
+      organizationsService.create({ name: name.trim(), organizationType: 'Gym' }),
+    onSuccess: (res) => {
+      const created = res.data
+      queryClient.invalidateQueries({ queryKey: ['branches', 'organizations'] })
+      if (created?.id) {
+        setForm((f) => ({ ...f, organizationId: created.id }))
+      }
+      setNewOrgName('')
+      toast.success(`Organization "${created?.name ?? 'created'}" added.`)
+    },
+    onError: (e: unknown) => toast.error(errMsg(e)),
+  })
+
   function buildPayload(f: BranchFormFields): BranchUpdatePayload | null {
     const coords = coordsFromInputs(f.latStr, f.lngStr)
     if (!coords.ok) {
@@ -216,6 +233,12 @@ export function BranchesPage() {
   }
 
   function fillLocationFromDevice() {
+    if (!window.isSecureContext) {
+      setFormError(
+        'GPS location needs HTTPS. On http://IP-only hosting, type latitude & longitude manually (see OpenStreetMap link after entering coords).',
+      )
+      return
+    }
     if (!navigator.geolocation) {
       setFormError('This browser does not support geolocation.')
       return
@@ -237,9 +260,18 @@ export function BranchesPage() {
         setGeoBusy(false)
         toast.success('Location set — confirm on the map below.')
       },
-      () => {
+      (err) => {
         setGeoBusy(false)
-        setFormError('Could not read location. Allow location permission and try again.')
+        const code = (err as GeolocationPositionError)?.code
+        const detail =
+          code === 1
+            ? 'Permission denied — allow location for this site in the browser.'
+            : code === 2
+              ? 'Position unavailable.'
+              : code === 3
+                ? 'Timed out — try again near a window.'
+                : 'Could not read location.'
+        setFormError(detail)
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
     )
@@ -383,9 +415,33 @@ export function BranchesPage() {
                   )}
                   {orgQuery.isSuccess && (!orgQuery.data || orgQuery.data.length === 0) && (
                     <p className="mt-1 text-xs text-amber-200/90">
-                      No organizations in the database yet. Leave as &quot;None&quot; or add rows in Organizations.
+                      No organizations yet — create one below or leave as &quot;None&quot;.
                     </p>
                   )}
+                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                    <div className="min-w-[12rem] flex-1">
+                      <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">
+                        New organization
+                      </label>
+                      <input
+                        type="text"
+                        value={newOrgName}
+                        onChange={(e) => setNewOrgName(e.target.value)}
+                        placeholder="e.g. PulseFit Gym"
+                        className={selectClass}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      isLoading={createOrgMut.isPending}
+                      disabled={!newOrgName.trim()}
+                      onClick={() => createOrgMut.mutate(newOrgName)}
+                    >
+                      Add organization
+                    </Button>
+                  </div>
                 </div>
                 <Input
                   label="Address (optional)"

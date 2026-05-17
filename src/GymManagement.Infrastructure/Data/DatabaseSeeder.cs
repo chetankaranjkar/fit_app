@@ -24,6 +24,9 @@ namespace GymManagement.Infrastructure.Data
             await EnsureRolesExistAsync();
             await _unitOfWork.SaveChangesAsync();
 
+            await EnsureDefaultOrganizationAsync();
+            await _unitOfWork.SaveChangesAsync();
+
             // Seed default Admin (profile) + AuthUser (login)
             await SeedDefaultAdminAndAuthAsync();
             await _unitOfWork.SaveChangesAsync();
@@ -194,6 +197,20 @@ namespace GymManagement.Infrastructure.Data
                 };
                 await _unitOfWork.Trainers.AddAsync(newTrainer);
             }
+        }
+
+        private async Task EnsureDefaultOrganizationAsync()
+        {
+            if (await _context.Organizations.AnyAsync())
+                return;
+
+            await _context.Organizations.AddAsync(new Organization
+            {
+                Name = "PulseFit Gym",
+                OrganizationType = "Gym",
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow,
+            });
         }
 
         /// <summary>

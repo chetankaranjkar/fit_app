@@ -1,4 +1,5 @@
 using GymManagement.Core.Interfaces;
+using GymManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -52,6 +53,38 @@ public static class DatabaseBootstrap
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Bootstrap seed failed. Run deploy/scripts/seed.sh on the server.");
+        }
+    }
+
+    public static async Task EnsureDefaultOrganizationAsync(
+        IServiceProvider services,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        try
+        {
+            if (!await db.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false))
+                return;
+
+            if (await db.Organizations.AnyAsync(cancellationToken).ConfigureAwait(false))
+                return;
+
+            db.Organizations.Add(new Organization
+            {
+                Name = "PulseFit Gym",
+                OrganizationType = "Gym",
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            logger.LogInformation("Created default organization: PulseFit Gym");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not create default organization.");
         }
     }
 }

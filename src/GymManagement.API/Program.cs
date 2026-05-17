@@ -233,6 +233,7 @@ builder.Services.AddScoped<GymManagement.Core.Services.LockerMgmt.ILockerAccessL
 builder.Services.AddScoped<GymManagement.Core.Services.LockerMgmt.ILockerMaintenanceService, GymManagement.Infrastructure.Services.LockerMgmt.LockerMaintenanceService>();
 
 builder.Services.AddScoped<IBranchCrudService, BranchCrudService>();
+builder.Services.AddScoped<IOrganizationService, OrganizationService>();
 builder.Services.AddScoped<IBranchQrAccessService, BranchQrAccessService>();
 builder.Services.AddScoped<IGymQrService, GymQrService>();
 builder.Services.AddScoped<IDoorUnlockService, DoorUnlockService>();
@@ -788,6 +789,7 @@ else
     if (!useSqlite)
     {
         await DatabaseBootstrap.SeedIfNoAccountsAsync(app.Services, logger);
+        await DatabaseBootstrap.EnsureDefaultOrganizationAsync(app.Services, logger);
     }
 }
 

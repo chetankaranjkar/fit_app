@@ -1,0 +1,54 @@
+# Deploy to Hostinger VPS (Docker) after CI passes on main, or manually.
+# Setup: deploy/GITHUB-DEPLOY.md
+
+name: Deploy to Hostinger
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: hostinger-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Pull and rebuild on VPS
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    environment: production
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 45m
+          script: |
+            set -euo pipefail
+            REPO_DIR="${{ secrets.HOSTINGER_DEPLOY_PATH }}"
+            if [ -z "${REPO_DIR}" ]; then REPO_DIR="/opt/gym"; fi
+            cd "${REPO_DIR}"
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            chmod +x deploy/scripts/*.sh
+            ./deploy/scripts/update.sh
+
+      - name: Health check
+        run: |
+          URL="${{ secrets.HOSTINGER_HEALTH_URL }}"
+          if [ -z "${URL}" ]; then
+            URL="http://${{ secrets.HOSTINGER_SSH_HOST }}/api/health/ready"
+          fi
+          echo "Checking ${URL}"
+          curl -fsS --retry 12 --retry-delay 10 --retry-all-errors "${URL}"

@@ -232,7 +232,7 @@ See [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md).
 
 | Task | Command |
 |------|---------|
-| Update app | `./deploy/scripts/update.sh` |
+| Update app | `./deploy/scripts/update.sh` or auto via [GITHUB-DEPLOY.md](./GITHUB-DEPLOY.md) |
 | Restart all | `./deploy/scripts/restart.sh` |
 | Logs | `./deploy/scripts/logs.sh` or `./deploy/scripts/logs.sh api -f` |
 | Backup DB + uploads | `./deploy/scripts/backup.sh` |

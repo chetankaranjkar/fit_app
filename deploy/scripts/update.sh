@@ -9,7 +9,9 @@ require_env
 cd "${REPO_ROOT}"
 
 echo "==> Pulling latest code..."
-git pull --ff-only
+git fetch origin main
+git checkout main 2>/dev/null || git checkout -B main
+git pull --ff-only origin main
 
 echo "==> Rebuilding and restarting..."
 compose build

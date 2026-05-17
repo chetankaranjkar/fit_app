@@ -89,6 +89,12 @@ Login (first time): `admin@gym.com` / `admin123` — change the password after l
 ./deploy/scripts/update.sh        # after git pull
 ```
 
+## Auto-deploy from GitHub (optional)
+
+After CI passes on `main`, GitHub Actions can SSH to this VPS and run `update.sh` automatically.
+
+See **[GITHUB-DEPLOY.md](./GITHUB-DEPLOY.md)** — add `HOSTINGER_SSH_*` secrets, then every push to `main` updates the site at your VPS IP.
+
 ## When you get a domain later
 
 1. Set `DEPLOY_MODE=production` (or remove it) in `deploy/.env`

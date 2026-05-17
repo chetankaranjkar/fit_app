@@ -201,7 +201,7 @@ export function WorkoutPlanBuilderPage() {
           console.warn('addWorkoutDay failed', dayError)
         }
       }
-      toast.success('Workout plan created')
+      toast.success('Program created')
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('createWorkoutPlan failed', error)
@@ -330,7 +330,7 @@ export function WorkoutPlanBuilderPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-sky-300/70">Training Module</p>
-            <h1 className="text-xl font-semibold text-white md:text-2xl">Workout Plan Builder</h1>
+            <h1 className="text-xl font-semibold text-white md:text-2xl">Program Builder</h1>
           </div>
 
           {hasPlan ? (

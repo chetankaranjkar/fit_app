@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { getSafeDashboardReturnPath, parseMemberIdsQuery } from '../lib/safeReturnPath'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -63,6 +65,10 @@ const getInitials = (name?: string | null, fallback?: number) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
+function formatMemberLabel(u: User) {
+  return `${u.firstName} ${u.lastName}`.trim() || `User #${u.id}`
+}
+
 const daysBetween = (start?: string | null, end?: string | null) => {
   if (!start) return null
   const s = new Date(start).getTime()
@@ -73,12 +79,21 @@ const daysBetween = (start?: string | null, end?: string | null) => {
 
 export function AssignDietPlansPage() {
   const { userName: dashboardUserName } = getDashboardUser()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const presetUserId = Number.parseInt(searchParams.get('userId') ?? '', 10)
+  const memberIdsQuery = searchParams.get('memberIds') ?? ''
+  const returnToSafe = useMemo(
+    () => getSafeDashboardReturnPath(searchParams.get('returnTo')),
+    [searchParams],
+  )
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(getDefaultForm())
   const [formError, setFormError] = useState<string | null>(null)
+  const [bulkAssignMode, setBulkAssignMode] = useState(false)
+  const [bulkUserIds, setBulkUserIds] = useState<number[]>([])
+  const [bulkSubmitting, setBulkSubmitting] = useState(false)
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [search, setSearch] = useState('')
 
@@ -107,10 +122,21 @@ export function AssignDietPlansPage() {
   })
 
   useEffect(() => {
-    if (!Number.isInteger(presetUserId) || presetUserId <= 0) return
-    setForm((f) => ({ ...f, userId: presetUserId }))
-    setModalOpen(true)
-  }, [presetUserId])
+    const presetBulk = parseMemberIdsQuery(memberIdsQuery)
+    if (presetBulk.length > 1) {
+      setBulkAssignMode(true)
+      setBulkUserIds(presetBulk)
+      setForm((f) => ({ ...f, userId: 0 }))
+      setModalOpen(true)
+      return
+    }
+    if (Number.isInteger(presetUserId) && presetUserId > 0) {
+      setBulkAssignMode(false)
+      setBulkUserIds([])
+      setForm((f) => ({ ...f, userId: presetUserId }))
+      setModalOpen(true)
+    }
+  }, [presetUserId, memberIdsQuery])
 
   const assignMutation = useMutation({
     mutationFn: (dto: CreateUserDietPlanDto) => userDietPlansService.assign(dto),
@@ -122,7 +148,13 @@ export function AssignDietPlansPage() {
       }
       setModalOpen(false)
       setForm(getDefaultForm())
+      setBulkAssignMode(false)
+      setBulkUserIds([])
       setFormError(null)
+      toast.success('Diet plan assigned.')
+      if (returnToSafe) {
+        navigate(returnToSafe)
+      }
     },
     onError: (err: Error) => setFormError(err.message || 'Failed to assign diet plan'),
   })
@@ -135,9 +167,74 @@ export function AssignDietPlansPage() {
     },
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const toggleBulkUserId = (userId: number) => {
+    setBulkUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    )
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
+
+    const activeForUsers = (userIds: number[]) =>
+      assignments.filter((a) => userIds.includes(a.userId) && a.isActive)
+
+    if (bulkAssignMode) {
+      if (!form.dietPlanId) {
+        setFormError('Select a diet plan.')
+        return
+      }
+      const targetIds = bulkUserIds
+      if (targetIds.length === 0) {
+        setFormError('Select one or more members.')
+        return
+      }
+      const conflicts = activeForUsers(targetIds)
+      if (conflicts.length > 0 && (form.isActive ?? true)) {
+        if (
+          !window.confirm(
+            `${conflicts.length} selected member${conflicts.length === 1 ? ' has' : 's have'} an active diet plan. Assigning will replace those with "${plans.find((p) => p.id === form.dietPlanId)?.planName ?? 'this plan'}". Continue?`,
+          )
+        ) {
+          return
+        }
+      }
+      const dtoBase: CreateUserDietPlanDto = {
+        dietPlanId: form.dietPlanId,
+        startDate: form.startDate,
+        endDate: form.endDate || undefined,
+        isActive: form.isActive ?? true,
+        notes: form.notes || undefined,
+      }
+      setBulkSubmitting(true)
+      try {
+        let succeeded = 0
+        let failed = 0
+        for (const userId of targetIds) {
+          try {
+            await userDietPlansService.assign({ ...dtoBase, userId })
+            succeeded++
+            queryClient.invalidateQueries({ queryKey: ['userDietPlans', userId] })
+          } catch {
+            failed++
+          }
+        }
+        await queryClient.invalidateQueries({ queryKey: ['user-diet-plans'] })
+        await queryClient.invalidateQueries({ queryKey: ['userDietPlans'] })
+        if (succeeded > 0) toast.success(`Assigned diet plan to ${succeeded} member${succeeded === 1 ? '' : 's'}.`)
+        if (failed > 0) toast.error(`${failed} assignment${failed === 1 ? '' : 's'} failed — check conflicts or try again per member.`)
+        setModalOpen(false)
+        setForm(getDefaultForm())
+        setBulkAssignMode(false)
+        setBulkUserIds([])
+        if (returnToSafe && succeeded > 0 && targetIds.length === 1) navigate(returnToSafe)
+      } finally {
+        setBulkSubmitting(false)
+      }
+      return
+    }
+
     if (!form.userId || !form.dietPlanId) {
       setFormError('Please select a user and a diet plan.')
       return
@@ -165,12 +262,18 @@ export function AssignDietPlansPage() {
     })
   }
 
+  function openFreshAssignModal() {
+    setFormError(null)
+    setBulkAssignMode(false)
+    setBulkUserIds([])
+    setForm(getDefaultForm())
+    setModalOpen(true)
+  }
+
   const handleUnassign = (a: UserDietPlanDto) => {
     if (!window.confirm(`Remove assignment of "${a.dietPlanName}" from "${a.userName}"?`)) return
     unassignMutation.mutate(a.id)
   }
-
-  const formatMemberLabel = (u: User) => `${u.firstName} ${u.lastName}`.trim() || `User #${u.id}`
 
   const stats = useMemo(() => {
     const total = assignments.length
@@ -199,7 +302,19 @@ export function AssignDietPlansPage() {
       <div className="min-w-0 space-y-6">
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
+          <div className="min-w-0">
+            {returnToSafe && (
+              <button
+                type="button"
+                onClick={() => navigate(returnToSafe)}
+                className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+              >
+                <svg className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to member
+              </button>
+            )}
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-300/80">Nutrition · Assignments</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Assign{' '}
@@ -215,7 +330,7 @@ export function AssignDietPlansPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setModalOpen(true)}
+              onClick={openFreshAssignModal}
               className="inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,#fbbf24_0%,#fb923c_50%,#f43f5e_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-110"
             >
               <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -322,7 +437,7 @@ export function AssignDietPlansPage() {
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <EmptyAssign onAdd={() => setModalOpen(true)} hasQuery={!!search || statusFilter !== 'all'} />
+          <EmptyAssign onAdd={openFreshAssignModal} hasQuery={!!search || statusFilter !== 'all'} />
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((a) => (
@@ -350,25 +465,74 @@ export function AssignDietPlansPage() {
               {formError}
             </p>
           )}
-          <div>
-            <label className={labelClass}>Member</label>
-            <select
-              aria-label="Select user"
-              value={form.userId || ''}
-              onChange={(e) => setForm((f) => ({ ...f, userId: Number(e.target.value) }))}
-              className={selectClass}
-              required
-            >
-              <option value="" className="bg-slate-900">
-                Select member
-              </option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id} className="bg-slate-900">
-                  {formatMemberLabel(u)} ({u.email})
+          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={bulkAssignMode}
+              onChange={(e) => {
+                const on = e.target.checked
+                setBulkAssignMode(on)
+                setFormError(null)
+                if (on && form.userId > 0) {
+                  setBulkUserIds([form.userId])
+                }
+                if (!on) {
+                  setBulkUserIds([])
+                }
+              }}
+              className="h-4 w-4 rounded border-white/20 bg-white/5 text-amber-500 focus:ring-amber-400/40"
+            />
+            <span className="text-sm text-slate-200">Assign to multiple members</span>
+          </label>
+          {bulkAssignMode ? (
+            <div>
+              <p className={labelClass}>Members ({bulkUserIds.length} selected)</p>
+              <div className="max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.03] p-2">
+                {users.length === 0 ? (
+                  <p className="px-2 py-3 text-sm text-slate-500">No members loaded.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {users.map((u) => (
+                      <li key={u.id}>
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-200 hover:bg-white/[0.06]">
+                          <input
+                            type="checkbox"
+                            checked={bulkUserIds.includes(u.id)}
+                            onChange={() => toggleBulkUserId(u.id)}
+                            className="h-4 w-4 rounded border-white/20 bg-white/5 text-amber-500"
+                          />
+                          <span className="min-w-0 truncate">
+                            {formatMemberLabel(u)}{' '}
+                            <span className="text-slate-500">({u.email})</span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className={labelClass}>Member</label>
+              <select
+                aria-label="Select user"
+                value={form.userId || ''}
+                onChange={(e) => setForm((f) => ({ ...f, userId: Number(e.target.value) }))}
+                className={selectClass}
+                required
+              >
+                <option value="" className="bg-slate-900">
+                  Select member
                 </option>
-              ))}
-            </select>
-          </div>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id} className="bg-slate-900">
+                    {formatMemberLabel(u)} ({u.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className={labelClass}>Diet plan</label>
             <select
@@ -427,8 +591,8 @@ export function AssignDietPlansPage() {
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={assignMutation.isPending}>
-              {assignMutation.isPending ? 'Assigning…' : 'Assign'}
+            <Button type="submit" disabled={assignMutation.isPending || bulkSubmitting}>
+              {assignMutation.isPending || bulkSubmitting ? 'Assigning…' : 'Assign'}
             </Button>
           </div>
         </form>

@@ -77,7 +77,7 @@ export class WorkoutPlanBuilderRepository {
     if (!plan) return null
 
     const daysResult = await pool.request().input('id', id).query(`
-      SELECT Id AS id, WorkoutPlanId AS workoutPlanId, DayNumber AS dayNumber, Name AS name, IsRestDay AS isRestDay, OrderIndex AS orderIndex
+      SELECT Id AS id, WorkoutPlanId AS workoutPlanId, WorkoutPlanWeekId AS workoutPlanWeekId, DayNumber AS dayNumber, Name AS name, IsRestDay AS isRestDay, OrderIndex AS orderIndex
       FROM WorkoutPlanDays WHERE WorkoutPlanId = @id ORDER BY OrderIndex ASC
     `)
 
@@ -102,18 +102,40 @@ export class WorkoutPlanBuilderRepository {
     }
   }
 
+  private async ensureWeekOne(workoutPlanId: number): Promise<number> {
+    const pool = await getDbPool()
+    const existing = await pool.request().input('pid', workoutPlanId).query(`
+      SELECT TOP 1 Id AS id FROM WorkoutPlanWeeks WHERE WorkoutPlanId = @pid AND WeekNumber = 1 AND IsDeleted = 0
+    `)
+    const found = existing.recordset?.[0]?.id as number | undefined
+    if (found) return found
+    await pool
+      .request()
+      .input('pid', workoutPlanId)
+      .query(`
+        INSERT INTO WorkoutPlanWeeks (WorkoutPlanId, WeekNumber, Name, CreatedDate, IsDeleted)
+        VALUES (@pid, 1, N'Week 1', GETDATE(), 0)
+      `)
+    const inserted = await pool.request().input('pid', workoutPlanId).query(`
+      SELECT TOP 1 Id AS id FROM WorkoutPlanWeeks WHERE WorkoutPlanId = @pid AND WeekNumber = 1 ORDER BY Id DESC
+    `)
+    return inserted.recordset?.[0]?.id as number
+  }
+
   async addDay(workoutPlanId: number, input: AddWorkoutPlanDayInput) {
     const pool = await getDbPool()
+    const weekId = await this.ensureWeekOne(workoutPlanId)
     await pool
       .request()
       .input('workoutPlanId', workoutPlanId)
+      .input('workoutPlanWeekId', weekId)
       .input('dayNumber', input.dayNumber)
       .input('name', input.name)
       .input('isRestDay', input.isRestDay ?? false)
       .input('orderIndex', input.orderIndex)
       .query(`
-        INSERT INTO WorkoutPlanDays (WorkoutPlanId, DayNumber, Name, IsRestDay, OrderIndex, CreatedDate, IsDeleted)
-        VALUES (@workoutPlanId, @dayNumber, @name, @isRestDay, @orderIndex, GETDATE(), 0)
+        INSERT INTO WorkoutPlanDays (WorkoutPlanId, WorkoutPlanWeekId, DayNumber, Name, IsRestDay, OrderIndex, CreatedDate, IsDeleted)
+        VALUES (@workoutPlanId, @workoutPlanWeekId, @dayNumber, @name, @isRestDay, @orderIndex, GETDATE(), 0)
       `)
     return this.getWorkoutPlanById(workoutPlanId)
   }

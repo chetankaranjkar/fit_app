@@ -14,6 +14,8 @@ namespace GymManagement.Core.Interfaces
         IRepository<Exercise> Exercises { get; }
         IRepository<ExerciseStep> ExerciseSteps { get; }
         IRepository<WorkoutPlan> WorkoutPlans { get; }
+        IRepository<WorkoutPlanWeek> WorkoutPlanWeeks { get; }
+        IRepository<WorkoutPlanDay> WorkoutPlanDays { get; }
         IRepository<WorkoutPlanExercise> WorkoutPlanExercises { get; }
         IRepository<UserSchedule> UserSchedules { get; }
         IRepository<WorkoutSession> WorkoutSessions { get; }

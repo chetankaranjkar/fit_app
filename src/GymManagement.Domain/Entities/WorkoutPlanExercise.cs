@@ -10,6 +10,9 @@
         public int RestBetweenSets { get; set; } // in seconds
         public int Order { get; set; }
         public decimal? Weight { get; set; } // Optional weight for the exercise
+        public string? Tempo { get; set; }
+        public string? Intensity { get; set; }
+        public string? Notes { get; set; }
 
         // Navigation properties
         public WorkoutPlan WorkoutPlan { get; set; } = null!;

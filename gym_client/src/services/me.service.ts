@@ -95,9 +95,66 @@ export type MeDietPlan = {
   }[]
 }
 
+export type MeWorkoutExerciseLine = {
+  planExerciseId: number
+  exerciseId: number
+  exerciseName: string
+  bodyPartName?: string | null
+  order: number
+  targetSets: number
+  targetReps: number
+  restSeconds: number
+  suggestedWeight?: number | null
+  lastSessionDateUtc?: string | null
+  lastWeightUsed?: number | null
+  lastRepsDone?: number | null
+}
+
+export type MeWorkoutPlanSummary = {
+  id: number
+  planName: string
+  workoutType: string
+  difficultyLevel?: string | null
+  durationMinutes?: number | null
+  description?: string | null
+  exerciseCount: number
+  goal?: string | null
+  durationDays?: number | null
+  workoutsPerWeek?: number | null
+}
+
+export type MeMemberScheduleSlot = {
+  scheduleId: number
+  scheduleType: string
+  dayOfWeek: number
+  startTime: string
+  endTime: string
+  trainerName?: string | null
+}
+
+export type MePlanDayOutline = {
+  planDayId: number
+  dayNumber: number
+  name: string
+  isRestDay: boolean
+  focusArea?: string | null
+  exercises: MeWorkoutExerciseLine[]
+}
+
+export type MeAssignedProgram = {
+  plan: MeWorkoutPlanSummary
+  scheduleSlots: MeMemberScheduleSlot[]
+  days: MePlanDayOutline[]
+}
+
+export type MeWorkoutProgram = {
+  programs: MeAssignedProgram[]
+}
+
 export const meService = {
   getDashboard: () => api.get<MeDashboard>('/me/dashboard'),
   getProfile: () => api.get<MeProfile>('/me/profile'),
-  getWorkoutPlans: () => api.get<unknown[]>('/me/workout-plans'),
+  getWorkoutPlans: () => api.get<MeWorkoutPlanSummary[]>('/me/workout-plans'),
+  getWorkoutProgram: () => api.get<MeWorkoutProgram>('/me/workout-program'),
   getDietPlan: () => api.get<MeDietPlan>('/me/diet-plan'),
 }

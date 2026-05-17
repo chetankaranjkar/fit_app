@@ -33,9 +33,9 @@ const trainingSubItems = [
   { path: '/dashboard/training/body-parts', label: 'Body Parts' },
   { path: '/dashboard/training/exercises', label: 'Exercises' },
   { path: '/dashboard/training/exercises-premium', label: 'Exercises Premium' },
-  { path: '/dashboard/training/workout-plan-builder', label: 'Workout Plan Builder' },
+  { path: '/dashboard/training/workout-plan-builder', label: 'Program Builder' },
   { path: '/dashboard/training/workout-studio', label: 'Workout Studio (AI + 3D)' },
-  { path: '/dashboard/training/workout-plans', label: 'Workout Plans' },
+  { path: '/dashboard/training/programs', label: 'Programs' },
   { path: '/dashboard/training/workout-assignments', label: 'Workout Assignments' },
 ] as const
 
@@ -296,59 +296,27 @@ export function SidebarNav({
         minWidth: collapsed ? '5rem' : '16rem',
       }}
     >
-        {/* Brand / user block */}
-        <div
-          className={`flex flex-col items-center gap-3 px-3 pb-4 pt-6 ${
-            collapsed ? 'px-2' : ''
-          }`}
-        >
-          <div
-            className={`flex items-center gap-3 ${
-              collapsed ? 'flex-col' : 'w-full'
-            }`}
-          >
-            {/* Logo mark */}
-            <div className="relative flex size-10 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] text-white shadow-lg shadow-purple-500/30">
-              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 8h2v8H6m10-8h2v8h-2M8 12h8M4 10h2v4H4m14-4h2v4h-2" />
-              </svg>
-            </div>
-            {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="truncate bg-[linear-gradient(135deg,#60a5fa,#c084fc)] bg-clip-text text-sm font-bold uppercase tracking-wider text-transparent">
-                  PulseFit
-                </p>
-                <p className="truncate text-[10px] uppercase tracking-widest text-slate-500">
-                  {staffFrontDesk ? 'Front Desk' : 'Admin Suite'}
-                </p>
-              </div>
-            )}
+        {/* ── Brand bar ── */}
+        <div className={`flex items-center border-b border-white/[0.06] px-3 py-4 ${collapsed ? 'justify-center px-2' : 'gap-3'}`}>
+          {/* Logo mark */}
+          <div className="relative flex size-9 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] text-white shadow-lg shadow-purple-500/30">
+            <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 8h2v8H6m10-8h2v8h-2M8 12h8M4 10h2v4H4m14-4h2v4h-2" />
+            </svg>
+            {/* Pulse dot */}
+            <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+              <span className="relative h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            </span>
           </div>
-
-          {/* User chip */}
           {!collapsed && (
-            <div className="mt-2 flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-2.5">
-              <div className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#3b82f6,#a855f7)] text-xs font-bold text-white">
-                {userAvatarUrl ? (
-                  <img src={userAvatarUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <span>
-                    {displayName
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')
-                      .slice(0, 2)
-                      .toUpperCase()}
-                  </span>
-                )}
-                <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-slate-950 bg-emerald-400" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white">{displayName}</p>
-                <p className="truncate text-[10px] uppercase tracking-wider text-slate-400">
-                  Online
-                </p>
-              </div>
+            <div className="min-w-0">
+              <p className="truncate bg-[linear-gradient(135deg,#60a5fa,#c084fc)] bg-clip-text text-sm font-extrabold uppercase tracking-widest text-transparent leading-none">
+                PulseFit
+              </p>
+              <p className="truncate text-[9px] uppercase tracking-[0.2em] text-slate-600 mt-0.5">
+                {staffFrontDesk ? 'Front Desk' : 'Admin Suite'}
+              </p>
             </div>
           )}
         </div>
@@ -391,7 +359,7 @@ export function SidebarNav({
         )}
 
         {!collapsed && (
-          <p className="px-5 pt-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+          <p className="px-4 pt-3 pb-1 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">
             Navigation
           </p>
         )}

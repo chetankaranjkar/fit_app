@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { authService } from '../../services/auth.service'
+import { useDashboardRoleOrCurrent } from '../../features/auth/DashboardRoleContext'
+import { dashboardService } from '../../services/dashboard.service'
+import { meService } from '../../services/me.service'
+import type { MeNotification } from '../../services/me.service'
+import type { DashboardAlert } from '../../services/dashboard.service'
 
 interface TopNavbarProps {
   userName: string
@@ -24,6 +30,9 @@ export function TopNavbar({
   title = 'Dashboard',
 }: TopNavbarProps) {
   const navigate = useNavigate()
+  const dashboardRole = useDashboardRoleOrCurrent()
+  const notificationsRef = useRef<HTMLDivElement>(null)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [expiryLabel, setExpiryLabel] = useState<string | null>(null)
   const [isExpiringSoon, setIsExpiringSoon] = useState(false)
   const initials = userName
@@ -76,6 +85,68 @@ export function TopNavbar({
     return () => window.clearInterval(intervalId)
   }, [])
 
+  const { data: meDashData, isLoading: meNotificationsLoading } = useQuery({
+    queryKey: ['top-navbar-me-dashboard'],
+    queryFn: async () => {
+      const { data } = await meService.getDashboard()
+      return data
+    },
+    enabled: dashboardRole === 'member',
+    staleTime: 120_000,
+    retry: 1,
+  })
+
+  const { data: staffNotifData, isLoading: staffNotificationsLoading } = useQuery({
+    queryKey: ['top-navbar-staff-dashboard-notifications'],
+    queryFn: async () => {
+      try {
+        const { data } = await dashboardService.getNotifications()
+        return data
+      } catch {
+        return { alerts: [] as DashboardAlert[], hooks: { emailEnabled: false, whatsAppEnabled: false } }
+      }
+    },
+    enabled: dashboardRole === 'admin' || dashboardRole === 'trainer',
+    staleTime: 120_000,
+    retry: false,
+  })
+
+  const memberNotifications: MeNotification[] = meDashData?.recentNotifications ?? []
+  const staffAlerts: DashboardAlert[] = staffNotifData?.alerts ?? []
+  const unreadMemberCount = memberNotifications.filter((n) => !n.isRead).length
+  const hasStaffAlerts = staffAlerts.length > 0
+  const showNotificationDot =
+    dashboardRole === 'member' ? unreadMemberCount > 0 : hasStaffAlerts
+
+  useEffect(() => {
+    if (!notificationsOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNotificationsOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [notificationsOpen])
+
+  useEffect(() => {
+    if (!notificationsOpen) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const root = notificationsRef.current
+      if (!root || !(e.target instanceof Node) || root.contains(e.target)) return
+      setNotificationsOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [notificationsOpen])
+
+  const handleNewMember = () => {
+    try {
+      sessionStorage.setItem('gym_openAddMember', '1')
+    } catch {
+      /* ignore storage blocked */
+    }
+    navigate('/dashboard/users', { state: { openAddMember: true } })
+  }
+
   return (
     <header
       className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-white/5 bg-[rgba(11,11,26,0.55)] px-4 backdrop-blur-xl sm:px-6"
@@ -99,7 +170,7 @@ export function TopNavbar({
       <h1 className="truncate text-base font-semibold text-white lg:hidden">{title}</h1>
 
       {/* Search */}
-      <div className="ml-2 hidden max-w-md flex-1 md:flex">
+      <div className="ml-2 hidden max-w-sm flex-1 md:flex">
         <div className="group relative w-full">
           <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400 group-focus-within:text-blue-300">
             <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,28 +200,121 @@ export function TopNavbar({
             Active until {expiryLabel}
           </button>
         )}
-        {/* Quick action: New */}
-        <button
-          type="button"
-          className="hidden items-center gap-1.5 rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-500/20 transition hover:brightness-110 sm:inline-flex"
-        >
-          <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Member
-        </button>
+        {/* Quick action: New (staff-facing members list) */}
+        {dashboardRole !== 'member' && (
+          <button
+            type="button"
+            onClick={handleNewMember}
+            className="hidden items-center gap-1.5 rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-500/20 transition hover:brightness-110 sm:inline-flex"
+          >
+            <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Member
+          </button>
+        )}
 
         {/* Notifications */}
-        <button
-          type="button"
-          className="relative inline-flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
-          aria-label="Notifications"
-        >
-          <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .53-.21 1.04-.59 1.41L4 17h5m6 0a3 3 0 11-6 0" />
-          </svg>
-          <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-pink-500 animate-pulse-glow" />
-        </button>
+        <div className="relative" ref={notificationsRef}>
+          <button
+            type="button"
+            onClick={() => setNotificationsOpen((o) => !o)}
+            className={`relative inline-flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white ${notificationsOpen ? 'ring-2 ring-blue-400/35' : ''}`}
+            aria-expanded={notificationsOpen}
+            aria-label="Notifications"
+          >
+            <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .53-.21 1.04-.59 1.41L4 17h5m6 0a3 3 0 11-6 0" />
+            </svg>
+            {showNotificationDot ? (
+              <span className="absolute right-1.5 top-1.5 flex size-2 items-center justify-center">
+                <span className="absolute inline-flex size-2.5 animate-ping rounded-full bg-pink-400 opacity-40" aria-hidden />
+                <span className="relative inline-flex size-2 rounded-full bg-pink-500 ring-2 ring-[rgba(11,11,26,0.9)]" />
+              </span>
+            ) : null}
+          </button>
+
+          {notificationsOpen ? (
+            <div
+              role="dialog"
+              aria-label="Notifications"
+              className="absolute right-0 top-full z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.97)] shadow-2xl shadow-black/40 backdrop-blur-xl"
+            >
+              <div className="border-b border-white/10 px-4 py-3">
+                <p className="text-sm font-semibold text-white">Notifications</p>
+                <p className="text-[11px] text-slate-400">
+                  {dashboardRole === 'member'
+                    ? 'Updates tied to your membership and workouts.'
+                    : 'Gym alerts and operational summaries.'}
+                </p>
+              </div>
+              <div className="max-h-80 overflow-y-auto p-2">
+                {dashboardRole === 'member' ? (
+                  memberNotificationsLoading ? (
+                    <p className="px-3 py-6 text-center text-sm text-slate-400">Loading…</p>
+                  ) : memberNotifications.length === 0 ? (
+                    <p className="px-3 py-8 text-center text-sm text-slate-500">
+                      You&apos;re all caught up.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {memberNotifications.map((n) => (
+                        <li
+                          key={n.id}
+                          className={`rounded-xl border px-3 py-2.5 text-left ${
+                            n.isRead
+                              ? 'border-transparent bg-white/[0.03]'
+                              : 'border-blue-400/25 bg-blue-500/10'
+                          }`}
+                        >
+                          <p className="text-xs font-semibold text-white">{n.title}</p>
+                          <p className="mt-0.5 text-xs leading-snug text-slate-300">{n.message}</p>
+                          <p className="mt-1 text-[10px] text-slate-500">
+                            {new Date(n.createdAt).toLocaleString()}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : staffNotificationsLoading ? (
+                  <p className="px-3 py-6 text-center text-sm text-slate-400">Loading…</p>
+                ) : staffAlerts.length === 0 ? (
+                  <p className="px-3 py-8 text-center text-sm text-slate-500">
+                    No alerts right now.
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {staffAlerts.map((alert, idx) => (
+                      <li
+                        key={`${alert.type}-${alert.title}-${idx}`}
+                        className={`rounded-xl border px-3 py-2.5 text-left ${
+                          alert.severity === 'danger'
+                            ? 'border-rose-500/30 bg-rose-500/10'
+                            : alert.severity === 'warning'
+                              ? 'border-amber-500/25 bg-amber-500/10'
+                              : 'border-white/10 bg-white/[0.03]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-xs font-semibold text-white">{alert.title}</p>
+                          {alert.count > 1 ? (
+                            <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-slate-200">
+                              {alert.count}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-xs leading-snug text-slate-300">{alert.message}</p>
+                        <p className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">
+                          {alert.type} · {alert.severity}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         {/* Settings */}
         <button

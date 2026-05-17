@@ -145,6 +145,16 @@ export function UserDetailPage() {
   const [searchParams] = useSearchParams()
   const viewMode = searchParams.get('mode') === 'view'
   const id = userId ? parseInt(userId, 10) : NaN
+  const dietPlansAssignQuery = useMemo(() => {
+    if (!Number.isFinite(id) || id <= 0) return ''
+    const returnTo = encodeURIComponent(`/dashboard/users/${userId}`)
+    return `userId=${id}&returnTo=${returnTo}`
+  }, [id, userId])
+  const workoutAssignmentsQuery = useMemo(() => {
+    if (!Number.isFinite(id) || id <= 0) return ''
+    const returnTo = encodeURIComponent(`/dashboard/users/${userId}`)
+    return `userId=${id}&returnTo=${returnTo}`
+  }, [id, userId])
   const { userName } = getDashboardUser()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<TabId>('Details')
@@ -441,7 +451,10 @@ export function UserDetailPage() {
     mutationFn: (scheduleId: number) => userSchedulesService.delete(scheduleId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userSchedules', id] })
+      void queryClient.invalidateQueries({ queryKey: ['user-schedules'] })
+      toast.success('Workout assignment removed.')
     },
+    onError: () => toast.error('Could not remove workout assignment.'),
   })
 
   const unassignDietMutation = useMutation({
@@ -461,7 +474,11 @@ export function UserDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userDietPlans', id] })
       queryClient.invalidateQueries({ queryKey: ['user-diet-plans'] })
-      navigate(`/dashboard/diet-plans/assign?userId=${id}`)
+      if (dietPlansAssignQuery) {
+        navigate(`/dashboard/diet-plans/assign?${dietPlansAssignQuery}`)
+      } else {
+        navigate('/dashboard/diet-plans/assign')
+      }
     },
     onError: () => toast.error('Could not remove the current diet plan.'),
   })
@@ -672,11 +689,25 @@ export function UserDetailPage() {
       replaceDietMutation.mutate(current.id)
       return
     }
-    navigate(`/dashboard/diet-plans/assign?userId=${id}`)
+    if (dietPlansAssignQuery) {
+      navigate(`/dashboard/diet-plans/assign?${dietPlansAssignQuery}`)
+    } else {
+      navigate('/dashboard/diet-plans/assign')
+    }
   }
 
   const handleAssignDiet = () => {
-    navigate(`/dashboard/diet-plans/assign?userId=${id}`)
+    if (dietPlansAssignQuery) {
+      navigate(`/dashboard/diet-plans/assign?${dietPlansAssignQuery}`)
+    } else {
+      navigate('/dashboard/diet-plans/assign')
+    }
+  }
+
+  const handleOpenWorkoutAssignmentsHub = () => {
+    if (workoutAssignmentsQuery) {
+      navigate(`/dashboard/training/workout-assignments?${workoutAssignmentsQuery}`)
+    }
   }
 
   const handleSubmitMetrics = (e: React.FormEvent) => {
@@ -832,7 +863,12 @@ export function UserDetailPage() {
           ? 'Diet assignment exists but is inactive or outside its date range.'
           : 'Nutrition plan assigned to this member.',
       action: !hasDietAssignment
-        ? { label: 'Assign diet plan', to: `/dashboard/diet-plans/assign?userId=${id}` }
+        ? {
+            label: 'Assign diet plan',
+            to: dietPlansAssignQuery
+              ? `/dashboard/diet-plans/assign?${dietPlansAssignQuery}`
+              : `/dashboard/diet-plans/assign?userId=${id}`,
+          }
         : undefined,
     },
   ]
@@ -924,6 +960,9 @@ export function UserDetailPage() {
             onEditProfile={handleOpenEditProfile}
             onAddDetail={handleOpenAddDetail}
             onAssignWorkout={handleOpenAssignWorkout}
+            onOpenWorkoutAssignmentsHub={
+              workoutAssignmentsQuery ? handleOpenWorkoutAssignmentsHub : undefined
+            }
             onDeleteSchedule={handleDeleteSchedule}
             onAssignDiet={handleAssignDiet}
             onChangeDiet={handleChangeDiet}
@@ -1877,6 +1916,7 @@ function DetailsTab({
   onEditProfile,
   onAddDetail,
   onAssignWorkout,
+  onOpenWorkoutAssignmentsHub,
   onDeleteSchedule,
   onAssignDiet,
   onChangeDiet,
@@ -1896,6 +1936,7 @@ function DetailsTab({
   onEditProfile: () => void
   onAddDetail: () => void
   onAssignWorkout: () => void
+  onOpenWorkoutAssignmentsHub?: () => void
   onDeleteSchedule: (schedule: UserScheduleDto) => void
   onAssignDiet: () => void
   onChangeDiet: () => void
@@ -2065,6 +2106,11 @@ function DetailsTab({
                 ? `${activeWorkoutPlanIds.size} plan · ${activeWorkoutSchedules.length} slot${activeWorkoutSchedules.length !== 1 ? 's' : ''}`
                 : 'No active plan'}
             </span>
+            {!viewMode && onOpenWorkoutAssignmentsHub && (
+              <Button variant="secondary" size="sm" onClick={onOpenWorkoutAssignmentsHub}>
+                Bulk assign
+              </Button>
+            )}
             {!viewMode && (
               <Button size="sm" onClick={onAssignWorkout}>
                 {hasWorkoutAssignment ? 'Change workout plan' : '+ Assign workout plan'}

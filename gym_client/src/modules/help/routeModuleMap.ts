@@ -10,6 +10,7 @@ const PREFIX_TO_MODULE: [string, string][] = [
   ['/dashboard/training/workout-plan-builder', 'workout_plan_builder'],
   ['/dashboard/training/workout-studio', 'workout_studio'],
   ['/dashboard/training/exercises-premium', 'exercises_premium'],
+  ['/dashboard/training/programs', 'workout_plans'],
   ['/dashboard/training/workout-plans', 'workout_plans'],
   ['/dashboard/training/exercises', 'exercises'],
   ['/dashboard/training/body-parts', 'body_parts'],

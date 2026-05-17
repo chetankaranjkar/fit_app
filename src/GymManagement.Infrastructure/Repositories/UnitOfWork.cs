@@ -20,6 +20,8 @@ namespace GymManagement.Infrastructure.Repositories
         private IRepository<Exercise>? _exercises;
         private IRepository<ExerciseStep>? _exerciseSteps;
         private IRepository<WorkoutPlan>? _workoutPlans;
+        private IRepository<WorkoutPlanWeek>? _workoutPlanWeeks;
+        private IRepository<WorkoutPlanDay>? _workoutPlanDays;
         private IRepository<WorkoutPlanExercise>? _workoutPlanExercises;
         private IRepository<UserSchedule>? _userSchedules;
         private IRepository<WorkoutSession>? _workoutSessions;
@@ -78,6 +80,12 @@ namespace GymManagement.Infrastructure.Repositories
 
         public IRepository<WorkoutPlan> WorkoutPlans => 
             _workoutPlans ??= new Repository<WorkoutPlan>(_context);
+
+        public IRepository<WorkoutPlanWeek> WorkoutPlanWeeks =>
+            _workoutPlanWeeks ??= new Repository<WorkoutPlanWeek>(_context);
+
+        public IRepository<WorkoutPlanDay> WorkoutPlanDays =>
+            _workoutPlanDays ??= new Repository<WorkoutPlanDay>(_context);
 
         public IRepository<WorkoutPlanExercise> WorkoutPlanExercises => 
             _workoutPlanExercises ??= new Repository<WorkoutPlanExercise>(_context);

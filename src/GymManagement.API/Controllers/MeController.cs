@@ -161,12 +161,191 @@ namespace GymManagement.API.Controllers
                     DifficultyLevel = p.DifficultyLevel,
                     DurationMinutes = p.Duration,
                     Description = p.Description,
-                    ExerciseCount = p.WorkoutPlanExercises.Count(e => !e.IsDeleted)
+                    ExerciseCount = p.WorkoutPlanExercises.Count(e => !e.IsDeleted),
+                    Goal = p.Goal,
+                    DurationDays = p.DurationDays,
+                    WorkoutsPerWeek = p.WorkoutsPerWeek
                 })
                 .ToListAsync()
                 .ConfigureAwait(false);
 
             return Ok(rows);
+        }
+
+        /// <summary>All assigned programs with weekly time slots and every plan day / exercise (member hub).</summary>
+        [HttpGet("workout-program")]
+        public async Task<ActionResult<MeWorkoutProgramDto>> GetWorkoutProgram()
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            var assignedPlanIds = await _db.UserSchedules.AsNoTracking()
+                .Where(s => s.UserId == userId.Value && s.IsActive)
+                .Select(s => s.WorkoutPlanId)
+                .Distinct()
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            if (assignedPlanIds.Count == 0)
+                return Ok(new MeWorkoutProgramDto { Programs = Array.Empty<MeAssignedProgramDto>() });
+
+            var allSchedules = await _db.UserSchedules.AsNoTracking()
+                .Where(s => s.UserId == userId.Value && s.IsActive && assignedPlanIds.Contains(s.WorkoutPlanId))
+                .OrderBy(s => s.WorkoutPlanId)
+                .ThenBy(s => s.DayOfWeek)
+                .ThenBy(s => s.StartTime)
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            var trainerIds = allSchedules.Where(s => s.TrainerId != null).Select(s => s.TrainerId!.Value).Distinct().ToList();
+            var trainerNames = new Dictionary<int, string?>();
+            if (trainerIds.Count > 0)
+            {
+                var trainers = await _db.Trainers.AsNoTracking()
+                    .Where(t => trainerIds.Contains(t.Id))
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+                var userIds = trainers.Select(t => t.UserId).Distinct().ToList();
+                var users = await _db.Users.AsNoTracking()
+                    .Where(u => userIds.Contains(u.Id))
+                    .ToDictionaryAsync(u => u.Id, u => u)
+                    .ConfigureAwait(false);
+                foreach (var t in trainers)
+                {
+                    if (users.TryGetValue(t.UserId, out var u))
+                        trainerNames[t.Id] = $"{u.FirstName} {u.LastName}".Trim();
+                    else
+                        trainerNames[t.Id] = null;
+                }
+            }
+
+            var programs = new List<MeAssignedProgramDto>();
+
+            foreach (var planId in assignedPlanIds.OrderBy(id => id))
+            {
+                var plan = await _db.WorkoutPlans.AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.Id == planId && !p.IsDeleted && p.IsActive)
+                    .ConfigureAwait(false);
+                if (plan == null) continue;
+
+                var slots = allSchedules
+                    .Where(s => s.WorkoutPlanId == planId)
+                    .Select(s => new MeMemberScheduleSlotDto
+                    {
+                        ScheduleId = s.Id,
+                        ScheduleType = s.ScheduleType.ToString(),
+                        DayOfWeek = (int)s.DayOfWeek,
+                        StartTime = s.StartTime.ToString(@"hh\:mm"),
+                        EndTime = s.EndTime.ToString(@"hh\:mm"),
+                        TrainerName = s.TrainerId.HasValue && trainerNames.TryGetValue(s.TrainerId.Value, out var nm) ? nm : null
+                    })
+                    .ToList();
+
+                var allLines = await _db.WorkoutPlanExercises.AsNoTracking()
+                    .Where(e => e.WorkoutPlanId == planId && !e.IsDeleted)
+                    .Include(e => e.Exercise)
+                    .ThenInclude(ex => ex.BodyPart)
+                    .OrderBy(e => e.Order)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+
+                var planDays = await _db.WorkoutPlanDays.AsNoTracking()
+                    .Where(d => d.WorkoutPlanId == planId && !d.IsDeleted)
+                    .OrderBy(d => d.DayNumber)
+                    .ThenBy(d => d.OrderIndex)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+
+                var hasDayAssigned = allLines.Any(e => e.WorkoutPlanDayId != null);
+                var dayOutlines = new List<MePlanDayOutlineDto>();
+                var exerciseIds = allLines.Select(x => x.ExerciseId).Distinct().ToList();
+                var lastByExercise = await GetLastLogByExerciseAsync(userId.Value, exerciseIds).ConfigureAwait(false);
+
+                if (!hasDayAssigned)
+                {
+                    dayOutlines.Add(new MePlanDayOutlineDto
+                    {
+                        PlanDayId = 0,
+                        DayNumber = 0,
+                        Name = "Full program",
+                        IsRestDay = false,
+                        FocusArea = null,
+                        Exercises = MapMeExerciseLines(allLines.OrderBy(e => e.Order), lastByExercise)
+                    });
+                }
+                else
+                {
+                    foreach (var pd in planDays)
+                    {
+                        if (pd.IsRestDay)
+                        {
+                            dayOutlines.Add(new MePlanDayOutlineDto
+                            {
+                                PlanDayId = pd.Id,
+                                DayNumber = pd.DayNumber,
+                                Name = string.IsNullOrWhiteSpace(pd.Name) ? $"Day {pd.DayNumber}" : pd.Name,
+                                IsRestDay = true,
+                                FocusArea = pd.FocusArea,
+                                Exercises = Array.Empty<MeWorkoutExerciseLineDto>()
+                            });
+                            continue;
+                        }
+
+                        var forDay = allLines.Where(e => e.WorkoutPlanDayId == pd.Id).OrderBy(e => e.Order).ToList();
+                        if (forDay.Count == 0)
+                            continue;
+
+                        dayOutlines.Add(new MePlanDayOutlineDto
+                        {
+                            PlanDayId = pd.Id,
+                            DayNumber = pd.DayNumber,
+                            Name = string.IsNullOrWhiteSpace(pd.Name) ? $"Day {pd.DayNumber}" : pd.Name,
+                            IsRestDay = false,
+                            FocusArea = pd.FocusArea,
+                            Exercises = MapMeExerciseLines(forDay, lastByExercise)
+                        });
+                    }
+
+                    var orphanLines = allLines.Where(e => e.WorkoutPlanDayId == null).OrderBy(e => e.Order).ToList();
+                    if (orphanLines.Count > 0)
+                    {
+                        dayOutlines.Add(new MePlanDayOutlineDto
+                        {
+                            PlanDayId = 0,
+                            DayNumber = 99,
+                            Name = "Additional exercises",
+                            IsRestDay = false,
+                            FocusArea = null,
+                            Exercises = MapMeExerciseLines(orphanLines, lastByExercise)
+                        });
+                    }
+                }
+
+                var totalExercises = dayOutlines.Sum(d => d.Exercises.Count);
+                var planSummary = new MeWorkoutPlanSummaryDto
+                {
+                    Id = plan.Id,
+                    PlanName = plan.Name,
+                    WorkoutType = plan.WorkoutType.ToString(),
+                    DifficultyLevel = plan.DifficultyLevel,
+                    DurationMinutes = plan.Duration > 0 ? plan.Duration : null,
+                    Description = plan.Description,
+                    ExerciseCount = totalExercises,
+                    Goal = plan.Goal,
+                    DurationDays = plan.DurationDays,
+                    WorkoutsPerWeek = plan.WorkoutsPerWeek
+                };
+
+                programs.Add(new MeAssignedProgramDto
+                {
+                    Plan = planSummary,
+                    ScheduleSlots = slots,
+                    Days = dayOutlines
+                });
+            }
+
+            programs.Sort((a, b) => string.CompareOrdinal(a.Plan.PlanName, b.Plan.PlanName));
+            return Ok(new MeWorkoutProgramDto { Programs = programs });
         }
 
         /// <summary>Active diet plan assigned to the member (meals included).</summary>
@@ -433,6 +612,40 @@ namespace GymManagement.API.Controllers
         /// <summary>ISO weekday number Monday = 1 … Sunday = 7 (matches typical <c>WorkoutPlanDay.DayNumber</c>).</summary>
         private static int IsoWeekdayNumber(DayOfWeek day) =>
             day == DayOfWeek.Sunday ? 7 : (int)day;
+
+        private static List<MeWorkoutExerciseLineDto> MapMeExerciseLines(
+            IEnumerable<WorkoutPlanExercise> lineEntities,
+            Dictionary<int, (DateTime SessionDate, decimal? WeightUsed, int RepsDone)> lastByExercise)
+        {
+            return lineEntities.Select(wpe =>
+            {
+                DateTime? lastDate = null;
+                decimal? lastWeight = null;
+                int? lastReps = null;
+                if (lastByExercise.TryGetValue(wpe.ExerciseId, out var last))
+                {
+                    lastDate = last.SessionDate;
+                    lastWeight = last.WeightUsed;
+                    lastReps = last.RepsDone;
+                }
+
+                return new MeWorkoutExerciseLineDto
+                {
+                    PlanExerciseId = wpe.Id,
+                    ExerciseId = wpe.ExerciseId,
+                    ExerciseName = wpe.Exercise.Name,
+                    BodyPartName = wpe.Exercise.BodyPart?.Name,
+                    Order = wpe.Order,
+                    TargetSets = wpe.Sets,
+                    TargetReps = wpe.Reps,
+                    RestSeconds = wpe.RestBetweenSets,
+                    SuggestedWeight = wpe.Weight,
+                    LastSessionDateUtc = lastDate,
+                    LastWeightUsed = lastWeight,
+                    LastRepsDone = lastReps
+                };
+            }).ToList();
+        }
 
         private static DayOfWeek LocalDayOfWeekFromUtcOffset(int? utcOffsetMinutes) =>
             DateTime.UtcNow.AddMinutes(utcOffsetMinutes ?? 0).DayOfWeek;

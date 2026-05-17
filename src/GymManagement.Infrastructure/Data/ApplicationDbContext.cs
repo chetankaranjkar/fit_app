@@ -39,6 +39,7 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<Exercise> Exercises { get; set; }
         public DbSet<ExerciseStep> ExerciseSteps { get; set; }
         public DbSet<WorkoutPlan> WorkoutPlans { get; set; }
+        public DbSet<WorkoutPlanWeek> WorkoutPlanWeeks { get; set; }
         public DbSet<WorkoutPlanDay> WorkoutPlanDays { get; set; }
         public DbSet<WorkoutPlanExercise> WorkoutPlanExercises { get; set; }
         public DbSet<UserSchedule> UserSchedules { get; set; }
@@ -209,6 +210,10 @@ namespace GymManagement.Infrastructure.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Goal).HasMaxLength(120);
+                entity.Property(e => e.Thumbnail).HasMaxLength(500);
+                entity.Property(e => e.Tags).HasMaxLength(1000);
+                entity.Property(e => e.Status).HasMaxLength(32);
                 entity.HasOne(e => e.Trainer)
                     .WithMany(i => i.WorkoutPlans)
                     .HasForeignKey(e => e.TrainerId)
@@ -217,6 +222,18 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany(o => o.WorkoutPlans)
                     .HasForeignKey(e => e.OrganizationId)
                     .OnDelete(DeleteBehavior.SetNull);
+                entity.HasMany(e => e.Weeks)
+                    .WithOne(w => w.WorkoutPlan)
+                    .HasForeignKey(w => w.WorkoutPlanId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Configure WorkoutPlanWeek (program template week)
+            modelBuilder.Entity<WorkoutPlanWeek>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).HasMaxLength(120);
+                entity.HasIndex(e => new { e.WorkoutPlanId, e.WeekNumber }).IsUnique();
             });
 
             // Configure WorkoutPlanExercise
@@ -224,6 +241,9 @@ namespace GymManagement.Infrastructure.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Weight).HasPrecision(10, 2);
+                entity.Property(e => e.Tempo).HasMaxLength(32);
+                entity.Property(e => e.Intensity).HasMaxLength(64);
+                entity.Property(e => e.Notes).HasMaxLength(500);
                 entity.HasOne(e => e.WorkoutPlan)
                     .WithMany(wp => wp.WorkoutPlanExercises)
                     .HasForeignKey(e => e.WorkoutPlanId)
@@ -243,12 +263,19 @@ namespace GymManagement.Infrastructure.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(80);
+                entity.Property(e => e.FocusArea).HasMaxLength(120);
+                entity.Property(e => e.Notes).HasMaxLength(500);
                 entity.HasOne(e => e.WorkoutPlan)
                     .WithMany(wp => wp.WorkoutPlanDays)
                     .HasForeignKey(e => e.WorkoutPlanId)
                     .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Week)
+                    .WithMany(w => w.Days)
+                    .HasForeignKey(e => e.WorkoutPlanWeekId)
+                    .OnDelete(DeleteBehavior.NoAction);
                 entity.HasIndex(e => new { e.WorkoutPlanId, e.OrderIndex });
                 entity.HasIndex(e => new { e.WorkoutPlanId, e.DayNumber });
+                entity.HasIndex(e => e.WorkoutPlanWeekId);
             });
 
             // Configure UserSchedule
@@ -905,9 +932,10 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<Exercise>().HasQueryFilter(e => !e.IsDeleted);
             // Matching filters for dependents of User/Exercise so 10622 warnings are resolved
             modelBuilder.Entity<UserDetail>().HasQueryFilter(ud => ud.User != null && !ud.User.IsDeleted);
-            modelBuilder.Entity<UserSchedule>().HasQueryFilter(us => us.User != null && !us.User.IsDeleted);
+            modelBuilder.Entity<UserSchedule>().HasQueryFilter(us => !us.IsDeleted && us.User != null && !us.User.IsDeleted);
             modelBuilder.Entity<WorkoutPlanExercise>().HasQueryFilter(wpe => wpe.Exercise != null && !wpe.Exercise.IsDeleted);
             modelBuilder.Entity<WorkoutPlanDay>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<WorkoutPlanWeek>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<ExerciseStep>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<WorkoutSession>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<WorkoutPlan>().HasQueryFilter(e => !e.IsDeleted);

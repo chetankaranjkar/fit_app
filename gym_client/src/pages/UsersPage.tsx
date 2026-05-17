@@ -81,86 +81,201 @@ function UserRow({
   const age = getAge(user.dateOfBirth)
   const initials = name !== '—' ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '—'
   return (
-    <tr className="border-b border-white/5 transition hover:bg-white/5">
-      <td className="px-6 py-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-blue-500/40 to-purple-500/40 text-sm font-semibold text-white ring-1 ring-white/10">
-          {user.profilePictureUrl ? (
-            <img src={user.profilePictureUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            initials
-          )}
+    <tr className="group transition-colors duration-150 hover:bg-white/[0.03]">
+      {/* Member (avatar + name + email) */}
+      <td className="px-5 py-3.5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-500/40 to-purple-600/40 text-xs font-bold text-white ring-1 ring-white/10">
+            {user.profilePictureUrl
+              ? <img src={user.profilePictureUrl} alt="" className="h-full w-full object-cover" />
+              : initials}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{name}</p>
+            <p className="truncate text-[11px] text-slate-500">
+              {user.email
+                ? <a href={`mailto:${user.email}`} className="text-blue-400/70 hover:text-blue-300 transition-colors">{user.email}</a>
+                : '—'}
+              {age != null && <span className="ml-1 text-slate-600">· {age}y</span>}
+            </p>
+          </div>
         </div>
       </td>
-      <td className="px-6 py-3">
-        <p className="font-medium text-white">{name}</p>
-        <p className="text-xs text-slate-400">
-          {user.email ? (
-            <a href={`mailto:${user.email}`} className="text-blue-300 transition hover:text-blue-200">
-              {user.email}
-            </a>
-          ) : (
-            '—'
-          )}
-          {age != null && ` · Age ${age}`}
-        </p>
+      {/* Phone (hidden < lg) */}
+      <td className="hidden px-5 py-3.5 text-sm text-slate-400 lg:table-cell">
+        {user.phone ?? <span className="text-slate-600">—</span>}
       </td>
-      <td className="px-6 py-3 font-mono text-sm text-slate-300">{user.id}</td>
-      <td className="px-6 py-3 text-slate-300">{user.phone ?? '—'}</td>
-      <td className="px-6 py-3">
-        <span
-          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            user.isActive
-              ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
-              : 'bg-white/5 text-slate-400 ring-1 ring-white/10'
-          }`}
-        >
+      {/* Status */}
+      <td className="px-5 py-3.5">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+          user.isActive
+            ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20'
+            : 'bg-slate-500/10 text-slate-400 ring-1 ring-white/8'
+        }`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${user.isActive ? 'bg-emerald-400' : 'bg-slate-500'}`} />
           {user.isActive ? 'Active' : 'Inactive'}
         </span>
       </td>
-      <td className="px-6 py-3 text-slate-300">{user.preferredGymTime ?? '—'}</td>
-      <td className="px-6 py-3 text-slate-300">
+      {/* Pref Time (hidden < lg) */}
+      <td className="hidden px-5 py-3.5 text-sm text-slate-400 lg:table-cell">
+        {user.preferredGymTime ?? <span className="text-slate-600">—</span>}
+      </td>
+      {/* Type (hidden < xl) */}
+      <td className="hidden px-5 py-3.5 text-sm text-slate-400 xl:table-cell">
         {user.userTypes && user.userTypes.length > 0
           ? user.userTypes.map((t) => t.name).join(', ')
-          : '—'}
+          : <span className="text-slate-600">—</span>}
       </td>
-      <td className="px-6 py-3 text-right">
-        <div className="flex flex-wrap justify-end gap-1">
-          <Button variant="soft" size="sm" onClick={() => onView(user)}>
+      {/* Actions */}
+      <td className="px-5 py-3.5 text-right">
+        <div className="inline-flex items-center justify-end gap-1">
+          <button
+            type="button"
+            onClick={() => onView(user)}
+            className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:bg-white/8 hover:text-white"
+          >
             View
-          </Button>
-          <Button variant="soft" size="sm" onClick={() => onEdit(user)}>
+          </button>
+          <button
+            type="button"
+            onClick={() => onEdit(user)}
+            className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-blue-300 transition hover:bg-blue-500/10"
+          >
             Edit
-          </Button>
+          </button>
           {user.isActive ? (
-            <Button
-              variant="soft"
-              size="sm"
+            <button
+              type="button"
               onClick={() => onDeactivate(user)}
-              className="!bg-amber-500/10 !text-amber-300 hover:!bg-amber-500/20"
+              className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/10"
             >
               Deactivate
-            </Button>
+            </button>
           ) : (
-            <Button
-              variant="soft"
-              size="sm"
+            <button
+              type="button"
               onClick={() => onActivate(user)}
-              className="!bg-emerald-500/10 !text-emerald-300 hover:!bg-emerald-500/20"
+              className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/10"
             >
               Activate
-            </Button>
+            </button>
           )}
-          <Button
-            variant="soft"
-            size="sm"
+          <button
+            type="button"
             onClick={() => onDelete(user.id, name)}
-            className="!bg-rose-500/10 !text-rose-300 hover:!bg-rose-500/20"
+            className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-rose-400 transition hover:bg-rose-500/10"
           >
-            Delete
-          </Button>
+            Del
+          </button>
         </div>
       </td>
     </tr>
+  )
+}
+
+
+function UserCard({
+  user,
+  onView,
+  onEdit,
+  onDelete,
+  onDeactivate,
+  onActivate,
+}: {
+  user: User
+  onView: (u: User) => void
+  onEdit: (u: User) => void
+  onDelete: (id: number, name: string) => void
+  onDeactivate: (u: User) => void
+  onActivate: (u: User) => void
+}) {
+  const name = `${user.firstName} ${user.lastName}`.trim() || '—'
+  const age = getAge(user.dateOfBirth)
+  const initials = name !== '—' ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '—'
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.06] hover:shadow-lg hover:shadow-black/20">
+      {/* Top: avatar + name + status */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-500/50 to-purple-600/50 text-sm font-bold text-white shadow-md ring-1 ring-white/10">
+            {user.profilePictureUrl
+              ? <img src={user.profilePictureUrl} alt="" className="h-full w-full object-cover" />
+              : initials}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white leading-tight">{name}</p>
+            {age != null && <p className="text-[11px] text-slate-500">Age {age}</p>}
+          </div>
+        </div>
+        <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+          user.isActive
+            ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/25'
+            : 'bg-slate-500/15 text-slate-400 ring-1 ring-white/10'
+        }`}>
+          {user.isActive ? 'Active' : 'Inactive'}
+        </span>
+      </div>
+
+      {/* Meta row */}
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+        {user.email && (
+          <a href={`mailto:${user.email}`} className="truncate text-[11px] text-blue-400/80 hover:text-blue-300 transition-colors">
+            {user.email}
+          </a>
+        )}
+        {user.phone && (
+          <span className="text-[11px] text-slate-400">{user.phone}</span>
+        )}
+        {user.preferredGymTime && (
+          <span className="text-[11px] text-slate-400">⏰ {user.preferredGymTime}</span>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="my-3 h-px bg-white/5" />
+
+      {/* Actions */}
+      <div className="grid grid-cols-4 gap-1.5">
+        <button
+          type="button"
+          onClick={() => onView(user)}
+          className="rounded-lg bg-white/5 py-2 text-[11px] font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+        >
+          View
+        </button>
+        <button
+          type="button"
+          onClick={() => onEdit(user)}
+          className="rounded-lg bg-blue-500/10 py-2 text-[11px] font-semibold text-blue-300 transition hover:bg-blue-500/20"
+        >
+          Edit
+        </button>
+        {user.isActive ? (
+          <button
+            type="button"
+            onClick={() => onDeactivate(user)}
+            className="rounded-lg bg-amber-500/10 py-2 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20"
+          >
+            Off
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onActivate(user)}
+            className="rounded-lg bg-emerald-500/10 py-2 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+          >
+            On
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onDelete(user.id, name)}
+          className="rounded-lg bg-rose-500/10 py-2 text-[11px] font-semibold text-rose-300 transition hover:bg-rose-500/20"
+        >
+          Del
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -546,39 +661,34 @@ export function UsersPage() {
       <div ref={contentRef} className="min-w-0 max-w-[100%] space-y-6">
         {/* Match DashboardPage header: eyebrow, gradient title, actions */}
         <div
-          className="users-dashboard-header flex flex-wrap items-end justify-between gap-4"
+          className="users-dashboard-header"
           data-walkthrough="members-header"
         >
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Members</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight text-white">
-              All{' '}
-              <span className="bg-[linear-gradient(135deg,#60a5fa,#c084fc)] bg-clip-text text-transparent">
-                Users
-              </span>
-            </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Search, filter, and manage member profiles — same workspace as your dashboard.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => startMembersTour()}
-              className="rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-500/20"
-            >
-              Tour
-            </button>
-            <div className="flex items-center gap-1">
+          {/* Title row */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Members</p>
+              <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                All{' '}
+                <span className="bg-[linear-gradient(135deg,#60a5fa,#c084fc)] bg-clip-text text-transparent">
+                  Users
+                </span>
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => startMembersTour()}
+                className="rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-500/20"
+              >
+                Tour
+              </button>
               <button
                 type="button"
                 className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
               >
                 Export
               </button>
-              <HelpTooltip helpKey="members.export" label="Help for export" />
-            </div>
-            <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={handleStartAdd}
@@ -587,13 +697,12 @@ export function UsersPage() {
               >
                 + Add Member
               </button>
-              <HelpTooltip helpKey="members.add" label="Help for add member" />
             </div>
           </div>
         </div>
 
         {/* KPI metrics — same MetricCard pattern as dashboard */}
-        <div ref={cardsRowRef} className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div ref={cardsRowRef} className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <MetricCard
             className="metric-card"
             title="Total members"
@@ -650,36 +759,42 @@ export function UsersPage() {
           data-walkthrough="members-table"
           className="glass-card dashboard-card min-w-0 rounded-2xl"
         >
-          <div className="border-b border-white/5 px-6 py-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-white">Member list</h2>
-                <p className="text-xs text-slate-400">
-                  View, edit, activate, or remove members. Use search and status filters.
-                </p>
+          <div className="border-b border-white/[0.06] px-4 py-4 sm:px-6 sm:py-5">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-white sm:text-base">Member List</h2>
+                <span className="rounded-full bg-white/5 px-2.5 py-0.5 text-xs font-medium text-slate-400">
+                  {filteredUsers.length} {filteredUsers.length === 1 ? 'member' : 'members'}
+                </span>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="search"
-                  placeholder="Search by name, email, phone…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="min-w-[200px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
-                  aria-label="Search users"
-                />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                {/* Search */}
+                <div className="relative flex-1">
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+                    </svg>
+                  </span>
+                  <input
+                    type="search"
+                    placeholder="Search name, email, phone…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 transition-colors focus:border-blue-400/50 focus:bg-white/[0.07] focus:outline-none focus:ring-1 focus:ring-blue-400/20"
+                    aria-label="Search users"
+                  />
+                </div>
+                {/* Status filter */}
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors focus:border-blue-400/50 focus:bg-white/[0.07] focus:outline-none sm:w-36"
                   aria-label="Filter by status"
                 >
-                  <option value="all" className="bg-slate-900">All</option>
-                  <option value="active" className="bg-slate-900">Active only</option>
-                  <option value="inactive" className="bg-slate-900">Inactive only</option>
+                  <option value="all" className="bg-slate-900">All Status</option>
+                  <option value="active" className="bg-slate-900">Active</option>
+                  <option value="inactive" className="bg-slate-900">Inactive</option>
                 </select>
-                <Button onClick={handleStartAdd} size="sm" className="shrink-0">
-                  Add member
-                </Button>
               </div>
             </div>
           </div>
@@ -1035,35 +1150,84 @@ export function UsersPage() {
             <p className="px-6 py-4 text-rose-300">{error instanceof Error ? error.message : 'Failed to load users'}</p>
           )}
           {isLoading ? (
-            <div className="flex h-64 items-center justify-center text-slate-400">
-              Loading…
+            <div className="flex h-64 items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-blue-400" />
+                <p className="text-sm text-slate-500">Loading members…</p>
+              </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-                <thead>
-                  <tr className="border-b border-white/5 bg-white/[0.02] text-left text-xs font-medium uppercase tracking-wider text-slate-400">
-                    <th className="px-6 py-4">Profile</th>
-                    <th className="px-6 py-4">Full Name</th>
-                    <th className="px-6 py-4">ID</th>
-                    <th className="px-6 py-4">Phone</th>
-                    <th className="px-6 py-4">Active</th>
-                    <th className="px-6 py-4">Preferred Time</th>
-                    <th className="px-6 py-4">User Types</th>
-                    <th className="px-6 py-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
-                        {users.length === 0
-                          ? 'No members yet. Use Add member to create one.'
-                          : 'No members match your search or filter.'}
-                      </td>
+            <>
+              {/* ── Mobile card grid (hidden ≥ md) ── */}
+              <div className="md:hidden">
+                {filteredUsers.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
+                      <svg className="h-7 w-7 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-slate-400">
+                      {users.length === 0 ? 'No members yet.' : 'No members match your filter.'}
+                    </p>
+                    {users.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={handleStartAdd}
+                        className="mt-1 rounded-xl bg-[linear-gradient(135deg,#3b82f6,#a855f7)] px-4 py-2 text-xs font-semibold text-white"
+                      >
+                        + Add First Member
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
+                    {filteredUsers.map((u) => (
+                      <UserCard
+                        key={u.id}
+                        user={u}
+                        onView={handleViewUser}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        onDeactivate={handleDeactivate}
+                        onActivate={handleActivate}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Desktop table (visible ≥ md) ── */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/5 bg-white/[0.025] text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                      <th className="px-5 py-3.5">Member</th>
+                      <th className="hidden px-5 py-3.5 lg:table-cell">Phone</th>
+                      <th className="px-5 py-3.5">Status</th>
+                      <th className="hidden px-5 py-3.5 lg:table-cell">Pref. Time</th>
+                      <th className="hidden px-5 py-3.5 xl:table-cell">Type</th>
+                      <th className="px-5 py-3.5 text-right">Actions</th>
                     </tr>
-                  ) : (
-                    filteredUsers.map((u) => (
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.04]">
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-14 text-center">
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5">
+                              <svg className="h-6 w-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
+                              </svg>
+                            </div>
+                            <p className="text-sm text-slate-400">
+                              {users.length === 0 ? 'No members yet.' : 'No members match your filter.'}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map((u) => (
                         <UserRow
                           key={u.id}
                           user={u}
@@ -1074,10 +1238,11 @@ export function UsersPage() {
                           onActivate={handleActivate}
                         />
                       ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       </div>

@@ -97,6 +97,9 @@ namespace GymManagement.Core.DTOs
         public int? DurationMinutes { get; set; }
         public string? Description { get; set; }
         public int ExerciseCount { get; set; }
+        public string? Goal { get; set; }
+        public int? DurationDays { get; set; }
+        public int? WorkoutsPerWeek { get; set; }
     }
 
     public class MeBodyMetricLogDto
@@ -147,6 +150,40 @@ namespace GymManagement.Core.DTOs
         public DateTime? LastSessionDateUtc { get; set; }
         public decimal? LastWeightUsed { get; set; }
         public int? LastRepsDone { get; set; }
+    }
+
+    /// <summary>Member workouts hub: every assigned program with slots and full weekly template.</summary>
+    public sealed class MeWorkoutProgramDto
+    {
+        public IReadOnlyList<MeAssignedProgramDto> Programs { get; set; } = Array.Empty<MeAssignedProgramDto>();
+    }
+
+    public sealed class MeAssignedProgramDto
+    {
+        public MeWorkoutPlanSummaryDto Plan { get; set; } = new();
+        public IReadOnlyList<MeMemberScheduleSlotDto> ScheduleSlots { get; set; } = Array.Empty<MeMemberScheduleSlotDto>();
+        public IReadOnlyList<MePlanDayOutlineDto> Days { get; set; } = Array.Empty<MePlanDayOutlineDto>();
+    }
+
+    public sealed class MeMemberScheduleSlotDto
+    {
+        public int ScheduleId { get; set; }
+        public string ScheduleType { get; set; } = string.Empty;
+        /// <summary><see cref="System.DayOfWeek"/> as int (Sunday = 0).</summary>
+        public int DayOfWeek { get; set; }
+        public string StartTime { get; set; } = string.Empty;
+        public string EndTime { get; set; } = string.Empty;
+        public string? TrainerName { get; set; }
+    }
+
+    public sealed class MePlanDayOutlineDto
+    {
+        public int PlanDayId { get; set; }
+        public int DayNumber { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public bool IsRestDay { get; set; }
+        public string? FocusArea { get; set; }
+        public IReadOnlyList<MeWorkoutExerciseLineDto> Exercises { get; set; } = Array.Empty<MeWorkoutExerciseLineDto>();
     }
 
     public sealed class MeCompleteWorkoutSessionDto

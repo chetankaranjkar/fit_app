@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AppLoader } from '../components/ui/AppLoader'
 import { HelpAppShell } from '../modules/help/HelpAppShell'
 import { RequireAuth } from '../features/auth/components/RequireAuth'
@@ -84,9 +84,14 @@ const WorkoutPlanBuilderPage = lazy(() =>
     default: m.WorkoutPlanBuilderPage,
   })),
 )
-const WorkoutPlansPage = lazy(() =>
-  import('../pages/training/WorkoutPlansPage').then((m) => ({
-    default: m.WorkoutPlansPage,
+const ProgramsPage = lazy(() =>
+  import('../pages/training/ProgramsPage').then((m) => ({
+    default: m.ProgramsPage,
+  })),
+)
+const ProgramDetailPage = lazy(() =>
+  import('../pages/training/ProgramDetailPage').then((m) => ({
+    default: m.ProgramDetailPage,
   })),
 )
 const WorkoutAssignmentsPage = lazy(() =>
@@ -231,7 +236,15 @@ const router = createBrowserRouter([
                 path: '/dashboard/training/workout-plan-builder',
                 element: withSuspense(<WorkoutPlanBuilderPage />),
               },
-              { path: '/dashboard/training/workout-plans', element: withSuspense(<WorkoutPlansPage />) },
+              { path: '/dashboard/training/programs', element: withSuspense(<ProgramsPage />) },
+              {
+                path: '/dashboard/training/programs/:programId',
+                element: withSuspense(<ProgramDetailPage />),
+              },
+              {
+                path: '/dashboard/training/workout-plans',
+                element: <Navigate to="/dashboard/training/programs" replace />,
+              },
               {
                 path: '/dashboard/training/workout-assignments',
                 element: withSuspense(<WorkoutAssignmentsPage />),

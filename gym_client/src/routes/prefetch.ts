@@ -37,7 +37,7 @@ const loaders: Record<string, Loader> = {
   // Training group
   '/dashboard/training/body-parts': () => import('../pages/training/BodyPartsPage'),
   '/dashboard/training/exercises': () => import('../pages/training/ExercisesPage'),
-  '/dashboard/training/workout-plans': () => import('../pages/training/WorkoutPlansPage'),
+  '/dashboard/training/programs': () => import('../pages/training/ProgramsPage'),
 
   // Diet group
   '/dashboard/diet-plans': () => import('../pages/DietPlansDashboardPage'),

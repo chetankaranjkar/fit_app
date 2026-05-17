@@ -70,6 +70,7 @@ namespace GymManagement.Infrastructure.Data
 
             // Seed Workout Plans
             await SeedWorkoutPlansAsync();
+            await SeedPremiumProgramsAsync();
 
             // Seed Diet Plans (with meals and meal items)
             await SeedDietPlansAsync();
@@ -811,6 +812,374 @@ namespace GymManagement.Infrastructure.Data
                     CreatedDate = DateTime.UtcNow
                 };
                 await _unitOfWork.WorkoutPlans.AddAsync(longHIIT);
+            }
+        }
+
+        private async Task<WorkoutPlanDay> AddPremiumDayAsync(int planId, int weekId, int dow, string title, string focus, bool rest, int order, int? durationMinutes = null)
+        {
+            var d = new WorkoutPlanDay
+            {
+                WorkoutPlanId = planId,
+                WorkoutPlanWeekId = weekId,
+                DayNumber = dow,
+                Name = title,
+                FocusArea = focus,
+                IsRestDay = rest,
+                OrderIndex = order,
+                DurationMinutes = durationMinutes,
+            };
+            await _unitOfWork.WorkoutPlanDays.AddAsync(d);
+            await _unitOfWork.SaveChangesAsync();
+            return d;
+        }
+
+        private async Task AddPremiumExercisesAsync(int planId, int dayId, Func<string, Task<int?>> resolveExerciseId, params (string name, int sets, int reps, int rest, int order)[] rows)
+        {
+            foreach (var row in rows)
+            {
+                var eid = await resolveExerciseId(row.name);
+                if (!eid.HasValue) continue;
+                await _unitOfWork.WorkoutPlanExercises.AddAsync(new WorkoutPlanExercise
+                {
+                    WorkoutPlanId = planId,
+                    WorkoutPlanDayId = dayId,
+                    ExerciseId = eid.Value,
+                    Sets = row.sets,
+                    Reps = row.reps,
+                    RestBetweenSets = row.rest,
+                    Order = row.order,
+                    Tempo = "3-0-1-0",
+                    Intensity = "RPE 7",
+                });
+            }
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        /// <summary>Industry-style programs with week/day structure (idempotent by plan name).</summary>
+        private async Task SeedPremiumProgramsAsync()
+        {
+            var trainer = await _unitOfWork.Trainers.FirstOrDefaultAsync(_ => true);
+            var trainerId = trainer?.Id;
+
+            async Task<int?> ExerciseId(string name) =>
+                (await _unitOfWork.Exercises.FirstOrDefaultAsync(e => e.Name == name))?.Id;
+
+            async Task AddExerciseRow(int planId, int? dayId, int exerciseId, int sets, int reps, int restSec, int order, string? tempo = "3-0-1-0", string? intensity = "RPE 7")
+            {
+                await _unitOfWork.WorkoutPlanExercises.AddAsync(new WorkoutPlanExercise
+                {
+                    WorkoutPlanId = planId,
+                    WorkoutPlanDayId = dayId,
+                    ExerciseId = exerciseId,
+                    Sets = sets,
+                    Reps = reps,
+                    RestBetweenSets = restSec,
+                    Order = order,
+                    Tempo = tempo,
+                    Intensity = intensity
+                });
+            }
+
+            // --- 1. Beginner Muscle Gain — 90 Days --------------------------------
+            if (!await _unitOfWork.WorkoutPlans.ExistsAsync(p => p.Name == "Beginner Muscle Gain - 90 Days"))
+            {
+                var p = new WorkoutPlan
+                {
+                    Name = "Beginner Muscle Gain - 90 Days",
+                    Description = "Progressive hypertrophy template with a classic 5-day split. Week 1 establishes movement quality; add load or reps weekly.",
+                    Goal = "Muscle Gain",
+                    WorkoutType = WorkoutType.Strength,
+                    Duration = 55,
+                    DurationDays = 90,
+                    WorkoutsPerWeek = 5,
+                    DifficultyLevel = "Beginner",
+                    TrainerId = trainerId,
+                    IsActive = true,
+                    IsPublic = true,
+                    Status = "Active",
+                    Thumbnail = "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=1200&q=80",
+                    EstimatedCaloriesBurn = 340,
+                    Tags = "[\"Hypertrophy\",\"Foundation\",\"Progressive overload\"]",
+                };
+                await _unitOfWork.WorkoutPlans.AddAsync(p);
+                await _unitOfWork.SaveChangesAsync();
+
+                var w1 = new WorkoutPlanWeek { WorkoutPlanId = p.Id, WeekNumber = 1, Name = "Accumulation" };
+                await _unitOfWork.WorkoutPlanWeeks.AddAsync(w1);
+                await _unitOfWork.SaveChangesAsync();
+
+                async Task<WorkoutPlanDay> AddDay(int dow, string title, string focus, bool rest, int ord, int? mins)
+                {
+                    var d = new WorkoutPlanDay
+                    {
+                        WorkoutPlanId = p.Id,
+                        WorkoutPlanWeekId = w1.Id,
+                        DayNumber = dow,
+                        Name = title,
+                        FocusArea = focus,
+                        IsRestDay = rest,
+                        OrderIndex = ord,
+                        DurationMinutes = mins,
+                    };
+                    await _unitOfWork.WorkoutPlanDays.AddAsync(d);
+                    await _unitOfWork.SaveChangesAsync();
+                    return d;
+                }
+
+                var mon = await AddDay(1, "Monday — Chest + Triceps", "Chest, Triceps", false, 1, 55);
+                foreach (var row in new (string ex, int s, int r, int rest, int o)[]
+                {
+                    ("Bench Press", 3, 10, 90, 1),
+                    ("Incline Dumbbell Press", 3, 10, 90, 2),
+                    ("Cable Fly", 3, 12, 60, 3),
+                    ("Tricep Pushdown", 3, 12, 60, 4),
+                    ("Overhead Tricep Extension", 3, 12, 60, 5),
+                })
+                {
+                    var eid = await ExerciseId(row.ex);
+                    if (eid.HasValue) await AddExerciseRow(p.Id, mon.Id, eid.Value, row.s, row.r, row.rest, row.o);
+                }
+
+                var tue = await AddDay(2, "Tuesday — Back + Biceps", "Back, Biceps", false, 2, 55);
+                foreach (var row in new (string ex, int s, int r, int rest, int o)[]
+                {
+                    ("Lat Pulldown", 3, 10, 90, 1),
+                    ("Seated Cable Row", 3, 10, 90, 2),
+                    ("Single Arm Dumbbell Row", 3, 10, 75, 3),
+                    ("Bicep Curls", 3, 12, 60, 4),
+                    ("Hammer Curls", 3, 12, 60, 5),
+                })
+                {
+                    var eid = await ExerciseId(row.ex);
+                    if (eid.HasValue) await AddExerciseRow(p.Id, tue.Id, eid.Value, row.s, row.r, row.rest, row.o);
+                }
+
+                var wed = await AddDay(3, "Wednesday — Legs", "Quads, Hamstrings, Glutes", false, 3, 60);
+                foreach (var row in new (string ex, int s, int r, int rest, int o)[]
+                {
+                    ("Squats", 4, 8, 120, 1),
+                    ("Romanian Deadlift", 3, 10, 120, 2),
+                    ("Leg Press", 3, 12, 90, 3),
+                    ("Leg Curl", 3, 12, 60, 4),
+                    ("Calf Raises", 3, 15, 45, 5),
+                })
+                {
+                    var eid = await ExerciseId(row.ex);
+                    if (eid.HasValue) await AddExerciseRow(p.Id, wed.Id, eid.Value, row.s, row.r, row.rest, row.o);
+                }
+
+                var thu = await AddDay(4, "Thursday — Shoulders + Abs", "Delts, Core", false, 4, 50);
+                foreach (var row in new (string ex, int s, int r, int rest, int o)[]
+                {
+                    ("Overhead Press", 4, 8, 120, 1),
+                    ("Lateral Raises", 3, 12, 60, 2),
+                    ("Rear Delt Fly", 3, 12, 60, 3),
+                    ("Plank", 3, 45, 45, 4),
+                    ("Leg Raises", 3, 12, 45, 5),
+                })
+                {
+                    var eid = await ExerciseId(row.ex);
+                    if (eid.HasValue) await AddExerciseRow(p.Id, thu.Id, eid.Value, row.s, row.r, row.rest, row.o);
+                }
+
+                var fri = await AddDay(5, "Friday — Full Body", "Compound + conditioning", false, 5, 50);
+                foreach (var row in new (string ex, int s, int r, int rest, int o)[]
+                {
+                    ("Goblet Squat", 3, 12, 90, 1),
+                    ("Push-ups", 3, 15, 60, 2),
+                    ("Lat Pulldown", 3, 10, 75, 3),
+                    ("Lunges", 3, 12, 60, 4),
+                    ("Mountain Climbers", 3, 20, 45, 5),
+                })
+                {
+                    var eid = await ExerciseId(row.ex);
+                    if (eid.HasValue) await AddExerciseRow(p.Id, fri.Id, eid.Value, row.s, row.r, row.rest, row.o);
+                }
+
+                await AddDay(6, "Saturday — Rest", "Recovery", true, 6, null);
+                await AddDay(7, "Sunday — Rest", "Recovery", true, 7, null);
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            // --- 2. Fat Loss HIIT — 60 Days -----------------------------------------
+            if (!await _unitOfWork.WorkoutPlans.ExistsAsync(p => p.Name == "Fat Loss HIIT - 60 Days"))
+            {
+                var p = new WorkoutPlan
+                {
+                    Name = "Fat Loss HIIT - 60 Days",
+                    Description = "Metabolic conditioning with strength maintenance. Alternates full-body circuits and lower-impact active recovery.",
+                    Goal = "Fat Loss",
+                    WorkoutType = WorkoutType.ShortHIIT,
+                    Duration = 40,
+                    DurationDays = 60,
+                    WorkoutsPerWeek = 4,
+                    DifficultyLevel = "Intermediate",
+                    TrainerId = trainerId,
+                    IsActive = true,
+                    IsPublic = true,
+                    Status = "Active",
+                    Thumbnail = "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=1200&q=80",
+                    EstimatedCaloriesBurn = 480,
+                    Tags = "[\"HIIT\",\"Fat loss\",\"Conditioning\"]",
+                };
+                await _unitOfWork.WorkoutPlans.AddAsync(p);
+                await _unitOfWork.SaveChangesAsync();
+                var w1 = new WorkoutPlanWeek { WorkoutPlanId = p.Id, WeekNumber = 1, Name = "Metabolic Phase" };
+                await _unitOfWork.WorkoutPlanWeeks.AddAsync(w1);
+                await _unitOfWork.SaveChangesAsync();
+
+                async Task<WorkoutPlanDay> D(int dow, string n, string f, bool r, int o) =>
+                    await AddPremiumDayAsync(p.Id, w1.Id, dow, n, f, r, o);
+
+                var d1 = await D(1, "Monday — Full Body Circuit", "Full body", false, 1);
+                await AddPremiumExercisesAsync(p.Id, d1.Id, ExerciseId,
+                    ("Burpees", 4, 10, 45, 1), ("Goblet Squat", 3, 12, 60, 2), ("Push-ups", 3, 12, 45, 3));
+                var d2 = await D(2, "Tuesday — Active Recovery", "Mobility + core", false, 2);
+                await AddPremiumExercisesAsync(p.Id, d2.Id, ExerciseId,
+                    ("Jumping Jacks", 3, 30, 30, 1), ("Plank", 3, 40, 45, 2), ("Russian Twist", 3, 20, 45, 3));
+                await D(3, "Wednesday — Rest", "Recovery", true, 3);
+                var d4 = await D(4, "Thursday — Lower Power", "Legs + glutes", false, 4);
+                await AddPremiumExercisesAsync(p.Id, d4.Id, ExerciseId,
+                    ("Squats", 4, 10, 90, 1), ("Romanian Deadlift", 3, 10, 90, 2), ("Lunges", 3, 12, 60, 3));
+                await D(5, "Friday — Rest", "Recovery", true, 5);
+                var d6 = await D(6, "Saturday — HIIT Finisher", "Conditioning", false, 6);
+                await AddPremiumExercisesAsync(p.Id, d6.Id, ExerciseId,
+                    ("High Knees", 4, 30, 30, 1), ("Mountain Climbers", 4, 20, 30, 2), ("Jump Rope", 3, 60, 45, 3));
+                await D(7, "Sunday — Rest", "Recovery", true, 7);
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            // --- 3. Strength Builder — 120 Days ------------------------------------
+            if (!await _unitOfWork.WorkoutPlans.ExistsAsync(p => p.Name == "Strength Builder - 120 Days"))
+            {
+                var p = new WorkoutPlan
+                {
+                    Name = "Strength Builder - 120 Days",
+                    Description = "Long-wave strength periodization: heavy compounds, assistance work, and scheduled deloads every 4th week in structure.",
+                    Goal = "Strength",
+                    WorkoutType = WorkoutType.Strength,
+                    Duration = 75,
+                    DurationDays = 120,
+                    WorkoutsPerWeek = 4,
+                    DifficultyLevel = "Advanced",
+                    TrainerId = trainerId,
+                    IsActive = true,
+                    IsPublic = true,
+                    Status = "Active",
+                    Thumbnail = "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=1200&q=80",
+                    EstimatedCaloriesBurn = 410,
+                    Tags = "[\"Strength\",\"Barbell\",\"Periodization\"]",
+                };
+                await _unitOfWork.WorkoutPlans.AddAsync(p);
+                await _unitOfWork.SaveChangesAsync();
+                var w1 = new WorkoutPlanWeek { WorkoutPlanId = p.Id, WeekNumber = 1, Name = "Heavy Week" };
+                await _unitOfWork.WorkoutPlanWeeks.AddAsync(w1);
+                await _unitOfWork.SaveChangesAsync();
+
+                var d1 = await AddPremiumDayAsync(p.Id, w1.Id, 1, "Monday — Squat emphasis", "Squat pattern", false, 1);
+                await AddPremiumExercisesAsync(p.Id, d1.Id, ExerciseId,
+                    ("Squats", 5, 5, 180, 1), ("Leg Press", 3, 8, 120, 2), ("Leg Extension", 3, 12, 60, 3));
+                var d2 = await AddPremiumDayAsync(p.Id, w1.Id, 2, "Tuesday — Bench emphasis", "Horizontal push", false, 2);
+                await AddPremiumExercisesAsync(p.Id, d2.Id, ExerciseId,
+                    ("Bench Press", 5, 5, 180, 1), ("Close Grip Bench Press", 3, 8, 90, 2), ("Tricep Pushdown", 3, 12, 60, 3));
+                await AddPremiumDayAsync(p.Id, w1.Id, 3, "Wednesday — Rest", "Recovery", true, 3);
+                var d4 = await AddPremiumDayAsync(p.Id, w1.Id, 4, "Thursday — Deadlift emphasis", "Hinge", false, 4);
+                await AddPremiumExercisesAsync(p.Id, d4.Id, ExerciseId,
+                    ("Deadlift", 4, 4, 180, 1), ("Romanian Deadlift", 3, 8, 120, 2), ("Face Pull", 3, 15, 60, 3));
+                var d5 = await AddPremiumDayAsync(p.Id, w1.Id, 5, "Friday — Overhead + Back", "Press + pull", false, 5);
+                await AddPremiumExercisesAsync(p.Id, d5.Id, ExerciseId,
+                    ("Overhead Press", 5, 5, 150, 1), ("Pull-ups", 4, 6, 120, 2), ("Bent-Over Row", 3, 8, 90, 3));
+                await AddPremiumDayAsync(p.Id, w1.Id, 6, "Saturday — Rest", "Recovery", true, 6);
+                await AddPremiumDayAsync(p.Id, w1.Id, 7, "Sunday — Rest", "Recovery", true, 7);
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            // --- 4. Women Fitness Starter — 30 Days ---------------------------------
+            if (!await _unitOfWork.WorkoutPlans.ExistsAsync(p => p.Name == "Women Fitness Starter - 30 Days"))
+            {
+                var p = new WorkoutPlan
+                {
+                    Name = "Women Fitness Starter - 30 Days",
+                    Description = "Low-intimidation introduction: strength, core, and posture with 3 training days per week.",
+                    Goal = "Beginner Fitness",
+                    WorkoutType = WorkoutType.Strength,
+                    Duration = 40,
+                    DurationDays = 30,
+                    WorkoutsPerWeek = 3,
+                    DifficultyLevel = "Beginner",
+                    TrainerId = trainerId,
+                    IsActive = true,
+                    IsPublic = true,
+                    Status = "Active",
+                    Thumbnail = "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=1200&q=80",
+                    EstimatedCaloriesBurn = 260,
+                    Tags = "[\"Starter\",\"Wellness\",\"Core\"]",
+                };
+                await _unitOfWork.WorkoutPlans.AddAsync(p);
+                await _unitOfWork.SaveChangesAsync();
+                var w1 = new WorkoutPlanWeek { WorkoutPlanId = p.Id, WeekNumber = 1, Name = "Week 1" };
+                await _unitOfWork.WorkoutPlanWeeks.AddAsync(w1);
+                await _unitOfWork.SaveChangesAsync();
+
+                var a = await AddPremiumDayAsync(p.Id, w1.Id, 1, "Monday — Full Body A", "Full body", false, 1);
+                await AddPremiumExercisesAsync(p.Id, a.Id, ExerciseId,
+                    ("Goblet Squat", 3, 10, 60, 1), ("Push-ups", 3, 8, 60, 2), ("Lat Pulldown", 3, 10, 60, 3), ("Plank", 3, 30, 45, 4));
+                await AddPremiumDayAsync(p.Id, w1.Id, 2, "Tuesday — Rest", "Recovery", true, 2);
+                var c = await AddPremiumDayAsync(p.Id, w1.Id, 3, "Wednesday — Full Body B", "Full body", false, 3);
+                await AddPremiumExercisesAsync(p.Id, c.Id, ExerciseId,
+                    ("Lunges", 3, 10, 60, 1), ("Dumbbell Fly", 3, 12, 45, 2), ("Seated Cable Row", 3, 12, 60, 3), ("Crunches", 3, 15, 45, 4));
+                await AddPremiumDayAsync(p.Id, w1.Id, 4, "Thursday — Rest", "Recovery", true, 4);
+                await AddPremiumDayAsync(p.Id, w1.Id, 5, "Friday — Rest", "Recovery", true, 5);
+                var f = await AddPremiumDayAsync(p.Id, w1.Id, 6, "Saturday — Full Body C", "Full body", false, 6);
+                await AddPremiumExercisesAsync(p.Id, f.Id, ExerciseId,
+                    ("Hip Thrust", 3, 12, 75, 1), ("Overhead Press", 3, 10, 75, 2), ("Face Pull", 3, 15, 45, 3));
+                await AddPremiumDayAsync(p.Id, w1.Id, 7, "Sunday — Rest", "Recovery", true, 7);
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            // --- 5. Advanced Body Recomposition — 90 Days -----------------------------
+            if (!await _unitOfWork.WorkoutPlans.ExistsAsync(p => p.Name == "Advanced Body Recomposition - 90 Days"))
+            {
+                var p = new WorkoutPlan
+                {
+                    Name = "Advanced Body Recomposition - 90 Days",
+                    Description = "High-frequency upper/lower hybrid with conditioning finishers. Calorie deficit assumed outside the gym.",
+                    Goal = "Fat Loss",
+                    WorkoutType = WorkoutType.Strength,
+                    Duration = 65,
+                    DurationDays = 90,
+                    WorkoutsPerWeek = 5,
+                    DifficultyLevel = "Advanced",
+                    TrainerId = trainerId,
+                    IsActive = true,
+                    IsPublic = true,
+                    Status = "Active",
+                    Thumbnail = "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=1200&q=80",
+                    EstimatedCaloriesBurn = 450,
+                    Tags = "[\"Recomp\",\"Advanced\",\"Hybrid\"]",
+                };
+                await _unitOfWork.WorkoutPlans.AddAsync(p);
+                await _unitOfWork.SaveChangesAsync();
+                var w1 = new WorkoutPlanWeek { WorkoutPlanId = p.Id, WeekNumber = 1, Name = "Volume block" };
+                await _unitOfWork.WorkoutPlanWeeks.AddAsync(w1);
+                await _unitOfWork.SaveChangesAsync();
+
+                var u1 = await AddPremiumDayAsync(p.Id, w1.Id, 1, "Monday — Upper Hypertrophy", "Chest, back, arms", false, 1);
+                await AddPremiumExercisesAsync(p.Id, u1.Id, ExerciseId,
+                    ("Incline Dumbbell Press", 4, 10, 90, 1), ("Lat Pulldown", 4, 10, 90, 2), ("Cable Fly", 3, 12, 60, 3), ("Hammer Curls", 3, 12, 45, 4));
+                var l1 = await AddPremiumDayAsync(p.Id, w1.Id, 2, "Tuesday — Lower Strength", "Legs", false, 2);
+                await AddPremiumExercisesAsync(p.Id, l1.Id, ExerciseId,
+                    ("Squats", 4, 6, 150, 1), ("Bulgarian Split Squat", 3, 10, 90, 2), ("Leg Curl", 3, 12, 60, 3));
+                await AddPremiumDayAsync(p.Id, w1.Id, 3, "Wednesday — Rest", "Recovery", true, 3);
+                var u2 = await AddPremiumDayAsync(p.Id, w1.Id, 4, "Thursday — Upper Strength", "Press + row", false, 4);
+                await AddPremiumExercisesAsync(p.Id, u2.Id, ExerciseId,
+                    ("Bench Press", 4, 6, 120, 1), ("Bent-Over Row", 4, 6, 120, 2), ("Lateral Raises", 4, 12, 45, 3));
+                var l2 = await AddPremiumDayAsync(p.Id, w1.Id, 5, "Friday — Lower Hypertrophy + Core", "Legs + core", false, 5);
+                await AddPremiumExercisesAsync(p.Id, l2.Id, ExerciseId,
+                    ("Romanian Deadlift", 4, 8, 120, 1), ("Leg Press", 4, 12, 90, 2), ("Bicycle Crunch", 3, 20, 45, 3));
+                await AddPremiumDayAsync(p.Id, w1.Id, 6, "Saturday — Rest", "Recovery", true, 6);
+                await AddPremiumDayAsync(p.Id, w1.Id, 7, "Sunday — Rest", "Recovery", true, 7);
+                await _unitOfWork.SaveChangesAsync();
             }
         }
 

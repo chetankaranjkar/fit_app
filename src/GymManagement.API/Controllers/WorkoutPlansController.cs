@@ -10,6 +10,7 @@ namespace GymManagement.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("api/Programs")]
     [Authorize]
     [HasPermission(PermissionCodes.TrainerAccess)]
     public class WorkoutPlansController : ControllerBase
@@ -58,6 +59,23 @@ namespace GymManagement.API.Controllers
             if (workoutPlan == null)
                 return NotFound();
             return Ok(workoutPlan);
+        }
+
+        [HttpPut("{id}/structure")]
+        public async Task<ActionResult<WorkoutPlanDto>> SaveProgramStructure(int id, SaveProgramStructureDto dto)
+        {
+            var plan = await _workoutPlanService.SaveProgramStructureAsync(id, dto);
+            if (plan == null) return NotFound();
+            return Ok(plan);
+        }
+
+        [HttpPost("{id}/clone")]
+        public async Task<ActionResult<WorkoutPlanDto>> CloneProgram(int id, [FromBody] CloneWorkoutPlanDto? dto)
+        {
+            dto ??= new CloneWorkoutPlanDto();
+            var plan = await _workoutPlanService.CloneWorkoutPlanAsync(id, dto);
+            if (plan == null) return NotFound();
+            return CreatedAtAction(nameof(GetWorkoutPlan), new { id = plan.Id }, plan);
         }
 
         [HttpDelete("{id}")]

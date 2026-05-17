@@ -190,7 +190,7 @@ test.describe('Training and attendance regression', () => {
     const updatedPlanName = `E2E Plan Updated ${seed}`
 
     await loginViaUi(page)
-    await page.goto('/dashboard/training/workout-plans')
+    await page.goto('/dashboard/training/programs')
 
     await page.getByRole('button', { name: '+ New plan' }).click()
     await page.getByLabel('Plan name').fill(planName)

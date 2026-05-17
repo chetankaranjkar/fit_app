@@ -111,14 +111,28 @@ class ApiClient {
         e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.sendTimeout) {
-      return const ApiException(
-        'Cannot reach server. On a real phone, rebuild with '
-        '--dart-define=API_BASE_URL=http://<YOUR_PC_LAN_IP>:5104 '
-        '(same Wi‑Fi as your PC). Run the API with the http-lan profile so it listens on all interfaces.',
+      final root = AppConfig.apiRoot;
+      if (AppConfig.looksLikeEmulatorDefault) {
+        return ApiException(
+          'Cannot reach server at $root. Rebuild with your VPS or PC IP, e.g.\n'
+          'flutter build apk --dart-define=API_BASE_URL=http://187.127.169.135',
+        );
+      }
+      return ApiException(
+        'Cannot reach server at $root. Check VPS is running (gym-gateway on port 80), '
+        'Hostinger firewall allows port 80, and use http:// not https:// until SSL is set up.',
       );
     }
-    return ApiException(_extractMessage(e.response?.data) ?? e.message ?? 'Network error',
-        statusCode: e.response?.statusCode, data: e.response?.data);
+    if (e.type == DioExceptionType.badCertificate) {
+      return ApiException(
+        'TLS certificate error for ${AppConfig.apiHost}. Use http:// for IP-only VPS, or fix SSL.',
+      );
+    }
+    return ApiException(
+      _extractMessage(e.response?.data) ?? e.message ?? 'Network error (${AppConfig.apiRoot})',
+      statusCode: e.response?.statusCode,
+      data: e.response?.data,
+    );
   }
 
   String? _extractMessage(dynamic data) {

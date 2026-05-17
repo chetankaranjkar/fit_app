@@ -9,13 +9,14 @@ class AuthService {
   static final AuthService instance = AuthService._();
 
   Future<LoginResponse> login(String identifier, String password) async {
-    final isEmail = identifier.contains('@');
+    final id = identifier.trim();
+    final isEmail = id.contains('@');
     final res = await ApiClient.instance.post<Map<String, dynamic>>(
       '/Auth/login',
       body: {
-        'email': isEmail ? identifier.trim() : '',
-        'username': isEmail ? '' : identifier.trim(),
+        'username': id,
         'password': password,
+        if (isEmail) 'email': id,
       },
     );
 

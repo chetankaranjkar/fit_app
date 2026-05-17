@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_exception.dart';
+import '../../core/app_config.dart';
 import '../../providers/auth_providers.dart';
 import '../../animations/app_motion.dart';
 import '../../theme/app_typography.dart';
@@ -223,6 +224,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onTap: _signIn,
                         isLoading: _submitting,
                       ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'API: ${AppConfig.apiRoot}',
+                        textAlign: TextAlign.center,
+                        style: AppType.caption.copyWith(
+                          color: CupertinoColors.white.withValues(alpha: 0.32),
+                          fontSize: 11,
+                        ),
+                      ),
+                      if (AppConfig.looksLikeEmulatorDefault) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Rebuild with --dart-define=API_BASE_URL=http://YOUR_VPS_IP',
+                          textAlign: TextAlign.center,
+                          style: AppType.caption.copyWith(
+                            color: const Color(0xFFFF9F0A),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 28),
                       Text(
                         'By continuing you agree to our Terms & Privacy.',

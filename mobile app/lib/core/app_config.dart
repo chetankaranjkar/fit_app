@@ -1,21 +1,40 @@
 /// Compile-time configuration. Override with `--dart-define`.
 ///
-/// **Android emulator:** default `http://10.0.2.2:5104` reaches your PC localhost.
+/// **VPS (Hostinger, port 80):**
+/// `flutter run --dart-define=API_BASE_URL=http://YOUR_VPS_IP`
+/// (no `/api` suffix, no `:5104` — gateway serves API on port 80)
 ///
-/// **Physical phone (same Wi‑Fi as PC):** you must rebuild with your PC LAN IP,
-/// e.g. `flutter run --dart-define=API_BASE_URL=http://192.168.1.50:5104`
-/// AND run the API bound to `0.0.0.0`, not only `localhost`.
+/// **Android emulator → PC localhost:**
+/// `http://10.0.2.2:5104`
+///
+/// **Physical phone → PC on LAN:**
+/// `http://192.168.x.x:5104` with API listening on `0.0.0.0:5104`
 class AppConfig {
   AppConfig._();
 
-  /// Backend base URL (scheme + host + port, **no** `/api` suffix).
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2:5104',
   );
 
-  /// API path prefix.
   static const String apiPrefix = '/api';
 
-  static String get apiRoot => '$apiBaseUrl$apiPrefix';
+  /// Normalized host root (no trailing slash, no duplicate `/api`).
+  static String get apiHost {
+    var base = apiBaseUrl.trim();
+    while (base.endsWith('/')) {
+      base = base.substring(0, base.length - 1);
+    }
+    if (base.toLowerCase().endsWith('/api')) {
+      base = base.substring(0, base.length - 4);
+    }
+    return base;
+  }
+
+  /// Full API root used by Dio, e.g. `http://187.127.169.135/api`
+  static String get apiRoot => '$apiHost$apiPrefix';
+
+  /// True when pointing at local emulator default (likely wrong on a real device).
+  static bool get looksLikeEmulatorDefault =>
+      apiHost == 'http://10.0.2.2:5104' || apiHost == 'http://127.0.0.1:5104';
 }

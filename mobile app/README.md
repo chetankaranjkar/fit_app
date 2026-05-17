@@ -10,17 +10,29 @@ flutter pub get
 flutter run
 ```
 
-**Physical device / VPS testing** — point at your API:
+**Physical device / VPS (Docker gateway on port 80)** — use your public IP, **no port**, **no `/api`**:
 
 ```bash
 flutter run --dart-define=API_BASE_URL=http://187.127.169.135
 ```
 
-Rebuild the APK after changing the URL:
+Rebuild the APK after changing the URL (the login screen shows the API URL it was built with):
 
 ```bash
 flutter build apk --release --dart-define=API_BASE_URL=http://187.127.169.135
 ```
+
+**Do not** use `:5104` for VPS unless you exposed the API port on the host. The production stack uses **port 80** via `gym-gateway`.
+
+**Wrong (old local dev):** `http://10.0.2.2:5104` — only works on Android emulator, not on a real phone.
+
+**Test API from your PC:**
+
+```bash
+curl -s http://187.127.169.135/api/Auth/login -H "Content-Type: application/json" -d "{\"username\":\"admin@gym.com\",\"password\":\"admin123\",\"email\":\"admin@gym.com\"}"
+```
+
+Use a **member** account on mobile (not admin). Create a member in the web app first.
 
 ## Member test account workflow (E2E)
 

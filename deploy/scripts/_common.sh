@@ -57,3 +57,40 @@ public_app_url() {
     echo "https://${DOMAIN}"
   fi
 }
+
+# Testing mode uses Docker gateway on :80. Host nginx/apache must not bind the same port.
+ensure_port_80_for_testing_gateway() {
+  if ! is_testing_mode; then
+    return 0
+  fi
+  if ! command -v ss >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! ss -tlnH 2>/dev/null | grep -qE ':80(\s|$)'; then
+    return 0
+  fi
+
+  echo "==> Port 80 is in use — freeing it for gym-gateway (testing mode)..."
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop nginx 2>/dev/null || true
+    systemctl disable nginx 2>/dev/null || true
+    systemctl stop apache2 2>/dev/null || true
+    systemctl disable apache2 2>/dev/null || true
+  fi
+
+  # Another Docker container may still hold :80
+  local cid
+  cid="$(docker ps -q --filter "publish=80" 2>/dev/null | head -n1 || true)"
+  if [[ -n "${cid}" ]]; then
+    docker rm -f "${cid}" 2>/dev/null || true
+  fi
+
+  if ss -tlnH 2>/dev/null | grep -qE ':80(\s|$)'; then
+    echo "ERROR: Port 80 is still in use. Run: ss -tlnp | grep ':80'"
+    echo "Stop that process, then: cd ${REPO_ROOT} && ./deploy/scripts/deploy.sh"
+    exit 1
+  fi
+
+  echo "Port 80 is free for gym-gateway."
+}

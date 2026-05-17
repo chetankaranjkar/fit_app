@@ -12,6 +12,7 @@ cd "${REPO_ROOT}"
 
 if is_testing_mode; then
   echo "==> Testing mode (no domain) — gateway will listen on port 80"
+  ensure_port_80_for_testing_gateway
 else
   echo "==> Production mode — containers bind to 127.0.0.1 (use host Nginx + SSL)"
 fi

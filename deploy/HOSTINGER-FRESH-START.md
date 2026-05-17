@@ -147,6 +147,7 @@ Or push to GitHub `main` and use [GITHUB-DEPLOY.md](./GITHUB-DEPLOY.md) (SSH sec
 | Problem | What to do |
 |---------|------------|
 | `fatal: not a git repository` | You uploaded files without git — run **fresh-start.sh** or clone again (Part B). |
+| `address already in use` on port 80 | Host nginx conflicts with Docker gateway. Run: `sudo systemctl stop nginx && sudo systemctl disable nginx` then `cd /opt/gym && ./deploy/scripts/deploy.sh` |
 | Site not loading on IP | Check `docker ps` includes `gym-gateway`; open port 80 in UFW + Hostinger firewall. |
 | API not ready | `./deploy/scripts/logs.sh api -f` — wait for SQL Server (can take 2–3 min). |
 | `CheckInRadiusOffsetMeters` error | Ensure latest `main` is deployed; API runs schema patch on start. |

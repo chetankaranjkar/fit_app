@@ -784,6 +784,11 @@ else
             throw;
         }
     }
+
+    if (!useSqlite)
+    {
+        await DatabaseBootstrap.SeedIfNoAccountsAsync(app.Services, logger);
+    }
 }
 
 app.Run();

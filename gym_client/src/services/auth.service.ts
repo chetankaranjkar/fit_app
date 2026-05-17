@@ -76,8 +76,15 @@ function getStoredUserRaw() {
 /** Auth API: matches backend AuthController */
 export const authService = {
   permissionCodes: AUTH_PERMISSION_CODES,
-  login: (credentials: LoginCredentials) =>
-    api.post<LoginResponse>('/Auth/login', credentials),
+  login: (credentials: LoginCredentials) => {
+    const id = credentials.username.trim()
+    const body: { password: string; username: string; email?: string } = {
+      username: id,
+      password: credentials.password,
+    }
+    if (id.includes('@')) body.email = id
+    return api.post<LoginResponse>('/Auth/login', body)
+  },
   refresh: (refreshToken: string) =>
     api.post<LoginResponse>('/Auth/refresh', { refreshToken }),
   logout: () => api.post('/Auth/logout'),

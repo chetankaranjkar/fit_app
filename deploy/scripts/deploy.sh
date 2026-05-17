@@ -44,6 +44,11 @@ done
 
 APP_URL="$(public_app_url)"
 
+if is_testing_mode; then
+  echo "==> Ensuring default admin account (bootstrap seed)..."
+  "${SCRIPT_DIR}/seed.sh" || echo "Warning: seed.sh failed — login with admin@gym.com / admin123 after fixing API logs."
+fi
+
 echo ""
 echo "Deploy complete."
 if is_testing_mode; then

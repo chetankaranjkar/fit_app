@@ -27,7 +27,9 @@ function getLoginErrorMessage(
   }
   const isNetworkError = err.message === 'Network Error' || err.code === 'ERR_NETWORK'
   if (isNetworkError) {
-    return 'Cannot reach the server. Start the API and ensure the dev server is running.'
+    return import.meta.env.DEV
+      ? 'Cannot reach the API. Start the backend (port 5104) and the Vite dev server.'
+      : 'Cannot reach the API. Check that gym-api and gym-gateway are running on the server.'
   }
   if (status === 401) return 'Invalid username or password.'
   return err.message ?? 'Invalid username or password.'

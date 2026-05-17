@@ -3,7 +3,8 @@ import { api } from '../../lib/api'
 import { fetchExercises } from '../exercise-management/api'
 import type { BuilderPlanInput, WorkoutPlanBuilderResponse } from './types'
 
-const EXERCISE_API_BASE_URL = import.meta.env.VITE_EXERCISE_API_URL ?? 'http://localhost:4300/api'
+const EXERCISE_API_BASE_URL =
+  import.meta.env.VITE_EXERCISE_API_URL?.trim() || '/exercise-api/api'
 
 async function requestWithExerciseApiFallback<T>(
   method: 'get' | 'post' | 'put' | 'delete',

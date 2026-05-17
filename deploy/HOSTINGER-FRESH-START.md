@@ -151,6 +151,7 @@ Or push to GitHub `main` and use [GITHUB-DEPLOY.md](./GITHUB-DEPLOY.md) (SSH sec
 | Site not loading on IP | Check `docker ps` includes `gym-gateway`; open port 80 in UFW + Hostinger firewall. |
 | API not ready | `./deploy/scripts/logs.sh api -f` — wait for SQL Server (can take 2–3 min). |
 | `CheckInRadiusOffsetMeters` error | Ensure latest `main` is deployed; API runs schema patch on start. |
+| Login: "Cannot reach the server" | Frontend was built with localhost API URL. Run `git pull` and rebuild: `compose build frontend --no-cache && compose up -d frontend gateway` |
 | Out of memory | In `.env` set `MSSQL_MEMORY_LIMIT_MB=1024`, `API_MEMORY_LIMIT=384m`; need **4 GB RAM** VPS for full stack. |
 | Old folder still there | `rm -rf /opt/gym_old_*` after you confirm the new site works. |
 

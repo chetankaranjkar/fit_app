@@ -3,7 +3,7 @@ import { api as coreApi } from '../../lib/api'
 import type { Exercise, ExerciseListResponse, ExerciseUpsertPayload } from './types'
 
 const exerciseApi = axios.create({
-  baseURL: import.meta.env.VITE_EXERCISE_API_URL ?? 'http://localhost:4300/api',
+  baseURL: import.meta.env.VITE_EXERCISE_API_URL?.trim() || '/exercise-api/api',
 })
 
 type LegacyExercise = {

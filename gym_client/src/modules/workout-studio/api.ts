@@ -11,7 +11,7 @@ import type {
 } from './types'
 
 const workoutApi = axios.create({
-  baseURL: import.meta.env.VITE_EXERCISE_API_URL ?? 'http://localhost:4300/api',
+  baseURL: import.meta.env.VITE_EXERCISE_API_URL?.trim() || '/exercise-api/api',
 })
 
 function buildClientFallbackWorkout(payload: GenerateAiWorkoutInput): AiWorkoutResult {

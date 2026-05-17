@@ -2,10 +2,8 @@ import axios from 'axios'
 import toast from 'react-hot-toast'
 import { getForbiddenMessage } from './apiErrors'
 
-// In dev, use relative /api so Vite proxy forwards to the backend (avoids CORS and wrong URL)
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ??
-  (import.meta.env.DEV ? '/api' : 'http://localhost:5104/api')
+// Production Docker/nginx: same-origin /api. Local dev: Vite proxy or VITE_API_URL override.
+const API_BASE_URL = import.meta.env.VITE_API_URL?.trim() || '/api'
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

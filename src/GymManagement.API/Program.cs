@@ -529,6 +529,7 @@ ELSE
                 }
             }
             logger.LogInformation("Database migrations applied successfully.");
+            await DatabaseSchemaPatch.ApplyAsync(dbContext, logger);
         }
         catch (Exception migrateEx)
         {
@@ -562,6 +563,8 @@ ELSE
             {
                 logger.LogWarning(migrateEx, "Migration failed. API will still start. Run: dotnet ef database update --project GymManagement.Infrastructure --startup-project GymManagement.API");
             }
+
+            await DatabaseSchemaPatch.ApplyAsync(dbContext, logger);
         }
 
         static async Task<bool> TableExistsAsync(ApplicationDbContext ctx, ILogger logger)
@@ -734,12 +737,26 @@ else
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             logger.LogInformation("Applying production database migrations (Database:AutoMigrate=true)...");
             await dbContext.Database.MigrateAsync();
+            await DatabaseSchemaPatch.ApplyAsync(dbContext, logger);
             logger.LogInformation("Production database migrations applied.");
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Production database migration failed.");
             throw;
+        }
+    }
+    else if (!useSqlite)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await DatabaseSchemaPatch.ApplyAsync(dbContext, logger);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Schema patch check failed.");
         }
     }
     else

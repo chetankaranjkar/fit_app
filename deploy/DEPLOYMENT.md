@@ -170,7 +170,7 @@ cd /opt/gym
 
 This builds and starts:
 
-- `gym-sqlserver` — database (internal network only)
+- `gym-sqlserver` — SQL Server 2022 (`-p 1433:1433`, password `MSSQL_SA_PASSWORD` in `.env`)
 - `gym-redis` — cache
 - `gym-api` — .NET API on `127.0.0.1:5104`
 - `gym-exercise-api` — Node API on `127.0.0.1:4300`

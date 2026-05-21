@@ -5,6 +5,11 @@ name: gym
 
 services:
   sqlserver:
+    # Equivalent to:
+    #   docker run -d --name gym-sqlserver -e ACCEPT_EULA=Y \
+    #     -e MSSQL_SA_PASSWORD=<from deploy/.env> -p 1433:1433 \
+    #     mcr.microsoft.com/mssql/server:2022-latest
+    # Note: 2022 image uses MSSQL_SA_PASSWORD (not SA_PASSWORD from older docs).
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: gym-sqlserver
     restart: unless-stopped
@@ -13,6 +18,8 @@ services:
       MSSQL_PID: Express
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in deploy/.env}
       MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-1536}
+    ports:
+      - "${SQLSERVER_PUBLISH_PORT:-1433}:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
     networks:

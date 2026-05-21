@@ -75,6 +75,31 @@ Login (first time): `admin@gym.com` / `admin123` — change the password after l
 
 ---
 
+## 7. Connect SQL from your PC (SSMS)
+
+Compose matches:
+
+```bash
+docker run -d --name gym-sqlserver -e ACCEPT_EULA=Y \
+  -e MSSQL_SA_PASSWORD='your-password' -p 1433:1433 \
+  mcr.microsoft.com/mssql/server:2022-latest
+```
+
+(`MSSQL_SA_PASSWORD` in `.env` = `SA_PASSWORD` in older docker run examples.)
+
+**Safer (recommended):** bind SQL to VPS loopback only, then SSH tunnel from Windows:
+
+```bash
+./deploy/scripts/enable-db-tunnel.sh
+```
+
+Windows (leave open): `ssh -N -L 14333:127.0.0.1:1433 root@YOUR_VPS_IP`  
+SSMS: `localhost,14333` · Login `sa` · Password from `MSSQL_SA_PASSWORD` in `.env`
+
+**Direct (less secure):** after `deploy.sh`, SQL is on `YOUR_VPS_IP,1433` if the host firewall allows 1433. Block 1433 on the public internet in production.
+
+---
+
 ## Notes
 
 - **Not HTTPS** — browsers may warn on some features; fine for internal testing.

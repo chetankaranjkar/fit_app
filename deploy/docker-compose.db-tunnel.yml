@@ -1,0 +1,15 @@
+# Optional: expose SQL Server on the VPS loopback only (for SSH tunnel → SSMS / Azure Data Studio).
+# NOT for public internet — bind is 127.0.0.1 only.
+#
+#   docker compose -f deploy/docker-compose.yml \
+#     -f deploy/docker-compose.testing.yml \
+#     -f deploy/docker-compose.db-tunnel.yml \
+#     --env-file deploy/.env up -d sqlserver
+#
+# From your PC:  ssh -L 14333:127.0.0.1:1433 root@YOUR_VPS_IP
+# SSMS server:   localhost,14333  |  Login: sa  |  DB: GymManagementDb
+
+services:
+  sqlserver:
+    ports:
+      - "127.0.0.1:1433:1433"

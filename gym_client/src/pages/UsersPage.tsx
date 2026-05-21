@@ -84,14 +84,37 @@ function PaymentDueCell({
   onCollect?: (u: User) => void
 }) {
   const pending = user.pendingPaymentAmount ?? 0
-  const hasDue = pending > 0.02 && user.membershipPaymentStatus
-  if (!hasDue) {
+  const dueLabel = formatDueDate(user.paymentNextDueDate)
+  const paidLabel = formatDueDate(user.paymentLastPaidDate)
+  const status = (user.membershipPaymentStatus ?? '').toLowerCase()
+  const hasBalance = pending > 0.02
+  const overdue = hasBalance && user.isPaymentOverdue
+
+  // Paid / no balance: show last payment or next due date instead of "—"
+  if (!hasBalance) {
+    if (status === 'paid' && paidLabel) {
+      return (
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="inline-flex rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-200 ring-1 ring-emerald-500/20">
+            Paid
+          </span>
+          <span className="text-xs text-slate-300">{paidLabel}</span>
+        </div>
+      )
+    }
+    if (dueLabel) {
+      return (
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="text-[11px] text-slate-500">Next due</span>
+          <span className="text-xs font-medium text-slate-300">{dueLabel}</span>
+        </div>
+      )
+    }
+    if (paidLabel) {
+      return <span className="text-xs text-slate-400">{paidLabel}</span>
+    }
     return <span className="text-slate-600">—</span>
   }
-
-  const overdue = user.isPaymentOverdue
-  const dueLabel = formatDueDate(user.paymentNextDueDate)
-  const status = user.membershipPaymentStatus ?? 'Due'
 
   return (
     <div className="flex flex-col items-start gap-1.5">
@@ -99,15 +122,17 @@ function PaymentDueCell({
         className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
           overdue
             ? 'bg-rose-500/15 text-rose-200 ring-1 ring-rose-500/30'
-            : status === 'Pending'
+            : status === 'pending'
               ? 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/25'
               : 'bg-orange-500/15 text-orange-200 ring-1 ring-orange-500/25'
         }`}
       >
-        {overdue ? 'Payment expired' : status === 'Partial' ? 'Partial due' : 'Payment due'}
+        {overdue ? 'Payment expired' : status === 'partial' ? 'Partial due' : 'Payment due'}
       </span>
-      <span className="text-xs font-medium tabular-nums text-amber-100/90">{formatInr(pending)}</span>
-      {dueLabel && (
+      <span className={`text-xs font-medium ${dueLabel && pending <= 0.02 ? 'text-slate-200' : 'tabular-nums text-amber-100/90'}`}>
+        {pending > 0.02 ? formatInr(pending) : dueLabel ?? formatInr(pending)}
+      </span>
+      {dueLabel && pending > 0.02 && (
         <span className={`text-[10px] ${overdue ? 'text-rose-300/80' : 'text-slate-500'}`}>
           Due {dueLabel}
         </span>

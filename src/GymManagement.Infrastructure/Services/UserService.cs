@@ -35,11 +35,11 @@ namespace GymManagement.Infrastructure.Services
             var trainerUserIds = trainersByUserId.Keys.ToHashSet();
             var userTypesByUserId = await GetUserTypesByUserIdsAsync(userIds);
             var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(userIds);
-            var openBillingByUserId = await GetOpenBillingByUserIdsAsync(userIds);
+            var billingByUserId = await GetBillingSummariesByUserIdsAsync(userIds);
             return users.Select(u =>
             {
                 var dto = MapToDto(u, authByUserId.GetValueOrDefault(u.Id), trainerUserIds.Contains(u.Id), userTypesByUserId.GetValueOrDefault(u.Id), appRoleNamesByUserId.GetValueOrDefault(u.Id));
-                EnrichWithBillingSummary(dto, openBillingByUserId.GetValueOrDefault(u.Id));
+                EnrichWithBillingSummary(dto, billingByUserId.GetValueOrDefault(u.Id));
                 return dto;
             });
         }
@@ -416,32 +416,48 @@ namespace GymManagement.Infrastructure.Services
             };
         }
 
-        private async Task<Dictionary<int, MembershipPayment>> GetOpenBillingByUserIdsAsync(IEnumerable<int> userIds)
+        private sealed class UserBillingListSummary
+        {
+            public MembershipPayment Latest { get; init; } = null!;
+            public bool HasOpenBalance { get; init; }
+        }
+
+        private async Task<Dictionary<int, UserBillingListSummary>> GetBillingSummariesByUserIdsAsync(IEnumerable<int> userIds)
         {
             var idSet = userIds.ToHashSet();
             if (idSet.Count == 0)
-                return new Dictionary<int, MembershipPayment>();
+                return new Dictionary<int, UserBillingListSummary>();
 
             var billings = (await _unitOfWork.MembershipPayments.FindAsync(
                 p => idSet.Contains(p.UserId) && !p.IsDeleted)).ToList();
 
             return billings
-                .Where(p => p.PaymentStatus != MembershipPaymentStatus.Paid && p.PendingAmount > 0.02m)
                 .GroupBy(p => p.UserId)
-                .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.CreatedDate).First());
+                .ToDictionary(g => g.Key, g =>
+                {
+                    var latest = g.OrderByDescending(p => p.CreatedDate).First();
+                    var hasOpen = g.Any(p =>
+                        p.PaymentStatus != MembershipPaymentStatus.Paid && p.PendingAmount > 0.02m);
+                    return new UserBillingListSummary { Latest = latest, HasOpenBalance = hasOpen };
+                });
         }
 
-        private static void EnrichWithBillingSummary(UserDto dto, MembershipPayment? billing)
+        private static void EnrichWithBillingSummary(UserDto dto, UserBillingListSummary? summary)
         {
-            if (billing == null)
+            if (summary == null)
                 return;
 
+            var billing = summary.Latest;
             dto.MembershipPaymentStatus = billing.PaymentStatus.ToString();
             dto.PendingPaymentAmount = billing.PendingAmount;
             dto.PaymentNextDueDate = billing.NextDueDate;
-            dto.IsPaymentOverdue = IsPaymentOverdue(billing);
-            dto.OpenMembershipPaymentId = billing.Id;
-            dto.OpenMembershipId = billing.MembershipId;
+            dto.PaymentLastPaidDate = billing.PaymentDate;
+            dto.IsPaymentOverdue = summary.HasOpenBalance && IsPaymentOverdue(billing);
+            if (summary.HasOpenBalance)
+            {
+                dto.OpenMembershipPaymentId = billing.Id;
+                dto.OpenMembershipId = billing.MembershipId;
+            }
         }
 
         private static bool IsPaymentOverdue(MembershipPayment billing)

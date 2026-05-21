@@ -44,6 +44,9 @@ namespace GymManagement.Core.DTOs
 
         public DateTime? PaymentNextDueDate { get; set; }
 
+        /// <summary>Last recorded payment date on the latest membership billing.</summary>
+        public DateTime? PaymentLastPaidDate { get; set; }
+
         /// <summary>True when payment is overdue (status Overdue or past due date with balance).</summary>
         public bool IsPaymentOverdue { get; set; }
 

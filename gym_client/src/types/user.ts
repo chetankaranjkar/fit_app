@@ -50,6 +50,7 @@ export interface User {
   membershipPaymentStatus?: string | null
   pendingPaymentAmount?: number | null
   paymentNextDueDate?: string | null
+  paymentLastPaidDate?: string | null
   isPaymentOverdue?: boolean
   openMembershipPaymentId?: number | null
   openMembershipId?: number | null

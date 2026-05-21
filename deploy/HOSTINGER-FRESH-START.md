@@ -160,13 +160,36 @@ Check what the server is running:
 
 ---
 
+## `git pull` blocked by local changes?
+
+On the VPS you may see:
+
+```text
+error: Your local changes to the following files would be overwritten by merge:
+        deploy/scripts/update.sh
+```
+
+That means someone edited deploy scripts on the server (or an old copy). **Do not commit on the VPS** — reset to GitHub instead. Your secrets in `deploy/.env` are **not** in git and stay as-is.
+
+```bash
+cd /opt/gym
+git fetch origin main
+git reset --hard origin/main
+chmod +x deploy/scripts/*.sh
+./deploy/scripts/update.sh
+```
+
+After the next pull, you can use `./deploy/scripts/sync-from-origin.sh` for the same reset step.
+
+---
+
 ## Part D — Future updates (after fresh install)
 
 `/opt/gym` must be a **git clone** (folder contains `.git`).
 
 ```bash
 cd /opt/gym
-git pull --ff-only origin main
+git pull --ff-only origin main || ./deploy/scripts/sync-from-origin.sh
 ./deploy/scripts/update.sh
 ```
 

@@ -14,16 +14,21 @@ import { paymentsService } from '../services/payments.service'
 import { reportsService } from '../services/reports.service'
 import { userMembershipsService } from '../services/userMemberships.service'
 import { membershipPaymentsService } from '../services/membershipPayments.service'
+import { couponsService } from '../services/coupons.service'
 import { InvoicesService, type Invoice } from '../services/invoices.service'
+import { BillingSummaryCard } from '../components/billing/BillingSummaryCard'
 import {
   MEMBERSHIP_PAYMENT_METHODS,
   computeNetPayable,
+  getMembershipAmount,
+  getRemainingBalance,
   paymentStatusBadgeClass,
   paymentStatusLabel,
 } from '../components/billing/membershipPaymentUi'
 import type { Payment, CreatePaymentDto, UpdatePaymentDto } from '../types/payment'
 import type { PaymentMode } from '../types/payment'
 import type { MembershipPaymentMethod } from '../types/membershipPayment'
+import type { Coupon, ValidateCouponResponse } from '../types/coupon'
 import { formatInr, formatInrWhole } from '../lib/formatInr'
 import { getApiErrorMessage } from '../lib/apiErrors'
 
@@ -94,6 +99,8 @@ export function PaymentsPage() {
   const [settlementType, setSettlementType] = useState<SettlementType>('full')
   const [collectAmount, setCollectAmount] = useState('')
   const [collectDiscount, setCollectDiscount] = useState('')
+  const [selectedCouponCode, setSelectedCouponCode] = useState('')
+  const [couponValidation, setCouponValidation] = useState<ValidateCouponResponse | null>(null)
   const [collectMethod, setCollectMethod] = useState<MembershipPaymentMethod>('Cash')
   const [collectReference, setCollectReference] = useState('')
   const [collectNextDue, setCollectNextDue] = useState('')
@@ -165,6 +172,15 @@ export function PaymentsPage() {
     enabled: modalOpen && !editing && selectedMembershipId > 0,
   })
 
+  const { data: activeCoupons = [] } = useQuery<Coupon[]>({
+    queryKey: ['coupons-active'],
+    queryFn: async () => {
+      const { data } = await couponsService.getAll({ status: 'Active' })
+      return data
+    },
+    enabled: modalOpen && !editing,
+  })
+
   const billingNet = useMemo(() => {
     if (!membershipBilling) return 0
     return computeNetPayable(
@@ -172,24 +188,55 @@ export function PaymentsPage() {
       membershipBilling.discountAmount,
       membershipBilling.waiverAmount,
       membershipBilling.netPayableAmount,
+      membershipBilling.finalBillAmount,
+      membershipBilling.couponDiscountAmount ?? 0,
     )
   }, [membershipBilling])
 
   const collectPaidNum = Number(collectAmount) || 0
-  const collectDiscNum = Number(collectDiscount) || 0
+  const remainingBeforePay = useMemo(() => {
+    if (!membershipBilling) return 0
+    return getRemainingBalance(membershipBilling)
+  }, [membershipBilling])
+
   const collectPendingAfter = useMemo(() => {
     if (!membershipBilling) return 0
-    const adjustedNet = Math.max(
-      0,
-      membershipBilling.totalAmount - collectDiscNum - membershipBilling.waiverAmount,
-    )
-    return Math.max(0, adjustedNet - (membershipBilling.paidAmount + collectPaidNum))
-  }, [membershipBilling, collectDiscNum, collectPaidNum])
+    return Math.max(0, remainingBeforePay - collectPaidNum)
+  }, [membershipBilling, remainingBeforePay, collectPaidNum])
+
+  const applyCouponMutation = useMutation({
+    mutationFn: async (couponCode: string) => {
+      if (!membershipBilling) throw new Error('No billing record')
+      const { data } = await membershipPaymentsService.applyCoupon(membershipBilling.id, couponCode)
+      return data
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['membership-payment', selectedMembershipId], data)
+      setCouponValidation({
+        valid: true,
+        discountAmount: data.couponDiscountAmount ?? 0,
+        finalAmount: data.finalBillAmount ?? data.netPayableAmount ?? 0,
+        message: 'Coupon applied and locked to invoice.',
+        couponId: data.couponId,
+        couponCode: data.couponCode,
+      })
+      toast.success('Coupon applied to invoice')
+      applySettlementAmount(settlementType, data)
+    },
+    onError: (err: unknown) => {
+      setCouponValidation({
+        valid: false,
+        discountAmount: 0,
+        finalAmount: 0,
+        message: getApiErrorMessage(err, 'Failed to apply coupon'),
+      })
+    },
+  })
 
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!membershipBilling) throw new Error('No membership billing record. Add the member with a plan first.')
-      if (membershipBilling.paymentStatus === 'Paid' || membershipBilling.pendingAmount <= 0.02) {
+      if (membershipBilling.paymentStatus === 'Paid' || remainingBeforePay <= 0.02) {
         throw new Error('This membership is already fully paid.')
       }
       const body = {
@@ -203,7 +250,6 @@ export function PaymentsPage() {
               ? new Date(`${collectNextDue}T12:00:00`).toISOString()
               : undefined
             : undefined,
-        discountAmount: collectDiscNum > 0 ? collectDiscNum : undefined,
         remarks: collectRemarks.trim() || undefined,
       }
       const { data } = await membershipPaymentsService.addInstallment(membershipBilling.id, body)
@@ -260,6 +306,8 @@ export function PaymentsPage() {
     setSettlementType('full')
     setCollectAmount('')
     setCollectDiscount('')
+    setSelectedCouponCode('')
+    setCouponValidation(null)
     setCollectMethod('Cash')
     setCollectReference('')
     setCollectNextDue('')
@@ -268,9 +316,12 @@ export function PaymentsPage() {
 
   const applySettlementAmount = (type: SettlementType, billing = membershipBilling) => {
     if (!billing) return
-    const pending = billing.pendingAmount
-    if (type === 'full') setCollectAmount(String(pending > 0 ? pending : billingNet))
-    else setCollectAmount('')
+    if (type === 'full') {
+      const remaining = getRemainingBalance(billing)
+      setCollectAmount(String(Math.round(remaining * 100) / 100))
+    } else {
+      setCollectAmount('')
+    }
   }
 
   const openAdd = () => {
@@ -333,6 +384,10 @@ export function PaymentsPage() {
       }
       if (collectPaidNum <= 0) {
         setFormError('Enter a payment amount greater than zero.')
+        return
+      }
+      if (collectPaidNum - remainingBeforePay > 0.02) {
+        setFormError(`Amount cannot exceed the remaining balance of ${formatInr(remainingBeforePay)}.`)
         return
       }
       if (collectPendingAfter > 0.02 && !collectNextDue) {
@@ -575,22 +630,26 @@ export function PaymentsPage() {
         </DashboardTablePanel>
       </DashboardSubpageShell>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editing ? 'Edit payment' : 'Add payment'}>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <Modal open={modalOpen} onClose={closeModal} title={editing ? 'Edit payment' : 'Record Payment'} size="wide" scrollable>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-0">
           {!canManagePayments && (
             <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
               You do not have permission to modify payments.
             </p>
           )}
           {formError && (
-            <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200" role="alert">
+            <p className="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200" role="alert">
               {formError}
             </p>
           )}
           {!editing && (
-            <>
-              <div>
-                <label className={labelClass}>Membership</label>
+            <div className="space-y-5">
+              {/* ─── STEP 1: Select Membership ─── */}
+              <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-300">1</span>
+                  Select Membership
+                </h3>
                 <select
                   value={form.membershipId}
                   onChange={(e) => {
@@ -598,13 +657,13 @@ export function PaymentsPage() {
                     setForm((f) => ({ ...f, membershipId }))
                     setCollectAmount('')
                     setCollectNextDue('')
+                    setSelectedCouponCode('')
+                    setCouponValidation(null)
                   }}
                   className={selectClass}
                   required
                 >
-                  <option value={0} className="bg-slate-900">
-                    Select membership
-                  </option>
+                  <option value={0} className="bg-slate-900">Select membership</option>
                   {memberships.map((m) => (
                     <option key={m.id} value={m.id} className="bg-slate-900">
                       {m.userName ?? 'User'} — {m.planName ?? 'Plan'} ({m.startDate} to {m.endDate})
@@ -612,234 +671,257 @@ export function PaymentsPage() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </section>
 
               {form.membershipId > 0 && billingLoading && (
-                <p className="text-sm text-slate-400">Loading billing…</p>
+                <div className="flex items-center justify-center py-6">
+                  <div className="size-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                  <span className="ml-2 text-sm text-slate-400">Loading billing…</span>
+                </div>
               )}
               {form.membershipId > 0 && !billingLoading && !membershipBilling && (
                 <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                  Could not load billing for this membership. Check that the membership and plan still exist, then try
-                  again or open{' '}
-                  <button
-                    type="button"
-                    className="font-semibold text-rose-100 underline"
-                    onClick={() => {
-                      const m = memberships.find((x) => x.id === form.membershipId)
-                      if (m?.userId) navigate(`/dashboard/payments/collect?membershipId=${form.membershipId}&userId=${m.userId}`)
-                    }}
-                  >
-                    Collect payment
+                  Could not load billing.{' '}
+                  <button type="button" className="font-semibold text-rose-100 underline"
+                    onClick={() => { const m = memberships.find((x) => x.id === form.membershipId); if (m?.userId) navigate(`/dashboard/payments/collect?membershipId=${form.membershipId}&userId=${m.userId}`) }}>
+                    Open full billing page →
                   </button>
-                  .
                 </p>
               )}
               {membershipBilling && (
-                <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-slate-400">Billing status</span>
-                    <span
-                      className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${paymentStatusBadgeClass(membershipBilling.paymentStatus)}`}
-                    >
-                      {paymentStatusLabel(membershipBilling.paymentStatus)}
-                    </span>
-                  </div>
-                  <dl className="mt-2 grid grid-cols-2 gap-2 text-slate-300">
-                    <dt>Total</dt>
-                    <dd>{formatInr(membershipBilling.totalAmount)}</dd>
-                    <dt>Paid</dt>
-                    <dd>{formatInr(membershipBilling.paidAmount)}</dd>
-                    <dt>Pending</dt>
-                    <dd className="text-amber-200">{formatInr(membershipBilling.pendingAmount)}</dd>
-                  </dl>
-                </div>
-              )}
-
-              {membershipBilling && membershipBilling.pendingAmount > 0.02 && (
                 <>
-                  <div>
-                    <label className={labelClass}>Payment type</label>
-                    <div className="flex flex-wrap gap-2">
-                      {(['full', 'partial'] as SettlementType[]).map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => {
-                            setSettlementType(t)
-                            applySettlementAmount(t, membershipBilling)
+                  {/* ─── STEP 2: Billing Summary ─── */}
+                  <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                    <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+                      <span className="flex size-5 items-center justify-center rounded-full bg-violet-500/20 text-[10px] font-bold text-violet-300">2</span>
+                      Billing Summary
+                      <span className={`ml-auto rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${paymentStatusBadgeClass(membershipBilling.paymentStatus)}`}>
+                        {paymentStatusLabel(membershipBilling.paymentStatus)}
+                      </span>
+                    </h3>
+                    <BillingSummaryCard
+                      membershipAmount={getMembershipAmount(membershipBilling)}
+                      couponCode={membershipBilling.couponCode}
+                      couponDiscount={membershipBilling.couponDiscountAmount ?? 0}
+                      manualDiscount={membershipBilling.discountAmount}
+                      waiverAmount={membershipBilling.waiverAmount}
+                      finalBilling={billingNet}
+                      paidAmount={membershipBilling.paidAmount}
+                      pendingAmount={remainingBeforePay}
+                      couponLocked={membershipBilling.couponLocked}
+                    />
+                  </section>
+
+              {membershipBilling && remainingBeforePay > 0.02 && (
+                <>
+                  {/* ─── STEP 3: Coupon / Discount ─── */}
+                  <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                    <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+                      <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500/20 text-[10px] font-bold text-emerald-300">3</span>
+                      Apply Discount / Coupon
+                    </h3>
+                    <select
+                      value={selectedCouponCode}
+                      disabled={
+                        membershipBilling.couponLocked ||
+                        membershipBilling.paidAmount > 0 ||
+                        applyCouponMutation.isPending
+                      }
+                      onChange={(e) => {
+                        const code = e.target.value
+                        setSelectedCouponCode(code)
+                        setCollectDiscount('')
+                        setCouponValidation(null)
+                        if (code && code !== '__manual__' && membershipBilling) {
+                          const m = memberships.find((x) => x.id === form.membershipId)
+                          couponsService
+                            .validate({
+                              couponCode: code,
+                              membershipPlanId: m?.planId ?? 0,
+                              invoiceAmount: getMembershipAmount(membershipBilling),
+                              userId: membershipBilling.userId,
+                              membershipPaymentId: membershipBilling.id,
+                            })
+                            .then(({ data }) => {
+                              if (!data.valid) {
+                                setCouponValidation(data)
+                                return
+                              }
+                              applyCouponMutation.mutate(code)
+                            })
+                            .catch(() => {
+                              setCouponValidation({ valid: false, discountAmount: 0, finalAmount: 0, message: 'Validation failed' })
+                            })
+                        }
+                      }}
+                      className={selectClass}
+                    >
+                      <option value="" className="bg-slate-900">No discount</option>
+                      <option value="__manual__" className="bg-slate-900">Manual discount (₹)</option>
+                      {activeCoupons.map((c) => (
+                        <option key={c.id} value={c.couponCode} className="bg-slate-900">
+                          {c.couponCode} — {c.discountType === 'Percentage' ? `${c.discountValue}%` : `₹${c.discountValue}`}
+                          {c.maximumDiscountAmount ? ` (max ₹${c.maximumDiscountAmount})` : ''}
+                          {' · '}{c.couponName}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Manual discount input */}
+                    {selectedCouponCode === '__manual__' && (
+                      <div className="mt-2">
+                        <Input
+                          label="Manual Discount Amount (₹)"
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={collectDiscount}
+                          onChange={(e) => {
+                            setCollectDiscount(e.target.value)
+                            setCouponValidation(null)
                           }}
+                          placeholder="Enter discount amount"
+                        />
+                      </div>
+                    )}
+
+                    {/* Coupon validation result */}
+                    {selectedCouponCode && selectedCouponCode !== '__manual__' && couponValidation && (
+                      <div className={`mt-2 rounded-lg border px-3 py-2 text-xs ${
+                        couponValidation.valid
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                          : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                      }`}>
+                        {couponValidation.valid ? (
+                          <div className="space-y-1">
+                            <p className="font-semibold">✓ Coupon applied: {couponValidation.couponCode}</p>
+                            <p>Discount: <span className="font-bold">{formatInr(couponValidation.discountAmount)}</span></p>
+                          </div>
+                        ) : (
+                          <p>✗ {couponValidation.message}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {membershipBilling.couponLocked && membershipBilling.couponCode && (
+                      <button
+                        type="button"
+                        className="mt-2 text-xs text-rose-300 underline"
+                        disabled={membershipBilling.paidAmount > 0}
+                        onClick={async () => {
+                          try {
+                            const { data } = await membershipPaymentsService.removeCoupon(membershipBilling.id)
+                            queryClient.setQueryData(['membership-payment', selectedMembershipId], data)
+                            setSelectedCouponCode('')
+                            setCouponValidation(null)
+                            toast.success('Coupon removed')
+                          } catch (err: unknown) {
+                            toast.error(getApiErrorMessage(err, 'Cannot remove coupon'))
+                          }
+                        }}
+                      >
+                        Remove coupon (before first payment only)
+                      </button>
+                    )}
+
+                    {/* Show calculated discount summary */}
+                    {(membershipBilling.couponDiscountAmount ?? 0) > 0 && (
+                      <div className="mt-2 flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                        <span>Discount applied</span>
+                        <span className="font-semibold text-emerald-300">
+                          −{formatInr(membershipBilling.couponDiscountAmount ?? 0)}
+                        </span>
+                      </div>
+                    )}
+                  </section>
+
+                  {/* ─── STEP 4: Payment Details ─── */}
+                  <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                    <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+                      <span className="flex size-5 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-300">4</span>
+                      Payment Details
+                    </h3>
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {(['full', 'partial'] as SettlementType[]).map((t) => (
+                        <button key={t} type="button"
+                          onClick={() => { setSettlementType(t); applySettlementAmount(t, membershipBilling) }}
                           className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
                             settlementType === t
-                              ? t === 'full'
-                                ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-100'
-                                : 'border-amber-400/50 bg-amber-500/20 text-amber-100'
+                              ? t === 'full' ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-100' : 'border-amber-400/50 bg-amber-500/20 text-amber-100'
                               : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
-                          }`}
-                        >
-                          {t === 'full' ? 'Full payment' : 'Partial payment'}
+                          }`}>
+                          {t === 'full' ? '💰 Full payment' : '📋 Partial'}
                         </button>
                       ))}
                     </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettlementType('partial')
-                        setCollectAmount(String(Math.round(membershipBilling.pendingAmount * 0.25 * 100) / 100))
-                      }}
-                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/10"
-                    >
-                      25% of pending
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettlementType('partial')
-                        setCollectAmount(String(Math.round(membershipBilling.pendingAmount * 0.5 * 100) / 100))
-                      }}
-                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/10"
-                    >
-                      50% of pending
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettlementType('full')
-                        applySettlementAmount('full', membershipBilling)
-                      }}
-                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/10"
-                    >
-                      Full pending
-                    </button>
-                  </div>
-
-                  <Input
-                    label={settlementType === 'full' ? 'Amount (₹) — full pending balance' : 'Amount (₹) — installment'}
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={collectAmount}
-                    onChange={(e) => setCollectAmount(e.target.value)}
-                    disabled={settlementType === 'full'}
-                    required
-                  />
-                  <Input
-                    label="Discount (₹)"
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={collectDiscount}
-                    onChange={(e) => setCollectDiscount(e.target.value)}
-                  />
-                  {collectPendingAfter > 0.02 && (
-                    <Input
-                      label="Next due date (required for partial)"
-                      type="date"
-                      value={collectNextDue}
-                      onChange={(e) => setCollectNextDue(e.target.value)}
-                      required
-                    />
-                  )}
-                  <p className="text-xs text-slate-500">
-                    Remaining after this entry: {formatInr(collectPendingAfter)}
-                    {collectPendingAfter <= 0.02 ? ' (full settlement)' : ' (partial — due date required)'}
-                  </p>
+                    {settlementType === 'partial' && (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {[25, 50, 75].map((pct) => (
+                          <button key={pct} type="button"
+                            onClick={() => setCollectAmount(String(Math.round(remainingBeforePay * (pct / 100) * 100) / 100))}
+                            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10">
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input label={settlementType === 'full' ? 'Amount (₹) — full balance' : 'Amount (₹)'} type="number" min={0} step={0.01} value={collectAmount} onChange={(e) => setCollectAmount(e.target.value)} disabled={settlementType === 'full'} required />
+                      <Input label="Payment date" type="date" value={form.paymentDate.slice(0, 10)} onChange={(e) => setForm((f) => ({ ...f, paymentDate: e.target.value }))} required />
+                      <div>
+                        <label className={labelClass}>Payment method</label>
+                        <select value={collectMethod} onChange={(e) => setCollectMethod(e.target.value as MembershipPaymentMethod)} className={selectClass}>
+                          {MEMBERSHIP_PAYMENT_METHODS.map((mode) => (<option key={mode} value={mode} className="bg-slate-900">{mode}</option>))}
+                        </select>
+                      </div>
+                      <Input label="Reference / Txn ID" value={collectReference} onChange={(e) => setCollectReference(e.target.value)} placeholder="Optional" />
+                    </div>
+                    {collectPendingAfter > 0.02 && (
+                      <div className="mt-3"><Input label="Next due date (required for partial)" type="date" value={collectNextDue} onChange={(e) => setCollectNextDue(e.target.value)} required /></div>
+                    )}
+                    <div className="mt-3">
+                      <Input label="Notes" value={collectRemarks} onChange={(e) => setCollectRemarks(e.target.value)} placeholder="Optional remarks" />
+                    </div>
+                    {/* Final calculation */}
+                    <div className="mt-4 rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01] p-3">
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <span>Paying now</span>
+                        <span className="font-bold text-white text-sm">{formatInr(collectPaidNum)}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
+                        <span>Remaining after</span>
+                        <span className={`font-semibold ${collectPendingAfter <= 0.02 ? 'text-emerald-300' : 'text-amber-300'}`}>
+                          {collectPendingAfter <= 0.02 ? '₹0 (Full settlement ✓)' : formatInr(collectPendingAfter)}
+                        </span>
+                      </div>
+                    </div>
+                  </section>
                 </>
               )}
-
-              <Input
-                label="Payment date"
-                type="date"
-                value={form.paymentDate.slice(0, 10)}
-                onChange={(e) => setForm((f) => ({ ...f, paymentDate: e.target.value }))}
-                required
-              />
-              <div>
-                <label className={labelClass}>Payment method</label>
-                <select
-                  value={collectMethod}
-                  onChange={(e) => setCollectMethod(e.target.value as MembershipPaymentMethod)}
-                  className={selectClass}
-                >
-                  {MEMBERSHIP_PAYMENT_METHODS.map((mode) => (
-                    <option key={mode} value={mode} className="bg-slate-900">
-                      {mode}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Input
-                label="Reference / transaction id"
-                value={collectReference}
-                onChange={(e) => setCollectReference(e.target.value)}
-              />
-              <Input
-                label="Notes"
-                value={collectRemarks}
-                onChange={(e) => setCollectRemarks(e.target.value)}
-              />
-            </>
+              </>
+              )}
+            </div>
           )}
 
           {editing && (
-            <>
-              <Input
-                label="Amount (₹)"
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.amount === 0 ? '' : String(form.amount)}
-                onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) || 0 }))}
-                required
-              />
-              <Input
-                label="Payment date"
-                type="date"
-                value={form.paymentDate.slice(0, 10)}
-                onChange={(e) => setForm((f) => ({ ...f, paymentDate: e.target.value }))}
-                required
-              />
-              <div>
-                <label className={labelClass}>Payment mode</label>
-                <select
-                  value={form.paymentMode}
-                  onChange={(e) => setForm((f) => ({ ...f, paymentMode: e.target.value as PaymentMode }))}
-                  className={selectClass}
-                >
-                  {legacyModeOptions.map((mode) => (
-                    <option key={mode} value={mode} className="bg-slate-900">
-                      {mode}
-                    </option>
-                  ))}
-                </select>
+            <div className="space-y-4 pt-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label="Amount (₹)" type="number" min={0} step={0.01} value={form.amount === 0 ? '' : String(form.amount)} onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) || 0 }))} required />
+                <Input label="Payment date" type="date" value={form.paymentDate.slice(0, 10)} onChange={(e) => setForm((f) => ({ ...f, paymentDate: e.target.value }))} required />
+                <div>
+                  <label className={labelClass}>Payment mode</label>
+                  <select value={form.paymentMode} onChange={(e) => setForm((f) => ({ ...f, paymentMode: e.target.value as PaymentMode }))} className={selectClass}>
+                    {legacyModeOptions.map((mode) => (<option key={mode} value={mode} className="bg-slate-900">{mode}</option>))}
+                  </select>
+                </div>
+                <Input label="Receipt no." value={form.receiptNo ?? ''} onChange={(e) => setForm((f) => ({ ...f, receiptNo: e.target.value }))} placeholder="Optional" />
               </div>
-              <Input
-                label="Receipt no."
-                value={form.receiptNo ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, receiptNo: e.target.value }))}
-                placeholder="Optional"
-              />
-            </>
+            </div>
           )}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={closeModal}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={
-                !canManagePayments ||
-                createMutation.isPending ||
-                updateMutation.isPending ||
-                (!editing &&
-                  (!membershipBilling ||
-                    membershipBilling.pendingAmount <= 0.02 ||
-                    billingLoading))
-              }
-            >
-              {editing ? 'Update' : 'Record payment'}
+          <div className="mt-5 flex items-center justify-end gap-3 border-t border-white/10 pt-4">
+            <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>
+            <Button type="submit" disabled={!canManagePayments || createMutation.isPending || updateMutation.isPending || (!editing && (!membershipBilling || remainingBeforePay <= 0.02 || billingLoading))}>
+              {editing ? 'Update' : '💳 Record Payment'}
             </Button>
           </div>
         </form>

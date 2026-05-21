@@ -22,6 +22,8 @@ export interface MembershipPaymentDetail {
   invoiceNumber?: string | null
   invoiceId?: number | null
   totalAmount: number
+  originalAmount?: number
+  finalBillAmount?: number
   paidAmount: number
   pendingAmount: number
   discountAmount: number
@@ -36,7 +38,25 @@ export interface MembershipPaymentDetail {
   notes?: string | null
   membershipStatus: string
   planName?: string | null
+  couponId?: number | null
+  couponCode?: string | null
+  couponDiscountType?: string | null
+  couponDiscountValue?: number | null
+  couponDiscountAmount?: number
+  couponLocked?: boolean
+  couponAppliedAt?: string | null
+  installmentCount?: number
   transactions: MembershipPaymentTransaction[]
+  timeline?: MembershipBillingTimelineEvent[]
+}
+
+export interface MembershipBillingTimelineEvent {
+  eventType: string
+  occurredAt: string
+  amount?: number | null
+  couponCode?: string | null
+  discountAmount?: number | null
+  label?: string | null
 }
 
 export interface RecordInstallmentPayload {
@@ -47,6 +67,7 @@ export interface RecordInstallmentPayload {
   nextDueDate?: string | null
   remarks?: string | null
   discountAmount?: number | null
+  couponCode?: string | null
 }
 
 export interface MembershipPaymentDashboard {

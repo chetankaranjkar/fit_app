@@ -35,7 +35,13 @@ namespace GymManagement.Infrastructure.Services
             var trainerUserIds = trainersByUserId.Keys.ToHashSet();
             var userTypesByUserId = await GetUserTypesByUserIdsAsync(userIds);
             var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(userIds);
-            return users.Select(u => MapToDto(u, authByUserId.GetValueOrDefault(u.Id), trainerUserIds.Contains(u.Id), userTypesByUserId.GetValueOrDefault(u.Id), appRoleNamesByUserId.GetValueOrDefault(u.Id)));
+            var openBillingByUserId = await GetOpenBillingByUserIdsAsync(userIds);
+            return users.Select(u =>
+            {
+                var dto = MapToDto(u, authByUserId.GetValueOrDefault(u.Id), trainerUserIds.Contains(u.Id), userTypesByUserId.GetValueOrDefault(u.Id), appRoleNamesByUserId.GetValueOrDefault(u.Id));
+                EnrichWithBillingSummary(dto, openBillingByUserId.GetValueOrDefault(u.Id));
+                return dto;
+            });
         }
 
         public async Task<UserDto?> GetUserByIdAsync(int id)
@@ -408,6 +414,44 @@ namespace GymManagement.Infrastructure.Services
                 Username = username,
                 UserTypes = userTypes ?? new List<UserTypeDto>()
             };
+        }
+
+        private async Task<Dictionary<int, MembershipPayment>> GetOpenBillingByUserIdsAsync(IEnumerable<int> userIds)
+        {
+            var idSet = userIds.ToHashSet();
+            if (idSet.Count == 0)
+                return new Dictionary<int, MembershipPayment>();
+
+            var billings = (await _unitOfWork.MembershipPayments.FindAsync(
+                p => idSet.Contains(p.UserId) && !p.IsDeleted)).ToList();
+
+            return billings
+                .Where(p => p.PaymentStatus != MembershipPaymentStatus.Paid && p.PendingAmount > 0.02m)
+                .GroupBy(p => p.UserId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.CreatedDate).First());
+        }
+
+        private static void EnrichWithBillingSummary(UserDto dto, MembershipPayment? billing)
+        {
+            if (billing == null)
+                return;
+
+            dto.MembershipPaymentStatus = billing.PaymentStatus.ToString();
+            dto.PendingPaymentAmount = billing.PendingAmount;
+            dto.PaymentNextDueDate = billing.NextDueDate;
+            dto.IsPaymentOverdue = IsPaymentOverdue(billing);
+            dto.OpenMembershipPaymentId = billing.Id;
+            dto.OpenMembershipId = billing.MembershipId;
+        }
+
+        private static bool IsPaymentOverdue(MembershipPayment billing)
+        {
+            if (billing.PendingAmount <= 0.02m)
+                return false;
+            if (billing.PaymentStatus == MembershipPaymentStatus.Overdue)
+                return true;
+            return billing.NextDueDate.HasValue
+                   && billing.NextDueDate.Value.Date < DateTime.UtcNow.Date;
         }
 
         private async Task<Dictionary<int, List<UserTypeDto>>> GetUserTypesByUserIdsAsync(IEnumerable<int> userIds)

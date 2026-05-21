@@ -101,6 +101,11 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<CleaningTaskItem> GymOpsCleaningTaskItems { get; set; }
         public DbSet<Vendor> GymOpsVendors { get; set; }
 
+        // Coupon / Promo Code module
+        public DbSet<Coupon> Coupons { get; set; }
+        public DbSet<CouponUsage> CouponUsages { get; set; }
+        public DbSet<InvoiceCouponUsage> InvoiceCouponUsages { get; set; }
+
         // Locker Management module (isolated in LockerMgmt namespace, own tables).
         public DbSet<Locker> LockerMgmtLockers { get; set; }
         public DbSet<LockerAssignment> LockerMgmtAssignments { get; set; }
@@ -579,6 +584,12 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.PaymentStatus).IsRequired().HasConversion<string>().HasMaxLength(30);
                 entity.Property(e => e.LastPaymentMethod).HasConversion<string>().HasMaxLength(30);
                 entity.Property(e => e.Notes).HasMaxLength(2000);
+                entity.Property(e => e.CouponCode).HasMaxLength(50);
+                entity.Property(e => e.CouponDiscountAmount).HasPrecision(12, 2);
+                entity.Property(e => e.OriginalAmount).HasPrecision(12, 2);
+                entity.Property(e => e.FinalBillAmount).HasPrecision(12, 2);
+                entity.Property(e => e.CouponDiscountValue).HasPrecision(12, 2);
+                entity.Property(e => e.CouponDiscountType).HasConversion<string>().HasMaxLength(20);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.MembershipId)
                     .IsUnique()
@@ -634,6 +645,8 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.TotalAmount).HasPrecision(10, 2);
                 entity.Property(e => e.Currency).HasMaxLength(10);
                 entity.Property(e => e.Notes).HasMaxLength(1000);
+                entity.Property(e => e.CouponCode).HasMaxLength(50);
+                entity.Property(e => e.CouponDiscountAmount).HasPrecision(10, 2);
                 entity.Property(e => e.BillingAddress).HasMaxLength(100);
                 entity.Property(e => e.BillingCity).HasMaxLength(100);
                 entity.Property(e => e.BillingState).HasMaxLength(100);
@@ -1261,6 +1274,96 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<LockerAssignment>().HasQueryFilter(e => !e.IsDeleted && e.Locker != null && !e.Locker.IsDeleted);
             modelBuilder.Entity<LockerAccessLog>().HasQueryFilter(e => !e.IsDeleted && e.Locker != null && !e.Locker.IsDeleted);
             modelBuilder.Entity<LockerMaintenance>().HasQueryFilter(e => !e.IsDeleted && e.Locker != null && !e.Locker.IsDeleted);
+
+            // -----------------------------------------------------------------
+            // Coupon / Promo Code module
+            // -----------------------------------------------------------------
+            modelBuilder.Entity<Coupon>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.CouponCode).IsRequired().HasMaxLength(50);
+                entity.HasIndex(e => e.CouponCode).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.Property(e => e.CouponName).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Description).HasMaxLength(1000);
+                entity.Property(e => e.DiscountType).IsRequired().HasConversion<string>().HasMaxLength(20);
+                entity.Property(e => e.DiscountValue).HasPrecision(12, 2);
+                entity.Property(e => e.MinimumInvoiceAmount).HasPrecision(12, 2);
+                entity.Property(e => e.MaximumDiscountAmount).HasPrecision(12, 2);
+                entity.Property(e => e.ApplicableMembershipIds).HasMaxLength(2000);
+                entity.Property(e => e.ApplicableBranchIds).HasMaxLength(2000);
+                entity.Property(e => e.ApplicableUserTypes).HasMaxLength(2000);
+                entity.Property(e => e.Status).IsRequired().HasConversion<string>().HasMaxLength(20);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.ValidTo);
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedByUserId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne(e => e.Organization)
+                    .WithMany()
+                    .HasForeignKey(e => e.OrganizationId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.ToTable("Coupons");
+            });
+
+            modelBuilder.Entity<CouponUsage>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.DiscountAmount).HasPrecision(12, 2);
+                entity.HasIndex(e => new { e.CouponId, e.UserId });
+                entity.HasIndex(e => e.MembershipPaymentId);
+                entity.HasOne(e => e.Coupon)
+                    .WithMany(c => c.Usages)
+                    .HasForeignKey(e => e.CouponId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.MembershipPayment)
+                    .WithMany()
+                    .HasForeignKey(e => e.MembershipPaymentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Invoice)
+                    .WithMany()
+                    .HasForeignKey(e => e.InvoiceId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.ToTable("CouponUsages");
+            });
+
+            modelBuilder.Entity<Coupon>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<CouponUsage>().HasQueryFilter(e => !e.IsDeleted);
+
+            modelBuilder.Entity<InvoiceCouponUsage>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.OriginalAmount).HasPrecision(12, 2);
+                entity.Property(e => e.DiscountAmount).HasPrecision(12, 2);
+                entity.Property(e => e.FinalAmount).HasPrecision(12, 2);
+                entity.Property(e => e.UsageType).HasConversion<string>().HasMaxLength(30);
+                entity.HasIndex(e => e.CouponId);
+                entity.HasIndex(e => e.MembershipPaymentId);
+                entity.HasIndex(e => e.UserId);
+                entity.HasOne(e => e.Coupon)
+                    .WithMany()
+                    .HasForeignKey(e => e.CouponId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.MembershipPayment)
+                    .WithMany()
+                    .HasForeignKey(e => e.MembershipPaymentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Invoice)
+                    .WithMany()
+                    .HasForeignKey(e => e.InvoiceId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.ToTable("invoice_coupon_usage");
+            });
+
+            modelBuilder.Entity<InvoiceCouponUsage>().HasQueryFilter(e => !e.IsDeleted);
 
             modelBuilder.Entity<GymQrWorkoutSession>(entity =>
             {

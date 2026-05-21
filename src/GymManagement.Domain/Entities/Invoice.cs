@@ -52,6 +52,13 @@ namespace GymManagement.Domain.Entities
         [MaxLength(500)]
         public string? Notes { get; set; }
 
+        /// <summary>Coupon code applied to this invoice (snapshot).</summary>
+        [MaxLength(50)]
+        public string? CouponCode { get; set; }
+
+        /// <summary>Coupon discount amount on this invoice.</summary>
+        public decimal CouponDiscountAmount { get; set; }
+
         [Required]
         public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
 

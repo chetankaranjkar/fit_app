@@ -6,15 +6,20 @@ import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { membershipPaymentsService } from '../services/membershipPayments.service'
+import { couponsService } from '../services/coupons.service'
 import { formatInr } from '../lib/formatInr'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import { BillingSummaryCard } from '../components/billing/BillingSummaryCard'
 import {
   MEMBERSHIP_PAYMENT_METHODS,
   computeNetPayable,
+  getMembershipAmount,
+  getRemainingBalance,
   paymentStatusBadgeClass,
   paymentStatusLabel,
 } from '../components/billing/membershipPaymentUi'
 import type { MembershipPaymentMethod } from '../types/membershipPayment'
+import type { ValidateCouponResponse } from '../types/coupon'
 import { usePermission } from '../features/auth/hooks/usePermission'
 import { authService } from '../services/auth.service'
 
@@ -40,6 +45,8 @@ export function CollectMembershipPaymentPage() {
   const [reference, setReference] = useState('')
   const [nextDue, setNextDue] = useState('')
   const [discount, setDiscount] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<ValidateCouponResponse | null>(null)
+  const [selectedCouponCode, setSelectedCouponCode] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['membership-payment', membershipId],
@@ -50,25 +57,68 @@ export function CollectMembershipPaymentPage() {
     enabled: membershipId > 0 && canPay,
   })
 
+  const { data: activeCoupons = [] } = useQuery({
+    queryKey: ['coupons-active-collect'],
+    queryFn: async () => {
+      const { data: d } = await couponsService.getAll({ status: 'Active' })
+      return d
+    },
+    enabled: canPay,
+  })
+
   const net = useMemo(() => {
     if (!data) return 0
-    return computeNetPayable(data.totalAmount, data.discountAmount, data.waiverAmount, data.netPayableAmount)
+    return computeNetPayable(
+      data.totalAmount,
+      data.discountAmount,
+      data.waiverAmount,
+      data.netPayableAmount,
+      data.finalBillAmount,
+      data.couponDiscountAmount ?? 0,
+    )
   }, [data])
+
+  const paidNum = Number(amount) || 0
+  const remainingBeforePay = useMemo(() => {
+    if (!data) return 0
+    return getRemainingBalance(data)
+  }, [data])
+
+  const pendingAfter = useMemo(() => {
+    if (!data) return 0
+    return Math.max(0, remainingBeforePay - paidNum)
+  }, [data, remainingBeforePay, paidNum])
+
+  const applyCouponMutation = useMutation({
+    mutationFn: async (couponCode: string) => {
+      if (!data) throw new Error('No billing')
+      const { data: res } = await membershipPaymentsService.applyCoupon(data.id, couponCode)
+      return res
+    },
+    onSuccess: (res) => {
+      queryClient.setQueryData(['membership-payment', membershipId], res)
+      setAppliedCoupon({
+        valid: true,
+        discountAmount: res.couponDiscountAmount ?? 0,
+        finalAmount: res.finalBillAmount ?? res.netPayableAmount ?? 0,
+        message: 'Coupon locked to invoice',
+        couponCode: res.couponCode,
+        couponId: res.couponId,
+      })
+      toast.success('Coupon applied')
+    },
+    onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Failed to apply coupon')),
+  })
 
   const installmentKind =
     paidNum > 0 && pendingAfter <= 0.02 ? 'full' : paidNum > 0 && pendingAfter > 0.02 ? 'partial' : null
 
-  const paidNum = Number(amount) || 0
-  const discNum = Number(discount) || 0
-  const pendingAfter = useMemo(() => {
-    if (!data) return 0
-    const adjustedNet = Math.max(0, data.totalAmount - discNum - data.waiverAmount)
-    return Math.max(0, adjustedNet - (data.paidAmount + paidNum))
-  }, [data, discNum, paidNum])
-
   const mutation = useMutation({
     mutationFn: async () => {
       if (!data) throw new Error('No data')
+      if (paidNum - remainingBeforePay > 0.02) {
+        throw new Error(`Amount cannot exceed the remaining balance of ${formatInr(remainingBeforePay)}.`)
+      }
       const body = {
         amount: paidNum,
         method,
@@ -76,7 +126,6 @@ export function CollectMembershipPaymentPage() {
         transactionDate: new Date().toISOString(),
         nextDueDate:
           pendingAfter > 0.02 ? (nextDue ? new Date(`${nextDue}T12:00:00`).toISOString() : undefined) : undefined,
-        discountAmount: discNum > 0 ? discNum : undefined,
       }
       const { data: res } = await membershipPaymentsService.addInstallment(data.id, body)
       return res
@@ -93,6 +142,8 @@ export function CollectMembershipPaymentPage() {
       setAmount('')
       setNextDue('')
       setDiscount('')
+      setAppliedCoupon(null)
+      setSelectedCouponCode('')
     },
     onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Failed to record payment')),
   })
@@ -126,27 +177,26 @@ export function CollectMembershipPaymentPage() {
         ) : (
           <>
             <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-xl backdrop-blur-md sm:p-6">
-              <h2 className="text-sm font-semibold text-white">Summary</h2>
-              <dl className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
-                <dt>Plan</dt>
-                <dd className="font-medium text-white">{data.planName ?? '—'}</dd>
-                <dt>Total</dt>
-                <dd>{formatInr(data.totalAmount)}</dd>
-                <dt>Paid</dt>
-                <dd>{formatInr(data.paidAmount)}</dd>
-                <dt>Pending</dt>
-                <dd className="text-amber-200">{formatInr(data.pendingAmount)}</dd>
-                <dt>Billing status</dt>
-                <dd>
-                  <span
-                    className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${paymentStatusBadgeClass(data.paymentStatus)}`}
-                  >
-                    {paymentStatusLabel(data.paymentStatus)}
-                  </span>
-                </dd>
-                <dt>Membership</dt>
-                <dd className="text-slate-400">{data.membershipStatus}</dd>
-              </dl>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-white">{data.planName ?? 'Membership'}</h2>
+                <span
+                  className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${paymentStatusBadgeClass(data.paymentStatus)}`}
+                >
+                  {paymentStatusLabel(data.paymentStatus)}
+                </span>
+              </div>
+              <BillingSummaryCard
+                className="mt-4"
+                membershipAmount={getMembershipAmount(data)}
+                couponCode={data.couponCode}
+                couponDiscount={data.couponDiscountAmount ?? 0}
+                manualDiscount={data.discountAmount}
+                waiverAmount={data.waiverAmount}
+                finalBilling={net}
+                paidAmount={data.paidAmount}
+                pendingAmount={remainingBeforePay}
+                couponLocked={data.couponLocked}
+              />
             </section>
 
             <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-md sm:p-6">
@@ -167,21 +217,21 @@ export function CollectMembershipPaymentPage() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setAmount(String(Math.round(net * 0.25 * 100) / 100))}
+                  onClick={() => setAmount(String(Math.round(remainingBeforePay * 0.25 * 100) / 100))}
                   className="rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
                 >
                   25%
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAmount(String(Math.round(net * 0.5 * 100) / 100))}
+                  onClick={() => setAmount(String(Math.round(remainingBeforePay * 0.5 * 100) / 100))}
                   className="rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
                 >
                   50%
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAmount(String(data.pendingAmount))}
+                  onClick={() => setAmount(String(Math.round(remainingBeforePay * 100) / 100))}
                   className="rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
                 >
                   Full amount
@@ -189,7 +239,75 @@ export function CollectMembershipPaymentPage() {
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Input label="Amount (₹)" type="number" min={0} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} />
-                <Input label="Discount (₹)" type="number" min={0} step={0.01} value={discount} onChange={(e) => setDiscount(e.target.value)} />
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">Discount — Apply Coupon</label>
+                  <select
+                    value={selectedCouponCode}
+                    disabled={data.couponLocked || data.paidAmount > 0 || applyCouponMutation.isPending}
+                    onChange={(e) => {
+                      const code = e.target.value
+                      setSelectedCouponCode(code)
+                      setDiscount('')
+                      setAppliedCoupon(null)
+                      if (code && code !== '__manual__') {
+                        couponsService
+                          .validate({
+                            couponCode: code,
+                            membershipPlanId: 0,
+                            invoiceAmount: getMembershipAmount(data),
+                            userId: data.userId,
+                            membershipPaymentId: data.id,
+                          })
+                          .then(({ data: res }) => {
+                            if (!res.valid) {
+                              setAppliedCoupon(res)
+                              return
+                            }
+                            applyCouponMutation.mutate(code)
+                          })
+                          .catch(() => {
+                            setAppliedCoupon({ valid: false, discountAmount: 0, finalAmount: 0, message: 'Validation failed' })
+                          })
+                      }
+                    }}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100"
+                  >
+                    <option value="" className="bg-slate-900">No discount</option>
+                    <option value="__manual__" className="bg-slate-900">Manual discount (₹)</option>
+                    {activeCoupons.map((c) => (
+                      <option key={c.id} value={c.couponCode} className="bg-slate-900">
+                        {c.couponCode} — {c.discountType === 'Percentage' ? `${c.discountValue}%` : `₹${c.discountValue}`}
+                        {c.maximumDiscountAmount ? ` (max ₹${c.maximumDiscountAmount})` : ''}
+                        {' · '}{c.couponName}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedCouponCode === '__manual__' && (
+                    <div className="mt-2">
+                      <Input
+                        label="Manual Discount (₹)"
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={discount}
+                        onChange={(e) => { setDiscount(e.target.value); setAppliedCoupon(null) }}
+                      />
+                    </div>
+                  )}
+                  {selectedCouponCode && selectedCouponCode !== '__manual__' && appliedCoupon && (
+                    <div className={`mt-2 rounded-lg border px-3 py-2 text-xs ${
+                      appliedCoupon.valid
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                        : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                    }`}>
+                      {appliedCoupon.valid ? (
+                        <p className="font-semibold">✓ Coupon applied — Discount: {formatInr(appliedCoupon.discountAmount)}</p>
+                      ) : (
+                        <p>✗ {appliedCoupon.message}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div className="sm:col-span-2">
                   <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">Method</label>
                   <select
@@ -206,6 +324,7 @@ export function CollectMembershipPaymentPage() {
                 </div>
                 <Input label="Reference / txn id" value={reference} onChange={(e) => setReference(e.target.value)} />
               </div>
+
               {pendingAfter > 0.02 && (
                 <div className="mt-3">
                   <Input label="Next due date (required for partial)" type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} />
@@ -221,16 +340,30 @@ export function CollectMembershipPaymentPage() {
 
             <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-md sm:p-6">
               <h2 className="text-sm font-semibold text-white">Timeline</h2>
-              <ul className="mt-3 divide-y divide-white/5 text-sm text-slate-300">
-                {data.transactions.length === 0 && <li className="py-2 text-slate-500">No transactions yet.</li>}
-                {data.transactions.map((t) => (
-                  <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                    <span className="font-medium text-white">{formatInr(t.transactionAmount)}</span>
-                    <span className="text-slate-500">{new Date(t.transactionDate).toLocaleString()}</span>
-                    <span>{t.transactionMethod}</span>
-                    <span className="text-slate-500">{t.collectedByName ?? '—'}</span>
+              <ul className="mt-3 space-y-3 text-sm text-slate-300">
+                {(data.timeline?.length ? data.timeline : []).map((ev, i) => (
+                  <li key={`${ev.eventType}-${i}`} className="border-l-2 border-blue-500/40 pl-3">
+                    <p className="text-xs text-slate-500">{new Date(ev.occurredAt).toLocaleString()}</p>
+                    <p className="font-medium text-white">{ev.label ?? ev.eventType}</p>
+                    {ev.discountAmount != null && ev.discountAmount > 0 && (
+                      <p className="text-emerald-300">Discount: {formatInr(ev.discountAmount)}</p>
+                    )}
+                    {ev.amount != null && ev.amount > 0 && (
+                      <p className="text-blue-200">Amount: {formatInr(ev.amount)}</p>
+                    )}
                   </li>
                 ))}
+                {(!data.timeline || data.timeline.length === 0) &&
+                  data.transactions.map((t) => (
+                    <li key={t.id} className="border-l-2 border-white/20 pl-3 py-1">
+                      <p className="text-xs text-slate-500">{new Date(t.transactionDate).toLocaleString()}</p>
+                      <p className="font-medium text-white">Payment: {formatInr(t.transactionAmount)}</p>
+                      <p className="text-slate-500">{t.transactionMethod}</p>
+                    </li>
+                  ))}
+                {data.transactions.length === 0 && !data.timeline?.length && (
+                  <li className="text-slate-500">No activity yet.</li>
+                )}
               </ul>
             </section>
           </>

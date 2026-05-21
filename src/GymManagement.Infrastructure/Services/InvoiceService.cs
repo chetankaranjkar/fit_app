@@ -471,7 +471,7 @@ namespace GymManagement.Infrastructure.Services
                             summary.Spacing(4);
                             summary.Item().Row(r =>
                             {
-                                r.RelativeItem().Text("Subtotal");
+                                r.RelativeItem().Text("Membership amount");
                                 r.ConstantItem(100).AlignRight().Text($"{symbol}{invoice.Subtotal:F2}");
                             });
                             summary.Item().Row(r =>
@@ -479,17 +479,42 @@ namespace GymManagement.Infrastructure.Services
                                 r.RelativeItem().Text("Tax");
                                 r.ConstantItem(100).AlignRight().Text($"{symbol}{invoice.TaxAmount:F2}");
                             });
-                            summary.Item().Row(r =>
+                            if (invoice.CouponDiscountAmount > 0)
                             {
-                                r.RelativeItem().Text("Discount");
-                                r.ConstantItem(100).AlignRight().Text($"-{symbol}{invoice.DiscountAmount:F2}");
-                            });
+                                summary.Item().Row(r =>
+                                {
+                                    r.RelativeItem().Text("Coupon discount");
+                                    r.ConstantItem(100).AlignRight().Text($"-{symbol}{invoice.CouponDiscountAmount:F2}");
+                                });
+                                if (!string.IsNullOrWhiteSpace(invoice.CouponCode))
+                                {
+                                    summary.Item().Text($"Coupon applied: {invoice.CouponCode}")
+                                        .FontSize(9).FontColor(Colors.Grey.Darken1);
+                                }
+                            }
+                            if (invoice.DiscountAmount > invoice.CouponDiscountAmount)
+                            {
+                                summary.Item().Row(r =>
+                                {
+                                    r.RelativeItem().Text("Other discount");
+                                    r.ConstantItem(100).AlignRight()
+                                        .Text($"-{symbol}{(invoice.DiscountAmount - invoice.CouponDiscountAmount):F2}");
+                                });
+                            }
+                            else if (invoice.CouponDiscountAmount <= 0 && invoice.DiscountAmount > 0)
+                            {
+                                summary.Item().Row(r =>
+                                {
+                                    r.RelativeItem().Text("Discount");
+                                    r.ConstantItem(100).AlignRight().Text($"-{symbol}{invoice.DiscountAmount:F2}");
+                                });
+                            }
                             summary.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
                             summary.Item().Row(r =>
                             {
-                                r.RelativeItem().Text("Total").SemiBold();
+                                r.RelativeItem().Text("Final bill amount").SemiBold();
                                 r.ConstantItem(100).AlignRight().Text($"{symbol}{invoice.TotalAmount:F2}")
-                                    .SemiBold().FontColor(Colors.Blue.Darken2);
+                                    .SemiBold();
                             });
                         });
 

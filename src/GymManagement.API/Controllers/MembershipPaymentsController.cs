@@ -38,6 +38,19 @@ namespace GymManagement.API.Controllers
         public async Task<ActionResult<IReadOnlyList<MembershipPaymentDto>>> ByUser(int userId, CancellationToken ct) =>
             Ok(await _service.GetByUserIdAsync(userId, ct));
 
+        [HttpPost("{id:int}/apply-coupon")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<MembershipPaymentDto>> ApplyCoupon(
+            int id,
+            [FromBody] ApplyCouponToPaymentDto dto,
+            CancellationToken ct) =>
+            Ok(await _service.ApplyCouponAsync(id, dto, ct));
+
+        [HttpPost("{id:int}/remove-coupon")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<MembershipPaymentDto>> RemoveCoupon(int id, CancellationToken ct) =>
+            Ok(await _service.RemoveCouponAsync(id, ct));
+
         [HttpPost("{id:int}/installments")]
         [HasPermission(PermissionCodes.Payments)]
         public async Task<ActionResult<MembershipPaymentDto>> AddInstallment(

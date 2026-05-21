@@ -27,6 +27,8 @@ export interface Invoice {
   currency: string
   notes?: string
   status: 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled' | 'Refunded'
+  couponCode?: string | null
+  couponDiscountAmount?: number
   billingAddress?: string
   billingCity?: string
   billingState?: string

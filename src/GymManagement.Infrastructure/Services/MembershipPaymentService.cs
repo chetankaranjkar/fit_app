@@ -13,15 +13,21 @@ namespace GymManagement.Infrastructure.Services
     {
         private readonly ApplicationDbContext _db;
         private readonly IInvoiceService _invoiceService;
+        private readonly ICouponService _couponService;
+        private readonly IBillingCalculationService _billing;
 
         public MembershipPaymentService(
             IUnitOfWork unitOfWork,
             ApplicationDbContext db,
-            IInvoiceService invoiceService)
+            IInvoiceService invoiceService,
+            ICouponService couponService,
+            IBillingCalculationService billing)
         {
             _ = unitOfWork;
             _db = db;
             _invoiceService = invoiceService;
+            _couponService = couponService;
+            _billing = billing;
         }
 
         private static bool IsTrialPlan(MembershipPlan plan)
@@ -32,12 +38,6 @@ namespace GymManagement.Infrastructure.Services
                 || name.Contains("trial")
                 || name.Contains("trail")
                 || name.Contains("free");
-        }
-
-        private static decimal NetPayable(MembershipPayment h)
-        {
-            var n = h.TotalAmount - h.DiscountAmount - h.WaiverAmount;
-            return n < 0 ? 0 : n;
         }
 
         private async Task<string> GeneratePaymentNumberAsync(CancellationToken ct)
@@ -86,6 +86,8 @@ namespace GymManagement.Infrastructure.Services
                 UserId = user.Id,
                 MembershipId = membership.Id,
                 TotalAmount = total,
+                OriginalAmount = total,
+                FinalBillAmount = total,
                 PaidAmount = 0m,
                 DiscountAmount = 0,
                 WaiverAmount = 0,
@@ -175,6 +177,7 @@ namespace GymManagement.Infrastructure.Services
 
             var beforePaid = header.PaidAmount;
             ApplyLegacyPaidTotals(header, header.Membership, legacyTotal);
+            _billing.RecalculateHeader(header);
             if (Math.Abs(beforePaid - header.PaidAmount) < 0.01m && header.PaymentStatus != MembershipPaymentStatus.Pending)
                 return;
 
@@ -183,9 +186,10 @@ namespace GymManagement.Infrastructure.Services
             await _db.SaveChangesAsync(cancellationToken);
         }
 
-        private static void ApplyLegacyPaidTotals(MembershipPayment header, UserMembership membership, decimal legacyTotal)
+        private void ApplyLegacyPaidTotals(MembershipPayment header, UserMembership membership, decimal legacyTotal)
         {
-            var net = NetPayable(header);
+            _billing.RecalculateHeader(header);
+            var net = _billing.GetNetPayable(header);
             header.PaidAmount = Math.Min(legacyTotal, net);
             header.PendingAmount = Math.Max(0, net - header.PaidAmount);
             if (header.PendingAmount <= 0.02m)
@@ -248,7 +252,9 @@ namespace GymManagement.Infrastructure.Services
                     .Where(u => staffIds.Contains(u.Id))
                     .ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}".Trim(), ct);
 
-            var netPayable = NetPayable(h);
+            var amounts = _billing.Compute(h);
+            var txList = h.Transactions.Where(t => !t.IsDeleted).OrderByDescending(t => t.TransactionDate).ToList();
+            var timeline = BuildTimeline(h, txList);
             return new MembershipPaymentDto
             {
                 Id = h.Id,
@@ -258,11 +264,13 @@ namespace GymManagement.Infrastructure.Services
                 InvoiceNumber = h.InvoiceNumber,
                 InvoiceId = h.InvoiceId,
                 TotalAmount = h.TotalAmount,
+                OriginalAmount = amounts.OriginalAmount,
+                FinalBillAmount = amounts.FinalBillAmount,
                 PaidAmount = h.PaidAmount,
-                PendingAmount = h.PendingAmount,
+                PendingAmount = amounts.PendingAmount,
                 DiscountAmount = h.DiscountAmount,
                 WaiverAmount = h.WaiverAmount,
-                NetPayableAmount = netPayable,
+                NetPayableAmount = amounts.FinalBillAmount,
                 IsFullyPaid = h.PaymentStatus == MembershipPaymentStatus.Paid,
                 IsPartiallyPaid = h.PaymentStatus == MembershipPaymentStatus.Partial,
                 PaymentStatus = h.PaymentStatus,
@@ -272,9 +280,15 @@ namespace GymManagement.Infrastructure.Services
                 Notes = h.Notes,
                 MembershipStatus = h.Membership.Status,
                 PlanName = h.Membership.Plan?.PlanName,
-                Transactions = h.Transactions
-                    .Where(t => !t.IsDeleted)
-                    .OrderByDescending(t => t.TransactionDate)
+                CouponId = h.CouponId,
+                CouponCode = h.CouponCode,
+                CouponDiscountType = h.CouponDiscountType?.ToString(),
+                CouponDiscountValue = h.CouponDiscountValue,
+                CouponDiscountAmount = h.CouponDiscountAmount,
+                CouponLocked = h.CouponLocked,
+                CouponAppliedAt = h.CouponAppliedAt,
+                InstallmentCount = txList.Count,
+                Transactions = txList
                     .Select(t => new MembershipPaymentTransactionDto
                     {
                         Id = t.Id,
@@ -287,7 +301,179 @@ namespace GymManagement.Infrastructure.Services
                         CollectedByName = t.CollectedByUserId.HasValue && names.TryGetValue(t.CollectedByUserId.Value, out var n) ? n : null,
                     })
                     .ToList(),
+                Timeline = timeline,
             };
+        }
+
+        private static IReadOnlyList<MembershipBillingTimelineEventDto> BuildTimeline(
+            MembershipPayment h,
+            IReadOnlyList<MembershipPaymentTransaction> transactions)
+        {
+            var events = new List<MembershipBillingTimelineEventDto>();
+            if (h.CouponAppliedAt.HasValue && !string.IsNullOrWhiteSpace(h.CouponCode))
+            {
+                events.Add(new MembershipBillingTimelineEventDto
+                {
+                    EventType = "coupon_applied",
+                    OccurredAt = h.CouponAppliedAt.Value,
+                    CouponCode = h.CouponCode,
+                    DiscountAmount = h.CouponDiscountAmount,
+                    Label = $"Coupon applied: {h.CouponCode}",
+                });
+            }
+
+            foreach (var t in transactions.OrderBy(t => t.TransactionDate))
+            {
+                events.Add(new MembershipBillingTimelineEventDto
+                {
+                    EventType = "payment",
+                    OccurredAt = t.TransactionDate,
+                    Amount = t.TransactionAmount,
+                    Label = $"Payment: ₹{t.TransactionAmount:N2}",
+                });
+            }
+
+            if (h.PaymentStatus == MembershipPaymentStatus.Paid && h.PaymentDate.HasValue)
+            {
+                events.Add(new MembershipBillingTimelineEventDto
+                {
+                    EventType = "settled",
+                    OccurredAt = h.PaymentDate.Value,
+                    Label = "Invoice settled",
+                });
+            }
+
+            return events.OrderBy(e => e.OccurredAt).ToList();
+        }
+
+        public async Task<MembershipPaymentDto> ApplyCouponAsync(
+            int membershipPaymentId,
+            ApplyCouponToPaymentDto dto,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(dto.CouponCode))
+                throw new BadRequestException("Coupon code is required.");
+
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                var membershipId = 0;
+                await using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
+                try
+                {
+                    var header = await _db.MembershipPayments
+                        .Include(p => p.Membership)
+                        .ThenInclude(m => m.Plan)
+                        .FirstOrDefaultAsync(p => p.Id == membershipPaymentId && !p.IsDeleted, cancellationToken);
+                    if (header == null)
+                        throw new NotFoundException("Membership payment not found.");
+                    if (header.Membership.Plan == null)
+                        throw new BadRequestException("Membership plan is not loaded.");
+                    membershipId = header.MembershipId;
+
+                    if (header.CouponId.HasValue || header.CouponLocked)
+                        throw new BadRequestException("A coupon is already applied to this invoice.");
+                    var hasTransactions = await _db.MembershipPaymentTransactions
+                        .AnyAsync(t => t.PaymentId == header.Id && !t.IsDeleted, cancellationToken);
+                    if (header.PaidAmount > 0 || hasTransactions)
+                        throw new BadRequestException("Cannot apply a coupon after payments have started.");
+
+                    var original = header.OriginalAmount > 0 ? header.OriginalAmount : header.TotalAmount;
+                    header.OriginalAmount = original;
+
+                    var validateReq = new ValidateCouponRequest
+                    {
+                        CouponCode = dto.CouponCode.Trim(),
+                        MembershipPlanId = header.Membership.Plan.Id,
+                        InvoiceAmount = original,
+                        UserId = header.UserId,
+                        MembershipPaymentId = header.Id,
+                    };
+                    var validation = await _couponService.ValidateAsync(validateReq, cancellationToken);
+                    if (!validation.Valid)
+                        throw new BadRequestException(validation.Message);
+
+                    var coupon = await _db.Coupons.AsNoTracking()
+                        .FirstOrDefaultAsync(c => c.Id == validation.CouponId, cancellationToken)
+                        ?? throw new NotFoundException("Coupon not found.");
+
+                    var couponDiscount = await _couponService.ApplyCouponAsync(
+                        validation.CouponId!.Value,
+                        header.UserId,
+                        header.Id,
+                        original,
+                        cancellationToken);
+
+                    header.CouponId = coupon.Id;
+                    header.CouponCode = coupon.CouponCode;
+                    header.CouponDiscountType = coupon.DiscountType;
+                    header.CouponDiscountValue = coupon.DiscountValue;
+                    header.CouponDiscountAmount = couponDiscount;
+                    header.CouponAppliedAt = DateTime.UtcNow;
+                    header.CouponLocked = true;
+                    _billing.RecalculateHeader(header);
+                    _db.MembershipPayments.Update(header);
+                    await _db.SaveChangesAsync(cancellationToken);
+                    await tx.CommitAsync(cancellationToken);
+                }
+                catch
+                {
+                    await tx.RollbackAsync(cancellationToken);
+                    throw;
+                }
+
+                var refreshed = await GetByMembershipIdAsync(membershipId, cancellationToken);
+                return refreshed ?? throw new ConflictException("Could not reload payment after coupon apply.");
+            });
+        }
+
+        public async Task<MembershipPaymentDto> RemoveCouponAsync(
+            int membershipPaymentId,
+            CancellationToken cancellationToken = default)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                var membershipId = 0;
+                await using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
+                try
+                {
+                    var header = await _db.MembershipPayments
+                        .Include(p => p.Membership)
+                        .FirstOrDefaultAsync(p => p.Id == membershipPaymentId && !p.IsDeleted, cancellationToken);
+                    if (header == null)
+                        throw new NotFoundException("Membership payment not found.");
+                    membershipId = header.MembershipId;
+
+                    if (!header.CouponId.HasValue)
+                        throw new BadRequestException("No coupon is applied to this invoice.");
+                    var hasTransactions = await _db.MembershipPaymentTransactions
+                        .AnyAsync(t => t.PaymentId == header.Id && !t.IsDeleted, cancellationToken);
+                    if (header.PaidAmount > 0 || hasTransactions)
+                        throw new BadRequestException("Cannot remove coupon after payments have started.");
+
+                    await _couponService.RevokeCouponUsageForBillingAsync(header.Id, cancellationToken);
+                    header.CouponId = null;
+                    header.CouponCode = null;
+                    header.CouponDiscountType = null;
+                    header.CouponDiscountValue = null;
+                    header.CouponDiscountAmount = 0;
+                    header.CouponAppliedAt = null;
+                    header.CouponLocked = false;
+                    _billing.RecalculateHeader(header);
+                    _db.MembershipPayments.Update(header);
+                    await _db.SaveChangesAsync(cancellationToken);
+                    await tx.CommitAsync(cancellationToken);
+                }
+                catch
+                {
+                    await tx.RollbackAsync(cancellationToken);
+                    throw;
+                }
+
+                var refreshed = await GetByMembershipIdAsync(membershipId, cancellationToken);
+                return refreshed ?? throw new ConflictException("Could not reload payment after coupon removal.");
+            });
         }
 
         public async Task<MembershipPaymentDto> RecordInstallmentAsync(
@@ -314,16 +500,30 @@ namespace GymManagement.Infrastructure.Services
 
                     membershipId = header.MembershipId;
 
-                    if (dto.DiscountAmount.HasValue && dto.DiscountAmount.Value >= 0)
-                        header.DiscountAmount = dto.DiscountAmount.Value;
+                    if (!string.IsNullOrWhiteSpace(dto.CouponCode))
+                        throw new BadRequestException("Apply coupons using the apply-coupon endpoint before recording payment.");
 
-                    var net = NetPayable(header);
+                    if (dto.DiscountAmount.HasValue)
+                    {
+                        if (header.CouponLocked || header.PaidAmount > 0)
+                            throw new BadRequestException("Manual discount cannot be changed after payments or coupon lock.");
+                        if (dto.DiscountAmount.Value >= 0)
+                            header.DiscountAmount = dto.DiscountAmount.Value;
+                    }
+
+                    if (header.CouponId.HasValue)
+                        header.CouponLocked = true;
+
+                    _billing.RecalculateHeader(header);
+                    var net = _billing.GetNetPayable(header);
                     if (dto.Amount <= 0)
                         throw new BadRequestException("Paid amount must be greater than zero.");
 
+                    var remaining = Math.Max(0, net - header.PaidAmount);
                     var newPaid = header.PaidAmount + dto.Amount;
-                    if (newPaid - net > 0.02m)
-                        throw new BadRequestException("Payment would exceed the outstanding balance.");
+                    if (dto.Amount - remaining > 0.02m)
+                        throw new BadRequestException(
+                            $"Payment would exceed the outstanding balance. Remaining due is ₹{remaining:N2}.");
 
                     var pendingAfter = net - newPaid;
                     var isFullSettlement = pendingAfter <= 0.02m;
@@ -394,7 +594,9 @@ namespace GymManagement.Infrastructure.Services
             if (header.InvoiceId.HasValue)
                 return;
 
-            var net = NetPayable(header);
+            _billing.RecalculateHeader(header);
+            var original = header.OriginalAmount > 0 ? header.OriginalAmount : header.TotalAmount;
+            var final = _billing.GetNetPayable(header);
             var inv = new Invoice
             {
                 InvoiceNumber = await GenerateInvoiceNumberAsync(ct),
@@ -402,13 +604,16 @@ namespace GymManagement.Infrastructure.Services
                 IssueDate = DateTime.UtcNow,
                 DueDate = header.NextDueDate ?? DateTime.UtcNow.Date,
                 PaidDate = DateTime.UtcNow,
-                Subtotal = net,
+                Subtotal = original,
                 TaxAmount = 0,
-                DiscountAmount = header.DiscountAmount,
-                TotalAmount = net,
+                DiscountAmount = header.DiscountAmount + header.CouponDiscountAmount,
+                TotalAmount = final,
                 Currency = "INR",
                 Status = EntityInvoiceStatus.Paid,
-                Notes = $"Membership billing {header.PaymentNumber}. Plan: {plan.PlanName}.",
+                CouponCode = header.CouponCode,
+                CouponDiscountAmount = header.CouponDiscountAmount,
+                Notes = $"Membership billing {header.PaymentNumber}. Plan: {plan.PlanName}." +
+                    (header.CouponCode != null ? $" Coupon applied: {header.CouponCode} (−₹{header.CouponDiscountAmount:N2})." : ""),
                 OrganizationId = header.OrganizationId,
                 InvoiceItems =
                 {
@@ -417,8 +622,8 @@ namespace GymManagement.Infrastructure.Services
                         Description = $"Membership — {plan.PlanName}",
                         Quantity = 1,
                         Unit = "membership",
-                        UnitPrice = net,
-                        Total = net,
+                        UnitPrice = original,
+                        Total = original,
                     },
                 },
             };

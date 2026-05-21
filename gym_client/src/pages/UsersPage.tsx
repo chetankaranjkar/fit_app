@@ -69,6 +69,62 @@ function getAge(dateOfBirth: string): number | null {
   return age
 }
 
+function formatDueDate(iso?: string | null) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function PaymentDueCell({
+  user,
+  onCollect,
+}: {
+  user: User
+  onCollect?: (u: User) => void
+}) {
+  const pending = user.pendingPaymentAmount ?? 0
+  const hasDue = pending > 0.02 && user.membershipPaymentStatus
+  if (!hasDue) {
+    return <span className="text-slate-600">—</span>
+  }
+
+  const overdue = user.isPaymentOverdue
+  const dueLabel = formatDueDate(user.paymentNextDueDate)
+  const status = user.membershipPaymentStatus ?? 'Due'
+
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <span
+        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+          overdue
+            ? 'bg-rose-500/15 text-rose-200 ring-1 ring-rose-500/30'
+            : status === 'Pending'
+              ? 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/25'
+              : 'bg-orange-500/15 text-orange-200 ring-1 ring-orange-500/25'
+        }`}
+      >
+        {overdue ? 'Payment expired' : status === 'Partial' ? 'Partial due' : 'Payment due'}
+      </span>
+      <span className="text-xs font-medium tabular-nums text-amber-100/90">{formatInr(pending)}</span>
+      {dueLabel && (
+        <span className={`text-[10px] ${overdue ? 'text-rose-300/80' : 'text-slate-500'}`}>
+          Due {dueLabel}
+        </span>
+      )}
+      {onCollect && user.openMembershipId && (
+        <button
+          type="button"
+          onClick={() => onCollect(user)}
+          className="rounded-lg bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200 transition hover:bg-blue-500/25"
+        >
+          Collect
+        </button>
+      )}
+    </div>
+  )
+}
+
 function UserRow({
   user,
   onView,
@@ -76,6 +132,7 @@ function UserRow({
   onDelete,
   onDeactivate,
   onActivate,
+  onCollectPayment,
 }: {
   user: User
   onView: (u: User) => void
@@ -83,6 +140,7 @@ function UserRow({
   onDelete: (id: number, name: string) => void
   onDeactivate: (u: User) => void
   onActivate: (u: User) => void
+  onCollectPayment?: (u: User) => void
 }) {
   const name = `${user.firstName} ${user.lastName}`.trim() || '—'
   const age = getAge(user.dateOfBirth)
@@ -122,6 +180,10 @@ function UserRow({
           <span className={`h-1.5 w-1.5 rounded-full ${user.isActive ? 'bg-emerald-400' : 'bg-slate-500'}`} />
           {user.isActive ? 'Active' : 'Inactive'}
         </span>
+      </td>
+      {/* Payment due / expired */}
+      <td className="px-5 py-3.5">
+        <PaymentDueCell user={user} onCollect={onCollectPayment} />
       </td>
       {/* Pref Time (hidden < lg) */}
       <td className="hidden px-5 py-3.5 text-sm text-slate-400 lg:table-cell">
@@ -188,6 +250,7 @@ function UserCard({
   onDelete,
   onDeactivate,
   onActivate,
+  onCollectPayment,
 }: {
   user: User
   onView: (u: User) => void
@@ -195,6 +258,7 @@ function UserCard({
   onDelete: (id: number, name: string) => void
   onDeactivate: (u: User) => void
   onActivate: (u: User) => void
+  onCollectPayment?: (u: User) => void
 }) {
   const name = `${user.firstName} ${user.lastName}`.trim() || '—'
   const age = getAge(user.dateOfBirth)
@@ -236,6 +300,10 @@ function UserCard({
         {user.preferredGymTime && (
           <span className="text-[11px] text-slate-400">⏰ {user.preferredGymTime}</span>
         )}
+      </div>
+
+      <div className="mt-3">
+        <PaymentDueCell user={user} onCollect={onCollectPayment} />
       </div>
 
       {/* Divider */}
@@ -604,6 +672,11 @@ export function UsersPage() {
 
   const handleViewUser = (user: User) => {
     navigate(`/dashboard/users/${user.id}?mode=view`)
+  }
+
+  const handleCollectPayment = (user: User) => {
+    if (!user.openMembershipId) return
+    navigate(`/dashboard/payments/collect?membershipId=${user.openMembershipId}&userId=${user.id}`)
   }
 
   const handleEdit = (user: User) => {
@@ -1362,6 +1435,7 @@ export function UsersPage() {
                         onDelete={handleDelete}
                         onDeactivate={handleDeactivate}
                         onActivate={handleActivate}
+                        onCollectPayment={handleCollectPayment}
                       />
                     ))}
                   </div>
@@ -1376,6 +1450,7 @@ export function UsersPage() {
                       <th className="px-5 py-3.5">Member</th>
                       <th className="hidden px-5 py-3.5 lg:table-cell">Phone</th>
                       <th className="px-5 py-3.5">Status</th>
+                      <th className="px-5 py-3.5">Payment due</th>
                       <th className="hidden px-5 py-3.5 lg:table-cell">Pref. Time</th>
                       <th className="hidden px-5 py-3.5 xl:table-cell">Type</th>
                       <th className="px-5 py-3.5 text-right">Actions</th>
@@ -1384,7 +1459,7 @@ export function UsersPage() {
                   <tbody className="divide-y divide-white/[0.04]">
                     {filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-14 text-center">
+                        <td colSpan={7} className="px-6 py-14 text-center">
                           <div className="flex flex-col items-center gap-3">
                             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5">
                               <svg className="h-6 w-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1407,6 +1482,7 @@ export function UsersPage() {
                           onDelete={handleDelete}
                           onDeactivate={handleDeactivate}
                           onActivate={handleActivate}
+                          onCollectPayment={handleCollectPayment}
                         />
                       ))
                     )}

@@ -30,7 +30,41 @@ export function computeNetPayable(
   discount: number,
   waiver: number,
   netPayableAmount?: number,
+  finalBillAmount?: number,
+  couponDiscount = 0,
 ) {
+  if (finalBillAmount != null && finalBillAmount > 0) return Math.max(0, finalBillAmount)
   if (netPayableAmount != null) return Math.max(0, netPayableAmount)
-  return Math.max(0, total - discount - waiver)
+  return Math.max(0, total - discount - waiver - couponDiscount)
+}
+
+export function getMembershipAmount(billing: {
+  originalAmount?: number
+  totalAmount: number
+}) {
+  return billing.originalAmount != null && billing.originalAmount > 0
+    ? billing.originalAmount
+    : billing.totalAmount
+}
+
+/** Amount still due on this invoice (authoritative for full-pay buttons). */
+export function getRemainingBalance(billing: {
+  totalAmount: number
+  paidAmount: number
+  discountAmount: number
+  waiverAmount: number
+  netPayableAmount?: number
+  finalBillAmount?: number
+  couponDiscountAmount?: number
+  pendingAmount?: number
+}) {
+  const finalBill = computeNetPayable(
+    billing.totalAmount,
+    billing.discountAmount,
+    billing.waiverAmount,
+    billing.netPayableAmount,
+    billing.finalBillAmount,
+    billing.couponDiscountAmount ?? 0,
+  )
+  return Math.max(0, finalBill - billing.paidAmount)
 }

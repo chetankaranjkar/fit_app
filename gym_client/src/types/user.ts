@@ -47,6 +47,12 @@ export interface User {
   currentMembershipStartDate?: string | null
   /** After create/update membership when billing is unpaid; use to open collect-payment flow. */
   pendingPaymentCollection?: PendingMembershipPaymentRedirect | null
+  membershipPaymentStatus?: string | null
+  pendingPaymentAmount?: number | null
+  paymentNextDueDate?: string | null
+  isPaymentOverdue?: boolean
+  openMembershipPaymentId?: number | null
+  openMembershipId?: number | null
 }
 
 export interface CreateUserDto {

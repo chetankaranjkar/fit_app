@@ -68,6 +68,9 @@ const PaymentsPage = lazy(() =>
 const CollectMembershipPaymentPage = lazy(() =>
   import('../pages/CollectMembershipPaymentPage').then((m) => ({ default: m.CollectMembershipPaymentPage })),
 )
+const CouponsPage = lazy(() =>
+  import('../pages/CouponsPage').then((m) => ({ default: m.CouponsPage })),
+)
 const BodyPartsPage = lazy(() =>
   import('../pages/training/BodyPartsPage').then((m) => ({
     default: m.BodyPartsPage,
@@ -228,6 +231,7 @@ const router = createBrowserRouter([
               { path: '/dashboard/user-memberships', element: withSuspense(<UserMembershipsPage />) },
               { path: '/dashboard/payments', element: withSuspense(<PaymentsPage />) },
               { path: '/dashboard/payments/collect', element: withSuspense(<CollectMembershipPaymentPage />) },
+              { path: '/dashboard/coupons', element: withSuspense(<CouponsPage />) },
               { path: '/dashboard/roles', element: withSuspense(<RolesPage />) },
               { path: '/dashboard/security', element: withSuspense(<SecurityPage />) },
               { path: '/dashboard/trainers', element: withSuspense(<TrainersPage />) },

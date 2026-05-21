@@ -20,6 +20,8 @@ namespace GymManagement.Core.DTOs
         public string Currency { get; set; } = "USD";
         public string? Notes { get; set; }
         public InvoiceStatus Status { get; set; }
+        public string? CouponCode { get; set; }
+        public decimal CouponDiscountAmount { get; set; }
         public string? BillingAddress { get; set; }
         public string? BillingCity { get; set; }
         public string? BillingState { get; set; }

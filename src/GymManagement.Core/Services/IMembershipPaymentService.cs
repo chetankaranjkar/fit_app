@@ -37,5 +37,14 @@ namespace GymManagement.Core.Services
         Task<MemberBillingAccessDto> GetMemberBillingAccessAsync(int userId, CancellationToken cancellationToken = default);
 
         Task<byte[]?> GetInvoicePdfForMembershipPaymentAsync(int membershipPaymentId, CancellationToken cancellationToken = default);
+
+        Task<MembershipPaymentDto> ApplyCouponAsync(
+            int membershipPaymentId,
+            ApplyCouponToPaymentDto dto,
+            CancellationToken cancellationToken = default);
+
+        Task<MembershipPaymentDto> RemoveCouponAsync(
+            int membershipPaymentId,
+            CancellationToken cancellationToken = default);
     }
 }

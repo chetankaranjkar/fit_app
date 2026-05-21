@@ -20,6 +20,12 @@ namespace GymManagement.Domain.Entities
         /// <summary>Gross amount (plan total) before discount.</summary>
         public decimal TotalAmount { get; set; }
 
+        /// <summary>Original membership amount at billing creation (same as plan price).</summary>
+        public decimal OriginalAmount { get; set; }
+
+        /// <summary>Authoritative amount due after all discounts (installments use this).</summary>
+        public decimal FinalBillAmount { get; set; }
+
         /// <summary>Sum of successful installment amounts (net of overpayment guard).</summary>
         public decimal PaidAmount { get; set; }
 
@@ -49,6 +55,20 @@ namespace GymManagement.Domain.Entities
         public DateTime? DueReminderLastSentAt { get; set; }
 
         public int? OrganizationId { get; set; }
+
+        /// <summary>Coupon applied to this payment (if any).</summary>
+        public int? CouponId { get; set; }
+        /// <summary>Coupon code snapshot at time of application.</summary>
+        public string? CouponCode { get; set; }
+        public DiscountType? CouponDiscountType { get; set; }
+        public decimal? CouponDiscountValue { get; set; }
+        /// <summary>Discount amount from coupon only.</summary>
+        public decimal CouponDiscountAmount { get; set; }
+
+        /// <summary>When true, coupon cannot be changed or removed.</summary>
+        public bool CouponLocked { get; set; }
+
+        public DateTime? CouponAppliedAt { get; set; }
 
         public User User { get; set; } = null!;
         public UserMembership Membership { get; set; } = null!;

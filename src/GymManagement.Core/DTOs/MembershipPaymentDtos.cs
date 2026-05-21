@@ -23,11 +23,13 @@ namespace GymManagement.Core.DTOs
         public string? InvoiceNumber { get; set; }
         public int? InvoiceId { get; set; }
         public decimal TotalAmount { get; set; }
+        public decimal OriginalAmount { get; set; }
+        public decimal FinalBillAmount { get; set; }
         public decimal PaidAmount { get; set; }
         public decimal PendingAmount { get; set; }
         public decimal DiscountAmount { get; set; }
         public decimal WaiverAmount { get; set; }
-        /// <summary>TotalAmount − DiscountAmount − WaiverAmount (amount required to close billing).</summary>
+        /// <summary>Authoritative amount due (same as FinalBillAmount when set).</summary>
         public decimal NetPayableAmount { get; set; }
         /// <summary>True when PaymentStatus is Paid (full settlement).</summary>
         public bool IsFullyPaid { get; set; }
@@ -40,7 +42,32 @@ namespace GymManagement.Core.DTOs
         public string? Notes { get; set; }
         public MembershipStatus MembershipStatus { get; set; }
         public string? PlanName { get; set; }
+        /// <summary>Coupon applied to this billing (if any).</summary>
+        public int? CouponId { get; set; }
+        public string? CouponCode { get; set; }
+        public string? CouponDiscountType { get; set; }
+        public decimal? CouponDiscountValue { get; set; }
+        public decimal CouponDiscountAmount { get; set; }
+        public bool CouponLocked { get; set; }
+        public DateTime? CouponAppliedAt { get; set; }
+        public int InstallmentCount { get; set; }
         public IReadOnlyList<MembershipPaymentTransactionDto> Transactions { get; set; } = Array.Empty<MembershipPaymentTransactionDto>();
+        public IReadOnlyList<MembershipBillingTimelineEventDto> Timeline { get; set; } = Array.Empty<MembershipBillingTimelineEventDto>();
+    }
+
+    public sealed class MembershipBillingTimelineEventDto
+    {
+        public string EventType { get; set; } = string.Empty;
+        public DateTime OccurredAt { get; set; }
+        public decimal? Amount { get; set; }
+        public string? CouponCode { get; set; }
+        public decimal? DiscountAmount { get; set; }
+        public string? Label { get; set; }
+    }
+
+    public sealed class ApplyCouponToPaymentDto
+    {
+        public string CouponCode { get; set; } = string.Empty;
     }
 
     public sealed class MembershipPaymentTransactionDto
@@ -65,6 +92,8 @@ namespace GymManagement.Core.DTOs
         public string? Remarks { get; set; }
         /// <summary>Optional discount adjustment applied to header (not per transaction).</summary>
         public decimal? DiscountAmount { get; set; }
+        /// <summary>Optional coupon code to apply (validated server-side).</summary>
+        public string? CouponCode { get; set; }
     }
 
     public sealed class MembershipPaymentDashboardDto

@@ -36,6 +36,20 @@ namespace GymManagement.Core.DTOs
 
         /// <summary>Start date of the current active membership used for <see cref="CurrentMembershipPlanId"/>.</summary>
         public DateTime? CurrentMembershipStartDate { get; set; }
+
+        /// <summary>Open membership billing status (Pending, Partial, Overdue) when balance is due.</summary>
+        public string? MembershipPaymentStatus { get; set; }
+
+        public decimal? PendingPaymentAmount { get; set; }
+
+        public DateTime? PaymentNextDueDate { get; set; }
+
+        /// <summary>True when payment is overdue (status Overdue or past due date with balance).</summary>
+        public bool IsPaymentOverdue { get; set; }
+
+        public int? OpenMembershipPaymentId { get; set; }
+
+        public int? OpenMembershipId { get; set; }
     }
 
     public class CreateUserDto

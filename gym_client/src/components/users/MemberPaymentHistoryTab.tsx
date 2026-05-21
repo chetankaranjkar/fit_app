@@ -94,7 +94,9 @@ export function MemberPaymentHistoryTab({ userId }: { userId: number }) {
             <tr>
               <th className="px-4 py-3">Invoice</th>
               <th className="px-4 py-3">Membership</th>
-              <th className="px-4 py-3 text-right">Total</th>
+              <th className="px-4 py-3 text-right">Original</th>
+              <th className="px-4 py-3">Coupon</th>
+              <th className="px-4 py-3 text-right">Final</th>
               <th className="px-4 py-3 text-right">Paid</th>
               <th className="px-4 py-3 text-right">Pending</th>
               <th className="px-4 py-3">Status</th>
@@ -113,7 +115,24 @@ export function MemberPaymentHistoryTab({ userId }: { userId: number }) {
                       {row.invoiceNumber ?? row.paymentNumber}
                     </td>
                     <td className="px-4 py-3 text-slate-300">{row.planName ?? '—'}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{formatInr(row.totalAmount)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {formatInr(row.originalAmount ?? row.totalAmount)}
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      {row.couponCode ? (
+                        <span className="font-mono text-emerald-200/90">
+                          {row.couponCode}
+                          {(row.couponDiscountAmount ?? 0) > 0 && (
+                            <span className="block text-slate-500">−{formatInr(row.couponDiscountAmount!)}</span>
+                          )}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-medium text-white">
+                      {formatInr(row.finalBillAmount ?? row.netPayableAmount ?? row.totalAmount)}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums text-emerald-200/90">
                       {formatInr(row.paidAmount)}
                     </td>
@@ -162,32 +181,36 @@ export function MemberPaymentHistoryTab({ userId }: { userId: number }) {
                   </tr>
                   {open && (
                     <tr className="bg-black/20">
-                      <td colSpan={8} className="px-4 py-4">
+                      <td colSpan={10} className="px-4 py-4">
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                          Transaction timeline
+                          Billing timeline ({row.installmentCount ?? row.transactions.length} installments)
                         </p>
-                        {row.transactions.length === 0 ? (
-                          <p className="text-sm text-slate-500">No installments recorded.</p>
+                        {(row.timeline?.length ?? 0) === 0 && row.transactions.length === 0 ? (
+                          <p className="text-sm text-slate-500">No activity recorded.</p>
                         ) : (
                           <ul className="space-y-2">
-                            {[...row.transactions]
-                              .sort(
-                                (a, b) =>
-                                  new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime(),
-                              )
-                              .map((t) => (
-                                <li
-                                  key={t.id}
-                                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300"
-                                >
-                                  <span className="font-medium text-white">{formatInr(t.transactionAmount)}</span>
-                                  <span>{t.transactionMethod}</span>
-                                  <span className="text-slate-500">
-                                    {new Date(t.transactionDate).toLocaleString('en-IN')}
-                                  </span>
-                                  <span className="text-slate-500">{t.collectedByName ?? '—'}</span>
-                                </li>
-                              ))}
+                            {(row.timeline?.length
+                              ? row.timeline
+                              : row.transactions.map((t) => ({
+                                  eventType: 'payment',
+                                  occurredAt: t.transactionDate,
+                                  amount: t.transactionAmount,
+                                  label: `Payment: ${formatInr(t.transactionAmount)}`,
+                                }))
+                            ).map((ev, i) => (
+                              <li
+                                key={i}
+                                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300"
+                              >
+                                <p className="text-slate-500">
+                                  {new Date(ev.occurredAt).toLocaleString('en-IN', {
+                                    dateStyle: 'medium',
+                                    timeStyle: 'short',
+                                  })}
+                                </p>
+                                <p className="font-medium text-white">{ev.label ?? ev.eventType}</p>
+                              </li>
+                            ))}
                           </ul>
                         )}
                         <div className="mt-3 flex flex-wrap gap-2">

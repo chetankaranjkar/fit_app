@@ -18,6 +18,7 @@ const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { path: '/dashboard/attendance', label: 'Attendance', icon: 'attendance' },
   { path: '/dashboard/payments', label: 'Payments', icon: 'payments' },
+  { path: '/dashboard/coupons', label: 'Coupons', icon: 'coupons' },
   { path: '/dashboard/security', label: 'Security', icon: 'security' },
   { path: '/dashboard/roles', label: 'Roles & Permissions', icon: 'roles' },
   { path: '/dashboard/trainers', label: 'Trainers', icon: 'trainers' },
@@ -159,6 +160,11 @@ const iconMap = {
       />
     </svg>
   ),
+  coupons: (
+    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+    </svg>
+  ),
 }
 
 interface SidebarNavProps {
@@ -215,6 +221,7 @@ export function SidebarNav({
     if (item.path === '/dashboard/security') return false
     if (item.path === '/dashboard/attendance') return canAccessAttendanceNav()
     if (item.path === '/dashboard/payments') return canAccessPaymentsNav()
+    if (item.path === '/dashboard/coupons') return canAccessPaymentsNav()
     if (item.path === '/dashboard/roles') return canAccessConfigNav()
     if (item.path === '/dashboard/trainers') return canAccessUsersNav()
     return true

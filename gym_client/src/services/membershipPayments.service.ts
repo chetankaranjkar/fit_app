@@ -12,6 +12,10 @@ export const membershipPaymentsService = {
   byUser: (userId: number) => api.get<MembershipPaymentDetail[]>(`/membership-payments/by-user/${userId}`),
   addInstallment: (id: number, body: RecordInstallmentPayload) =>
     api.post<MembershipPaymentDetail>(`/membership-payments/${id}/installments`, body),
+  applyCoupon: (id: number, couponCode: string) =>
+    api.post<MembershipPaymentDetail>(`/membership-payments/${id}/apply-coupon`, { couponCode }),
+  removeCoupon: (id: number) =>
+    api.post<MembershipPaymentDetail>(`/membership-payments/${id}/remove-coupon`),
   invoicePdf: (id: number) =>
     api.get<Blob>(`/membership-payments/${id}/invoice-pdf`, { responseType: 'blob' }),
 }

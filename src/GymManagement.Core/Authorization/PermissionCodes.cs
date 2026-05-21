@@ -26,4 +26,7 @@ public static class PermissionCodes
 
     /// <summary>Trainer-scoped CRM: trials assigned to this trainer.</summary>
     public const string LeadsTrainer = "LEADS_TRAINER";
+
+    /// <summary>Manage coupons / promo codes.</summary>
+    public const string Coupons = "COUPONS";
 }

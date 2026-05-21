@@ -128,6 +128,38 @@ Default login (change after first login): `admin@gym.com` / `admin123`
 
 ---
 
+## After `git pull` — changes not visible?
+
+Run a **full** update (rebuild + force recreate), not only `up -d`:
+
+```bash
+cd /opt/gym
+git pull --ff-only origin main
+chmod +x deploy/scripts/*.sh
+./deploy/scripts/update.sh
+```
+
+Or manually:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.testing.yml \
+  --env-file deploy/.env build --no-cache frontend api
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.testing.yml \
+  --env-file deploy/.env up -d --force-recreate
+```
+
+Then in the browser: **Ctrl+Shift+R** or open a **private/incognito** window.
+
+Check what the server is running:
+
+```bash
+./deploy/scripts/verify-deploy.sh
+```
+
+**Mobile app** changes are **not** in the website — rebuild the APK on your PC after `git pull`.
+
+---
+
 ## Part D — Future updates (after fresh install)
 
 `/opt/gym` must be a **git clone** (folder contains `.git`).

@@ -160,6 +160,29 @@ Check what the server is running:
 
 ---
 
+## `gym-api` failed to start / dependency failed?
+
+Usually the API **crashed during database migration**. Check logs on the VPS:
+
+```bash
+cd /opt/gym
+./deploy/scripts/logs.sh api --tail 120
+```
+
+Common fix (migration order + restart):
+
+```bash
+cd /opt/gym
+git pull --ff-only origin main   # or: git reset --hard origin/main
+compose build --no-cache api
+./deploy/scripts/fix-api-migration-order.sh
+compose up -d --force-recreate
+```
+
+If logs show `Invalid object name 'membership_payments'`, pull latest `main` (coupon migration must run **after** `MembershipPaymentsEnterprise`).
+
+---
+
 ## `git pull` blocked by local changes?
 
 On the VPS you may see:

@@ -17,7 +17,11 @@ echo "==> Rebuilding images (frontend + api, no cache)..."
 compose build --no-cache frontend api
 
 echo "==> Recreating all stack containers..."
-compose up -d --force-recreate --remove-orphans
+if ! compose up -d --force-recreate --remove-orphans; then
+  echo "ERROR: compose up failed. API logs:"
+  compose logs --tail 80 api 2>/dev/null || true
+  exit 1
+fi
 
 echo "==> Waiting for API..."
 sleep 5

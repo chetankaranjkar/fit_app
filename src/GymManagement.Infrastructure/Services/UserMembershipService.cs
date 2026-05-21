@@ -8,10 +8,12 @@ namespace GymManagement.Infrastructure.Services
     public class UserMembershipService : IUserMembershipService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IMembershipPaymentService _membershipPaymentService;
 
-        public UserMembershipService(IUnitOfWork unitOfWork)
+        public UserMembershipService(IUnitOfWork unitOfWork, IMembershipPaymentService membershipPaymentService)
         {
             _unitOfWork = unitOfWork;
+            _membershipPaymentService = membershipPaymentService;
         }
 
         public async Task<IEnumerable<UserMembershipDto>> GetAllAsync()
@@ -49,6 +51,12 @@ namespace GymManagement.Infrastructure.Services
             };
             await _unitOfWork.UserMemberships.AddAsync(m);
             await _unitOfWork.SaveChangesAsync();
+
+            var user = await _unitOfWork.Users.GetByIdAsync(m.UserId);
+            var plan = await _unitOfWork.MembershipPlans.GetByIdAsync(m.PlanId);
+            if (user != null && plan != null)
+                await _membershipPaymentService.EnsureBillingForNewMembershipAsync(user, m, plan);
+
             var dtos = await MapToDtosAsync(new[] { m });
             return dtos.First();
         }

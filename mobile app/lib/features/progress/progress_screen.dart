@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/formatters.dart';
 import '../../models/me_models.dart';
@@ -15,6 +16,8 @@ import '../../widgets/section_header.dart';
 import '../../widgets/skeleton_shimmer.dart';
 import '../../widgets/stat_tile.dart';
 import '../../widgets/premium_background.dart';
+import '../../widgets/press_scale.dart';
+import '../../services/me_service.dart';
 import '../shell/shell_layout_metrics.dart';
 
 class ProgressScreen extends ConsumerWidget {
@@ -24,6 +27,7 @@ class ProgressScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final attendance = ref.watch(attendanceProvider);
     final metrics = ref.watch(bodyMetricsProvider);
+    final workoutHistory = ref.watch(workoutSessionHistoryProvider);
 
     return CupertinoPageScaffold(
       backgroundColor: AppColors.resolveBg(context),
@@ -41,8 +45,11 @@ class ProgressScreen extends ConsumerWidget {
             ),
             CupertinoSliverRefreshControl(
               onRefresh: () async {
+                await MeService.instance.flushPendingWorkoutSessions();
                 ref.invalidate(attendanceProvider);
                 ref.invalidate(bodyMetricsProvider);
+                ref.invalidate(workoutSessionHistoryProvider);
+                ref.invalidate(progressPhotosProvider);
               },
             ),
             SliverPadding(
@@ -50,6 +57,43 @@ class ProgressScreen extends ConsumerWidget {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   const _ProgressHero(),
+                  const SizedBox(height: AppSpacing.md),
+                  GlassCard(
+                    tint: AppColors.neonPurple.withValues(alpha: 0.07),
+                    child: PressScale(
+                      onTap: () => context.push('/progress/transformation'),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              color: AppColors.accent.withValues(alpha: 0.15),
+                            ),
+                            child: const Icon(CupertinoIcons.photo_on_rectangle, color: AppColors.accent, size: 22),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Transformation tracker',
+                                  style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Front · side · back photos, timeline & before/after',
+                                  style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(CupertinoIcons.chevron_right, color: AppColors.resolveTextSecondary(context), size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.lg),
                   attendance.when(
                     loading: () => const SkeletonBlock(height: 100),
@@ -71,6 +115,22 @@ class ProgressScreen extends ConsumerWidget {
                     data: (rows) => _WeightChart(rows: rows),
                   ),
                   const SizedBox(height: AppSpacing.xl),
+                  metrics.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (rows) => _BodyFatChart(rows: rows),
+                  ),
+                  const SectionHeader(title: 'Workout history'),
+                  const SizedBox(height: AppSpacing.md),
+                  workoutHistory.when(
+                    loading: () => const SkeletonBlock(height: 120),
+                    error: (e, _) => ErrorStateView(
+                      message: e.toString(),
+                      onRetry: () => ref.refresh(workoutSessionHistoryProvider),
+                    ),
+                    data: (sessions) => _WorkoutHistoryList(sessions: sessions),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
                   const SectionHeader(title: 'Last 30 days'),
                   const SizedBox(height: AppSpacing.md),
                   attendance.when(
@@ -84,9 +144,9 @@ class ProgressScreen extends ConsumerWidget {
           ],
         ),
       ),
-        ],
-      ),
-    );
+    ],
+  ),
+);
   }
 }
 
@@ -210,7 +270,6 @@ class _WeightChart extends StatelessWidget {
               ),
             ),
             titlesData: FlTitlesData(
-              show: true,
               topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
               rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
               bottomTitles: AxisTitles(
@@ -279,6 +338,173 @@ class _WeightChart extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BodyFatChart extends StatelessWidget {
+  const _BodyFatChart({required this.rows});
+  final List<MeBodyMetricLog> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = rows
+        .where((r) => r.bodyFatPercent != null && r.bodyFatPercent! > 0)
+        .toList()
+      ..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
+
+    if (filtered.isEmpty) return const SizedBox.shrink();
+
+    final spots = <FlSpot>[
+      for (var i = 0; i < filtered.length; i++) FlSpot(i.toDouble(), filtered[i].bodyFatPercent!.toDouble()),
+    ];
+    final values = filtered.map((r) => r.bodyFatPercent!.toDouble()).toList();
+    final minY = (values.reduce((a, b) => a < b ? a : b) - 0.5).clamp(0.0, 100.0);
+    final maxY = (values.reduce((a, b) => a > b ? a : b) + 0.5).clamp(0.0, 100.0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionHeader(title: 'Body fat %'),
+        const SizedBox(height: AppSpacing.md),
+        GlassCard(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
+          child: SizedBox(
+            height: 200,
+            child: LineChart(
+              LineChartData(
+                minY: minY,
+                maxY: maxY,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: ((maxY - minY) / 4).clamp(0.5, double.infinity),
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: AppColors.resolveBorder(context).withValues(alpha: 0.5),
+                    strokeWidth: 0.6,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: filtered.length > 1,
+                      reservedSize: 24,
+                      interval: (filtered.length / 4).ceilToDouble().clamp(1, double.infinity),
+                      getTitlesWidget: (value, _) {
+                        final i = value.round();
+                        if (i < 0 || i >= filtered.length) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            Fmt.dateShort(filtered[i].loggedAt),
+                            style: AppType.caption.copyWith(
+                              color: AppColors.resolveTextSecondary(context),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 32,
+                      interval: ((maxY - minY) / 4).clamp(0.5, double.infinity),
+                      getTitlesWidget: (value, _) => Text(
+                        value.toStringAsFixed(0),
+                        style: AppType.caption.copyWith(
+                          color: AppColors.resolveTextSecondary(context),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    curveSmoothness: 0.32,
+                    color: AppColors.neonPurple,
+                    barWidth: 3,
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
+                        radius: 3.5,
+                        color: AppColors.neonPurple,
+                        strokeWidth: 2,
+                        strokeColor: AppColors.resolveBg(context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+      ],
+    );
+  }
+}
+
+class _WorkoutHistoryList extends StatelessWidget {
+  const _WorkoutHistoryList({required this.sessions});
+  final List<MeWorkoutSessionSummary> sessions;
+
+  @override
+  Widget build(BuildContext context) {
+    if (sessions.isEmpty) {
+      return const GlassCard(
+        child: EmptyState(
+          title: 'No sessions yet',
+          message: 'Complete a workout from the Workouts tab to see history here.',
+          icon: CupertinoIcons.flame,
+        ),
+      );
+    }
+
+    return GlassCard(
+      child: Column(
+        children: [
+          for (var i = 0; i < sessions.length; i++) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(CupertinoIcons.flame_fill, color: AppColors.accent, size: 20),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        sessions[i].planName,
+                        style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
+                      ),
+                      Text(
+                        '${Fmt.date(sessions[i].sessionDateUtc.toLocal())} · '
+                        '${sessions[i].setsLogged} sets'
+                        '${sessions[i].durationMinutes != null ? ' · ${sessions[i].durationMinutes} min' : ''}',
+                        style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (i < sessions.length - 1)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                child: Container(
+                  height: 1,
+                  color: AppColors.resolveBorder(context).withValues(alpha: 0.35),
+                ),
+              ),
+          ],
+        ],
       ),
     );
   }

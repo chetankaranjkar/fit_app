@@ -15,6 +15,7 @@ using GymManagement.Core.Interfaces;
 using GymManagement.Core.Options;
 using GymManagement.Core.Services;
 using GymManagement.Infrastructure.Services;
+using GymManagement.API.Hosting;
 using GymManagement.API.Middleware;
 using StackExchange.Redis;
 using HealthChecks.Redis;
@@ -186,12 +187,14 @@ builder.Services.AddHttpClient("door-device", (sp, client) =>
 builder.Services.AddScoped<INotificationWebhookDispatcher, NotificationWebhookDispatcher>();
 builder.Services.AddHostedService<MembershipExpiryReminderHostedService>();
 builder.Services.AddHostedService<GymQrExpiryReminderHostedService>();
+builder.Services.AddHostedService<PaymentBillingReminderHostedService>();
 
 // Register Unit of Work
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Register Services
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<IExerciseService, ExerciseService>();
 builder.Services.AddScoped<IBodyPartService, BodyPartService>();
 builder.Services.AddScoped<IBodyPartMuscleService, BodyPartMuscleService>();
@@ -211,6 +214,7 @@ builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();
 builder.Services.AddScoped<IUserMembershipService, UserMembershipService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IMembershipPaymentService, MembershipPaymentService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IRolePermissionService, RolePermissionService>();
 builder.Services.AddScoped<IRbacService, RbacService>();
@@ -218,7 +222,7 @@ builder.Services.AddScoped<IUserTypeService, UserTypeService>();
 builder.Services.AddScoped<IDietPlanService, DietPlanService>();
 builder.Services.AddScoped<IUserDietPlanService, UserDietPlanService>();
 builder.Services.AddSingleton<IFileMalwareScanner, NoOpFileMalwareScanner>();
-
+builder.Services.AddScoped<GymManagement.API.Services.WebRootImageStorage>();
 // Gym Operations module (isolated)
 builder.Services.AddScoped<GymManagement.Core.Services.GymOps.IEquipmentService, GymManagement.Infrastructure.Services.GymOps.EquipmentService>();
 builder.Services.AddScoped<GymManagement.Core.Services.GymOps.IMaintenanceLogService, GymManagement.Infrastructure.Services.GymOps.MaintenanceLogService>();
@@ -339,6 +343,7 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseAuthentication();
 // JWT claims → HttpContext.User; mirror ids/roles on Items.
 app.UseJwtUserContext();
+app.UseMiddleware<MemberPaymentAccessMiddleware>();
 // Profile UserId → DB permissions (UserRoles → RolePermissions) → HttpContext.Items for permission checks.
 app.UsePermissionResolution();
 app.UseAuthorization();

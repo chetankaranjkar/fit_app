@@ -61,14 +61,20 @@ const MEMBER_ALLOWED_PREFIXES = [
   '/help',
 ]
 
+const STAFF_FRONT_DESK_PAYMENT_PREFIXES = [
+  '/dashboard/payments/collect',
+]
+
 const STAFF_ALLOWED_PREFIXES = [
   '/dashboard',
+  '/dashboard/reception',
   '/dashboard/attendance',
   '/dashboard/users',
   '/dashboard/user-memberships',
   '/dashboard/membership-plans',
   '/dashboard/access/scan',
   '/dashboard/profile',
+  ...STAFF_FRONT_DESK_PAYMENT_PREFIXES,
   '/help',
 ]
 
@@ -86,6 +92,10 @@ export function isPathAllowedForRole(pathname: string, role: DashboardRole): boo
     return MEMBER_ALLOWED_PREFIXES.some(
       (p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith('/help'),
     )
+  }
+
+  if (role === 'trainer') {
+    if (pathname.startsWith('/dashboard/reception') && authService.hasPermission('LEADS_TRAINER')) return true
   }
 
   if (TRAINER_BLOCKED_PREFIXES.some((p) => pathname.startsWith(p))) return false

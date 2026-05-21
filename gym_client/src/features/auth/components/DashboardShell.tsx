@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { MemberPaymentBlockedHost } from '../../billing/MemberPaymentBlockedHost'
 import { DashboardRoleProvider } from '../DashboardRoleContext'
 import { getCurrentDashboardRole, isPathAllowedForRole } from '../roleRouting'
 
@@ -13,6 +14,7 @@ export function DashboardShell() {
 
   return (
     <DashboardRoleProvider value={role}>
+      <MemberPaymentBlockedHost />
       <Outlet />
     </DashboardRoleProvider>
   )

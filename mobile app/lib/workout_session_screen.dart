@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import 'core/api_exception.dart';
 import 'models/me_models.dart';
 import 'providers/me_providers.dart';
 import 'services/me_service.dart';
+import 'services/workout_pending_queue.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_typography.dart';
@@ -64,8 +66,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
         sets: sets,
       );
       if (!mounted) return;
-      ref.invalidate(workoutPlansProvider);
-      ref.invalidate(dashboardProvider);
+      ref.invalidate(workoutSessionHistoryProvider);
       HapticFeedback.heavyImpact();
       context.pop();
       showCupertinoDialog<void>(
@@ -78,6 +79,52 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
               isDefaultAction: true,
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('Great'),
+            ),
+          ],
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      final offline = e.isNetwork || e.statusCode == 503;
+      if (offline) {
+        await WorkoutPendingQueue.instance.enqueue(
+          workoutPlanId: widget.plan.id,
+          durationMinutes: durationMinutes,
+          sets: sets,
+        );
+        if (!mounted) return;
+        ref.invalidate(workoutPlansProvider);
+        ref.invalidate(dashboardProvider);
+        ref.invalidate(workoutSessionHistoryProvider);
+        HapticFeedback.heavyImpact();
+        context.pop();
+        showCupertinoDialog<void>(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('Saved offline'),
+            content: const Text(
+              'We could not reach the server. Your sets are queued and will upload when you pull to refresh on Home or Progress.',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('Could not save'),
+          content: Text(e.message),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
             ),
           ],
         ),

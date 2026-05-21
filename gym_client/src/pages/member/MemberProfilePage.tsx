@@ -40,6 +40,18 @@ export function MemberProfilePage() {
               </dd>
             </div>
           </dl>
+          <div className="mt-5 border-t border-white/10 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                const base = typeof window !== 'undefined' ? window.location.origin : ''
+                window.open(`${base}/help`, '_blank', 'noopener,noreferrer')
+              }}
+              className="w-full rounded-xl border border-blue-400/30 bg-blue-500/10 py-2.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-500/20"
+            >
+              Help center (opens in browser)
+            </button>
+          </div>
         </GlassPanel>
         <Link to="/dashboard" className="text-sm text-orange-400 hover:underline">
           ← Back to home

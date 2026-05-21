@@ -1,15 +1,26 @@
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { HeroStat } from '../../components/dashboard/premium/HeroStat'
 import { QuickAction } from '../../components/dashboard/premium/QuickAction'
 import { TrendAreaChart } from '../../components/dashboard/premium/TrendAreaChart'
 import { getDashboardUser } from '../../lib/dashboardUser'
+import { formatInr } from '../../lib/formatInr'
 import { useAdminKpis } from './useAdminKpis'
+import { usePermission } from '../../features/auth/hooks/usePermission'
+import { authService } from '../../services/auth.service'
+import { membershipPaymentsService } from '../../services/membershipPayments.service'
 
 export function AdminDashboardPage() {
   const { userName } = getDashboardUser()
   const { data, isLoading } = useAdminKpis()
+  const canBillingDash = usePermission(authService.permissionCodes.payments)
+  const { data: billingDash } = useQuery({
+    queryKey: ['membership-payments-dashboard'],
+    queryFn: async () => (await membershipPaymentsService.dashboard()).data,
+    enabled: canBillingDash,
+  })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
@@ -54,6 +65,43 @@ export function AdminDashboardPage() {
             />
           </div>
         </header>
+
+        {canBillingDash ? (
+          <section className="rounded-3xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-transparent to-violet-600/10 p-6 shadow-lg shadow-amber-900/10 backdrop-blur-md sm:p-8">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-200/90">Membership billing</h2>
+                <p className="mt-1 max-w-xl text-xs text-slate-400">
+                  Pending dues, overdue members, partial plans, and today&apos;s membership collections.
+                </p>
+              </div>
+              <Link
+                to="/dashboard/users"
+                className="inline-flex items-center justify-center rounded-xl border border-violet-400/40 bg-violet-500/15 px-4 py-2.5 text-sm font-semibold text-violet-100 shadow-md shadow-violet-900/20 transition hover:bg-violet-500/25"
+              >
+                Collect payment
+              </Link>
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <HeroStat role="admin" label="Pending invoices" numericValue={billingDash?.pendingPaymentsCount ?? 0} />
+              <HeroStat
+                role="admin"
+                label="Pending amount"
+                numericValue={billingDash ? Number(billingDash.totalPendingAmount) : 0}
+                format={(n) => formatInr(n)}
+              />
+              <HeroStat role="admin" label="Overdue members" numericValue={billingDash?.overdueMembersCount ?? 0} />
+              <HeroStat
+                role="admin"
+                label="Today collected"
+                numericValue={billingDash ? Number(billingDash.todayCollections) : 0}
+                format={(n) => formatInr(n)}
+              />
+              <HeroStat role="admin" label="Due soon" numericValue={billingDash?.upcomingDueCount ?? 0} />
+              <HeroStat role="admin" label="Partial pay" numericValue={billingDash?.partialMembersCount ?? 0} />
+            </div>
+          </section>
+        ) : null}
 
         <section className="grid gap-6 lg:grid-cols-3">
           <GlassPanel role="admin" title="Revenue" subtitle="Last 30 days" className="lg:col-span-2">

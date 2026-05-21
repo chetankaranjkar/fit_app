@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using GymManagement.Core.Interfaces;
 using GymManagement.Domain.Entities;
@@ -34,6 +35,8 @@ namespace GymManagement.Infrastructure.Repositories
         private IRepository<UserBodyImage>? _userBodyImages;
         private IRepository<MembershipPlan>? _membershipPlans;
         private IRepository<UserMembership>? _userMemberships;
+        private IRepository<MembershipPayment>? _membershipPayments;
+        private IRepository<MembershipPaymentTransaction>? _membershipPaymentTransactions;
         private IRepository<Payment>? _payments;
         private IRepository<Invoice>? _invoices;
         private IRepository<InvoiceItem>? _invoiceItems;
@@ -45,6 +48,9 @@ namespace GymManagement.Infrastructure.Repositories
         private IRepository<UserRole>? _userRoles;
         private IRepository<DietPlan>? _dietPlans;
         private IRepository<GymQrCode>? _gymQrCodes;
+        private IRepository<GymLead>? _gymLeads;
+        private IRepository<LeadFollowup>? _leadFollowups;
+        private IRepository<LeadTrial>? _leadTrials;
 
         public UnitOfWork(ApplicationDbContext context)
         {
@@ -123,6 +129,12 @@ namespace GymManagement.Infrastructure.Repositories
         public IRepository<UserMembership> UserMemberships => 
             _userMemberships ??= new Repository<UserMembership>(_context);
 
+        public IRepository<MembershipPayment> MembershipPayments =>
+            _membershipPayments ??= new Repository<MembershipPayment>(_context);
+
+        public IRepository<MembershipPaymentTransaction> MembershipPaymentTransactions =>
+            _membershipPaymentTransactions ??= new Repository<MembershipPaymentTransaction>(_context);
+
         public IRepository<Payment> Payments =>
             _payments ??= new Repository<Payment>(_context);
 
@@ -156,9 +168,55 @@ namespace GymManagement.Infrastructure.Repositories
         public IRepository<GymQrCode> GymQrCodes =>
             _gymQrCodes ??= new Repository<GymQrCode>(_context);
 
+        public IRepository<GymLead> GymLeads =>
+            _gymLeads ??= new Repository<GymLead>(_context);
+
+        public IRepository<LeadFollowup> LeadFollowups =>
+            _leadFollowups ??= new Repository<LeadFollowup>(_context);
+
+        public IRepository<LeadTrial> LeadTrials =>
+            _leadTrials ??= new Repository<LeadTrial>(_context);
+
         public async Task<int> SaveChangesAsync()
         {
             return await _context.SaveChangesAsync();
+        }
+
+        public async Task SyncUserUserTypesAsync(int userId, IReadOnlyCollection<int> userTypeIds)
+        {
+            var desired = userTypeIds.Where(tid => tid > 0).Distinct().ToHashSet();
+            var allRows = await _context.UserUserTypes
+                .IgnoreQueryFilters()
+                .Where(uut => uut.UserId == userId)
+                .ToListAsync();
+
+            var now = DateTime.UtcNow;
+
+            foreach (var typeId in desired)
+            {
+                var existing = allRows.FirstOrDefault(r => r.UserTypeId == typeId);
+                if (existing == null)
+                {
+                    await _context.UserUserTypes.AddAsync(new UserUserType
+                    {
+                        UserId = userId,
+                        UserTypeId = typeId,
+                    });
+                }
+                else if (existing.IsDeleted)
+                {
+                    existing.IsDeleted = false;
+                    existing.UpdatedDate = now;
+                    _context.UserUserTypes.Update(existing);
+                }
+            }
+
+            foreach (var row in allRows.Where(r => !desired.Contains(r.UserTypeId) && !r.IsDeleted))
+            {
+                row.IsDeleted = true;
+                row.UpdatedDate = now;
+                _context.UserUserTypes.Update(row);
+            }
         }
 
         public async Task BeginTransactionAsync()

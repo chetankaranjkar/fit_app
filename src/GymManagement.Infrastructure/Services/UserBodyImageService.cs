@@ -41,10 +41,12 @@ namespace GymManagement.Infrastructure.Services
             var userBodyImage = new UserBodyImage
             {
                 UserId = createDto.UserId,
-                ImageUrl = string.Empty, // Will be set after file upload
+                ImageUrl = string.IsNullOrWhiteSpace(createDto.ImageUrl) ? string.Empty : createDto.ImageUrl.Trim(),
                 ImageType = createDto.ImageType,
                 ImageDate = createDto.ImageDate ?? DateTime.UtcNow,
                 Notes = createDto.Notes,
+                WeightKg = createDto.WeightKg,
+                BodyFatPercent = createDto.BodyFatPercent,
                 UploadedById = uploadedById,
                 UploadedByType = uploadedByType
             };
@@ -82,6 +84,10 @@ namespace GymManagement.Infrastructure.Services
                 userBodyImage.ImageDate = updateDto.ImageDate.Value;
             if (updateDto.Notes != null)
                 userBodyImage.Notes = updateDto.Notes;
+            if (updateDto.WeightKg.HasValue)
+                userBodyImage.WeightKg = updateDto.WeightKg;
+            if (updateDto.BodyFatPercent.HasValue)
+                userBodyImage.BodyFatPercent = updateDto.BodyFatPercent;
 
             _unitOfWork.UserBodyImages.Update(userBodyImage);
             await _unitOfWork.SaveChangesAsync();
@@ -131,6 +137,8 @@ namespace GymManagement.Infrastructure.Services
                     ImageType = image.ImageType,
                     ImageDate = image.ImageDate,
                     Notes = image.Notes,
+                    WeightKg = image.WeightKg,
+                    BodyFatPercent = image.BodyFatPercent,
                     UploadedById = image.UploadedById,
                     UploadedByType = image.UploadedByType
                 };

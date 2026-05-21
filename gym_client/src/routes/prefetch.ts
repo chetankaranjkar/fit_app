@@ -24,12 +24,15 @@ const loaders: Record<string, Loader> = {
   '/login': () => import('../pages/LoginPage'),
   '/dashboard': () => import('../pages/dashboards/DashboardHubPage'),
   '/dashboard/profile': () => import('../pages/member/MemberProfilePage'),
+  '/dashboard/member/portal': () => import('../pages/member/MemberPortalPage'),
   '/dashboard/payments': () => import('../pages/PaymentsPage'),
+  '/dashboard/payments/collect': () => import('../pages/CollectMembershipPaymentPage'),
   '/dashboard/security': () => import('../pages/SecurityPage'),
   '/dashboard/roles': () => import('../pages/RolesPage'),
   '/dashboard/trainers': () => import('../pages/TrainersPage'),
 
   // Users group
+  '/dashboard/reception': () => import('../pages/reception/ReceptionCrmPage'),
   '/dashboard/users': () => import('../pages/UsersPage'),
   '/dashboard/user-memberships': () => import('../pages/UserMembershipsPage'),
   '/dashboard/membership-plans': () => import('../pages/MembershipPlansPage'),

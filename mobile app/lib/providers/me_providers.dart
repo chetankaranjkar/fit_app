@@ -39,3 +39,12 @@ final profileProvider = FutureProvider.autoDispose<MeProfile>((ref) async {
 final dietPlanProvider = FutureProvider.autoDispose<MeDietPlan?>((ref) async {
   return MeService.instance.getDietPlan();
 });
+
+final workoutSessionHistoryProvider =
+    FutureProvider.autoDispose<List<MeWorkoutSessionSummary>>((ref) async {
+  return MeService.instance.getWorkoutSessions();
+});
+
+final progressPhotosProvider = FutureProvider.autoDispose<List<MeProgressPhoto>>((ref) async {
+  return MeService.instance.getProgressPhotos();
+});

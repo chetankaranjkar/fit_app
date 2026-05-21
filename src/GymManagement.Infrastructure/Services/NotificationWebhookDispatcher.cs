@@ -67,6 +67,36 @@ namespace GymManagement.Infrastructure.Services
             }
         }
 
+        public async Task DispatchDietAssignmentAssignedAsync(
+            DietAssignmentAssignedNotificationDto dto,
+            CancellationToken cancellationToken = default)
+        {
+            var opts = _options.Value;
+            try
+            {
+                await PostEnvelopeAsync(
+                        "email",
+                        opts.EmailWebhookUrl,
+                        NotificationWebhookEventTypes.DietAssignmentAssigned,
+                        dto,
+                        opts,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                await PostEnvelopeAsync(
+                        "whatsapp",
+                        opts.WhatsAppWebhookUrl,
+                        NotificationWebhookEventTypes.DietAssignmentAssigned,
+                        dto,
+                        opts,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error dispatching diet assignment webhooks.");
+            }
+        }
+
         private async Task PostEnvelopeAsync(
             string channel,
             string? url,

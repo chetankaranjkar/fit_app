@@ -2,9 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/auth_providers.dart';
+import '../../providers/me_providers.dart';
 import '../../theme/app_colors.dart';
+import '../media/onboarding_profile_photo_screen.dart';
 import 'package:pulsefit/widgets/pulsefit_logo.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -23,7 +26,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       if (!mounted) return;
       final state = ref.read(authControllerProvider);
       if (state.status == AuthBootstrapStatus.signedIn) {
-        context.go('/home');
+        try {
+          await ref.read(profileProvider.future);
+        } catch (_) {}
+        if (!mounted) return;
+        final prefs = await SharedPreferences.getInstance();
+        if (!mounted) return;
+        final dismissed = prefs.getBool(kProfilePhotoPromptDismissedKey) ?? false;
+        final pic = ref.read(profileProvider).asData?.value.profilePictureUrl;
+        final missing = pic == null || pic.trim().isEmpty;
+        if (missing && !dismissed) {
+          context.go('/onboarding/photo');
+        } else {
+          context.go('/home');
+        }
       } else {
         context.go('/login');
       }

@@ -246,7 +246,7 @@ class QrAttendanceService {
     }
 
     if (_isMembershipMessage(lower)) {
-      return AttendanceMembershipExpired();
+      return const AttendanceMembershipExpired();
     }
 
     if (_isLocationMessage(lower)) {

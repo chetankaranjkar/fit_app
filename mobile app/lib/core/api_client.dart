@@ -84,9 +84,51 @@ class ApiClient {
     }
   }
 
+  /// Multipart upload (e.g. profile / progress photos). Field name `file` matches ASP.NET `IFormFile file`.
+  Future<Response<T>> postMultipart<T>(
+    String path, {
+    required List<int> fileBytes,
+    required String fileName,
+    Map<String, dynamic>? formFields,
+    ProgressCallback? onSendProgress,
+  }) async {
+    try {
+      final map = <String, dynamic>{
+        'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
+      };
+      if (formFields != null) {
+        for (final e in formFields.entries) {
+          final v = e.value;
+          if (v == null) continue;
+          map[e.key] = v is String ? v : v.toString();
+        }
+      }
+      final form = FormData.fromMap(map);
+      final res = await _dio.post<T>(
+        path,
+        data: form,
+        onSendProgress: onSendProgress,
+      );
+      _ensureOk(res);
+      return res;
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
   Future<Response<T>> put<T>(String path, {Object? body}) async {
     try {
       final res = await _dio.put<T>(path, data: body);
+      _ensureOk(res);
+      return res;
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  Future<Response<T>> delete<T>(String path) async {
+    try {
+      final res = await _dio.delete<T>(path);
       _ensureOk(res);
       return res;
     } on DioException catch (e) {

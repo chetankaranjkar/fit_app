@@ -11,10 +11,12 @@ namespace GymManagement.Infrastructure.Services
     public class UserService : IUserService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IMembershipPaymentService _membershipPaymentService;
 
-        public UserService(IUnitOfWork unitOfWork)
+        public UserService(IUnitOfWork unitOfWork, IMembershipPaymentService membershipPaymentService)
         {
             _unitOfWork = unitOfWork;
+            _membershipPaymentService = membershipPaymentService;
         }
 
         public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
@@ -45,7 +47,9 @@ namespace GymManagement.Infrastructure.Services
             var authUser = allAuth.FirstOrDefault(a => a.UserId == user.Id);
             var userTypes = await GetUserTypeDtosForUserAsync(id);
             var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(new HashSet<int> { id });
-            return MapToDto(user, authUser, trainer != null, userTypes, appRoleNamesByUserId.GetValueOrDefault(id));
+            var dto = MapToDto(user, authUser, trainer != null, userTypes, appRoleNamesByUserId.GetValueOrDefault(id));
+            await EnrichUserProfileForEditPrefillAsync(dto, id);
+            return dto;
         }
 
         public async Task<UserDto> CreateUserAsync(CreateUserDto createUserDto)
@@ -120,12 +124,16 @@ namespace GymManagement.Infrastructure.Services
                 await _unitOfWork.SaveChangesAsync();
             }
 
+            UserMembership? createdMembership = null;
+            MembershipPlan? createdPlan = null;
+
             // Optional: add membership if PlanId is provided
             if (createUserDto.PlanId.HasValue && createUserDto.PlanId.Value > 0)
             {
                 var plan = await _unitOfWork.MembershipPlans.GetByIdAsync(createUserDto.PlanId.Value);
                 if (plan != null)
                 {
+                    createdPlan = plan;
                     var startDate = createUserDto.MembershipStartDate?.Date ?? DateTime.UtcNow.Date;
                     var endDate = startDate.AddDays(plan.DurationDays);
                     var membership = new UserMembership
@@ -138,8 +146,9 @@ namespace GymManagement.Infrastructure.Services
                     };
                     await _unitOfWork.UserMemberships.AddAsync(membership);
                     await _unitOfWork.SaveChangesAsync();
+                    createdMembership = membership;
 
-                    await CreateMembershipPaymentAndInvoiceAsync(user, membership, plan);
+                    await _membershipPaymentService.EnsureBillingForNewMembershipAsync(user, membership, plan);
                 }
             }
 
@@ -182,7 +191,29 @@ namespace GymManagement.Infrastructure.Services
             var trainerUserIds = (await _unitOfWork.Trainers.GetAllAsync()).Select(i => i.UserId).ToHashSet();
             var userTypeDtos = await GetUserTypeDtosForUserAsync(user.Id);
             var appRoleNamesForNew = await BuildAppRoleNamesByUserIdsAsync(new HashSet<int> { user.Id });
-            return MapToDto(user, authForNew, trainerUserIds.Contains(user.Id), userTypeDtos, appRoleNamesForNew.GetValueOrDefault(user.Id));
+            var dto = MapToDto(user, authForNew, trainerUserIds.Contains(user.Id), userTypeDtos, appRoleNamesForNew.GetValueOrDefault(user.Id));
+
+            if (createdMembership != null && createdPlan != null)
+            {
+                var billings = await _unitOfWork.MembershipPayments.FindAsync(p => p.MembershipId == createdMembership.Id);
+                var billing = billings.FirstOrDefault();
+                if (billing != null && billing.PaymentStatus != MembershipPaymentStatus.Paid)
+                {
+                    dto.PendingPaymentCollection = new PendingMembershipPaymentRedirectDto
+                    {
+                        UserId = user.Id,
+                        MembershipId = createdMembership.Id,
+                        MembershipPlanId = createdPlan.Id,
+                        MembershipAmount = createdPlan.Price,
+                        MembershipDurationDays = createdPlan.DurationDays,
+                        StartDate = createdMembership.StartDate,
+                        EndDate = createdMembership.EndDate,
+                        MembershipPaymentId = billing.Id,
+                    };
+                }
+            }
+
+            return dto;
         }
 
         public async Task<UserDto?> UpdateUserAsync(int id, UpdateUserDto updateUserDto)
@@ -240,7 +271,7 @@ namespace GymManagement.Infrastructure.Services
                     await _unitOfWork.UserMemberships.AddAsync(membership);
                     await _unitOfWork.SaveChangesAsync();
 
-                    await CreateMembershipPaymentAndInvoiceAsync(user, membership, plan);
+                    await _membershipPaymentService.EnsureBillingForNewMembershipAsync(user, membership, plan);
                 }
             }
 
@@ -262,23 +293,18 @@ namespace GymManagement.Infrastructure.Services
                 }
             }
 
-            // User types: replace with new selection if provided
+            // User types: sync selection if provided (revive soft-deleted links; avoid unique-index clash on re-add)
             if (updateUserDto.UserTypeIds != null)
             {
-                var existing = (await _unitOfWork.UserUserTypes.FindAsync(uut => uut.UserId == id)).ToList();
-                foreach (var e in existing)
-                {
-                    _unitOfWork.UserUserTypes.Delete(e);
-                }
-                await _unitOfWork.SaveChangesAsync();
-                foreach (var typeId in updateUserDto.UserTypeIds.Where(tid => tid > 0))
+                var validIds = new List<int>();
+                foreach (var typeId in updateUserDto.UserTypeIds.Where(tid => tid > 0).Distinct())
                 {
                     var userType = await _unitOfWork.UserTypes.GetByIdAsync(typeId);
                     if (userType != null)
-                    {
-                        await _unitOfWork.UserUserTypes.AddAsync(new UserUserType { UserId = id, UserTypeId = typeId });
-                    }
+                        validIds.Add(typeId);
                 }
+
+                await _unitOfWork.SyncUserUserTypesAsync(id, validIds);
                 await _unitOfWork.SaveChangesAsync();
             }
 
@@ -413,6 +439,35 @@ namespace GymManagement.Infrastructure.Services
             return types.Select(t => new UserTypeDto { Id = t.Id, Name = t.Name, Description = t.Description }).ToList();
         }
 
+        /// <summary>
+        /// Populates membership and trainer fields for the admin edit-user form without requiring extra API calls
+        /// (membership/instructor endpoints may be permission-gated).
+        /// </summary>
+        private async Task EnrichUserProfileForEditPrefillAsync(UserDto dto, int userId)
+        {
+            var activeMemberships = (await _unitOfWork.UserMemberships.FindAsync(m =>
+                m.UserId == userId && (
+                    m.Status == MembershipStatus.Active
+                    || m.Status == MembershipStatus.ActivePendingPayment
+                    || m.Status == MembershipStatus.PartialPayment))).ToList();
+            var bestMembership = activeMemberships
+                .OrderByDescending(m => m.StartDate)
+                .FirstOrDefault();
+            if (bestMembership != null)
+            {
+                dto.CurrentMembershipPlanId = bestMembership.PlanId;
+                dto.CurrentMembershipStartDate = bestMembership.StartDate;
+            }
+
+            var activeAssignments = (await _unitOfWork.UserInstructors.FindAsync(ui =>
+                ui.UserId == userId && ui.IsActive && !ui.EndDate.HasValue)).ToList();
+            var primary = activeAssignments
+                .OrderByDescending(ui => ui.AssignmentDate)
+                .FirstOrDefault();
+            if (primary != null)
+                dto.AssignedTrainerId = primary.TrainerId;
+        }
+
         private static UserDetailDto MapDetailToDto(UserDetail detail)
         {
             return new UserDetailDto
@@ -456,82 +511,6 @@ namespace GymManagement.Infrastructure.Services
             }
         }
 
-        private static bool IsTrialPlan(MembershipPlan plan)
-        {
-            var name = (plan.PlanName ?? string.Empty).Trim().ToLowerInvariant();
-            // Trial/free heuristics: explicit trial keyword, common typo "trail", free tier, or very short duration.
-            return plan.Price <= 0m
-                || plan.DurationDays <= 15
-                || name.Contains("trial")
-                || name.Contains("trail")
-                || name.Contains("free");
-        }
-
-        private async Task<string> GenerateInvoiceNumberAsync()
-        {
-            var year = DateTime.UtcNow.Year;
-            var count = await _unitOfWork.Invoices.CountAsync(i => i.CreatedDate.Year == year);
-            var sequence = count + 1;
-            return $"INV-{year}-{sequence:D6}";
-        }
-
-        private async Task CreateMembershipPaymentAndInvoiceAsync(User user, UserMembership membership, MembershipPlan plan)
-        {
-            var now = DateTime.UtcNow;
-            var isTrial = IsTrialPlan(plan);
-            var amount = isTrial ? 0m : plan.Price;
-
-            var payment = new Payment
-            {
-                MembershipId = membership.Id,
-                Amount = amount,
-                PaymentDate = now,
-                PaymentMode = PaymentMode.Cash,
-                ReceiptNo = $"RCPT-{now:yyyyMMddHHmmss}-{membership.Id}",
-                OrganizationId = user.OrganizationId ?? plan.OrganizationId
-            };
-            await _unitOfWork.Payments.AddAsync(payment);
-            await _unitOfWork.SaveChangesAsync();
-
-            var invoice = new Invoice
-            {
-                InvoiceNumber = await GenerateInvoiceNumberAsync(),
-                UserMembershipId = membership.Id,
-                IssueDate = now,
-                DueDate = now,
-                PaidDate = now,
-                Subtotal = amount,
-                TaxAmount = 0m,
-                DiscountAmount = 0m,
-                TotalAmount = amount,
-                Currency = "USD",
-                Status = Domain.Entities.InvoiceStatus.Paid,
-                Notes = isTrial
-                    ? $"Trial invoice generated for {plan.PlanName} ({plan.DurationDays} days)."
-                    : $"Invoice generated on user creation for {plan.PlanName}.",
-                PaymentId = payment.Id,
-                OrganizationId = user.OrganizationId ?? plan.OrganizationId,
-                InvoiceItems = new List<InvoiceItem>
-                {
-                    new InvoiceItem
-                    {
-                        Description = isTrial
-                            ? $"Trial membership - {plan.PlanName}"
-                            : $"Membership - {plan.PlanName}",
-                        Quantity = 1,
-                        Unit = isTrial ? "trial" : "plan",
-                        UnitPrice = amount,
-                        Total = amount,
-                        Notes = isTrial
-                            ? "Free/Trial plan invoice item"
-                            : "Auto-generated during user onboarding"
-                    }
-                }
-            };
-
-            await _unitOfWork.Invoices.AddAsync(invoice);
-            await _unitOfWork.SaveChangesAsync();
-        }
     }
 }
 

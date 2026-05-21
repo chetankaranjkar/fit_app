@@ -28,6 +28,8 @@ namespace GymManagement.Core.Interfaces
         IRepository<UserBodyImage> UserBodyImages { get; }
         IRepository<MembershipPlan> MembershipPlans { get; }
         IRepository<UserMembership> UserMemberships { get; }
+        IRepository<MembershipPayment> MembershipPayments { get; }
+        IRepository<MembershipPaymentTransaction> MembershipPaymentTransactions { get; }
         IRepository<Payment> Payments { get; }
         IRepository<Invoice> Invoices { get; }
         IRepository<InvoiceItem> InvoiceItems { get; }
@@ -39,8 +41,18 @@ namespace GymManagement.Core.Interfaces
         IRepository<UserRole> UserRoles { get; }
         IRepository<DietPlan> DietPlans { get; }
         IRepository<GymQrCode> GymQrCodes { get; }
+        IRepository<GymLead> GymLeads { get; }
+        IRepository<LeadFollowup> LeadFollowups { get; }
+        IRepository<LeadTrial> LeadTrials { get; }
 
         Task<int> SaveChangesAsync();
+
+        /// <summary>
+        /// Sets a user's type assignments to match <paramref name="userTypeIds"/> (active rows only).
+        /// Revives soft-deleted junction rows when re-assigning the same pair (unfiltered unique index).
+        /// </summary>
+        Task SyncUserUserTypesAsync(int userId, IReadOnlyCollection<int> userTypeIds);
+
         Task BeginTransactionAsync();
         Task CommitTransactionAsync();
         Task RollbackTransactionAsync();

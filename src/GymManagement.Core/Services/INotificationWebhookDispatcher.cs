@@ -8,5 +8,7 @@ namespace GymManagement.Core.Services
         Task DispatchPaymentReceiptAsync(PaymentReceiptNotificationDto dto, CancellationToken cancellationToken = default);
 
         Task DispatchMembershipExpiringAsync(MembershipExpiringNotificationDto dto, CancellationToken cancellationToken = default);
+
+        Task DispatchDietAssignmentAssignedAsync(DietAssignmentAssignedNotificationDto dto, CancellationToken cancellationToken = default);
     }
 }

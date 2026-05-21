@@ -20,6 +20,9 @@ const AUTH_PERMISSION_CODES = {
   trainerAccess: 'TrainerAccess',
   usersAccess: 'UsersAccess',
   createUsers: 'CreateUsers',
+  createMember: 'CREATE_MEMBER',
+  leadsCrm: 'LEADS_CRM',
+  leadsTrainer: 'LEADS_TRAINER',
 } as const
 
 function normalizeLoginResponse(raw: Record<string, unknown>): LoginResponse {

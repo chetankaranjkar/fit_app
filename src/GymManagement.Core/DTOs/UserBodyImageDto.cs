@@ -9,6 +9,8 @@ namespace GymManagement.Core.DTOs
         public string ImageType { get; set; } = string.Empty;
         public DateTime ImageDate { get; set; }
         public string? Notes { get; set; }
+        public decimal? WeightKg { get; set; }
+        public decimal? BodyFatPercent { get; set; }
         public int? UploadedById { get; set; }
         public string? UploadedByType { get; set; }
         public string? UploadedByName { get; set; }
@@ -17,9 +19,13 @@ namespace GymManagement.Core.DTOs
     public class CreateUserBodyImageDto
     {
         public int UserId { get; set; }
+        /// <summary>Relative URL under wwwroot, e.g. /uploads/body/users/… Set after storage write for member self-service uploads.</summary>
+        public string? ImageUrl { get; set; }
         public string ImageType { get; set; } = "FullBody";
         public DateTime? ImageDate { get; set; }
         public string? Notes { get; set; }
+        public decimal? WeightKg { get; set; }
+        public decimal? BodyFatPercent { get; set; }
     }
 
     public class UpdateUserBodyImageDto
@@ -27,6 +33,8 @@ namespace GymManagement.Core.DTOs
         public string? ImageType { get; set; }
         public DateTime? ImageDate { get; set; }
         public string? Notes { get; set; }
+        public decimal? WeightKg { get; set; }
+        public decimal? BodyFatPercent { get; set; }
     }
 }
 

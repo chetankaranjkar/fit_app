@@ -45,6 +45,12 @@ export function MemberDashboardPage() {
               🔥 {streak} day streak
             </span>
             <Link
+              to="/dashboard/member/portal"
+              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              Web overview
+            </Link>
+            <Link
               to="/dashboard/access/scan"
               className="ml-auto inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-orange-500/30 transition-transform duration-200 hover:scale-[1.02]"
             >

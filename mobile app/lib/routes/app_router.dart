@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/login_screen.dart';
+import '../features/media/onboarding_profile_photo_screen.dart';
+import '../features/media/transformation_tracker_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/diet/diet_screen.dart';
 import '../features/membership/membership_screen.dart';
@@ -30,6 +32,10 @@ final appRouter = GoRouter(
       pageBuilder: (_, __) => _fadePage(const LoginScreen()),
     ),
     GoRoute(
+      path: '/onboarding/photo',
+      pageBuilder: (_, __) => _fadePage(const OnboardingProfilePhotoScreen()),
+    ),
+    GoRoute(
       path: '/scanner',
       pageBuilder: (_, __) => _slidePage(const QrScannerScreen()),
     ),
@@ -37,6 +43,11 @@ final appRouter = GoRouter(
       path: '/membership',
       parentNavigatorKey: _rootNavKey,
       pageBuilder: (_, __) => _slidePage(const MembershipScreen()),
+    ),
+    GoRoute(
+      path: '/progress/transformation',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const TransformationTrackerScreen()),
     ),
     StatefulShellRoute.indexedStack(
       builder: (_, __, navigationShell) => AppShell(navigationShell: navigationShell),

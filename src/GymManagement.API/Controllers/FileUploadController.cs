@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
+using GymManagement.API.Services;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.Services;
 
@@ -11,41 +12,31 @@ namespace GymManagement.API.Controllers
     [Authorize]
     public class FileUploadController : ControllerBase
     {
-        private readonly IWebHostEnvironment _environment;
         private readonly ILogger<FileUploadController> _logger;
-        private readonly IFileMalwareScanner _malwareScanner;
-        private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ".jpg", ".jpeg", ".png", ".gif", ".webp"
-        };
-        private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "image/jpeg", "image/png", "image/gif", "image/webp"
-        };
+        private readonly WebRootImageStorage _storage;
         private const long ProfileMaxBytes = 5 * 1024 * 1024;
         private const long BodyImageMaxBytes = 10 * 1024 * 1024;
 
         public FileUploadController(
-            IWebHostEnvironment environment,
-            ILogger<FileUploadController> logger,
-            IFileMalwareScanner malwareScanner)
+            WebRootImageStorage storage,
+            ILogger<FileUploadController> logger)
         {
-            _environment = environment;
+            _storage = storage;
             _logger = logger;
-            _malwareScanner = malwareScanner;
         }
 
         [HttpPost("profile/user/{userId}")]
         [HasPermission(PermissionCodes.UsersAccess)]
-        public async Task<ActionResult<string>> UploadUserProfileImage(int userId, IFormFile file)
+        public async Task<ActionResult<string>> UploadUserProfileImage(int userId, IFormFile file, CancellationToken cancellationToken = default)
         {
             try
             {
-                var (imageUrl, _) = await ProcessImageUploadAsync(
+                var (imageUrl, _) = await _storage.SaveAsync(
                     file,
-                    relativeFolder: Path.Combine("uploads", "profiles", "users"),
-                    maxBytes: ProfileMaxBytes,
-                    prefixToCleanup: $"user_{userId}_");
+                    Path.Combine("uploads", "profiles", "users").Replace('\\', '/'),
+                    ProfileMaxBytes,
+                    prefixToCleanup: $"user_{userId}_",
+                    cancellationToken: cancellationToken);
                 return Ok(new { imageUrl });
             }
             catch (InvalidOperationException ex)
@@ -61,15 +52,16 @@ namespace GymManagement.API.Controllers
 
         [HttpPost("profile/trainer/{trainerId}")]
         [HasPermission(PermissionCodes.TrainerAccess)]
-        public async Task<ActionResult<string>> UploadTrainerProfileImage(int trainerId, IFormFile file)
+        public async Task<ActionResult<string>> UploadTrainerProfileImage(int trainerId, IFormFile file, CancellationToken cancellationToken = default)
         {
             try
             {
-                var (imageUrl, _) = await ProcessImageUploadAsync(
+                var (imageUrl, _) = await _storage.SaveAsync(
                     file,
-                    relativeFolder: Path.Combine("uploads", "profiles", "trainers"),
-                    maxBytes: ProfileMaxBytes,
-                    prefixToCleanup: $"trainer_{trainerId}_");
+                    Path.Combine("uploads", "profiles", "trainers").Replace('\\', '/'),
+                    ProfileMaxBytes,
+                    prefixToCleanup: $"trainer_{trainerId}_",
+                    cancellationToken: cancellationToken);
                 return Ok(new { imageUrl });
             }
             catch (InvalidOperationException ex)
@@ -85,17 +77,18 @@ namespace GymManagement.API.Controllers
 
         [HttpPost("body/user/{userId}")]
         [HasPermission(PermissionCodes.UsersAccess)]
-        public async Task<ActionResult<string>> UploadUserBodyImage(int userId, IFormFile file, [FromForm] string imageType = "FullBody", [FromForm] string? notes = null)
+        public async Task<ActionResult<string>> UploadUserBodyImage(int userId, IFormFile file, [FromForm] string imageType = "FullBody", [FromForm] string? notes = null, CancellationToken cancellationToken = default)
         {
             try
             {
                 var sanitizedType = SanitizeSegment(imageType);
-                var (imageUrl, _) = await ProcessImageUploadAsync(
+                var (imageUrl, _) = await _storage.SaveAsync(
                     file,
-                    relativeFolder: Path.Combine("uploads", "body", "users"),
-                    maxBytes: BodyImageMaxBytes,
+                    Path.Combine("uploads", "body", "users").Replace('\\', '/'),
+                    BodyImageMaxBytes,
                     prefixToCleanup: null,
-                    namePrefix: $"body_{userId}_{sanitizedType}_");
+                    namePrefix: $"body_{userId}_{sanitizedType}_",
+                    cancellationToken: cancellationToken);
                 return Ok(new { imageUrl, imageType, notes });
             }
             catch (InvalidOperationException ex)
@@ -114,15 +107,16 @@ namespace GymManagement.API.Controllers
         /// </summary>
         [HttpPost("body-part/{bodyPartId}")]
         [HasPermission(PermissionCodes.TrainerAccess)]
-        public async Task<ActionResult<string>> UploadBodyPartImage(int bodyPartId, IFormFile file)
+        public async Task<ActionResult<string>> UploadBodyPartImage(int bodyPartId, IFormFile file, CancellationToken cancellationToken = default)
         {
             try
             {
-                var (imageUrl, _) = await ProcessImageUploadAsync(
+                var (imageUrl, _) = await _storage.SaveAsync(
                     file,
-                    relativeFolder: "uploads/body-parts",
-                    maxBytes: ProfileMaxBytes,
-                    prefixToCleanup: $"bodypart_{bodyPartId}_");
+                    "uploads/body-parts",
+                    ProfileMaxBytes,
+                    prefixToCleanup: $"bodypart_{bodyPartId}_",
+                    cancellationToken: cancellationToken);
                 return Ok(new { imageUrl });
             }
             catch (InvalidOperationException ex)
@@ -138,15 +132,16 @@ namespace GymManagement.API.Controllers
 
         [HttpPost("body-part-muscle/{bodyPartMuscleId}")]
         [HasPermission(PermissionCodes.TrainerAccess)]
-        public async Task<ActionResult<string>> UploadBodyPartMuscleImage(int bodyPartMuscleId, IFormFile file)
+        public async Task<ActionResult<string>> UploadBodyPartMuscleImage(int bodyPartMuscleId, IFormFile file, CancellationToken cancellationToken = default)
         {
             try
             {
-                var (imageUrl, _) = await ProcessImageUploadAsync(
+                var (imageUrl, _) = await _storage.SaveAsync(
                     file,
-                    relativeFolder: "uploads/body-parts",
-                    maxBytes: ProfileMaxBytes,
-                    prefixToCleanup: $"muscle_{bodyPartMuscleId}_");
+                    "uploads/body-parts",
+                    ProfileMaxBytes,
+                    prefixToCleanup: $"muscle_{bodyPartMuscleId}_",
+                    cancellationToken: cancellationToken);
                 return Ok(new { imageUrl });
             }
             catch (InvalidOperationException ex)
@@ -160,104 +155,12 @@ namespace GymManagement.API.Controllers
             }
         }
 
-        private async Task<(string imageUrl, string filePath)> ProcessImageUploadAsync(
-            IFormFile file,
-            string relativeFolder,
-            long maxBytes,
-            string? prefixToCleanup,
-            string? namePrefix = null)
-        {
-            if (file == null || file.Length == 0)
-                throw new InvalidOperationException("No file uploaded");
-            if (file.Length > maxBytes)
-                throw new InvalidOperationException($"File size exceeds {maxBytes / (1024 * 1024)}MB limit");
-
-            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (!AllowedExtensions.Contains(extension))
-                throw new InvalidOperationException("Invalid file extension");
-            if (string.IsNullOrWhiteSpace(file.ContentType) || !AllowedMimeTypes.Contains(file.ContentType))
-                throw new InvalidOperationException("Invalid MIME type");
-
-            var uploadRoot = Path.Combine(_environment.ContentRootPath, "wwwroot");
-            var folderPath = Path.Combine(uploadRoot, relativeFolder.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(folderPath);
-
-            await using var input = file.OpenReadStream();
-            if (!await IsSupportedImageSignatureAsync(input))
-                throw new InvalidOperationException("File signature validation failed");
-
-            var scanResult = await _malwareScanner.ScanAsync(input, file.FileName);
-            if (!scanResult.IsSafe)
-                throw new InvalidOperationException(scanResult.Reason ?? "Malware scan failed");
-            input.Position = 0;
-
-            var safePrefix = string.IsNullOrWhiteSpace(namePrefix) ? "img_" : SanitizeSegment(namePrefix);
-            var randomToken = Convert.ToHexString(Guid.NewGuid().ToByteArray()).ToLowerInvariant();
-            var fileName = $"{safePrefix}{randomToken}{extension}";
-            var filePath = Path.Combine(folderPath, fileName);
-
-            await using (var output = new FileStream(filePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                await input.CopyToAsync(output);
-            }
-
-            if (!string.IsNullOrWhiteSpace(prefixToCleanup))
-                CleanupOlderFiles(folderPath, fileName, SanitizeSegment(prefixToCleanup));
-
-            var normalizedFolder = relativeFolder.Replace('\\', '/').Trim('/');
-            var imageUrl = $"/{normalizedFolder}/{fileName}";
-            return (imageUrl, filePath);
-        }
-
-        private static async Task<bool> IsSupportedImageSignatureAsync(Stream stream)
-        {
-            stream.Position = 0;
-            var header = new byte[12];
-            var read = await stream.ReadAsync(header.AsMemory(0, header.Length));
-            stream.Position = 0;
-            if (read < 4) return false;
-
-            var isJpeg = header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF;
-            var isPng = read >= 8 &&
-                        header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47 &&
-                        header[4] == 0x0D && header[5] == 0x0A && header[6] == 0x1A && header[7] == 0x0A;
-            var isGif = read >= 6 &&
-                        header[0] == 0x47 && header[1] == 0x49 && header[2] == 0x46 &&
-                        header[3] == 0x38 && (header[4] == 0x37 || header[4] == 0x39) && header[5] == 0x61;
-            var isWebp = read >= 12 &&
-                         header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46 &&
-                         header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50;
-            return isJpeg || isPng || isGif || isWebp;
-        }
-
         private static string SanitizeSegment(string value)
         {
             var chars = value
                 .Where(ch => char.IsLetterOrDigit(ch) || ch == '_' || ch == '-')
                 .ToArray();
-            var sanitized = new string(chars);
-            return string.IsNullOrWhiteSpace(sanitized) ? "file" : sanitized;
-        }
-
-        private void CleanupOlderFiles(string folderPath, string currentFileName, string safePrefix)
-        {
-            var files = Directory.EnumerateFiles(folderPath)
-                .Where(path => Path.GetFileName(path).StartsWith(safePrefix, StringComparison.OrdinalIgnoreCase))
-                .Where(path => !string.Equals(Path.GetFileName(path), currentFileName, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            foreach (var oldFile in files)
-            {
-                try
-                {
-                    System.IO.File.Delete(oldFile);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to cleanup old upload file {Path}", oldFile);
-                }
-            }
+            return chars.Length == 0 ? "file" : new string(chars);
         }
     }
 }
-

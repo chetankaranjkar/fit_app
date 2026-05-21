@@ -9,7 +9,11 @@ namespace GymManagement.Domain.Entities
         Expired,
         Frozen,
         Cancelled,
-        Pending
+        Pending,
+        /// <summary>Membership is recognized but full payment has not been received.</summary>
+        ActivePendingPayment,
+        /// <summary>Part of the membership fee has been paid; balance is outstanding.</summary>
+        PartialPayment,
     }
 
     public class UserMembership : BaseEntity
@@ -31,5 +35,6 @@ namespace GymManagement.Domain.Entities
         public MembershipPlan Plan { get; set; } = null!;
         public ICollection<Payment> Payments { get; set; } = new List<Payment>();
         public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
+        public ICollection<MembershipPayment> MembershipPayments { get; set; } = new List<MembershipPayment>();
     }
 }

@@ -1,0 +1,8 @@
+# Copy to key.properties next to this file and fill in real values.
+# Never commit key.properties or *.jks (see .gitignore).
+
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=pulsefit
+# Path relative to the android/ directory (same folder as key.properties).
+storeFile=pulsefit-release.jks

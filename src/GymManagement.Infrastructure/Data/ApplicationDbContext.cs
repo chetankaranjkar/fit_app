@@ -56,6 +56,8 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<MembershipStatusLookup> MembershipStatusLookups { get; set; }
         public DbSet<UserMembership> UserMemberships { get; set; }
         public DbSet<Payment> Payments { get; set; }
+        public DbSet<MembershipPayment> MembershipPayments { get; set; }
+        public DbSet<MembershipPaymentTransaction> MembershipPaymentTransactions { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<InvoiceItem> InvoiceItems { get; set; }
         public DbSet<AppRole> AppRoles { get; set; }
@@ -83,6 +85,13 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<GymQrWorkoutSession> GymQrWorkoutSessions { get; set; }
         public DbSet<GymQrWorkoutLog> GymQrWorkoutLogs { get; set; }
         public DbSet<MemberActivitySummary> MemberActivitySummaries { get; set; }
+
+        /// <summary>Lead / inquiry CRM (<c>gym_leads</c>).</summary>
+        public DbSet<GymLead> GymLeads { get; set; }
+        /// <summary>Lead follow-ups (<c>lead_followups</c>).</summary>
+        public DbSet<LeadFollowup> LeadFollowups { get; set; }
+        /// <summary>Lead trials (<c>lead_trials</c>).</summary>
+        public DbSet<LeadTrial> LeadTrials { get; set; }
 
         // Gym Operations module (isolated in GymOps namespace, own tables).
         public DbSet<Equipment> GymOpsEquipment { get; set; }
@@ -482,6 +491,8 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.ImageUrl).IsRequired();
                 entity.Property(e => e.ImageType).IsRequired();
                 entity.Property(e => e.ImageDate).IsRequired();
+                entity.Property(e => e.WeightKg).HasPrecision(10, 2);
+                entity.Property(e => e.BodyFatPercent).HasPrecision(5, 2);
                 entity.HasOne(e => e.User)
                     .WithMany(u => u.BodyImages)
                     .HasForeignKey(e => e.UserId)
@@ -550,6 +561,63 @@ namespace GymManagement.Infrastructure.Data
                     .HasForeignKey(e => e.OrganizationId)
                     .OnDelete(DeleteBehavior.SetNull);
                 entity.ToTable("payments");
+            });
+
+            modelBuilder.Entity<MembershipPayment>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PaymentNumber).IsRequired().HasMaxLength(40);
+                entity.HasIndex(e => e.PaymentNumber)
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
+                entity.Property(e => e.InvoiceNumber).HasMaxLength(50);
+                entity.Property(e => e.TotalAmount).HasPrecision(12, 2);
+                entity.Property(e => e.PaidAmount).HasPrecision(12, 2);
+                entity.Property(e => e.PendingAmount).HasPrecision(12, 2);
+                entity.Property(e => e.DiscountAmount).HasPrecision(12, 2);
+                entity.Property(e => e.WaiverAmount).HasPrecision(12, 2);
+                entity.Property(e => e.PaymentStatus).IsRequired().HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.LastPaymentMethod).HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.Notes).HasMaxLength(2000);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.MembershipId)
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => e.PaymentStatus);
+                entity.HasIndex(e => e.NextDueDate);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Membership)
+                    .WithMany(m => m.MembershipPayments)
+                    .HasForeignKey(e => e.MembershipId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Invoice)
+                    .WithMany()
+                    .HasForeignKey(e => e.InvoiceId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne(e => e.Organization)
+                    .WithMany()
+                    .HasForeignKey(e => e.OrganizationId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.ToTable("membership_payments");
+            });
+
+            modelBuilder.Entity<MembershipPaymentTransaction>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.TransactionAmount).HasPrecision(12, 2);
+                entity.Property(e => e.TransactionMethod).IsRequired().HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.ReferenceNumber).HasMaxLength(120);
+                entity.Property(e => e.Remarks).HasMaxLength(1000);
+                entity.HasIndex(e => e.PaymentId);
+                entity.HasIndex(e => e.TransactionDate);
+                entity.HasOne(e => e.Payment)
+                    .WithMany(p => p.Transactions)
+                    .HasForeignKey(e => e.PaymentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.ToTable("membership_payment_transactions");
             });
 
             // Configure Invoice
@@ -953,6 +1021,8 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<MembershipPlan>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<UserMembership>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<Payment>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<MembershipPayment>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<MembershipPaymentTransaction>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<Invoice>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<InvoiceItem>().HasQueryFilter(ii => ii.Invoice != null && !ii.Invoice.IsDeleted && !ii.IsDeleted);
             modelBuilder.Entity<AppRole>().HasQueryFilter(e => !e.IsDeleted);
@@ -963,6 +1033,77 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<UserRole>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<DietPlan>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<UserDietPlan>().HasQueryFilter(e => !e.IsDeleted);
+
+            // Lead CRM (gym_leads, lead_followups, lead_trials)
+            modelBuilder.Entity<GymLead>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("gym_leads");
+                entity.Property(e => e.FullName).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Phone).HasMaxLength(100);
+                entity.Property(e => e.Email).HasMaxLength(256);
+                entity.Property(e => e.Gender).HasMaxLength(32);
+                entity.Property(e => e.Occupation).HasMaxLength(200);
+                entity.Property(e => e.FitnessGoal).HasMaxLength(500);
+                entity.Property(e => e.LeadSource).HasMaxLength(100);
+                entity.Property(e => e.CustomLeadSource).HasMaxLength(150);
+                entity.Property(e => e.ReferenceName).HasMaxLength(200);
+                entity.Property(e => e.Notes).HasMaxLength(4000);
+                entity.Property(e => e.Status)
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasConversion<string>();
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.LeadSource);
+                entity.HasIndex(e => e.CreatedDate);
+                entity.HasIndex(e => e.NextFollowUpAt);
+                entity.HasIndex(e => e.ConvertedMemberId);
+                entity.HasOne(e => e.ConvertedMember)
+                    .WithMany()
+                    .HasForeignKey(e => e.ConvertedMemberId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne(e => e.Organization)
+                    .WithMany()
+                    .HasForeignKey(e => e.OrganizationId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+            modelBuilder.Entity<LeadFollowup>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("lead_followups");
+                entity.Property(e => e.Notes).IsRequired().HasMaxLength(4000);
+                entity.Property(e => e.CallRemarks).HasMaxLength(2000);
+                entity.HasIndex(e => e.GymLeadId);
+                entity.HasIndex(e => e.NextFollowUpAt);
+                entity.HasOne(e => e.GymLead)
+                    .WithMany(l => l.Followups)
+                    .HasForeignKey(e => e.GymLeadId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedByUserId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+            modelBuilder.Entity<LeadTrial>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("lead_trials");
+                entity.Property(e => e.Feedback).HasMaxLength(4000);
+                entity.HasIndex(e => e.GymLeadId);
+                entity.HasIndex(e => e.AssignedTrainerId);
+                entity.HasIndex(e => e.TrialDate);
+                entity.HasOne(e => e.GymLead)
+                    .WithMany(l => l.Trials)
+                    .HasForeignKey(e => e.GymLeadId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.AssignedTrainer)
+                    .WithMany()
+                    .HasForeignKey(e => e.AssignedTrainerId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+            modelBuilder.Entity<GymLead>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<LeadFollowup>().HasQueryFilter(f => f.GymLead != null && !f.GymLead.IsDeleted && !f.IsDeleted);
+            modelBuilder.Entity<LeadTrial>().HasQueryFilter(t => t.GymLead != null && !t.GymLead.IsDeleted && !t.IsDeleted);
 
             // -----------------------------------------------------------------
             // Gym Operations module (isolated; own tables under GymOps_* prefix)

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
 import { MetricCard } from '../components/dashboard/MetricCard'
@@ -7,6 +8,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { membershipPlansService } from '../services/membershipPlans.service'
+import { formatInr, formatInrWhole } from '../lib/formatInr'
 import type {
   MembershipPlan,
   CreateMembershipPlanDto,
@@ -72,6 +74,7 @@ export function MembershipPlansPage() {
       setModalOpen(false)
       setForm(defaultCreate)
       setFormError(null)
+      toast.success('Plan created successfully.')
     },
     onError: (err: Error) => setFormError(err.message || 'Failed to create plan'),
   })
@@ -81,9 +84,11 @@ export function MembershipPlansPage() {
       membershipPlansService.update(id, dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['membership-plans'] })
+      setModalOpen(false)
       setEditing(null)
       setForm(defaultCreate)
       setFormError(null)
+      toast.success('Successfully updated the plan.')
     },
     onError: (err: Error) => setFormError(err.message || 'Failed to update plan'),
   })
@@ -181,7 +186,7 @@ export function MembershipPlansPage() {
           />
           <MetricCard
             title="Avg. price"
-            value={planStats.total ? `₹${planStats.avgPrice.toFixed(0)}` : '—'}
+            value={planStats.total ? formatInrWhole(planStats.avgPrice) : '—'}
             gradient="from-violet-500 to-fuchsia-500"
             icon={planMetricIcons.rupee}
             caption="Across all plans"
@@ -220,7 +225,7 @@ export function MembershipPlansPage() {
                     <tr key={plan.id} className="border-b border-white/5 transition-colors hover:bg-white/[0.03]">
                       <td className="px-6 py-3 font-medium text-white">{plan.planName}</td>
                       <td className="px-6 py-3 text-slate-300">{plan.durationDays}</td>
-                      <td className="px-6 py-3 text-slate-300">₹{plan.price.toFixed(2)}</td>
+                      <td className="px-6 py-3 text-slate-300">{formatInr(plan.price)}</td>
                       <td className="px-6 py-3 max-w-[200px] truncate text-slate-300">
                         {plan.description ?? '—'}
                       </td>

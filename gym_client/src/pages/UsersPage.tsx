@@ -3,18 +3,25 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
-import { HelpTooltip } from '../modules/help/components/HelpTooltip'
 import { useWalkthrough } from '../modules/help/hooks/useWalkthrough'
 import { usersService } from '../services/users.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
 import { trainersService } from '../services/trainers.service'
 import { userTypesService } from '../services/userTypes.service'
 import type { User, CreateUserDto } from '../types/user'
+import {
+  MEMBERS_CSV_TEMPLATE,
+  downloadMembersCsv,
+  parseCsvLines,
+  rowsToMemberImports,
+} from '../lib/membersCsv'
+import { formatInr } from '../lib/formatInr'
 import type { Trainer } from '../types/trainer'
 
 function getDashboardUser() {
@@ -318,6 +325,9 @@ export function UsersPage() {
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [importOpen, setImportOpen] = useState(false)
+  const [importLog, setImportLog] = useState<string[]>([])
+  const [importing, setImporting] = useState(false)
 
   const { data: users = [], isLoading, error } = useQuery({
     queryKey: ['users'],
@@ -420,8 +430,8 @@ export function UsersPage() {
   }
 
   const createMutation = useMutation({
-    mutationFn: (dto: CreateUserDto) => usersService.create(dto),
-    onSuccess: () => {
+    mutationFn: (dto: CreateUserDto) => usersService.create(dto).then((r) => r.data),
+    onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setIsAdding(false)
       setForm(defaultCreateForm)
@@ -429,6 +439,10 @@ export function UsersPage() {
       setEmailError(null)
       setPhoneError(null)
       setUsernameError(null)
+      const p = created?.pendingPaymentCollection
+      if (p?.membershipId && p.membershipPaymentId) {
+        navigate(`/dashboard/payments/collect?membershipId=${p.membershipId}&userId=${p.userId}`)
+      }
     },
     onError: (err: unknown) => setFormError(getCreateUserErrorMessage(err)),
   })
@@ -611,6 +625,106 @@ export function UsersPage() {
     updateMutation.mutate({ id: user.id, payload: { isActive: true } })
   }
 
+  const handleExportFiltered = () => {
+    const headers = [
+      'id',
+      'firstName',
+      'lastName',
+      'email',
+      'phone',
+      'isActive',
+      'preferredGymTime',
+      'registrationDate',
+    ]
+    const lines = filteredUsers.map((u) => [
+      String(u.id),
+      u.firstName,
+      u.lastName,
+      u.email,
+      u.phone ?? '',
+      u.isActive ? 'true' : 'false',
+      u.preferredGymTime ?? '',
+      u.registrationDate?.slice(0, 10) ?? '',
+    ])
+    downloadMembersCsv(
+      `members-export-${new Date().toISOString().slice(0, 10)}.csv`,
+      headers,
+      lines,
+    )
+    toast.success('Downloaded member list CSV.')
+  }
+
+  const downloadImportTemplate = () => {
+    const blob = new Blob([MEMBERS_CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'members-import-template.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleCsvImportFile = async (file: File | null) => {
+    if (!file) return
+    const memberTypeId = memberUserType?.id
+    if (!memberTypeId) {
+      toast.error('Member user type not loaded. Cannot import.')
+      return
+    }
+    setImporting(true)
+    setImportLog([])
+    try {
+      const text = await file.text()
+      const grid = parseCsvLines(text)
+      const { rows: parsed, errors } = rowsToMemberImports(grid)
+      const log = [...errors]
+      let ok = 0
+      for (const r of parsed) {
+        if (users.some((u) => (u.email ?? '').toLowerCase() === r.email)) {
+          log.push(`Skipped (exists): ${r.email}`)
+          continue
+        }
+        const payload: CreateUserDto = {
+          firstName: r.firstName,
+          lastName: r.lastName,
+          email: r.email,
+          phone: r.phone,
+          dateOfBirth: r.dateOfBirth,
+          gender: r.gender,
+          address: undefined,
+          emergencyContact: undefined,
+          emergencyPhone: undefined,
+          profilePictureUrl: undefined,
+          preferredGymTime: undefined,
+          isActive: r.isActive,
+          username: r.username,
+          password: r.password,
+          role: 1,
+          planId: undefined,
+          membershipStartDate: undefined,
+          trainerId: undefined,
+          instructorSpecialization: undefined,
+          instructorBio: undefined,
+          instructorHireDate: undefined,
+          userTypeIds: [memberTypeId],
+        }
+        try {
+          await usersService.create(payload)
+          ok++
+        } catch (err: unknown) {
+          log.push(`${r.email}: ${getCreateUserErrorMessage(err)}`)
+        }
+      }
+      setImportLog(log)
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success(`Imported ${ok} member(s). Review log for skips or errors.`)
+    } catch {
+      toast.error('Could not read CSV file.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const contentRef = useRef<HTMLDivElement>(null)
   const cardsRowRef = useRef<HTMLDivElement>(null)
   const tableSectionRef = useRef<HTMLElement>(null)
@@ -685,9 +799,20 @@ export function UsersPage() {
               </button>
               <button
                 type="button"
+                onClick={handleExportFiltered}
                 className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
               >
-                Export
+                Export CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setImportLog([])
+                  setImportOpen(true)
+                }}
+                className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
+              >
+                Import CSV
               </button>
               <button
                 type="button"
@@ -1078,7 +1203,7 @@ export function UsersPage() {
                         <option value="" className="bg-slate-900">None</option>
                         {membershipPlans.map((p) => (
                           <option key={p.id} value={p.id} className="bg-slate-900">
-                            {p.planName} ({p.durationDays} days – ${p.price})
+                            {p.planName} ({p.durationDays} days – {formatInr(p.price)})
                           </option>
                         ))}
                       </select>
@@ -1144,6 +1269,52 @@ export function UsersPage() {
                 </div>
               )}
             </form>
+          </Modal>
+
+          <Modal open={importOpen} onClose={() => !importing && setImportOpen(false)} title="Import members from CSV">
+            <div className="space-y-4 text-sm">
+              <p className="text-slate-400">
+                Required columns: <strong className="text-slate-200">firstName</strong>,{' '}
+                <strong className="text-slate-200">lastName</strong>,{' '}
+                <strong className="text-slate-200">email</strong>,{' '}
+                <strong className="text-slate-200">dateOfBirth</strong> (YYYY-MM-DD),{' '}
+                <strong className="text-slate-200">gender</strong>. Optional: phone, isActive,
+                username, password.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={downloadImportTemplate}
+                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
+                >
+                  Download template
+                </button>
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-slate-500">CSV file</span>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  disabled={importing}
+                  className="block w-full text-xs text-slate-300 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-500/20 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-100"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    void handleCsvImportFile(f ?? null)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              {importing ? (
+                <p className="text-slate-400">Importing…</p>
+              ) : null}
+              {importLog.length > 0 ? (
+                <div className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-[11px] text-slate-300">
+                  {importLog.map((line, i) => (
+                    <div key={`${i}-${line.slice(0, 24)}`}>{line}</div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </Modal>
 
           {error && (

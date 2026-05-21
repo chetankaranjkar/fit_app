@@ -1,4 +1,9 @@
-export type MembershipStatus = 'Active' | 'Expired' | 'Paused'
+export type MembershipStatus =
+  | 'Active'
+  | 'Expired'
+  | 'Paused'
+  | 'ActivePendingPayment'
+  | 'PartialPayment'
 
 export interface UserMembership {
   id: number

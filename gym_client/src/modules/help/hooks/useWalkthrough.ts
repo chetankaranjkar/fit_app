@@ -1,10 +1,13 @@
-import { useCallback, useMemo } from 'react'
-import { useHelpUi } from '../HelpUiContext'
+import { useCallback, useContext, useMemo } from 'react'
+import { HelpUiContext } from '../HelpUiContext'
 
 const storageKey = (moduleKey: string) => `walkthrough_${moduleKey}_completed`
 
 export function useWalkthrough(moduleKey: string) {
-  const { walkthroughModuleKey, launchWalkthrough, dismissWalkthrough } = useHelpUi()
+  const ctx = useContext(HelpUiContext)
+  const walkthroughModuleKey = ctx?.walkthroughModuleKey ?? null
+  const launchWalkthrough = ctx?.launchWalkthrough ?? (() => {})
+  const dismissWalkthrough = ctx?.dismissWalkthrough ?? (() => {})
 
   const completed = useMemo(() => {
     try {

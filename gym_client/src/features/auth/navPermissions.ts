@@ -63,6 +63,7 @@ export function canAccessAttendanceNav(): boolean {
 /** Front-desk staff sidebar (reception). */
 export const STAFF_FRONT_DESK_LINKS = [
   { path: '/dashboard', label: 'Dashboard' },
+  { path: '/dashboard/reception', label: 'Lead CRM' },
   { path: '/dashboard/attendance', label: 'Attendance' },
   { path: '/dashboard/users', label: 'Members' },
   { path: '/dashboard/user-memberships', label: 'Memberships' },

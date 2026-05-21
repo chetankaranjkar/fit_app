@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using GymManagement.Core.Authorization;
 using GymManagement.Core.Interfaces;
 using GymManagement.Domain.Entities;
 using GymManagement.Domain.Entities.GymOps;
@@ -57,6 +58,9 @@ namespace GymManagement.Infrastructure.Data
 
             // ADMIN role gets all permissions so permission-based APIs work for the default admin
             await EnsureAdminRoleHasAllPermissionsAsync();
+            await _unitOfWork.SaveChangesAsync();
+
+            await EnsureDefaultRoleLeadPermissionsAsync();
             await _unitOfWork.SaveChangesAsync();
 
             // Seed Body Parts
@@ -351,6 +355,8 @@ namespace GymManagement.Infrastructure.Data
                 new { Code = "VIEW_ATTENDANCE", Name = "View attendance", Description = "View attendance logs and statistics" },
                 new { Code = "MANAGE_ATTENDANCE", Name = "Manage attendance", Description = "Check-in, check-out, and edit attendance" },
                 new { Code = "MANAGE_MEMBERS", Name = "Manage members", Description = "Update or delete users and profile details" },
+                new { Code = PermissionCodes.LeadsCrm, Name = "Leads CRM", Description = "Lead pipeline, reception dashboard, conversion" },
+                new { Code = PermissionCodes.LeadsTrainer, Name = "Leads (trainer)", Description = "View assigned lead trials and update trial feedback" },
             };
             foreach (var p in permissions)
             {
@@ -365,6 +371,34 @@ namespace GymManagement.Infrastructure.Data
                     });
                 }
             }
+        }
+
+        /// <summary>Assigns lead CRM permissions to STAFF/TRAINER roles for reception and trial workflows (idempotent).</summary>
+        private async Task EnsureDefaultRoleLeadPermissionsAsync()
+        {
+            async Task LinkAsync(string roleName, string permissionCode)
+            {
+                var role = await _unitOfWork.AppRoles.FirstOrDefaultAsync(r => r.Name == roleName);
+                var perm = await _unitOfWork.Permissions.FirstOrDefaultAsync(p => p.Code == permissionCode);
+                if (role == null || perm == null)
+                    return;
+                var exists = await _unitOfWork.RolePermissions.ExistsAsync(rp =>
+                    rp.RoleId == role.Id && rp.PermissionId == perm.Id);
+                if (exists)
+                    return;
+                await _unitOfWork.RolePermissions.AddAsync(new RolePermission
+                {
+                    RoleId = role.Id,
+                    PermissionId = perm.Id,
+                    CreatedDate = DateTime.UtcNow,
+                });
+            }
+
+            await LinkAsync("STAFF", PermissionCodes.LeadsCrm);
+            await LinkAsync("STAFF", PermissionCodes.CREATE_MEMBER);
+            await LinkAsync("STAFF", PermissionCodes.UsersAccess);
+            await LinkAsync("STAFF", PermissionCodes.VIEW_ATTENDANCE);
+            await LinkAsync("TRAINER", PermissionCodes.LeadsTrainer);
         }
 
         /// <summary>Links every seeded <see cref="Permission"/> to the ADMIN <see cref="AppRole"/> (idempotent).</summary>

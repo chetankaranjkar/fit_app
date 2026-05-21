@@ -24,6 +24,18 @@ namespace GymManagement.Core.DTOs
         public string? Username { get; set; }
         /// <summary>User types (e.g. Admin, Instructor, Staff) - a user can have many.</summary>
         public List<UserTypeDto> UserTypes { get; set; } = new();
+
+        /// <summary>When set, client should open payment collection for this new membership (non-trial, unpaid).</summary>
+        public PendingMembershipPaymentRedirectDto? PendingPaymentCollection { get; set; }
+
+        /// <summary>Active trainer assignment (Trainers.Id) for edit-form prefill.</summary>
+        public int? AssignedTrainerId { get; set; }
+
+        /// <summary>Current active membership plan id for edit-form prefill.</summary>
+        public int? CurrentMembershipPlanId { get; set; }
+
+        /// <summary>Start date of the current active membership used for <see cref="CurrentMembershipPlanId"/>.</summary>
+        public DateTime? CurrentMembershipStartDate { get; set; }
     }
 
     public class CreateUserDto

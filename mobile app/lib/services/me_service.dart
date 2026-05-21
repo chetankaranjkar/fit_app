@@ -1,6 +1,7 @@
 import '../core/api_client.dart';
 import '../core/api_exception.dart';
 import '../models/me_models.dart';
+import 'workout_pending_queue.dart';
 
 /// Calls into the backend `/api/me/*` self-service endpoints.
 class MeService {
@@ -15,6 +16,43 @@ class MeService {
   Future<MeProfile> getProfile() async {
     final res = await ApiClient.instance.get<Map<String, dynamic>>('/me/profile');
     return MeProfile.fromJson(res.data ?? {});
+  }
+
+  Future<MeProfile> updateProfile({
+    String? firstName,
+    String? lastName,
+    String? phone,
+    String? profilePictureUrl,
+  }) async {
+    final body = <String, dynamic>{};
+    if (firstName != null) body['firstName'] = firstName;
+    if (lastName != null) body['lastName'] = lastName;
+    if (phone != null) body['phone'] = phone;
+    if (profilePictureUrl != null) body['profilePictureUrl'] = profilePictureUrl;
+    final res = await ApiClient.instance.put<Map<String, dynamic>>('/me/profile', body: body);
+    return MeProfile.fromJson(res.data ?? {});
+  }
+
+  Future<List<MeWorkoutSessionSummary>> getWorkoutSessions({int take = 40}) async {
+    final res = await ApiClient.instance.get<List<dynamic>>(
+      '/me/workout-sessions',
+      query: {'take': take},
+    );
+    return (res.data ?? const [])
+        .whereType<Map>()
+        .map((e) => MeWorkoutSessionSummary.fromJson(e.cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// Retries locally queued workout completions (offline save).
+  Future<int> flushPendingWorkoutSessions() async {
+    return WorkoutPendingQueue.instance.drain((workoutPlanId, durationMinutes, sets) async {
+      await completeWorkoutSession(
+        workoutPlanId: workoutPlanId,
+        durationMinutes: durationMinutes,
+        sets: sets,
+      );
+    });
   }
 
   Future<MeMembership?> getMembership() async {
@@ -92,5 +130,63 @@ class MeService {
       },
     );
     return MeWorkoutSessionCompleted.fromJson(res.data ?? {});
+  }
+
+  // —— Media (profile + transformation photos) ————————————————————
+
+  Future<MeProfile> uploadProfilePhoto(
+    List<int> bytes,
+    String fileName, {
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
+    final res = await ApiClient.instance.postMultipart<Map<String, dynamic>>(
+      '/me/profile/photo',
+      fileBytes: bytes,
+      fileName: fileName,
+      onSendProgress: onSendProgress,
+    );
+    return MeProfile.fromJson(res.data ?? {});
+  }
+
+  Future<List<MeProgressPhoto>> getProgressPhotos({int take = 60}) async {
+    final res = await ApiClient.instance.get<List<dynamic>>(
+      '/me/progress-photos',
+      query: {'take': take},
+    );
+    return (res.data ?? const [])
+        .whereType<Map>()
+        .map((e) => MeProgressPhoto.fromJson(e.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<MeProgressPhoto> uploadProgressPhoto(
+    List<int> bytes,
+    String fileName, {
+    required String imageType,
+    String? notes,
+    double? weightKg,
+    double? bodyFatPercent,
+    DateTime? imageDate,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
+    final fields = <String, dynamic>{
+      'imageType': imageType,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (weightKg != null) 'weightKg': weightKg.toString(),
+      if (bodyFatPercent != null) 'bodyFatPercent': bodyFatPercent.toString(),
+      if (imageDate != null) 'imageDate': imageDate.toUtc().toIso8601String(),
+    };
+    final res = await ApiClient.instance.postMultipart<Map<String, dynamic>>(
+      '/me/progress-photos',
+      fileBytes: bytes,
+      fileName: fileName,
+      formFields: fields,
+      onSendProgress: onSendProgress,
+    );
+    return MeProgressPhoto.fromJson(res.data ?? {});
+  }
+
+  Future<void> deleteProgressPhoto(int id) async {
+    await ApiClient.instance.delete<void>('/me/progress-photos/$id');
   }
 }

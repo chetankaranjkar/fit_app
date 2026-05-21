@@ -1,11 +1,14 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/formatters.dart';
+import '../../core/media_urls.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/me_providers.dart';
+import '../../services/me_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -15,6 +18,7 @@ import '../../widgets/glass_card.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
+import 'profile_edit_sheet.dart';
 import '../../widgets/skeleton_shimmer.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -38,7 +42,11 @@ class ProfileScreen extends ConsumerWidget {
               border: null,
             ),
             CupertinoSliverRefreshControl(
-              onRefresh: () async => ref.refresh(profileProvider),
+              onRefresh: () async {
+                await MeService.instance.flushPendingWorkoutSessions();
+                ref.invalidate(profileProvider);
+                await ref.read(profileProvider.future);
+              },
             ),
             SliverPadding(
               padding: ShellLayoutMetrics.scrollPadding(context),
@@ -69,13 +77,31 @@ class ProfileScreen extends ConsumerWidget {
                                 ),
                               ],
                             ),
-                            child: Text(
-                              p.initials,
-                              style: AppType.title2.copyWith(
-                                color: CupertinoColors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: p.profilePictureUrl != null &&
+                                    MediaUrls.resolve(p.profilePictureUrl!).isNotEmpty
+                                ? CachedNetworkImage(
+                                    imageUrl: MediaUrls.resolve(p.profilePictureUrl!),
+                                    fit: BoxFit.cover,
+                                    width: 64,
+                                    height: 64,
+                                    placeholder: (_, __) =>
+                                        const CupertinoActivityIndicator(color: CupertinoColors.white),
+                                    errorWidget: (_, __, ___) => Text(
+                                      p.initials,
+                                      style: AppType.title2.copyWith(
+                                        color: CupertinoColors.white,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  )
+                                : Text(
+                                    p.initials,
+                                    style: AppType.title2.copyWith(
+                                      color: CupertinoColors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
@@ -133,6 +159,30 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xl),
+                  if (profile.asData?.value != null)
+                    AppleGroupedSection(
+                      header: 'Account',
+                      children: [
+                        _ActionRow(
+                          icon: CupertinoIcons.pencil,
+                          label: 'Edit profile',
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            final me = profile.asData!.value;
+                            showCupertinoModalPopup<void>(
+                              context: context,
+                              builder: (modalContext) => Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: MediaQuery.viewInsetsOf(modalContext).bottom,
+                                ),
+                                child: ProfileEditSheet(initial: me),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  if (profile.asData?.value != null) const SizedBox(height: AppSpacing.lg),
                   AppleGroupedSection(
                     header: 'Member details',
                     children: [

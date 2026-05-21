@@ -207,6 +207,26 @@ namespace GymManagement.Core.DTOs
         public int SetsLogged { get; set; }
     }
 
+    /// <summary>Past completed strength sessions for the member hub / Progress tab.</summary>
+    public sealed class MeWorkoutSessionSummaryDto
+    {
+        public int SessionId { get; set; }
+        public int WorkoutPlanId { get; set; }
+        public string PlanName { get; set; } = string.Empty;
+        public DateTime SessionDateUtc { get; set; }
+        public int? DurationMinutes { get; set; }
+        public int SetsLogged { get; set; }
+    }
+
+    /// <summary>Partial profile update from the mobile app (name, phone, optional photo URL).</summary>
+    public sealed class MeUpdateProfileDto
+    {
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? Phone { get; set; }
+        public string? ProfilePictureUrl { get; set; }
+    }
+
     /// <summary>Member's currently active assigned diet plan.</summary>
     public sealed class MeDietPlanDto
     {

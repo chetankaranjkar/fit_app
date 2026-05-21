@@ -31,6 +31,7 @@ const PREFIX_TO_MODULE: [string, string][] = [
   ['/dashboard/access/branches', 'branches'],
   ['/dashboard/access/scan', 'scan'],
   ['/dashboard/owner-analytics', 'owner_analytics'],
+  ['/dashboard/reception', 'lead_crm'],
   ['/dashboard/users', 'members'],
   ['/dashboard/attendance', 'attendance'],
   ['/dashboard/payments', 'payments'],
@@ -38,6 +39,7 @@ const PREFIX_TO_MODULE: [string, string][] = [
   ['/dashboard/roles', 'roles'],
   ['/dashboard/security', 'security'],
   ['/dashboard/profile', 'dashboard'],
+  ['/dashboard/member/portal', 'member_portal'],
   ['/dashboard', 'dashboard'],
   ['/help', 'help_center'],
 ]

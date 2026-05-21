@@ -7,6 +7,9 @@ namespace GymManagement.Domain.Entities
         public string ImageType { get; set; } = "FullBody"; // FullBody, Front, Side, Back
         public DateTime ImageDate { get; set; } = DateTime.UtcNow;
         public string? Notes { get; set; }
+        /// <summary>Optional snapshot metrics logged with this progress photo.</summary>
+        public decimal? WeightKg { get; set; }
+        public decimal? BodyFatPercent { get; set; }
         public int? UploadedById { get; set; } // Admin or Instructor who uploaded
         public string? UploadedByType { get; set; } // "Admin" or "Instructor"
 

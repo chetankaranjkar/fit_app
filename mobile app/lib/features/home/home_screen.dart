@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/formatters.dart';
 import '../../models/me_models.dart';
 import '../../providers/me_providers.dart';
+import '../../providers/ui_banner_provider.dart';
+import '../../services/me_service.dart';
 import '../../animations/app_motion.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
@@ -25,6 +27,8 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dashboard = ref.watch(dashboardProvider);
+    final checkIn = ref.watch(checkInBannerProvider);
+    final topPad = MediaQuery.paddingOf(context).top;
     return CupertinoPageScaffold(
       backgroundColor: AppColors.resolveBg(context),
       child: Stack(
@@ -40,7 +44,10 @@ class HomeScreen extends ConsumerWidget {
                   border: null,
                 ),
                 CupertinoSliverRefreshControl(
-                  onRefresh: () async => ref.refresh(dashboardProvider),
+                  onRefresh: () async {
+                    await MeService.instance.flushPendingWorkoutSessions();
+                    ref.invalidate(dashboardProvider);
+                  },
                 ),
                 dashboard.when(
                   loading: () => const SliverToBoxAdapter(child: _HomeSkeleton()),
@@ -126,6 +133,16 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
+          if (checkIn != null)
+            Positioned(
+              left: AppSpacing.lg,
+              right: AppSpacing.lg,
+              top: topPad + 6,
+              child: _CheckInSuccessBanner(
+                state: checkIn,
+                onDismiss: () => ref.read(checkInBannerProvider.notifier).state = null,
+              ),
+            ),
           Positioned(
             right: AppSpacing.lg,
             bottom: ShellLayoutMetrics.fabBottomOffset(context),
@@ -136,6 +153,55 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+class _CheckInSuccessBanner extends StatelessWidget {
+  const _CheckInSuccessBanner({required this.state, required this.onDismiss});
+
+  final CheckInBannerState state;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      radius: AppRadius.lg,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      tint: AppColors.success.withValues(alpha: 0.12),
+      child: Row(
+        children: [
+          const Icon(CupertinoIcons.checkmark_seal_fill, color: AppColors.success, size: 26),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  state.title,
+                  style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
+                ),
+                Text(
+                  state.subtitle,
+                  style: AppType.footnote.copyWith(color: AppColors.resolveTextSecondary(context)),
+                ),
+              ],
+            ),
+          ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: onDismiss,
+            child: Icon(
+              CupertinoIcons.xmark_circle_fill,
+              color: AppColors.resolveTextSecondary(context),
+              size: 22,
+            ),
+          ),
+        ],
+      ),
+    )
+        .animate()
+        .fadeIn(duration: 280.ms)
+        .slideY(begin: -0.06, end: 0, curve: Curves.easeOutCubic);
   }
 }
 
@@ -750,7 +816,7 @@ class _HomeSkeleton extends StatelessWidget {
         AppSpacing.lg,
         ShellLayoutMetrics.contentBottomPadding(context),
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SkeletonBlock(height: 18, width: 120),
@@ -759,13 +825,15 @@ class _HomeSkeleton extends StatelessWidget {
           SizedBox(height: AppSpacing.lg),
           SkeletonBlock(height: 145),
           SizedBox(height: AppSpacing.lg),
-          Row(children: [
-            Expanded(child: SkeletonBlock(height: 100)),
-            SizedBox(width: AppSpacing.md),
-            Expanded(child: SkeletonBlock(height: 100)),
-            SizedBox(width: AppSpacing.md),
-            Expanded(child: SkeletonBlock(height: 100)),
-          ]),
+          Row(
+            children: [
+              Expanded(child: SkeletonBlock(height: 100)),
+              SizedBox(width: AppSpacing.md),
+              Expanded(child: SkeletonBlock(height: 100)),
+              SizedBox(width: AppSpacing.md),
+              Expanded(child: SkeletonBlock(height: 100)),
+            ],
+          ),
           SizedBox(height: AppSpacing.xl),
           SkeletonBlock(height: 80),
           SizedBox(height: AppSpacing.md),

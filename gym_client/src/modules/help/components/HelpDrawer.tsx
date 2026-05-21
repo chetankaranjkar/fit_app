@@ -1,15 +1,19 @@
+import { useContext } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, BookOpen, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useHelpUi } from '../HelpUiContext'
+import { HelpUiContext } from '../HelpUiContext'
 import { useHelpModuleArticle } from '../hooks/useHelp'
 
 export function HelpDrawer() {
-  const { drawerOpen, drawerModuleKey, closeDrawer } = useHelpUi()
-  const { data, isLoading, isError } = useHelpModuleArticle(drawerModuleKey, drawerOpen)
+  const ctx = useContext(HelpUiContext)
+  const drawerOpen = ctx?.drawerOpen ?? false
+  const drawerModuleKey = ctx?.drawerModuleKey ?? ''
+  const closeDrawer = ctx?.closeDrawer ?? (() => {})
+  const { data, isLoading, isError } = useHelpModuleArticle(drawerModuleKey, drawerOpen && !!ctx)
 
-  if (typeof document === 'undefined') return null
+  if (!ctx || typeof document === 'undefined') return null
 
   return createPortal(
     <AnimatePresence>

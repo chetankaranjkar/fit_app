@@ -1,6 +1,7 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import { getForbiddenMessage } from './apiErrors'
+import { dispatchPaymentBlocked } from './paymentBlockedEvents'
 
 // Production Docker/nginx: same-origin /api. Local dev: Vite proxy or VITE_API_URL override.
 const API_BASE_URL = import.meta.env.VITE_API_URL?.trim() || '/api'
@@ -95,6 +96,14 @@ async function requestTokenRefresh() {
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
+  // Default axios instance sets application/json; multipart uploads need the browser-set boundary.
+  if (config.data instanceof FormData) {
+    if (typeof config.headers.delete === 'function') {
+      config.headers.delete('Content-Type')
+    } else {
+      delete (config.headers as Record<string, unknown>)['Content-Type']
+    }
+  }
   return config
 })
 
@@ -155,6 +164,18 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 403) {
+      const raw = error.response?.data
+      const blocked =
+        raw && typeof raw === 'object'
+          ? (raw as { code?: string; message?: string; pendingAmount?: number; dueDate?: string })
+          : undefined
+      if (blocked?.code === 'PAYMENT_ACCESS_BLOCKED') {
+        dispatchPaymentBlocked({
+          message: blocked.message,
+          pendingAmount: blocked.pendingAmount,
+          dueDate: blocked.dueDate,
+        })
+      }
       const friendly = getForbiddenMessage(error)
       ;(error as { userMessage?: string }).userMessage = friendly
       const method = String(error.config?.method ?? 'get').toLowerCase()

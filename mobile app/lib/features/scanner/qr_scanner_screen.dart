@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../services/qr_attendance_service.dart';
+import '../../providers/ui_banner_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -116,6 +117,13 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
 
     if (result is AttendanceSuccess) {
       HapticFeedback.heavyImpact();
+      final r = result;
+      ref.read(checkInBannerProvider.notifier).state = CheckInBannerState(
+        title: 'Checked in',
+        subtitle:
+            '${r.memberName} • ${DateFormat('h:mm a').format(r.checkInTime.toLocal())}'
+            '${r.planName != null ? '\n${r.planName}' : ''}',
+      );
       _autoCloseTimer = Timer(const Duration(milliseconds: 2400), () {
         if (mounted) context.pop();
       });

@@ -1,12 +1,15 @@
+import { useContext } from 'react'
 import { CircleHelp } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { useHelpUi } from '../HelpUiContext'
+import { HelpUiContext } from '../HelpUiContext'
 
 /**
  * Compact floating help — bottom-right corner (same drawer as ? shortcut).
  */
 export function HelpFloatingButton() {
-  const { openDrawer, resolvedModuleKey } = useHelpUi()
+  const ctx = useContext(HelpUiContext)
+  if (!ctx) return null
+  const { openDrawer, resolvedModuleKey } = ctx
 
   return (
     <motion.button

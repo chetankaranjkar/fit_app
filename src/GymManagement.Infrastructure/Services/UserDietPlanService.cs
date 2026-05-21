@@ -9,10 +9,14 @@ namespace GymManagement.Infrastructure.Services
     public class UserDietPlanService : IUserDietPlanService
     {
         private readonly ApplicationDbContext _context;
+        private readonly INotificationWebhookDispatcher _notificationWebhookDispatcher;
 
-        public UserDietPlanService(ApplicationDbContext context)
+        public UserDietPlanService(
+            ApplicationDbContext context,
+            INotificationWebhookDispatcher notificationWebhookDispatcher)
         {
             _context = context;
+            _notificationWebhookDispatcher = notificationWebhookDispatcher;
         }
 
         public async Task<IEnumerable<UserDietPlanDto>> GetAssignmentsAsync(int? userId = null, int? dietPlanId = null)
@@ -74,10 +78,33 @@ namespace GymManagement.Infrastructure.Services
 
             var withNav = await _context.UserDietPlans
                 .AsNoTracking()
-                .Include(u => u.User)
+                .Include(u => u.User)!.ThenInclude(u => u.AuthUser)
                 .Include(u => u.DietPlan)
                 .FirstAsync(u => u.Id == entity.Id);
-            return MapToDto(withNav);
+            var result = MapToDto(withNav);
+
+            if (dto.IsActive && withNav.User != null)
+            {
+                var webhookDto = new DietAssignmentAssignedNotificationDto
+                {
+                    UserId = withNav.UserId,
+                    MemberName =
+                        $"{withNav.User.FirstName} {withNav.User.LastName}".Trim(),
+                    MemberEmail = withNav.User.AuthUser?.Email,
+                    MemberPhone = withNav.User.Phone,
+                    DietPlanId = withNav.DietPlanId,
+                    DietPlanName = withNav.DietPlan?.PlanName,
+                    StartDateUtc = withNav.StartDate,
+                    EndDateUtc = withNav.EndDate,
+                    IsActive = withNav.IsActive,
+                    Notes = withNav.Notes,
+                };
+                await _notificationWebhookDispatcher
+                    .DispatchDietAssignmentAssignedAsync(webhookDto)
+                    .ConfigureAwait(false);
+            }
+
+            return result;
         }
 
         public async Task<bool> UnassignAsync(int id)

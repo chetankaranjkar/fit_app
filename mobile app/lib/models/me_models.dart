@@ -51,6 +51,45 @@ class MeProfile {
   }
 }
 
+/// Progress / transformation photo (`UserBodyImage`) from `/api/me/progress-photos`.
+class MeProgressPhoto {
+  final int id;
+  final int userId;
+  final String imageUrl;
+  final String imageType;
+  final DateTime imageDate;
+  final String? notes;
+  final double? weightKg;
+  final double? bodyFatPercent;
+  final String? uploadedByName;
+
+  const MeProgressPhoto({
+    required this.id,
+    required this.userId,
+    required this.imageUrl,
+    required this.imageType,
+    required this.imageDate,
+    this.notes,
+    this.weightKg,
+    this.bodyFatPercent,
+    this.uploadedByName,
+  });
+
+  factory MeProgressPhoto.fromJson(Map<String, dynamic> json) {
+    return MeProgressPhoto(
+      id: _int(json['id']) ?? 0,
+      userId: _int(json['userId']) ?? 0,
+      imageUrl: json['imageUrl']?.toString() ?? '',
+      imageType: json['imageType']?.toString() ?? 'FullBody',
+      imageDate: _dt(json['imageDate']) ?? DateTime.now(),
+      notes: json['notes']?.toString(),
+      weightKg: _double(json['weightKg']),
+      bodyFatPercent: _double(json['bodyFatPercent']),
+      uploadedByName: json['uploadedByName']?.toString(),
+    );
+  }
+}
+
 class MeMembership {
   final int id;
   final int planId;
@@ -388,6 +427,34 @@ class MeWorkoutSessionCompleted {
 
   factory MeWorkoutSessionCompleted.fromJson(Map<String, dynamic> json) => MeWorkoutSessionCompleted(
         sessionId: _int(json['sessionId']) ?? 0,
+        setsLogged: _int(json['setsLogged']) ?? 0,
+      );
+}
+
+/// Past completed sessions from `GET /api/me/workout-sessions`.
+class MeWorkoutSessionSummary {
+  final int sessionId;
+  final int workoutPlanId;
+  final String planName;
+  final DateTime sessionDateUtc;
+  final int? durationMinutes;
+  final int setsLogged;
+
+  const MeWorkoutSessionSummary({
+    required this.sessionId,
+    required this.workoutPlanId,
+    required this.planName,
+    required this.sessionDateUtc,
+    required this.setsLogged,
+    this.durationMinutes,
+  });
+
+  factory MeWorkoutSessionSummary.fromJson(Map<String, dynamic> json) => MeWorkoutSessionSummary(
+        sessionId: _int(json['sessionId']) ?? 0,
+        workoutPlanId: _int(json['workoutPlanId']) ?? 0,
+        planName: json['planName']?.toString() ?? '',
+        sessionDateUtc: _dt(json['sessionDateUtc']) ?? DateTime.now(),
+        durationMinutes: _int(json['durationMinutes']),
         setsLogged: _int(json['setsLogged']) ?? 0,
       );
 }

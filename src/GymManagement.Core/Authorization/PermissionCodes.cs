@@ -21,4 +21,9 @@ public static class PermissionCodes
 
     /// <summary>Update or delete users and related profile details.</summary>
     public const string MANAGE_MEMBERS = "MANAGE_MEMBERS";
+    /// <summary>Reception CRM: leads, follow-ups, trials, conversion.</summary>
+    public const string LeadsCrm = "LEADS_CRM";
+
+    /// <summary>Trainer-scoped CRM: trials assigned to this trainer.</summary>
+    public const string LeadsTrainer = "LEADS_TRAINER";
 }

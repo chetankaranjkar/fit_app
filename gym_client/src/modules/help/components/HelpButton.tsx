@@ -1,5 +1,6 @@
+import { useContext } from 'react'
 import { CircleHelp } from 'lucide-react'
-import { useHelpUi } from '../HelpUiContext'
+import { HelpUiContext } from '../HelpUiContext'
 
 type HelpButtonProps = {
   /** Override inferred route module */
@@ -13,7 +14,9 @@ type HelpButtonProps = {
  * Inline trigger for the contextual help drawer (`/api/help/articles/module/{module_key}`).
  */
 export function HelpButton({ moduleKey, className = '', size = 'default' }: HelpButtonProps) {
-  const { openDrawer } = useHelpUi()
+  const ctx = useContext(HelpUiContext)
+  if (!ctx) return null
+  const { openDrawer } = ctx
   const box = size === 'sm' ? 'size-8' : 'size-9'
   const icon = size === 'sm' ? 'size-4' : 'size-5'
 

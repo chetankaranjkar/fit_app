@@ -221,6 +221,7 @@ export function SidebarNav({
   })
   const staffNavIcon: Record<string, keyof typeof iconMap> = {
     '/dashboard': 'dashboard',
+    '/dashboard/reception': 'trainers',
     '/dashboard/attendance': 'attendance',
     '/dashboard/users': 'clients',
     '/dashboard/user-memberships': 'payments',
@@ -368,7 +369,12 @@ export function SidebarNav({
           {/* Scrollable nav links */}
           <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
             {staffFrontDesk ? (
-              STAFF_FRONT_DESK_LINKS.map(({ path, label }) => {
+              STAFF_FRONT_DESK_LINKS.filter(
+                ({ path }) =>
+                  path !== '/dashboard/reception' ||
+                  authService.hasPermission('LEADS_CRM') ||
+                  authService.hasPermission('LEADS_TRAINER'),
+              ).map(({ path, label }) => {
                 const icon = staffNavIcon[path] ?? 'dashboard'
                 return (
                   <Link
@@ -478,6 +484,29 @@ export function SidebarNav({
                 )}
               </div>
             ))}
+
+            {(authService.hasPermission('LEADS_CRM') ||
+              authService.hasPermission('LEADS_TRAINER')) && (
+              <Link
+                to="/dashboard/reception"
+                {...linkPrefetchProps('/dashboard/reception')}
+                onClick={handleNavClick}
+                title={collapsed ? 'Lead CRM' : undefined}
+                className={linkClass('/dashboard/reception')}
+              >
+                <span
+                  className={
+                    location.pathname === '/dashboard/reception' ||
+                    location.pathname.startsWith('/dashboard/reception/')
+                      ? 'text-white'
+                      : 'text-slate-400 group-hover:text-white'
+                  }
+                >
+                  {iconMap.trainers}
+                </span>
+                {!collapsed && <span className="truncate">Lead CRM</span>}
+              </Link>
+            )}
 
             {/* Payments, Roles, Trainers */}
             {visibleNavItems.slice(1).map(({ path, label, icon }) => (

@@ -22,10 +22,21 @@ namespace GymManagement.API.Controllers
     public class MeController : ControllerBase
     {
         private readonly ApplicationDbContext _db;
+        private readonly IMembershipPaymentService _membershipPaymentService;
 
-        public MeController(ApplicationDbContext db)
+        public MeController(ApplicationDbContext db, IMembershipPaymentService membershipPaymentService)
         {
             _db = db;
+            _membershipPaymentService = membershipPaymentService;
+        }
+
+        /// <summary>Payment gate info for mobile / member apps (allowed while access is otherwise blocked).</summary>
+        [HttpGet("membership-billing/access")]
+        public async Task<ActionResult<MemberBillingAccessDto>> GetMembershipBillingAccess()
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+            return Ok(await _membershipPaymentService.GetMemberBillingAccessAsync(userId.Value));
         }
 
         /// <summary>Aggregate dashboard for the home screen of the mobile app.</summary>
@@ -70,6 +81,35 @@ namespace GymManagement.API.Controllers
             if (user == null) return NotFound();
 
             var auth = await _db.AuthUsers.AsNoTracking().FirstOrDefaultAsync(a => a.UserId == userId.Value);
+            return Ok(MapProfile(user, auth?.Email));
+        }
+
+        /// <summary>Update editable profile fields for the authenticated member.</summary>
+        [HttpPut("profile")]
+        public async Task<ActionResult<MeProfileDto>> UpdateProfile(
+            [FromBody] MeUpdateProfileDto dto,
+            CancellationToken cancellationToken = default)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId.Value, cancellationToken);
+            if (user == null) return NotFound();
+
+            if (!string.IsNullOrWhiteSpace(dto.FirstName))
+                user.FirstName = dto.FirstName.Trim();
+            if (!string.IsNullOrWhiteSpace(dto.LastName))
+                user.LastName = dto.LastName.Trim();
+            if (dto.Phone != null)
+                user.Phone = string.IsNullOrWhiteSpace(dto.Phone) ? null : dto.Phone.Trim();
+            if (dto.ProfilePictureUrl != null)
+                user.ProfilePictureUrl = string.IsNullOrWhiteSpace(dto.ProfilePictureUrl)
+                    ? null
+                    : dto.ProfilePictureUrl.Trim();
+
+            await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            var auth = await _db.AuthUsers.AsNoTracking().FirstOrDefaultAsync(a => a.UserId == userId.Value, cancellationToken);
             return Ok(MapProfile(user, auth?.Email));
         }
 
@@ -607,6 +647,56 @@ namespace GymManagement.API.Controllers
                 SessionId = session.Id,
                 SetsLogged = sets.Count
             });
+        }
+
+        /// <summary>Completed workout sessions for this member (latest first).</summary>
+        [HttpGet("workout-sessions")]
+        public async Task<ActionResult<IReadOnlyList<MeWorkoutSessionSummaryDto>>> GetWorkoutSessions(
+            [FromQuery] int take = 40,
+            CancellationToken cancellationToken = default)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            if (take <= 0) take = 40;
+            if (take > 200) take = 200;
+
+            var sessions = await _db.WorkoutSessions.AsNoTracking()
+                .Where(ws => ws.UserId == userId && !ws.IsDeleted && ws.IsCompleted)
+                .OrderByDescending(ws => ws.SessionDate)
+                .Take(take)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (sessions.Count == 0)
+                return Ok(Array.Empty<MeWorkoutSessionSummaryDto>());
+
+            var planIds = sessions.Select(s => s.WorkoutPlanId).Distinct().ToList();
+            var planNames = await _db.WorkoutPlans.AsNoTracking()
+                .Where(p => planIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Name, cancellationToken)
+                .ConfigureAwait(false);
+
+            var sessionIds = sessions.Select(s => s.Id).ToList();
+            var setCounts = await _db.WorkoutLogs.AsNoTracking()
+                .Where(wl => sessionIds.Contains(wl.WorkoutSessionId))
+                .GroupBy(wl => wl.WorkoutSessionId)
+                .Select(g => new { SessionId = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var countMap = setCounts.ToDictionary(x => x.SessionId, x => x.Count);
+
+            var result = sessions.Select(ws => new MeWorkoutSessionSummaryDto
+            {
+                SessionId = ws.Id,
+                WorkoutPlanId = ws.WorkoutPlanId,
+                PlanName = planNames.TryGetValue(ws.WorkoutPlanId, out var n) ? n : string.Empty,
+                SessionDateUtc = ws.SessionDate,
+                DurationMinutes = ws.DurationMinutes,
+                SetsLogged = countMap.TryGetValue(ws.Id, out var c) ? c : 0
+            }).ToList();
+
+            return Ok(result);
         }
 
         /// <summary>ISO weekday number Monday = 1 … Sunday = 7 (matches typical <c>WorkoutPlanDay.DayNumber</c>).</summary>

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -15,6 +15,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { usersService } from '../services/users.service'
+import { fileUploadService } from '../services/fileUpload.service'
 import { bodyMetricsService } from '../services/bodyMetrics.service'
 import { attendanceService } from '../services/attendance.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
@@ -30,6 +31,11 @@ import {
   type OnboardingStep,
 } from '../components/users/UserOnboardingChecklist'
 import { DietAssignmentsSection } from '../components/users/DietAssignmentsSection'
+import { MemberReportExports } from '../components/users/MemberReportExports'
+import { MemberPaymentHistoryTab } from '../components/users/MemberPaymentHistoryTab'
+import { ProfilePhotoCameraModal } from '../components/users/ProfilePhotoCameraModal'
+import { getCameraErrorMessage, requestUserCamera, stopMediaStream } from '../lib/cameraMedia'
+import { formatInr } from '../lib/formatInr'
 import type { User, UpdateUserDto } from '../types/user'
 import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
 import type {
@@ -43,6 +49,7 @@ import type { WorkoutPlan } from '../types/workoutPlan'
 import type { CreateUserScheduleDto, ScheduleType, UserScheduleDto } from '../types/userSchedule'
 import type { Trainer } from '../types/trainer'
 import type { UserDietPlanDto } from '../types/dietPlan'
+import type { UserMembership } from '../types/userMembership'
 import toast from 'react-hot-toast'
 
 function getDashboardUser() {
@@ -91,6 +98,28 @@ function getBmiCategory(bmi: number) {
   return { label: 'Obese', color: 'rose', gradient: 'from-rose-400 to-red-500' }
 }
 
+function normalizeEditProfileDate(s: string | null | undefined) {
+  const t = (s ?? '').trim()
+  return t.length >= 10 ? t.slice(0, 10) : t
+}
+
+/** Prefer latest active membership; otherwise latest row (e.g. all expired). */
+function pickMembershipRowForPrefill(memberships: UserMembership[]) {
+  const byStartDesc = (a: UserMembership, b: UserMembership) =>
+    new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+  const active = memberships.filter((m) => m.status === 'Active').sort(byStartDesc)
+  if (active[0]) return active[0]
+  return [...memberships].sort(byStartDesc)[0]
+}
+
+function userTypeIdsFromUser(user: User) {
+  const mixed = user as User & { UserTypes?: { id?: number; Id?: number }[] }
+  const rows = user.userTypes ?? mixed.UserTypes ?? []
+  return rows
+    .map((t) => (typeof t.id === 'number' ? t.id : t.Id))
+    .filter((id): id is number => typeof id === 'number' && Number.isFinite(id) && id > 0)
+}
+
 interface TabDef {
   id: TabId
   icon: ReactNode
@@ -122,6 +151,18 @@ const TABS_META: TabDef[] = [
     ),
   },
   {
+    id: 'Payment History',
+    icon: (
+      <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+        />
+      </svg>
+    ),
+  },
+  {
     id: 'In Action',
     icon: (
       <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -131,7 +172,7 @@ const TABS_META: TabDef[] = [
   },
 ]
 
-const TAB_IDS = ['Details', 'Body Metrics', 'Graph', 'In Action'] as const
+const TAB_IDS = ['Details', 'Body Metrics', 'Graph', 'Payment History', 'In Action'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 const selectClass =
@@ -162,7 +203,18 @@ export function UserDetailPage() {
   const [addMetricsOpen, setAddMetricsOpen] = useState(false)
   const [editProfileOpen, setEditProfileOpen] = useState(false)
   const [profileForm, setProfileForm] = useState<UpdateUserDto>({})
+  const [editProfileBaseline, setEditProfileBaseline] = useState<{
+    planId?: number
+    membershipStartDate: string
+    trainerId?: number
+  } | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [profilePhotoUploading, setProfilePhotoUploading] = useState(false)
+  const [profileCameraOpen, setProfileCameraOpen] = useState(false)
+  const [profileCameraAcquiring, setProfileCameraAcquiring] = useState(false)
+  const [profileCameraStream, setProfileCameraStream] = useState<MediaStream | null>(null)
+  const [profileCameraError, setProfileCameraError] = useState<string | null>(null)
+  const profilePhotoFileInputRef = useRef<HTMLInputElement>(null)
   const [detailForm, setDetailForm] = useState<CreateUserDetailDto>({
     userId: 0,
     height: 0,
@@ -417,13 +469,17 @@ export function UserDetailPage() {
   })
 
   const updateProfileMutation = useMutation({
-    mutationFn: (dto: UpdateUserDto) => usersService.update(id, dto),
-    onSuccess: () => {
+    mutationFn: (dto: UpdateUserDto) => usersService.update(id, dto).then((r) => r.data),
+    onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['user', id] })
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setEditProfileOpen(false)
       setProfileForm({})
       setProfileError(null)
+      const p = updated?.pendingPaymentCollection
+      if (p?.membershipId && p.membershipPaymentId) {
+        navigate(`/dashboard/payments/collect?membershipId=${p.membershipId}&userId=${p.userId}`)
+      }
     },
     onError: (err: Error) => setProfileError(err.message || 'Failed to update profile'),
   })
@@ -761,6 +817,27 @@ export function UserDetailPage() {
   }
 
   const handleOpenEditProfile = () => {
+    const fromList = pickMembershipRowForPrefill(userMemberships)
+    const apiPlanId =
+      user.currentMembershipPlanId != null && user.currentMembershipPlanId > 0
+        ? user.currentMembershipPlanId
+        : undefined
+    const planId = apiPlanId ?? (fromList != null && fromList.planId > 0 ? fromList.planId : undefined)
+    const startFromApi = user.currentMembershipStartDate
+      ? normalizeEditProfileDate(user.currentMembershipStartDate)
+      : ''
+    const startFromList = fromList?.startDate ? normalizeEditProfileDate(fromList.startDate) : ''
+    const membershipStartDate = startFromApi || startFromList || undefined
+
+    const trainerRaw = user.assignedTrainerId ?? user.trainerId
+    const trainerId =
+      trainerRaw != null && Number(trainerRaw) > 0 ? Number(trainerRaw) : undefined
+
+    setEditProfileBaseline({
+      planId,
+      membershipStartDate: membershipStartDate ?? '',
+      trainerId,
+    })
     setProfileForm({
       firstName: user.firstName,
       lastName: user.lastName,
@@ -771,25 +848,103 @@ export function UserDetailPage() {
       emergencyContact: user.emergencyContact ?? '',
       emergencyPhone: user.emergencyPhone ?? '',
       preferredGymTime: user.preferredGymTime ?? '',
+      profilePictureUrl: user.profilePictureUrl ?? '',
       isActive: user.isActive,
-      planId: undefined,
-      membershipStartDate: undefined,
-      trainerId: undefined,
-      userTypeIds: user.userTypes?.map((t) => t.id) ?? [],
+      planId,
+      membershipStartDate,
+      trainerId,
+      userTypeIds: userTypeIdsFromUser(user),
     })
     setProfileError(null)
     setEditProfileOpen(true)
   }
 
+  const closeProfileCamera = () => {
+    stopMediaStream(profileCameraStream)
+    setProfileCameraStream(null)
+    setProfileCameraError(null)
+    setProfileCameraOpen(false)
+  }
+
+  const openProfileCamera = async () => {
+    stopMediaStream(profileCameraStream)
+    setProfileCameraStream(null)
+    setProfileCameraError(null)
+    setProfileCameraAcquiring(true)
+    try {
+      const stream = await requestUserCamera()
+      setProfileCameraStream(stream)
+      setProfileCameraOpen(true)
+    } catch (err: unknown) {
+      setProfileCameraError(getCameraErrorMessage(err))
+      setProfileCameraOpen(true)
+      toast.error('Could not access the camera.')
+    } finally {
+      setProfileCameraAcquiring(false)
+    }
+  }
+
   const handleCloseEditProfile = () => {
     setEditProfileOpen(false)
+    closeProfileCamera()
     setProfileForm({})
+    setEditProfileBaseline(null)
     setProfileError(null)
+    setProfilePhotoUploading(false)
+  }
+
+  const uploadProfilePhotoFile = async (file: File) => {
+    if (!Number.isFinite(id) || id <= 0) return
+    setProfilePhotoUploading(true)
+    setProfileError(null)
+    try {
+      const { data } = await fileUploadService.uploadUserProfileImage(id, file)
+      const url = data.imageUrl?.trim()
+      if (!url) throw new Error('Server did not return imageUrl')
+      setProfileForm((f) => ({ ...f, profilePictureUrl: url }))
+      await usersService.update(id, { profilePictureUrl: url })
+      await queryClient.invalidateQueries({ queryKey: ['user', id] })
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success('Profile photo saved.')
+      closeProfileCamera()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed'
+      setProfileError(msg)
+      toast.error(msg)
+      throw err
+    } finally {
+      setProfilePhotoUploading(false)
+    }
+  }
+
+  const handleProfilePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    await uploadProfilePhotoFile(file)
+  }
+
+  const handleProfilePhotoFromCamera = async (file: File) => {
+    await uploadProfilePhotoFile(file)
   }
 
   const handleSubmitProfile = (e: React.FormEvent) => {
     e.preventDefault()
     setProfileError(null)
+    const baseline = editProfileBaseline
+    const formPlanId = profileForm.planId && profileForm.planId > 0 ? profileForm.planId : undefined
+    const formStart = normalizeEditProfileDate(profileForm.membershipStartDate)
+    const basePlanId = baseline?.planId && baseline.planId > 0 ? baseline.planId : undefined
+    const baseStart = normalizeEditProfileDate(baseline?.membershipStartDate)
+    const membershipUnchanged =
+      baseline != null && formPlanId === basePlanId && formStart === baseStart
+
+    const formTrainerId =
+      profileForm.trainerId && profileForm.trainerId > 0 ? profileForm.trainerId : undefined
+    const baseTrainerId =
+      baseline?.trainerId && baseline.trainerId > 0 ? baseline.trainerId : undefined
+    const trainerUnchanged = baseline != null && formTrainerId === baseTrainerId
+
     const payload: UpdateUserDto = {
       firstName: profileForm.firstName?.trim(),
       lastName: profileForm.lastName?.trim(),
@@ -800,10 +955,15 @@ export function UserDetailPage() {
       emergencyContact: profileForm.emergencyContact?.trim() || null,
       emergencyPhone: profileForm.emergencyPhone?.trim() || null,
       preferredGymTime: profileForm.preferredGymTime?.trim() || null,
+      profilePictureUrl:
+        profileForm.profilePictureUrl != null && profileForm.profilePictureUrl.trim() !== ''
+          ? profileForm.profilePictureUrl.trim()
+          : null,
       isActive: profileForm.isActive,
-      planId: profileForm.planId && profileForm.planId > 0 ? profileForm.planId : undefined,
-      membershipStartDate: profileForm.membershipStartDate || undefined,
-      trainerId: profileForm.trainerId && profileForm.trainerId > 0 ? profileForm.trainerId : undefined,
+      planId: !membershipUnchanged && formPlanId ? formPlanId : undefined,
+      membershipStartDate:
+        !membershipUnchanged && formPlanId ? profileForm.membershipStartDate || undefined : undefined,
+      trainerId: !trainerUnchanged && formTrainerId ? formTrainerId : undefined,
       userTypeIds:
         profileForm.userTypeIds && profileForm.userTypeIds.length > 0
           ? profileForm.userTypeIds
@@ -889,7 +1049,7 @@ export function UserDetailPage() {
     <DashboardLayout userName={userName}>
       <div className="min-w-0 max-w-full space-y-6">
         {/* Back link */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => navigate('/dashboard/users')}
@@ -900,6 +1060,13 @@ export function UserDetailPage() {
             </svg>
             Back to Members
           </button>
+          {user ? (
+            <MemberReportExports
+              user={user}
+              attendanceLogs={attendanceLogs}
+              metricsList={metricsList}
+            />
+          ) : null}
         </div>
 
         {/* HERO */}
@@ -980,6 +1147,9 @@ export function UserDetailPage() {
           />
         )}
         {activeTab === 'Graph' && <GraphTab chartData={chartData} logs={logs} />}
+        {activeTab === 'Payment History' && Number.isFinite(id) && id > 0 && (
+          <MemberPaymentHistoryTab userId={id} />
+        )}
         {activeTab === 'In Action' && (
           <InActionTab
             attendanceLogs={attendanceLogs}
@@ -1094,6 +1264,15 @@ export function UserDetailPage() {
             </form>
           </Modal>
 
+          <ProfilePhotoCameraModal
+            open={profileCameraOpen}
+            stream={profileCameraStream}
+            error={profileCameraError}
+            onClose={closeProfileCamera}
+            onRetry={() => void openProfileCamera()}
+            onCapture={handleProfilePhotoFromCamera}
+            busy={profilePhotoUploading}
+          />
           <Modal
             open={editProfileOpen}
             onClose={handleCloseEditProfile}
@@ -1118,6 +1297,69 @@ export function UserDetailPage() {
                 <p className="text-sm text-slate-500 sm:col-span-2">
                   Email: {user.email} (cannot be changed)
                 </p>
+                <div className="sm:col-span-2 space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div>
+                    <p className={labelClass}>Profile photo</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Upload a file (JPG, PNG, GIF, WebP — max 5MB), use your webcam, or set a URL below. Upload saves
+                      immediately to this member&apos;s profile.
+                    </p>
+                  </div>
+                  <input
+                    ref={profilePhotoFileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp"
+                    className="sr-only"
+                    disabled={profilePhotoUploading}
+                    onChange={handleProfilePhotoFileChange}
+                    aria-label="Upload profile photo from files"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={profilePhotoUploading}
+                      onClick={() => profilePhotoFileInputRef.current?.click()}
+                    >
+                      {profilePhotoUploading ? 'Uploading…' : 'From device'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={profilePhotoUploading || profileCameraAcquiring}
+                      onClick={() => void openProfileCamera()}
+                    >
+                      {profileCameraAcquiring ? 'Opening camera…' : 'Use camera'}
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {profileForm.profilePictureUrl ? (
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={profileForm.profilePictureUrl}
+                          alt=""
+                          className="size-14 rounded-full border border-white/15 object-cover"
+                        />
+                        <span className="max-w-[200px] truncate text-xs text-slate-500" title={profileForm.profilePictureUrl}>
+                          {profileForm.profilePictureUrl}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                  <Input
+                    label="Picture URL (optional)"
+                    value={profileForm.profilePictureUrl ?? ''}
+                    placeholder="/uploads/profiles/users/… or https://…"
+                    onChange={(e) =>
+                      setProfileForm((f) => ({ ...f, profilePictureUrl: e.target.value || undefined }))
+                    }
+                  />
+                  <p className="text-xs text-slate-500">
+                    Use upload above, or paste a link. Save profile to persist URL-only changes.
+                  </p>
+                </div>
                 <Input
                   label="Phone"
                   value={profileForm.phone ?? ''}
@@ -1210,7 +1452,7 @@ export function UserDetailPage() {
                     <option value="" className="bg-slate-900">None</option>
                     {membershipPlans.map((p) => (
                       <option key={p.id} value={p.id} className="bg-slate-900">
-                        {p.planName} ({p.durationDays} days – ${p.price})
+                        {p.planName} ({p.durationDays} days – {formatInr(p.price)})
                       </option>
                     ))}
                   </select>

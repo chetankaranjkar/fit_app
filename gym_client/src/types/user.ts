@@ -1,3 +1,5 @@
+import type { PendingMembershipPaymentRedirect } from './membershipPayment'
+
 /** Backend Role enum: 1 = User (Member), 2 = Instructor, 3 = Admin. API may send number or string. */
 export type UserRole = 1 | 2 | 3
 export type UserRoleString = 'User' | 'Instructor' | 'Admin'
@@ -39,6 +41,12 @@ export interface User {
   userTypes?: { id: number; name: string; description?: string | null }[]
   /** Assigned trainer (when returned by API). */
   trainerId?: number | null
+  /** Active trainer assignment for edit-form prefill (GET user by id). */
+  assignedTrainerId?: number | null
+  currentMembershipPlanId?: number | null
+  currentMembershipStartDate?: string | null
+  /** After create/update membership when billing is unpaid; use to open collect-payment flow. */
+  pendingPaymentCollection?: PendingMembershipPaymentRedirect | null
 }
 
 export interface CreateUserDto {

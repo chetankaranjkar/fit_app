@@ -22,7 +22,8 @@ export type HelpUiContextValue = {
   dismissWalkthrough: () => void
 }
 
-const HelpUiContext = createContext<HelpUiContextValue | null>(null)
+/** Exported so global help widgets can degrade gracefully outside the provider (e.g. error boundaries, HMR). */
+export const HelpUiContext = createContext<HelpUiContextValue | null>(null)
 
 export function HelpUiProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()

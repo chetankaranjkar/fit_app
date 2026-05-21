@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useHelpUi } from '../HelpUiContext'
+import { HelpUiContext } from '../HelpUiContext'
 import { fetchWalkthrough } from '../helpApi.service'
 
 function walkthroughStorageKey(moduleKey: string) {
@@ -10,7 +10,9 @@ function walkthroughStorageKey(moduleKey: string) {
 }
 
 export function WalkthroughOverlay() {
-  const { walkthroughModuleKey, dismissWalkthrough } = useHelpUi()
+  const ctx = useContext(HelpUiContext)
+  const walkthroughModuleKey = ctx?.walkthroughModuleKey ?? null
+  const dismissWalkthrough = ctx?.dismissWalkthrough ?? (() => {})
   const [stepIndex, setStepIndex] = useState(0)
   const [rect, setRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null)
 

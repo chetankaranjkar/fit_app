@@ -160,6 +160,36 @@ Check what the server is running:
 
 ---
 
+## `gym-sqlserver` unhealthy / dependency failed?
+
+```bash
+cd /opt/gym
+./deploy/scripts/diagnose-sql.sh
+```
+
+**Most common:** `MSSQL_SA_PASSWORD` in `deploy/.env` was changed after the database volume was first created. SQL keeps the **original** password in `gym_sqlserver_data`.
+
+**Fix A — restore the old password** in `deploy/.env` (if you remember it), then:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.testing.yml \
+  --env-file deploy/.env up -d sqlserver
+```
+
+**Fix B — wipe DB and start fresh** (deletes all data):
+
+```bash
+cd /opt/gym
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.testing.yml \
+  --env-file deploy/.env down
+docker volume rm gym_sqlserver_data
+./deploy/scripts/deploy.sh
+```
+
+**Low RAM VPS:** in `deploy/.env` set `MSSQL_MEMORY_LIMIT_MB=1024` and `SQLSERVER_MEMORY_LIMIT=1200m`.
+
+---
+
 ## `gym-api` failed to start / dependency failed?
 
 Usually the API **crashed during database migration**. Check logs on the VPS:

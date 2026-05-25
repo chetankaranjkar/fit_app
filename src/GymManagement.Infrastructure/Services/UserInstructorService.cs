@@ -35,6 +35,57 @@ namespace GymManagement.Infrastructure.Services
             return await MapAssignmentsToDtoAsync(assignments);
         }
 
+        public async Task<IReadOnlyList<TrainerAssignedClientDto>> GetTrainerAssignedClientsAsync(int trainerId)
+        {
+            var assignments = (await _unitOfWork.UserInstructors.FindAsync(a =>
+                a.TrainerId == trainerId && a.IsActive && !a.EndDate.HasValue)).ToList();
+            if (assignments.Count == 0)
+                return Array.Empty<TrainerAssignedClientDto>();
+
+            var userIds = assignments.Select(a => a.UserId).Distinct().ToList();
+            var users = (await _unitOfWork.Users.FindAsync(u => userIds.Contains(u.Id))).ToDictionary(u => u.Id);
+            var authByUserId = (await _unitOfWork.AuthUsers.FindAsync(a =>
+                    a.UserId.HasValue && userIds.Contains(a.UserId.Value)))
+                .GroupBy(a => a.UserId!.Value)
+                .ToDictionary(g => g.Key, g => g.First().Email);
+
+            var memberships = (await _unitOfWork.UserMemberships.FindAsync(m =>
+                userIds.Contains(m.UserId) &&
+                (m.Status == MembershipStatus.Active ||
+                 m.Status == MembershipStatus.ActivePendingPayment ||
+                 m.Status == MembershipStatus.PartialPayment))).ToList();
+            var planIds = memberships.Select(m => m.PlanId).Distinct().ToList();
+            var plans = planIds.Count == 0
+                ? new Dictionary<int, MembershipPlan>()
+                : (await _unitOfWork.MembershipPlans.FindAsync(p => planIds.Contains(p.Id)))
+                    .ToDictionary(p => p.Id);
+
+            string? PlanNameForUser(int uid)
+            {
+                var m = memberships.Where(x => x.UserId == uid).OrderByDescending(x => x.StartDate).FirstOrDefault();
+                if (m == null) return null;
+                return plans.TryGetValue(m.PlanId, out var plan) ? plan.PlanName : null;
+            }
+
+            return assignments
+                .OrderByDescending(a => a.AssignmentDate)
+                .Select(a =>
+                {
+                    users.TryGetValue(a.UserId, out var user);
+                    return new TrainerAssignedClientDto
+                    {
+                        UserId = a.UserId,
+                        FirstName = user?.FirstName ?? string.Empty,
+                        LastName = user?.LastName ?? string.Empty,
+                        Email = authByUserId.GetValueOrDefault(a.UserId),
+                        ProfilePicture = user?.ProfilePictureUrl,
+                        AssignedOn = a.AssignmentDate,
+                        MembershipPlan = PlanNameForUser(a.UserId),
+                    };
+                })
+                .ToList();
+        }
+
         public async Task<UserInstructorDto?> GetAssignmentByIdAsync(int id)
         {
             var assignment = await _unitOfWork.UserInstructors.GetByIdAsync(id);
@@ -43,6 +94,52 @@ namespace GymManagement.Infrastructure.Services
             var assignments = new[] { assignment };
             var dtos = await MapAssignmentsToDtoAsync(assignments);
             return dtos.FirstOrDefault();
+        }
+
+        public async Task AssignOrReplaceMemberTrainerAsync(int userId, int? trainerId, CancellationToken cancellationToken = default)
+        {
+            var activeForUser = (await _unitOfWork.UserInstructors.FindAsync(a =>
+                a.UserId == userId && a.IsActive && !a.EndDate.HasValue)).ToList();
+
+            if (!trainerId.HasValue || trainerId.Value <= 0)
+            {
+                foreach (var a in activeForUser)
+                {
+                    a.IsActive = false;
+                    a.EndDate = DateTime.UtcNow;
+                    a.UpdatedDate = DateTime.UtcNow;
+                    _unitOfWork.UserInstructors.Update(a);
+                }
+                if (activeForUser.Count > 0)
+                {
+                    var trainerIds = activeForUser.Select(a => a.TrainerId).Distinct();
+                    await _unitOfWork.SaveChangesAsync();
+                    foreach (var tid in trainerIds)
+                        await SyncTrainerClientCountAsync(tid);
+                }
+                return;
+            }
+
+            var targetTrainerId = trainerId.Value;
+            if (activeForUser.Any(a => a.TrainerId == targetTrainerId))
+                return;
+
+            foreach (var a in activeForUser.Where(a => a.TrainerId != targetTrainerId))
+            {
+                a.IsActive = false;
+                a.EndDate = DateTime.UtcNow;
+                a.UpdatedDate = DateTime.UtcNow;
+                _unitOfWork.UserInstructors.Update(a);
+            }
+            if (activeForUser.Any(a => a.TrainerId != targetTrainerId))
+                await _unitOfWork.SaveChangesAsync();
+
+            await CreateAssignmentAsync(new CreateUserInstructorDto
+            {
+                UserId = userId,
+                TrainerId = targetTrainerId,
+                AssignmentDate = DateTime.UtcNow,
+            });
         }
 
         public async Task<UserInstructorDto> CreateAssignmentAsync(CreateUserInstructorDto createDto)

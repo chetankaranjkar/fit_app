@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -14,10 +14,16 @@ import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
+import { getApiErrorMessage } from '../lib/apiErrors'
 import { trainersService } from '../services/trainers.service'
+import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
+import { fileUploadService } from '../services/fileUpload.service'
+import { usersService } from '../services/users.service'
+import type { UpdateUserDto } from '../types/user'
 import {
   AVAILABILITY_STATUSES,
   VERIFICATION_STATUSES,
+  TRAINER_GENDERS,
   parseCsv,
   trainerFullName,
   trainerInitials,
@@ -281,10 +287,9 @@ export function TrainerDetailPage() {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         trainer={trainer}
-        onSave={(payload) => {
-          updateMutation.mutate(payload, {
-            onSuccess: () => setEditOpen(false),
-          })
+        onTrainerUpdated={() => {
+          queryClient.invalidateQueries({ queryKey: ['trainer', id] })
+          queryClient.invalidateQueries({ queryKey: ['trainers'] })
         }}
       />
     </DashboardLayout>
@@ -683,22 +688,31 @@ function Row({ label, value }: { label: string; value: string }) {
 /* ------------------------------------------------------------------ */
 
 function ClientsTab({ trainerId }: { trainerId: number }) {
-  const { data: clients = [], isLoading } = useQuery({
+  const navigate = useNavigate()
+  const { data: clients = [], isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['trainer-clients', trainerId],
     queryFn: async () => {
-      try {
-        const { data } = await trainersService.getAssignedClients(trainerId)
-        return Array.isArray(data) ? data : []
-      } catch {
-        return []
-      }
+      const { data } = await trainersService.getAssignedClients(trainerId)
+      return Array.isArray(data) ? data : []
     },
+    staleTime: 0,
   })
 
-  if (isLoading) {
+  if (isLoading || isFetching) {
     return (
       <div className="glass-card rounded-2xl p-10 text-center text-sm text-slate-400">
         Loading clients…
+      </div>
+    )
+  }
+  if (isError) {
+    return (
+      <div className="glass-card space-y-3 rounded-2xl p-8 text-center">
+        <p className="text-sm font-semibold text-rose-200">Could not load assigned clients</p>
+        <p className="text-xs text-slate-400">{getApiErrorMessage(error)}</p>
+        <Button size="sm" variant="soft" onClick={() => void refetch()}>
+          Retry
+        </Button>
       </div>
     )
   }
@@ -706,7 +720,7 @@ function ClientsTab({ trainerId }: { trainerId: number }) {
     return (
       <EmptyPanel
         title="No clients assigned yet"
-        message="Assign members to this trainer from the Users directory."
+        message="Open a member in Users → Edit profile → Assign trainer (coach). That is separate from the User type “Trainer”, which marks staff coaches."
       />
     )
   }
@@ -726,7 +740,8 @@ function ClientsTab({ trainerId }: { trainerId: number }) {
           {clients.map((c) => (
             <tr
               key={c.userId}
-              className="border-b border-white/5 transition hover:bg-white/[0.03]"
+              className="cursor-pointer border-b border-white/5 transition hover:bg-white/[0.03]"
+              onClick={() => navigate(`/dashboard/users/${c.userId}`)}
             >
               <td className="px-4 py-2.5">
                 <div className="flex items-center gap-3">
@@ -1150,18 +1165,40 @@ function SettingsTab({
 /*                           Edit modal                                 */
 /* ------------------------------------------------------------------ */
 
-function EditTrainerModal({
-  open,
-  onClose,
-  trainer,
-  onSave,
-}: {
-  open: boolean
-  onClose: () => void
-  trainer: Trainer
-  onSave: (p: UpdateTrainerDto) => void
-}) {
-  const [form, setForm] = useState<UpdateTrainerDto>({
+type EditTrainerTab = 'personal' | 'trainer'
+
+interface PersonalDetailsForm {
+  firstName: string
+  lastName: string
+  phone: string
+  gender: string
+  dateOfBirth: string
+  address: string
+  emergencyContact: string
+  emergencyPhone: string
+  preferredGymTime: string
+  profilePictureUrl: string
+  isActive: boolean
+}
+
+function buildPersonalForm(trainer: Trainer, user?: { firstName?: string; lastName?: string; phone?: string | null; gender?: string; dateOfBirth?: string; address?: string | null; emergencyContact?: string | null; emergencyPhone?: string | null; preferredGymTime?: string | null; profilePictureUrl?: string | null; isActive?: boolean }): PersonalDetailsForm {
+  return {
+    firstName: user?.firstName ?? trainer.firstName ?? '',
+    lastName: user?.lastName ?? trainer.lastName ?? '',
+    phone: user?.phone ?? trainer.phone ?? '',
+    gender: user?.gender ?? trainer.gender ?? '',
+    dateOfBirth: (user?.dateOfBirth ?? trainer.dateOfBirth ?? '').slice(0, 10),
+    address: user?.address ?? '',
+    emergencyContact: user?.emergencyContact ?? '',
+    emergencyPhone: user?.emergencyPhone ?? '',
+    preferredGymTime: user?.preferredGymTime ?? '',
+    profilePictureUrl: user?.profilePictureUrl ?? trainer.profilePicture ?? '',
+    isActive: user?.isActive ?? true,
+  }
+}
+
+function buildTrainerForm(trainer: Trainer): UpdateTrainerDto {
+  return {
     employeeCode: trainer.employeeCode,
     specialization: trainer.specialization,
     secondarySpecializations: trainer.secondarySpecializations,
@@ -1180,153 +1217,441 @@ function EditTrainerModal({
     instagramUrl: trainer.instagramUrl,
     linkedinUrl: trainer.linkedinUrl,
     websiteUrl: trainer.websiteUrl,
+  }
+}
+
+function EditTrainerModal({
+  open,
+  onClose,
+  trainer,
+  onTrainerUpdated,
+}: {
+  open: boolean
+  onClose: () => void
+  trainer: Trainer
+  onTrainerUpdated: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [tab, setTab] = useState<EditTrainerTab>('personal')
+  const [personalForm, setPersonalForm] = useState<PersonalDetailsForm>(() =>
+    buildPersonalForm(trainer),
+  )
+  const [trainerForm, setTrainerForm] = useState<UpdateTrainerDto>(() => buildTrainerForm(trainer))
+  const [error, setError] = useState<string | null>(null)
+
+  const { data: user, isLoading: userLoading } = useQuery({
+    queryKey: ['user', trainer.userId],
+    queryFn: async () => (await usersService.getById(trainer.userId)).data,
+    enabled: open && trainer.userId > 0,
   })
 
-  const handle = <K extends keyof UpdateTrainerDto>(key: K, value: UpdateTrainerDto[K]) =>
-    setForm((f) => ({ ...f, [key]: value }))
+  useEffect(() => {
+    if (!open) return
+    setTab('personal')
+    setTrainerForm(buildTrainerForm(trainer))
+    setPersonalForm(buildPersonalForm(trainer))
+    setError(null)
+  }, [open, trainer])
+
+  useEffect(() => {
+    if (!open || !user) return
+    setPersonalForm(buildPersonalForm(trainer, user))
+  }, [open, user, trainer])
+
+  const persistTrainerPhoto = async (url: string) => {
+    await usersService.update(trainer.userId, { profilePictureUrl: url })
+    await trainersService.update(trainer.id, { profilePicture: url })
+    queryClient.invalidateQueries({ queryKey: ['user', trainer.userId] })
+    onTrainerUpdated()
+  }
+
+  const personalMutation = useMutation({
+    mutationFn: (dto: UpdateUserDto) => usersService.update(trainer.userId, dto).then((r) => r.data),
+    onSuccess: async (updated) => {
+      const photo = updated?.profilePictureUrl?.trim() ?? personalForm.profilePictureUrl.trim()
+      if (photo) await trainersService.update(trainer.id, { profilePicture: photo })
+      queryClient.invalidateQueries({ queryKey: ['user', trainer.userId] })
+      onTrainerUpdated()
+      setError(null)
+    },
+    onError: (err: unknown) => setError(getApiErrorMessage(err, 'Failed to save personal details')),
+  })
+
+  const trainerMutation = useMutation({
+    mutationFn: (dto: UpdateTrainerDto) => trainersService.update(trainer.id, dto),
+    onSuccess: () => {
+      onTrainerUpdated()
+      setError(null)
+    },
+    onError: (err: unknown) => setError(getApiErrorMessage(err, 'Failed to save trainer profile')),
+  })
+
+  const handleTrainer = <K extends keyof UpdateTrainerDto>(key: K, value: UpdateTrainerDto[K]) =>
+    setTrainerForm((f) => ({ ...f, [key]: value }))
 
   const labelCls = 'mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400'
   const ctrl =
     'w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20'
 
+  const savePersonal = () => {
+    const payload: UpdateUserDto = {
+      firstName: personalForm.firstName.trim(),
+      lastName: personalForm.lastName.trim(),
+      phone: personalForm.phone.trim() || null,
+      gender: personalForm.gender.trim() || null,
+      dateOfBirth: personalForm.dateOfBirth || null,
+      address: personalForm.address.trim() || null,
+      emergencyContact: personalForm.emergencyContact.trim() || null,
+      emergencyPhone: personalForm.emergencyPhone.trim() || null,
+      preferredGymTime: personalForm.preferredGymTime.trim() || null,
+      profilePictureUrl: personalForm.profilePictureUrl.trim() || null,
+      isActive: personalForm.isActive,
+    }
+    personalMutation.mutate(payload)
+  }
+
+  const saveTrainer = () => {
+    trainerMutation.mutate({
+      ...trainerForm,
+      profilePicture: personalForm.profilePictureUrl.trim() || trainerForm.profilePicture || null,
+    })
+  }
+
+  const saving = personalMutation.isPending || trainerMutation.isPending
+
   return (
-    <Modal open={open} onClose={onClose} title="Edit trainer" size="wide" scrollable>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          onSave(form)
-        }}
-        className="space-y-4"
-      >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Input
-            label="Employee code"
-            value={form.employeeCode ?? ''}
-            onChange={(e) => handle('employeeCode', e.target.value)}
-          />
-          <Input
-            label="Specialization"
-            value={form.specialization ?? ''}
-            onChange={(e) => handle('specialization', e.target.value)}
-          />
-          <Input
-            label="Secondary (comma-sep.)"
-            value={form.secondarySpecializations ?? ''}
-            onChange={(e) => handle('secondarySpecializations', e.target.value)}
-          />
-          <Input
-            label="Certifications"
-            value={form.certifications ?? ''}
-            onChange={(e) => handle('certifications', e.target.value)}
-          />
-          <Input
-            label="Languages"
-            value={form.languagesSpoken ?? ''}
-            onChange={(e) => handle('languagesSpoken', e.target.value)}
-          />
-          <Input
-            label="Experience (years)"
-            type="number"
-            min={0}
-            value={form.experienceYears ?? ''}
-            onChange={(e) =>
-              handle('experienceYears', e.target.value ? Number(e.target.value) : null)
-            }
-          />
-        </div>
+    <Modal open={open} onClose={onClose} title="Edit profile" size="wide" scrollable>
+      <div className="mb-4 flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'personal'}
+          onClick={() => {
+            setTab('personal')
+            setError(null)
+          }}
+          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
+            tab === 'personal'
+              ? 'bg-[linear-gradient(135deg,#3b82f6,#a855f7)] text-white shadow-md'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          Personal details
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'trainer'}
+          onClick={() => {
+            setTab('trainer')
+            setError(null)
+          }}
+          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
+            tab === 'trainer'
+              ? 'bg-[linear-gradient(135deg,#3b82f6,#a855f7)] text-white shadow-md'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          Trainer module
+        </button>
+      </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Input
-            label="Currency"
-            value={form.currency ?? ''}
-            onChange={(e) => handle('currency', e.target.value)}
-          />
-          <Input
-            label="Session rate"
-            type="number"
-            min={0}
-            value={form.sessionRate ?? ''}
-            onChange={(e) =>
-              handle('sessionRate', e.target.value ? Number(e.target.value) : null)
-            }
-          />
-          <Input
-            label="Hourly rate"
-            type="number"
-            min={0}
-            value={form.hourlyRate ?? ''}
-            onChange={(e) =>
-              handle('hourlyRate', e.target.value ? Number(e.target.value) : null)
-            }
-          />
-          <Input
-            label="Max clients"
-            type="number"
-            min={0}
-            value={form.maxClients ?? ''}
-            onChange={(e) =>
-              handle('maxClients', e.target.value ? Number(e.target.value) : null)
-            }
-          />
-        </div>
+      {error && (
+        <p className="mb-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          {error}
+        </p>
+      )}
 
-        <div>
-          <label className={labelCls}>Bio</label>
-          <textarea
-            aria-label="Bio"
-            value={form.bio ?? ''}
-            onChange={(e) => handle('bio', e.target.value)}
-            rows={3}
-            className={ctrl}
-          />
-        </div>
+      {tab === 'personal' && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            savePersonal()
+          }}
+          className="space-y-4"
+        >
+          <p className="text-xs text-slate-400">
+            Name, contact, and account status are stored on the user record shared across the gym.
+          </p>
+          {userLoading ? (
+            <p className="text-sm text-slate-400">Loading personal details…</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Input
+                  label="First name"
+                  value={personalForm.firstName}
+                  onChange={(e) => setPersonalForm((f) => ({ ...f, firstName: e.target.value }))}
+                  required
+                />
+                <Input
+                  label="Last name"
+                  value={personalForm.lastName}
+                  onChange={(e) => setPersonalForm((f) => ({ ...f, lastName: e.target.value }))}
+                  required
+                />
+                <Input
+                  label="Phone"
+                  value={personalForm.phone}
+                  onChange={(e) => setPersonalForm((f) => ({ ...f, phone: e.target.value }))}
+                />
+                <div>
+                  <Input label="Email" value={trainer.email} readOnly disabled />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Login email is changed from the user security settings.
+                  </p>
+                </div>
+                <div>
+                  <label className={labelCls}>Gender</label>
+                  <select
+                    aria-label="Gender"
+                    value={personalForm.gender}
+                    onChange={(e) => setPersonalForm((f) => ({ ...f, gender: e.target.value }))}
+                    className={ctrl}
+                  >
+                    <option value="" className="bg-slate-900">
+                      Prefer not to say
+                    </option>
+                    {TRAINER_GENDERS.map((g) => (
+                      <option key={g} value={g} className="bg-slate-900">
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  label="Date of birth"
+                  type="date"
+                  value={personalForm.dateOfBirth}
+                  onChange={(e) => setPersonalForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
+                />
+                <ProfilePhotoEditor
+                  className="sm:col-span-2"
+                  imageUrl={personalForm.profilePictureUrl}
+                  onImageUrlChange={(url) =>
+                    setPersonalForm((f) => ({ ...f, profilePictureUrl: url }))
+                  }
+                  subjectLabel="trainer"
+                  onError={setError}
+                  uploadFile={async (file) => {
+                    const { data } = await fileUploadService.uploadUserProfileImage(trainer.userId, file)
+                    const url = data.imageUrl?.trim()
+                    if (!url) throw new Error('Server did not return imageUrl')
+                    return url
+                  }}
+                  persistUrl={persistTrainerPhoto}
+                />
+                <div className="sm:col-span-2">
+                  <Input
+                    label="Address"
+                    value={personalForm.address}
+                    onChange={(e) => setPersonalForm((f) => ({ ...f, address: e.target.value }))}
+                  />
+                </div>
+                <Input
+                  label="Emergency contact"
+                  value={personalForm.emergencyContact}
+                  onChange={(e) =>
+                    setPersonalForm((f) => ({ ...f, emergencyContact: e.target.value }))
+                  }
+                />
+                <Input
+                  label="Emergency phone"
+                  value={personalForm.emergencyPhone}
+                  onChange={(e) =>
+                    setPersonalForm((f) => ({ ...f, emergencyPhone: e.target.value }))
+                  }
+                />
+                <div>
+                  <label className={labelCls}>Preferred gym time</label>
+                  <select
+                    aria-label="Preferred gym time"
+                    value={personalForm.preferredGymTime}
+                    onChange={(e) =>
+                      setPersonalForm((f) => ({ ...f, preferredGymTime: e.target.value }))
+                    }
+                    className={ctrl}
+                  >
+                    <option value="" className="bg-slate-900">
+                      Not set
+                    </option>
+                    {['Morning', 'Afternoon', 'Evening', 'Night'].map((t) => (
+                      <option key={t} value={t} className="bg-slate-900">
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={personalForm.isActive}
+                      onChange={(e) =>
+                        setPersonalForm((f) => ({ ...f, isActive: e.target.checked }))
+                      }
+                      className="size-4 rounded border-white/20 bg-white/5"
+                    />
+                    Account active
+                  </label>
+                </div>
+              </div>
+            </>
+          )}
+          <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+            <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={personalMutation.isPending} disabled={userLoading}>
+              Save personal details
+            </Button>
+          </div>
+        </form>
+      )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Input
-            label="Working days (CSV)"
-            value={form.workingDays ?? ''}
-            onChange={(e) => handle('workingDays', e.target.value)}
-            placeholder="Mon,Tue,Wed,Fri"
-          />
-          <Input
-            label="Hours start"
-            type="time"
-            value={form.workingHoursStart ?? ''}
-            onChange={(e) => handle('workingHoursStart', e.target.value)}
-          />
-          <Input
-            label="Hours end"
-            type="time"
-            value={form.workingHoursEnd ?? ''}
-            onChange={(e) => handle('workingHoursEnd', e.target.value)}
-          />
-        </div>
+      {tab === 'trainer' && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            saveTrainer()
+          }}
+          className="space-y-4"
+        >
+          <p className="text-xs text-slate-400">
+            Specialization, rates, capacity, schedule, and trainer-only fields.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input
+              label="Employee code"
+              value={trainerForm.employeeCode ?? ''}
+              onChange={(e) => handleTrainer('employeeCode', e.target.value)}
+            />
+            <Input
+              label="Specialization"
+              value={trainerForm.specialization ?? ''}
+              onChange={(e) => handleTrainer('specialization', e.target.value)}
+            />
+            <Input
+              label="Secondary (comma-sep.)"
+              value={trainerForm.secondarySpecializations ?? ''}
+              onChange={(e) => handleTrainer('secondarySpecializations', e.target.value)}
+            />
+            <Input
+              label="Certifications"
+              value={trainerForm.certifications ?? ''}
+              onChange={(e) => handleTrainer('certifications', e.target.value)}
+            />
+            <Input
+              label="Languages"
+              value={trainerForm.languagesSpoken ?? ''}
+              onChange={(e) => handleTrainer('languagesSpoken', e.target.value)}
+            />
+            <Input
+              label="Experience (years)"
+              type="number"
+              min={0}
+              value={trainerForm.experienceYears ?? ''}
+              onChange={(e) =>
+                handleTrainer('experienceYears', e.target.value ? Number(e.target.value) : null)
+              }
+            />
+          </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Input
-            label="Instagram"
-            value={form.instagramUrl ?? ''}
-            onChange={(e) => handle('instagramUrl', e.target.value)}
-          />
-          <Input
-            label="LinkedIn"
-            value={form.linkedinUrl ?? ''}
-            onChange={(e) => handle('linkedinUrl', e.target.value)}
-          />
-          <Input
-            label="Website"
-            value={form.websiteUrl ?? ''}
-            onChange={(e) => handle('websiteUrl', e.target.value)}
-          />
-        </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Input
+              label="Currency"
+              value={trainerForm.currency ?? ''}
+              onChange={(e) => handleTrainer('currency', e.target.value)}
+            />
+            <Input
+              label="Session rate"
+              type="number"
+              min={0}
+              value={trainerForm.sessionRate ?? ''}
+              onChange={(e) =>
+                handleTrainer('sessionRate', e.target.value ? Number(e.target.value) : null)
+              }
+            />
+            <Input
+              label="Hourly rate"
+              type="number"
+              min={0}
+              value={trainerForm.hourlyRate ?? ''}
+              onChange={(e) =>
+                handleTrainer('hourlyRate', e.target.value ? Number(e.target.value) : null)
+              }
+            />
+            <Input
+              label="Max clients"
+              type="number"
+              min={0}
+              value={trainerForm.maxClients ?? ''}
+              onChange={(e) =>
+                handleTrainer('maxClients', e.target.value ? Number(e.target.value) : null)
+              }
+            />
+          </div>
 
-        <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit">Save changes</Button>
-        </div>
-      </form>
+          <div>
+            <label className={labelCls}>Bio</label>
+            <textarea
+              aria-label="Bio"
+              value={trainerForm.bio ?? ''}
+              onChange={(e) => handleTrainer('bio', e.target.value)}
+              rows={3}
+              className={ctrl}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Input
+              label="Working days (CSV)"
+              value={trainerForm.workingDays ?? ''}
+              onChange={(e) => handleTrainer('workingDays', e.target.value)}
+              placeholder="Mon,Tue,Wed,Fri"
+            />
+            <Input
+              label="Hours start"
+              type="time"
+              value={trainerForm.workingHoursStart ?? ''}
+              onChange={(e) => handleTrainer('workingHoursStart', e.target.value)}
+            />
+            <Input
+              label="Hours end"
+              type="time"
+              value={trainerForm.workingHoursEnd ?? ''}
+              onChange={(e) => handleTrainer('workingHoursEnd', e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Input
+              label="Instagram"
+              value={trainerForm.instagramUrl ?? ''}
+              onChange={(e) => handleTrainer('instagramUrl', e.target.value)}
+            />
+            <Input
+              label="LinkedIn"
+              value={trainerForm.linkedinUrl ?? ''}
+              onChange={(e) => handleTrainer('linkedinUrl', e.target.value)}
+            />
+            <Input
+              label="Website"
+              value={trainerForm.websiteUrl ?? ''}
+              onChange={(e) => handleTrainer('websiteUrl', e.target.value)}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+            <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={trainerMutation.isPending}>
+              Save trainer module
+            </Button>
+          </div>
+        </form>
+      )}
     </Modal>
   )
 }

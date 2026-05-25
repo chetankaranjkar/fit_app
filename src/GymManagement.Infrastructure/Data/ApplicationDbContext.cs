@@ -32,6 +32,8 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<User> Users { get; set; }
         public DbSet<UserDetail> UserDetails { get; set; }
         public DbSet<Trainer> Trainers { get; set; }
+        public DbSet<Member> Members { get; set; }
+        public DbSet<Staff> Staff { get; set; }
         public DbSet<AuthUser> AuthUsers { get; set; }
         public DbSet<LoginActivity> LoginActivities { get; set; }
         public DbSet<BodyPart> BodyParts { get; set; }
@@ -44,6 +46,7 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<WorkoutPlanExercise> WorkoutPlanExercises { get; set; }
         public DbSet<UserSchedule> UserSchedules { get; set; }
         public DbSet<WorkoutSession> WorkoutSessions { get; set; }
+        public DbSet<WorkoutSessionExercise> WorkoutSessionExercises { get; set; }
         public DbSet<WorkoutLog> WorkoutLogs { get; set; }
         public DbSet<UserInstructor> UserInstructors { get; set; }
         public DbSet<TrainerFeedback> TrainerFeedbacks { get; set; }
@@ -104,7 +107,30 @@ namespace GymManagement.Infrastructure.Data
         // Coupon / Promo Code module
         public DbSet<Coupon> Coupons { get; set; }
         public DbSet<CouponUsage> CouponUsages { get; set; }
+
+        // Retail / POS module (isolated under Retail_* prefix; not gym assets)
+        public DbSet<GymManagement.Domain.Entities.Retail.ProductCategory> RetailProductCategories { get; set; }
+        public DbSet<GymManagement.Domain.Entities.Retail.Product> RetailProducts { get; set; }
+        public DbSet<GymManagement.Domain.Entities.Retail.InventoryTransaction> RetailInventoryTransactions { get; set; }
+        public DbSet<GymManagement.Domain.Entities.Retail.PosOrder> RetailPosOrders { get; set; }
+        public DbSet<GymManagement.Domain.Entities.Retail.PosOrderItem> RetailPosOrderItems { get; set; }
         public DbSet<InvoiceCouponUsage> InvoiceCouponUsages { get; set; }
+
+        // Personal Training module (PT_* tables)
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTPackage> PTPackages { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTPackagePrice> PTPackagePrices { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTPackageInvoice> PTPackageInvoices { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.MemberPTPackage> MemberPTPackages { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.MemberPTPackageHistory> MemberPTPackageHistories { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.TrainerSchedule> PTTrainerSchedules { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.TrainerLeave> PTTrainerLeaves { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTSession> PTSessions { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTSessionHistory> PTSessionHistories { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTAttendance> PTAttendances { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.TrainerCommissionRule> PTCommissionRules { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.TrainerCommission> PTCommissions { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.TrainerPayout> PTPayouts { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTNotification> PTNotifications { get; set; }
 
         // Locker Management module (isolated in LockerMgmt namespace, own tables).
         public DbSet<Locker> LockerMgmtLockers { get; set; }
@@ -146,6 +172,41 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasOne(e => e.User)
                     .WithMany(u => u.UserDetails)
                     .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Member>(entity =>
+            {
+                entity.ToTable("Members");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.UserId).IsUnique();
+                entity.Property(e => e.FitnessGoal).HasMaxLength(100);
+                entity.Property(e => e.MedicalConditions).HasMaxLength(2000);
+                entity.Property(e => e.EmergencyContact).HasMaxLength(150);
+                entity.Property(e => e.EmergencyPhone).HasMaxLength(20);
+                entity.Property(e => e.PreferredGymTime).HasMaxLength(20);
+                entity.Property(e => e.Gender).HasMaxLength(20);
+                entity.Property(e => e.HeightCm).HasPrecision(10, 2);
+                entity.Property(e => e.WeightKg).HasPrecision(10, 2);
+                entity.HasOne(e => e.User)
+                    .WithOne(u => u.Member)
+                    .HasForeignKey<Member>(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Staff>(entity =>
+            {
+                entity.ToTable("Staff");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.UserId).IsUnique();
+                entity.Property(e => e.EmployeeCode).HasMaxLength(30);
+                entity.HasIndex(e => e.EmployeeCode).IsUnique().HasFilter("[EmployeeCode] IS NOT NULL AND [IsDeleted] = 0");
+                entity.Property(e => e.Department).HasMaxLength(80);
+                entity.Property(e => e.JobTitle).HasMaxLength(100);
+                entity.Property(e => e.ShiftType).HasMaxLength(30);
+                entity.HasOne(e => e.User)
+                    .WithOne(u => u.StaffProfile)
+                    .HasForeignKey<Staff>(e => e.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
@@ -314,15 +375,45 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<WorkoutSession>(entity =>
             {
                 entity.HasKey(e => e.Id);
+                entity.Property(e => e.Status).HasMaxLength(20);
+                entity.Property(e => e.CaloriesBurned).HasPrecision(10, 2);
+                entity.Property(e => e.CompletionPercent).HasPrecision(5, 2);
+                entity.Property(e => e.TotalVolume).HasPrecision(14, 2);
                 entity.HasOne(e => e.User)
                     .WithMany()
                     .HasForeignKey(e => e.UserId)
                     .IsRequired(false)
                     .OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne(e => e.Member)
+                    .WithMany()
+                    .HasForeignKey(e => e.MemberId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.WorkoutPlan)
                     .WithMany()
                     .HasForeignKey(e => e.WorkoutPlanId)
+                    .IsRequired(false)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<WorkoutSessionExercise>(entity =>
+            {
+                entity.ToTable("WorkoutSessionExercises");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.ExerciseName).HasMaxLength(200);
+                entity.Property(e => e.TargetWeight).HasPrecision(10, 2);
+                entity.Property(e => e.ActualWeight).HasPrecision(10, 2);
+                entity.Property(e => e.Notes).HasMaxLength(500);
+                entity.HasOne(e => e.WorkoutSession)
+                    .WithMany(s => s.SessionExercises)
+                    .HasForeignKey(e => e.WorkoutSessionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Exercise)
+                    .WithMany()
+                    .HasForeignKey(e => e.ExerciseId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => new { e.WorkoutSessionId, e.ExerciseId, e.SetNumber });
             });
 
             // Configure WorkoutLog (per-set log: session, exercise, set number, reps, weight, notes)
@@ -977,6 +1068,8 @@ namespace GymManagement.Infrastructure.Data
 
             // Soft delete query filter
             modelBuilder.Entity<User>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<Member>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<Staff>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<Trainer>().HasQueryFilter(e => !e.IsDeleted);
 
             // Role & Permission (role_tbl, permissions, role_permissions)
@@ -1364,6 +1457,132 @@ namespace GymManagement.Infrastructure.Data
             });
 
             modelBuilder.Entity<InvoiceCouponUsage>().HasQueryFilter(e => !e.IsDeleted);
+
+            // -----------------------------------------------------------------
+            // Retail / POS module (isolated; tables under Retail_* prefix)
+            // -----------------------------------------------------------------
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.ProductCategory>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(150);
+                entity.Property(e => e.Description).HasMaxLength(1000);
+                entity.HasIndex(e => e.Name);
+                entity.HasOne(e => e.ParentCategory)
+                    .WithMany(p => p.SubCategories)
+                    .HasForeignKey(e => e.ParentCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne<Organization>()
+                    .WithMany()
+                    .HasForeignKey(e => e.OrganizationId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.ToTable("Retail_ProductCategories");
+            });
+
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.Product>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Description).HasMaxLength(2000);
+                entity.Property(e => e.Sku).IsRequired().HasMaxLength(50);
+                entity.HasIndex(e => e.Sku).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.Property(e => e.Barcode).HasMaxLength(100);
+                entity.HasIndex(e => e.Barcode);
+                entity.Property(e => e.Brand).HasMaxLength(150);
+                entity.Property(e => e.Flavor).HasMaxLength(100);
+                entity.Property(e => e.Size).HasMaxLength(50);
+                entity.Property(e => e.Unit).HasMaxLength(50);
+                entity.Property(e => e.BatchNumber).HasMaxLength(100);
+                entity.Property(e => e.GstPercent).HasPrecision(5, 2);
+                entity.Property(e => e.Mrp).HasPrecision(12, 2);
+                entity.Property(e => e.PurchasePrice).HasPrecision(12, 2);
+                entity.Property(e => e.SellingPrice).HasPrecision(12, 2);
+                entity.Property(e => e.ImageUrl).HasMaxLength(500);
+                entity.Property(e => e.Status).IsRequired().HasConversion<string>().HasMaxLength(30);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.CategoryId);
+                entity.HasIndex(e => e.ExpiryDate);
+                entity.HasOne(e => e.Category)
+                    .WithMany(c => c.Products)
+                    .HasForeignKey(e => e.CategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.ToTable("Retail_Products");
+            });
+
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.InventoryTransaction>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.TransactionType).IsRequired().HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.UnitPrice).HasPrecision(12, 2);
+                entity.Property(e => e.ReferenceNumber).HasMaxLength(120);
+                entity.Property(e => e.Notes).HasMaxLength(1000);
+                entity.HasIndex(e => e.ProductId);
+                entity.HasIndex(e => e.TransactionDate);
+                entity.HasIndex(e => e.PosOrderId);
+                entity.HasOne(e => e.Product)
+                    .WithMany(p => p.InventoryTransactions)
+                    .HasForeignKey(e => e.ProductId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.PosOrder)
+                    .WithMany(o => o.InventoryTransactions)
+                    .HasForeignKey(e => e.PosOrderId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.ToTable("Retail_InventoryTransactions");
+            });
+
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.PosOrder>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.OrderNumber).IsRequired().HasMaxLength(50);
+                entity.HasIndex(e => e.OrderNumber).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.Property(e => e.CustomerName).HasMaxLength(200);
+                entity.Property(e => e.CustomerPhone).HasMaxLength(50);
+                entity.Property(e => e.Subtotal).HasPrecision(12, 2);
+                entity.Property(e => e.TaxAmount).HasPrecision(12, 2);
+                entity.Property(e => e.DiscountAmount).HasPrecision(12, 2);
+                entity.Property(e => e.CouponDiscountAmount).HasPrecision(12, 2);
+                entity.Property(e => e.CouponCode).HasMaxLength(50);
+                entity.Property(e => e.TotalAmount).HasPrecision(12, 2);
+                entity.Property(e => e.PaymentMethod).IsRequired().HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.PaymentReference).HasMaxLength(120);
+                entity.Property(e => e.Status).IsRequired().HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.Notes).HasMaxLength(2000);
+                entity.HasIndex(e => e.OrderDate);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.CustomerUserId);
+                entity.ToTable("Retail_PosOrders");
+            });
+
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.PosOrderItem>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.ProductName).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Sku).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.UnitPrice).HasPrecision(12, 2);
+                entity.Property(e => e.GstPercent).HasPrecision(5, 2);
+                entity.Property(e => e.DiscountAmount).HasPrecision(12, 2);
+                entity.Property(e => e.Subtotal).HasPrecision(12, 2);
+                entity.Property(e => e.TaxAmount).HasPrecision(12, 2);
+                entity.Property(e => e.LineTotal).HasPrecision(12, 2);
+                entity.HasIndex(e => e.OrderId);
+                entity.HasIndex(e => e.ProductId);
+                entity.HasOne(e => e.Order)
+                    .WithMany(o => o.Items)
+                    .HasForeignKey(e => e.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Product)
+                    .WithMany()
+                    .HasForeignKey(e => e.ProductId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.ToTable("Retail_PosOrderItems");
+            });
+
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.ProductCategory>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.Product>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.InventoryTransaction>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.PosOrder>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.PosOrderItem>().HasQueryFilter(e => !e.IsDeleted);
+
+            PersonalTrainingModelConfiguration.Apply(modelBuilder);
 
             modelBuilder.Entity<GymQrWorkoutSession>(entity =>
             {

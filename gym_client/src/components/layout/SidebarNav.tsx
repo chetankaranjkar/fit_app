@@ -8,6 +8,7 @@ import {
   canAccessPaymentsNav,
   canAccessReportsNav,
   canAccessTrainingNav,
+  canAccessPtNav,
   canAccessUsersNav,
   isStaffFrontDeskOnly,
   STAFF_FRONT_DESK_LINKS,
@@ -61,6 +62,22 @@ const lockerMgmtSubItems = [
   { path: '/dashboard/locker-management/access-logs', label: 'Access Logs' },
   { path: '/dashboard/locker-management/maintenance', label: 'Maintenance' },
   { path: '/dashboard/locker-management/reports', label: 'Reports' },
+] as const
+
+const ptSubItems = [
+  { path: '/dashboard/personal-training', label: 'Dashboard' },
+  { path: '/dashboard/personal-training/packages', label: 'PT Packages' },
+  { path: '/dashboard/personal-training/assign', label: 'Assign Package' },
+  { path: '/dashboard/personal-training/sessions', label: 'Sessions' },
+  { path: '/dashboard/personal-training/reports', label: 'Reports' },
+] as const
+
+const retailSubItems = [
+  { path: '/dashboard/retail/pos', label: 'POS Checkout' },
+  { path: '/dashboard/retail/products', label: 'Products' },
+  { path: '/dashboard/retail/categories', label: 'Categories' },
+  { path: '/dashboard/retail/orders', label: 'Orders / Sales' },
+  { path: '/dashboard/retail/alerts', label: 'Stock Alerts' },
 ] as const
 
 /** Door / QR entry (scan = all; owner console = ADMIN + STAFF). */
@@ -165,6 +182,11 @@ const iconMap = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
     </svg>
   ),
+  retail: (
+    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+    </svg>
+  ),
 }
 
 interface SidebarNavProps {
@@ -204,6 +226,12 @@ export function SidebarNav({
   const isLockerMgmtPath = lockerMgmtSubItems.some(
     (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
   )
+  const isPtPath = ptSubItems.some(
+    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
+  )
+  const isRetailPath = retailSubItems.some(
+    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
+  )
   const staffFrontDesk = isStaffFrontDeskOnly()
   const visibleAccessNav = accessNavItems.filter(
     (item) => !item.requiresQrConsole || authService.hasQrOwnerAccess(),
@@ -216,6 +244,8 @@ export function SidebarNav({
   const [dietOpen, setDietOpen] = useState(isDietPath)
   const [gymOpsOpen, setGymOpsOpen] = useState(isGymOpsPath)
   const [lockerMgmtOpen, setLockerMgmtOpen] = useState(isLockerMgmtPath)
+  const [ptOpen, setPtOpen] = useState(isPtPath)
+  const [retailOpen, setRetailOpen] = useState(isRetailPath)
   const [accessOpen, setAccessOpen] = useState(isAccessPath)
   const visibleNavItems = navItems.filter((item) => {
     if (item.path === '/dashboard/security') return false
@@ -250,6 +280,9 @@ export function SidebarNav({
   useEffect(() => {
     if (isLockerMgmtPath) setLockerMgmtOpen(true)
   }, [isLockerMgmtPath])
+  useEffect(() => {
+    if (isRetailPath) setRetailOpen(true)
+  }, [isRetailPath])
   useEffect(() => {
     if (isAccessPath) setAccessOpen(true)
   }, [isAccessPath])
@@ -808,6 +841,95 @@ export function SidebarNav({
                         onClick={handleNavClick}
                         className={subLinkClass(path)}
                       >
+                        {label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Personal Training */}
+            {canAccessPtNav() &&
+            (collapsed ? (
+              <Link
+                to="/dashboard/personal-training"
+                {...linkPrefetchProps('/dashboard/personal-training')}
+                onClick={handleNavClick}
+                title="Personal Training"
+                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
+                  isPtPath ? activeBase : inactiveBase
+                }`}
+              >
+                <span className={isPtPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}>
+                  {iconMap.trainers}
+                </span>
+              </Link>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setPtOpen((o) => !o)}
+                  onMouseEnter={() => prefetchRoute('/dashboard/personal-training')}
+                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="text-slate-400 group-hover:text-white">{iconMap.trainers}</span>
+                    <span>Personal Training</span>
+                  </span>
+                  <svg className={`size-4 shrink-0 text-slate-500 transition-transform ${ptOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {ptOpen && (
+                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
+                    {ptSubItems.map(({ path, label }) => (
+                      <Link key={path} to={path} {...linkPrefetchProps(path)} onClick={handleNavClick} className={subLinkClass(path)}>
+                        {label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Retail / Store group (isolated POS module) */}
+            {canAccessPaymentsNav() &&
+            (collapsed ? (
+              <Link
+                to="/dashboard/retail/pos"
+                {...linkPrefetchProps('/dashboard/retail/pos')}
+                onClick={handleNavClick}
+                title="Retail / Store"
+                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
+                  isRetailPath ? activeBase : inactiveBase
+                }`}
+              >
+                <span className={isRetailPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}>
+                  {iconMap.retail}
+                </span>
+              </Link>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setRetailOpen((o) => !o)}
+                  onMouseEnter={() => prefetchRoute('/dashboard/retail/pos')}
+                  onFocus={() => prefetchRoute('/dashboard/retail/pos')}
+                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="text-slate-400 group-hover:text-white">{iconMap.retail}</span>
+                    <span>Retail / Store</span>
+                  </span>
+                  <svg className={`size-4 shrink-0 text-slate-500 transition-transform ${retailOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {retailOpen && (
+                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
+                    {retailSubItems.map(({ path, label }) => (
+                      <Link key={path} to={path} {...linkPrefetchProps(path)} onClick={handleNavClick} className={subLinkClass(path)}>
                         {label}
                       </Link>
                     ))}

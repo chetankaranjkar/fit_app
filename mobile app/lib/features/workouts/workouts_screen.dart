@@ -14,7 +14,9 @@ import 'widgets/workout_ai_coach_card.dart';
 import 'widgets/workout_analytics_section.dart';
 import 'widgets/workout_command_hero.dart';
 import 'widgets/workout_featured_carousel.dart';
+import 'widgets/workout_dashboard_card.dart';
 import 'widgets/workout_quick_dock.dart';
+import '../../providers/workout_tracking_providers.dart';
 
 class WorkoutsScreen extends ConsumerWidget {
   const WorkoutsScreen({super.key});
@@ -156,12 +158,16 @@ class WorkoutsScreen extends ConsumerWidget {
                         ref.invalidate(dashboardProvider);
                         ref.invalidate(workoutPlansProvider);
                         ref.invalidate(workoutSessionHistoryProvider);
+                        ref.invalidate(workoutTrackingDashboardProvider);
+                        ref.invalidate(activeWorkoutProvider);
                       },
                     ),
                     SliverPadding(
                       padding: ShellLayoutMetrics.scrollPadding(context),
                       sliver: SliverList(
                         delegate: SliverChildListDelegate([
+                          const WorkoutDashboardCard(),
+                          const SizedBox(height: AppSpacing.xl),
                           WorkoutCommandHero(
                             profile: profile,
                             attendance: attendance,

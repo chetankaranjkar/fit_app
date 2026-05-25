@@ -31,6 +31,21 @@ namespace GymManagement.Core.DTOs
         /// <summary>Active trainer assignment (Trainers.Id) for edit-form prefill.</summary>
         public int? AssignedTrainerId { get; set; }
 
+        /// <summary>Display name of <see cref="AssignedTrainerId"/> when loaded from list/detail APIs.</summary>
+        public string? AssignedTrainerName { get; set; }
+
+        /// <summary>Linked <c>Members</c> profile id when present.</summary>
+        public int? MemberProfileId { get; set; }
+
+        /// <summary>Linked <c>Trainer</c> profile id when present.</summary>
+        public int? TrainerProfileId { get; set; }
+
+        /// <summary>Linked <c>Staff</c> profile id when present.</summary>
+        public int? StaffProfileId { get; set; }
+
+        /// <summary>Application roles from <c>UserRoles</c> (when aggregate/detail loaded).</summary>
+        public List<AppRoleDto> AppRoles { get; set; } = new();
+
         /// <summary>Current active membership plan id for edit-form prefill.</summary>
         public int? CurrentMembershipPlanId { get; set; }
 
@@ -110,6 +125,10 @@ namespace GymManagement.Core.DTOs
         public int? TrainerId { get; set; }
         /// <summary>User type IDs to assign. Replaces existing types.</summary>
         public List<int>? UserTypeIds { get; set; }
+        /// <summary>When set by an admin, updates or creates the member login password (min 6 characters).</summary>
+        public string? Password { get; set; }
+        /// <summary>Login email when creating a new AuthUser (required if the user has no login yet).</summary>
+        public string? Email { get; set; }
     }
 }
 

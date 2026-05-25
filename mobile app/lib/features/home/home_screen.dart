@@ -20,6 +20,8 @@ import '../../widgets/skeleton_shimmer.dart';
 import '../../widgets/stat_tile.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
+import '../workouts/widgets/workout_dashboard_card.dart';
+import '../../providers/workout_tracking_providers.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -47,6 +49,8 @@ class HomeScreen extends ConsumerWidget {
                   onRefresh: () async {
                     await MeService.instance.flushPendingWorkoutSessions();
                     ref.invalidate(dashboardProvider);
+                    ref.invalidate(workoutTrackingDashboardProvider);
+                    ref.invalidate(activeWorkoutProvider);
                   },
                 ),
                 dashboard.when(
@@ -74,6 +78,8 @@ class HomeScreen extends ConsumerWidget {
                           const SizedBox(height: AppSpacing.lg),
                         ],
                         _StatsRow(attendance: data.attendance, metric: data.latestBodyMetric),
+                        const SizedBox(height: AppSpacing.lg),
+                        const WorkoutDashboardCard(),
                         const SizedBox(height: AppSpacing.xl),
                         SectionHeader(
                           title: 'This week',

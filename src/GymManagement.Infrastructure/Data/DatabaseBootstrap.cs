@@ -1,3 +1,4 @@
+using GymManagement.Core.Authorization;
 using GymManagement.Core.Interfaces;
 using GymManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -179,5 +180,80 @@ public static class DatabaseBootstrap
         }
 
         await unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>Idempotently seeds PT permissions and links them to ADMIN/STAFF/TRAINER roles on existing databases.</summary>
+    public static async Task EnsurePtPermissionsAsync(
+        IServiceProvider services,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = services.CreateScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        try
+        {
+            var defs = new[]
+            {
+                (PermissionCodes.ManagePtPackages, "Manage PT packages", "Create and manage PT packages and member assignments"),
+                (PermissionCodes.BookPtSessions, "Book PT sessions", "Book, reschedule, and cancel PT sessions"),
+                (PermissionCodes.ManagePtSchedules, "Manage PT schedules", "Trainer schedules and leave"),
+                (PermissionCodes.ViewTrainerEarnings, "View trainer earnings", "Trainer PT earnings and commissions"),
+                (PermissionCodes.ViewPtReports, "View PT reports", "PT reports and exports"),
+            };
+
+            foreach (var (code, name, desc) in defs)
+            {
+                var perm = await unitOfWork.Permissions.FirstOrDefaultAsync(p => p.Code == code);
+                if (perm == null)
+                {
+                    await unitOfWork.Permissions.AddAsync(new Permission { Code = code, Name = name, Description = desc });
+                    await unitOfWork.SaveChangesAsync();
+                }
+            }
+
+            async Task LinkRole(string roleName, params string[] codes)
+            {
+                var role = await unitOfWork.AppRoles.FirstOrDefaultAsync(r => r.Name == roleName);
+                if (role == null) return;
+                foreach (var code in codes)
+                {
+                    var perm = await unitOfWork.Permissions.FirstOrDefaultAsync(p => p.Code == code);
+                    if (perm == null) continue;
+                    var linked = await unitOfWork.RolePermissions.ExistsAsync(rp =>
+                        rp.RoleId == role.Id && rp.PermissionId == perm.Id);
+                    if (linked) continue;
+                    await unitOfWork.RolePermissions.AddAsync(new RolePermission
+                    {
+                        RoleId = role.Id,
+                        PermissionId = perm.Id,
+                        CreatedDate = DateTime.UtcNow,
+                    });
+                }
+            }
+
+            await LinkRole("ADMIN",
+                PermissionCodes.ManagePtPackages,
+                PermissionCodes.BookPtSessions,
+                PermissionCodes.ManagePtSchedules,
+                PermissionCodes.ViewTrainerEarnings,
+                PermissionCodes.ViewPtReports);
+            await LinkRole("STAFF",
+                PermissionCodes.ManagePtPackages,
+                PermissionCodes.BookPtSessions,
+                PermissionCodes.ManagePtSchedules,
+                PermissionCodes.ViewPtReports);
+            await LinkRole("TRAINER",
+                PermissionCodes.BookPtSessions,
+                PermissionCodes.ManagePtSchedules,
+                PermissionCodes.ViewTrainerEarnings);
+
+            await unitOfWork.SaveChangesAsync();
+            logger.LogInformation("PT permissions ensured.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "PT permission bootstrap failed.");
+        }
     }
 }

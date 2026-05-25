@@ -5,8 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
 import '../../models/me_models.dart';
 import '../../providers/me_providers.dart';
 import '../../theme/app_colors.dart';
@@ -17,6 +15,7 @@ import '../../widgets/press_scale.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
 import 'workout_derived_metrics.dart';
+import 'workout_session_launcher.dart';
 
 class WorkoutDetailScreen extends ConsumerWidget {
   const WorkoutDetailScreen({super.key, required this.plan});
@@ -167,7 +166,7 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
             minimum: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
             child: CupertinoButton(
               padding: EdgeInsets.zero,
-              onPressed: () => context.push('/workouts/${plan.id}/session', extra: plan),
+              onPressed: () => launchLiveWorkoutSession(context, ref, plan: plan),
               child: Container(
                 height: 54,
                 decoration: BoxDecoration(

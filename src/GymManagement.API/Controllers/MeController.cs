@@ -671,11 +671,13 @@ namespace GymManagement.API.Controllers
             if (sessions.Count == 0)
                 return Ok(Array.Empty<MeWorkoutSessionSummaryDto>());
 
-            var planIds = sessions.Select(s => s.WorkoutPlanId).Distinct().ToList();
-            var planNames = await _db.WorkoutPlans.AsNoTracking()
-                .Where(p => planIds.Contains(p.Id))
-                .ToDictionaryAsync(p => p.Id, p => p.Name, cancellationToken)
-                .ConfigureAwait(false);
+            var planIds = sessions.Where(s => s.WorkoutPlanId.HasValue).Select(s => s.WorkoutPlanId!.Value).Distinct().ToList();
+            var planNames = planIds.Count == 0
+                ? new Dictionary<int, string>()
+                : await _db.WorkoutPlans.AsNoTracking()
+                    .Where(p => planIds.Contains(p.Id))
+                    .ToDictionaryAsync(p => p.Id, p => p.Name, cancellationToken)
+                    .ConfigureAwait(false);
 
             var sessionIds = sessions.Select(s => s.Id).ToList();
             var setCounts = await _db.WorkoutLogs.AsNoTracking()
@@ -690,7 +692,7 @@ namespace GymManagement.API.Controllers
             {
                 SessionId = ws.Id,
                 WorkoutPlanId = ws.WorkoutPlanId,
-                PlanName = planNames.TryGetValue(ws.WorkoutPlanId, out var n) ? n : string.Empty,
+                PlanName = ws.WorkoutPlanId.HasValue && planNames.TryGetValue(ws.WorkoutPlanId.Value, out var n) ? n : string.Empty,
                 SessionDateUtc = ws.SessionDate,
                 DurationMinutes = ws.DurationMinutes,
                 SetsLogged = countMap.TryGetValue(ws.Id, out var c) ? c : 0

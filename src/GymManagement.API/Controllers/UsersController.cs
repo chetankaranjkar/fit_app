@@ -42,6 +42,17 @@ namespace GymManagement.API.Controllers
             return Ok(user);
         }
 
+        /// <summary>User identity + RBAC roles + member/trainer/staff profiles.</summary>
+        [HttpGet("{id}/aggregate")]
+        [HasPermission(PermissionCodes.UsersAccess)]
+        public async Task<ActionResult<UserAggregateDto>> GetUserAggregate(int id)
+        {
+            var aggregate = await _userService.GetUserAggregateAsync(id);
+            if (aggregate == null)
+                return NotFound();
+            return Ok(aggregate);
+        }
+
         [HttpPost]
         [HasPermission(PermissionCodes.CREATE_MEMBER)]
         public async Task<ActionResult<UserDto>> CreateUser(CreateUserDto createUserDto)
@@ -75,6 +86,14 @@ namespace GymManagement.API.Controllers
             catch (ConflictException ex)
             {
                 return Conflict(new { message = ex.Message });
+            }
+            catch (NotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (DbUpdateException ex) when (IsDuplicatePhoneException(ex))
             {
@@ -126,6 +145,42 @@ namespace GymManagement.API.Controllers
                 return NotFound();
             var roles = await _rbacService.GetUserAppRolesAsync(id);
             return Ok(roles);
+        }
+
+        [HttpPost("{id}/roles")]
+        [HasPermission(PermissionCodes.MANAGE_MEMBERS)]
+        public async Task<IActionResult> AssignRole(int id, [FromBody] AssignRoleRequest request)
+        {
+            var user = await _userService.GetUserByIdAsync(id);
+            if (user == null)
+                return NotFound();
+            try
+            {
+                await _userService.AssignRoleAsync(id, request.RoleCode);
+                return NoContent();
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{id}/roles/{roleCode}")]
+        [HasPermission(PermissionCodes.MANAGE_MEMBERS)]
+        public async Task<IActionResult> RevokeRole(int id, string roleCode)
+        {
+            var user = await _userService.GetUserByIdAsync(id);
+            if (user == null)
+                return NotFound();
+            try
+            {
+                await _userService.RevokeRoleAsync(id, roleCode);
+                return NoContent();
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet("{id}/details")]

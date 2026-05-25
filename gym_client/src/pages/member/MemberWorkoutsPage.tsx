@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMemo, useState, type ComponentType } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -270,15 +270,18 @@ function TodayHero({
   greeting,
   userName,
   programName,
+  planId,
   todayDay,
   todayLabel,
 }: {
   greeting: string
   userName: string
   programName: string
+  planId: number
   todayDay: MePlanDayOutline | null
   todayLabel: string
 }) {
+  const navigate = useNavigate()
   const isRest = todayDay?.isRestDay ?? false
   const exerciseCount = todayDay?.exercises.length ?? 0
   const estMinutes = todayDay ? Math.round(estimateDayMinutes(todayDay)) : 0
@@ -350,6 +353,7 @@ function TodayHero({
 
             <button
               type="button"
+              onClick={() => navigate(`/dashboard/member/workouts/today?planId=${planId}`)}
               className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-orange-400/30 bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_-6px_rgba(249,115,22,0.55)] transition-transform hover:scale-[1.02] active:scale-[0.98]"
             >
               <Play className="size-4 fill-current" />
@@ -429,6 +433,7 @@ function ProgramView({ program }: { program: MeAssignedProgram }) {
         greeting={greeting}
         userName={userName || 'Athlete'}
         programName={plan.planName}
+        planId={plan.id}
         todayDay={todayDay}
         todayLabel={todayLabel}
       />

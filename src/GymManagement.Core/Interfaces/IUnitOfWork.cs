@@ -39,6 +39,8 @@ namespace GymManagement.Core.Interfaces
         IRepository<UserType> UserTypes { get; }
         IRepository<UserUserType> UserUserTypes { get; }
         IRepository<UserRole> UserRoles { get; }
+        IRepository<Member> Members { get; }
+        IRepository<Staff> Staff { get; }
         IRepository<DietPlan> DietPlans { get; }
         IRepository<GymQrCode> GymQrCodes { get; }
         IRepository<GymLead> GymLeads { get; }

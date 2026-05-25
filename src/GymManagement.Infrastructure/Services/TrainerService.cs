@@ -74,7 +74,7 @@ namespace GymManagement.Infrastructure.Services
             var trainer = new Trainer
             {
                 UserId = dto.UserId,
-                EmployeeCode = !string.IsNullOrWhiteSpace(dto.EmployeeCode) ? dto.EmployeeCode : $"EMP{dto.UserId}",
+                EmployeeCode = await TrainerEmployeeCodeGenerator.GenerateNextAsync(_unitOfWork),
                 Specialization = dto.Specialization,
                 CertificationDetails = dto.CertificationDetails,
                 ExperienceYears = dto.ExperienceYears,

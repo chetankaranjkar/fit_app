@@ -1,0 +1,5 @@
+export { ProductsPage } from './pages/ProductsPage'
+export { ProductCategoriesPage } from './pages/ProductCategoriesPage'
+export { PosPage } from './pages/PosPage'
+export { PosOrdersPage } from './pages/PosOrdersPage'
+export { InventoryAlertsPage } from './pages/InventoryAlertsPage'

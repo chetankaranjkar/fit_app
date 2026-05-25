@@ -13,6 +13,8 @@ import '../features/scanner/qr_scanner_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/workouts/workout_detail_screen.dart';
+import '../features/workouts/live_workout_session_screen.dart';
+import '../models/workout_tracking_models.dart';
 import '../workout_session_screen.dart';
 import '../features/workouts/workouts_screen.dart';
 import '../models/me_models.dart';
@@ -63,6 +65,18 @@ final appRouter = GoRouter(
             path: '/workouts',
             pageBuilder: (_, __) => _fadePage(const WorkoutsScreen()),
             routes: [
+              GoRoute(
+                path: 'live',
+                parentNavigatorKey: _rootNavKey,
+                pageBuilder: (context, state) {
+                  final extra = state.extra;
+                  return _slidePage(
+                    LiveWorkoutSessionScreen(
+                      initialSession: extra is ActiveWorkoutSession ? extra : null,
+                    ),
+                  );
+                },
+              ),
               GoRoute(
                 path: ':planId',
                 pageBuilder: (context, state) {

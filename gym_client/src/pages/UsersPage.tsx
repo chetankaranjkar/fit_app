@@ -325,6 +325,9 @@ function UserCard({
         {user.preferredGymTime && (
           <span className="text-[11px] text-slate-400">⏰ {user.preferredGymTime}</span>
         )}
+        {user.assignedTrainerName && (
+          <span className="text-[11px] text-violet-300/90">Coach: {user.assignedTrainerName}</span>
+        )}
       </div>
 
       <div className="mt-3">

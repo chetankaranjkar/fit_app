@@ -211,7 +211,7 @@ namespace GymManagement.Core.DTOs
     public sealed class MeWorkoutSessionSummaryDto
     {
         public int SessionId { get; set; }
-        public int WorkoutPlanId { get; set; }
+        public int? WorkoutPlanId { get; set; }
         public string PlanName { get; set; } = string.Empty;
         public DateTime SessionDateUtc { get; set; }
         public int? DurationMinutes { get; set; }

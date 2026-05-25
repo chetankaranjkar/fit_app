@@ -28,6 +28,12 @@ const DashboardHubPage = lazy(() =>
 const MemberWorkoutsPage = lazy(() =>
   import('../pages/member/MemberWorkoutsPage').then((m) => ({ default: m.MemberWorkoutsPage })),
 )
+const TodayWorkoutPage = lazy(() =>
+  import('../modules/workout-tracking').then((m) => ({ default: m.TodayWorkoutPage })),
+)
+const LiveWorkoutPage = lazy(() =>
+  import('../modules/workout-tracking').then((m) => ({ default: m.LiveWorkoutPage })),
+)
 const MemberDietPage = lazy(() =>
   import('../pages/member/MemberDietPage').then((m) => ({ default: m.MemberDietPage })),
 )
@@ -70,6 +76,39 @@ const CollectMembershipPaymentPage = lazy(() =>
 )
 const CouponsPage = lazy(() =>
   import('../pages/CouponsPage').then((m) => ({ default: m.CouponsPage })),
+)
+
+// Retail / POS module
+const RetailProductsPage = lazy(() =>
+  import('../modules/retail').then((m) => ({ default: m.ProductsPage })),
+)
+const RetailCategoriesPage = lazy(() =>
+  import('../modules/retail').then((m) => ({ default: m.ProductCategoriesPage })),
+)
+const RetailPosPage = lazy(() =>
+  import('../modules/retail').then((m) => ({ default: m.PosPage })),
+)
+const RetailPosOrdersPage = lazy(() =>
+  import('../modules/retail').then((m) => ({ default: m.PosOrdersPage })),
+)
+const RetailInventoryAlertsPage = lazy(() =>
+  import('../modules/retail').then((m) => ({ default: m.InventoryAlertsPage })),
+)
+
+const PtDashboardPage = lazy(() =>
+  import('../modules/personal-training').then((m) => ({ default: m.PtDashboardPage })),
+)
+const PtPackagesPage = lazy(() =>
+  import('../modules/personal-training').then((m) => ({ default: m.PtPackagesPage })),
+)
+const PtAssignPackagePage = lazy(() =>
+  import('../modules/personal-training').then((m) => ({ default: m.PtAssignPackagePage })),
+)
+const PtSessionsPage = lazy(() =>
+  import('../modules/personal-training').then((m) => ({ default: m.PtSessionsPage })),
+)
+const PtReportsPage = lazy(() =>
+  import('../modules/personal-training').then((m) => ({ default: m.PtReportsPage })),
 )
 const BodyPartsPage = lazy(() =>
   import('../pages/training/BodyPartsPage').then((m) => ({
@@ -232,12 +271,24 @@ const router = createBrowserRouter([
               { path: '/dashboard/payments', element: withSuspense(<PaymentsPage />) },
               { path: '/dashboard/payments/collect', element: withSuspense(<CollectMembershipPaymentPage />) },
               { path: '/dashboard/coupons', element: withSuspense(<CouponsPage />) },
+              { path: '/dashboard/retail/products', element: withSuspense(<RetailProductsPage />) },
+              { path: '/dashboard/retail/categories', element: withSuspense(<RetailCategoriesPage />) },
+              { path: '/dashboard/retail/pos', element: withSuspense(<RetailPosPage />) },
+              { path: '/dashboard/retail/orders', element: withSuspense(<RetailPosOrdersPage />) },
+              { path: '/dashboard/retail/alerts', element: withSuspense(<RetailInventoryAlertsPage />) },
+              { path: '/dashboard/personal-training', element: withSuspense(<PtDashboardPage />) },
+              { path: '/dashboard/personal-training/packages', element: withSuspense(<PtPackagesPage />) },
+              { path: '/dashboard/personal-training/assign', element: withSuspense(<PtAssignPackagePage />) },
+              { path: '/dashboard/personal-training/sessions', element: withSuspense(<PtSessionsPage />) },
+              { path: '/dashboard/personal-training/reports', element: withSuspense(<PtReportsPage />) },
               { path: '/dashboard/roles', element: withSuspense(<RolesPage />) },
               { path: '/dashboard/security', element: withSuspense(<SecurityPage />) },
               { path: '/dashboard/trainers', element: withSuspense(<TrainersPage />) },
               { path: '/dashboard/trainers/:trainerId', element: withSuspense(<TrainerDetailPage />) },
               { path: '/dashboard/profile', element: withSuspense(<MemberProfilePage />) },
               { path: '/dashboard/member/workouts', element: withSuspense(<MemberWorkoutsPage />) },
+              { path: '/dashboard/member/workouts/today', element: withSuspense(<TodayWorkoutPage />) },
+              { path: '/dashboard/member/workouts/live', element: withSuspense(<LiveWorkoutPage />) },
               { path: '/dashboard/member/diet', element: withSuspense(<MemberDietPage />) },
               { path: '/dashboard/member/progress', element: withSuspense(<MemberProgressPage />) },
               { path: '/dashboard/member/portal', element: withSuspense(<MemberPortalPage />) },

@@ -52,6 +52,14 @@ export function canAccessConfigNav(): boolean {
   return canAccessNavSection(NavPermission.config)
 }
 
+export function canAccessPtNav(): boolean {
+  return (
+    canAccessNavSection('MANAGE_PT_PACKAGES') ||
+    canAccessNavSection('BOOK_PT_SESSIONS') ||
+    canAccessNavSection('VIEW_PT_REPORTS')
+  )
+}
+
 export function canAccessAttendanceNav(): boolean {
   if (isStaffFrontDeskOnly()) return true
   return (

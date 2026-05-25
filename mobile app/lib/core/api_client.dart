@@ -74,9 +74,13 @@ class ApiClient {
     }
   }
 
-  Future<Response<T>> post<T>(String path, {Object? body}) async {
+  Future<Response<T>> post<T>(
+    String path, {
+    Object? body,
+    Map<String, dynamic>? query,
+  }) async {
     try {
-      final res = await _dio.post<T>(path, data: body);
+      final res = await _dio.post<T>(path, data: body, queryParameters: query);
       _ensureOk(res);
       return res;
     } on DioException catch (e) {

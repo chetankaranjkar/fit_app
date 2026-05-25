@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
@@ -12,11 +13,22 @@ namespace GymManagement.Infrastructure.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMembershipPaymentService _membershipPaymentService;
+        private readonly IUserInstructorService _userInstructorService;
+        private readonly IUserProvisioningService _provisioning;
+        private readonly IRbacService _rbacService;
 
-        public UserService(IUnitOfWork unitOfWork, IMembershipPaymentService membershipPaymentService)
+        public UserService(
+            IUnitOfWork unitOfWork,
+            IMembershipPaymentService membershipPaymentService,
+            IUserInstructorService userInstructorService,
+            IUserProvisioningService provisioning,
+            IRbacService rbacService)
         {
             _unitOfWork = unitOfWork;
             _membershipPaymentService = membershipPaymentService;
+            _userInstructorService = userInstructorService;
+            _provisioning = provisioning;
+            _rbacService = rbacService;
         }
 
         public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
@@ -36,10 +48,12 @@ namespace GymManagement.Infrastructure.Services
             var userTypesByUserId = await GetUserTypesByUserIdsAsync(userIds);
             var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(userIds);
             var billingByUserId = await GetBillingSummariesByUserIdsAsync(userIds);
+            var trainerAssignmentByUserId = await GetActiveTrainerAssignmentByUserIdsAsync(userIds);
             return users.Select(u =>
             {
                 var dto = MapToDto(u, authByUserId.GetValueOrDefault(u.Id), trainerUserIds.Contains(u.Id), userTypesByUserId.GetValueOrDefault(u.Id), appRoleNamesByUserId.GetValueOrDefault(u.Id));
                 EnrichWithBillingSummary(dto, billingByUserId.GetValueOrDefault(u.Id));
+                EnrichWithTrainerAssignment(dto, trainerAssignmentByUserId.GetValueOrDefault(u.Id));
                 return dto;
             });
         }
@@ -55,8 +69,35 @@ namespace GymManagement.Infrastructure.Services
             var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(new HashSet<int> { id });
             var dto = MapToDto(user, authUser, trainer != null, userTypes, appRoleNamesByUserId.GetValueOrDefault(id));
             await EnrichUserProfileForEditPrefillAsync(dto, id);
+            await EnrichProfileIdsAsync(dto, id);
             return dto;
         }
+
+        public async Task<UserAggregateDto?> GetUserAggregateAsync(int id)
+        {
+            var user = await GetUserByIdAsync(id);
+            if (user == null)
+                return null;
+
+            var (member, staff, trainer) = await _provisioning.GetProfilesAsync(id);
+            var appRoles = await _rbacService.GetUserAppRolesAsync(id);
+            user.AppRoles = appRoles.ToList();
+
+            return new UserAggregateDto
+            {
+                User = user,
+                AppRoles = appRoles,
+                MemberProfile = member,
+                StaffProfile = staff,
+                TrainerProfile = trainer,
+            };
+        }
+
+        public Task AssignRoleAsync(int userId, string roleCode) =>
+            _provisioning.AssignRoleAsync(userId, roleCode);
+
+        public Task RevokeRoleAsync(int userId, string roleCode) =>
+            _provisioning.RevokeRoleAsync(userId, roleCode);
 
         public async Task<UserDto> CreateUserAsync(CreateUserDto createUserDto)
         {
@@ -87,26 +128,6 @@ namespace GymManagement.Infrastructure.Services
             await _unitOfWork.SaveChangesAsync();
 
             var accountRole = createUserDto.Role ?? Role.User;
-
-            // If role is Instructor, ensure they have a Trainer profile (create before AuthUser so we can set TrainerId)
-            if (accountRole == Role.Instructor)
-            {
-                var existingTrainer = (await _unitOfWork.Trainers.GetAllAsync()).FirstOrDefault(i => i.UserId == user.Id);
-                if (existingTrainer == null)
-                {
-                    var trainer = new Trainer
-                    {
-                        UserId = user.Id,
-                        EmployeeCode = $"EMP{user.Id}",
-                        Specialization = !string.IsNullOrWhiteSpace(createUserDto.InstructorSpecialization) ? createUserDto.InstructorSpecialization.Trim() : null,
-                        Bio = !string.IsNullOrWhiteSpace(createUserDto.InstructorBio) ? createUserDto.InstructorBio.Trim() : null,
-                        IsActive = true,
-                        HireDate = createUserDto.InstructorHireDate?.Date ?? DateTime.UtcNow.Date
-                    };
-                    await _unitOfWork.Trainers.AddAsync(trainer);
-                    await _unitOfWork.SaveChangesAsync();
-                }
-            }
 
             // Create AuthUser (single auth table) if email and password are provided
             if (!string.IsNullOrEmpty(createUserDto.Password) && !string.IsNullOrWhiteSpace(createUserDto.Email))
@@ -158,40 +179,42 @@ namespace GymManagement.Infrastructure.Services
                 }
             }
 
-            // Optional: assign trainer if TrainerId is provided
-            if (createUserDto.TrainerId.HasValue && createUserDto.TrainerId.Value > 0)
-            {
-                var trainer = await _unitOfWork.Trainers.GetByIdAsync(createUserDto.TrainerId.Value);
-                if (trainer != null)
-                {
-                    var assignment = new UserInstructor
-                    {
-                        UserId = user.Id,
-                        TrainerId = trainer.Id,
-                        AssignmentDate = DateTime.UtcNow,
-                        IsActive = true
-                    };
-                    await _unitOfWork.UserInstructors.AddAsync(assignment);
-                    await _unitOfWork.SaveChangesAsync();
-                }
-            }
+            if (createUserDto.TrainerId.HasValue)
+                await _userInstructorService.AssignOrReplaceMemberTrainerAsync(user.Id, createUserDto.TrainerId.Value);
 
-            // User types (many-to-many)
+            // User types (many-to-many, legacy UI)
             if (createUserDto.UserTypeIds != null && createUserDto.UserTypeIds.Count > 0)
             {
                 foreach (var typeId in createUserDto.UserTypeIds.Where(tid => tid > 0))
                 {
                     var userType = await _unitOfWork.UserTypes.GetByIdAsync(typeId);
                     if (userType != null)
-                    {
                         await _unitOfWork.UserUserTypes.AddAsync(new UserUserType { UserId = user.Id, UserTypeId = typeId });
-                    }
                 }
                 await _unitOfWork.SaveChangesAsync();
             }
 
             await AuthUserRoleHelper.EnsureUserHasAppRoleAsync(_unitOfWork, user.Id, AuthUserRoleHelper.MapRoleEnumToAppRoleName(accountRole));
             await _unitOfWork.SaveChangesAsync();
+
+            await _provisioning.SyncFromUserTypeIdsAsync(user.Id, createUserDto.UserTypeIds);
+            await _provisioning.EnsureProfilesForUserAsync(user.Id);
+            if (accountRole == Role.Instructor)
+            {
+                await _provisioning.AssignRoleAsync(user.Id, ApplicationRoleCodes.Trainer);
+                await _provisioning.EnsureTrainerProfileAsync(user.Id, new TrainerProfileSeedDto
+                {
+                    Specialization = createUserDto.InstructorSpecialization,
+                    Bio = createUserDto.InstructorBio,
+                    HireDate = createUserDto.InstructorHireDate,
+                });
+            }
+            else if (accountRole == Role.User)
+            {
+                await _provisioning.EnsureMemberProfileAsync(user.Id);
+            }
+
+            await _provisioning.SyncMemberProfileFromUserAsync(user.Id);
 
             var authForNew = (await _unitOfWork.AuthUsers.GetAllAsync()).FirstOrDefault(a => a.UserId == user.Id);
             var trainerUserIds = (await _unitOfWork.Trainers.GetAllAsync()).Select(i => i.UserId).ToHashSet();
@@ -281,23 +304,8 @@ namespace GymManagement.Infrastructure.Services
                 }
             }
 
-            // Optional: assign trainer if TrainerId is provided
-            if (updateUserDto.TrainerId.HasValue && updateUserDto.TrainerId.Value > 0)
-            {
-                var trainer = await _unitOfWork.Trainers.GetByIdAsync(updateUserDto.TrainerId.Value);
-                if (trainer != null)
-                {
-                    var assignment = new UserInstructor
-                    {
-                        UserId = id,
-                        TrainerId = trainer.Id,
-                        AssignmentDate = DateTime.UtcNow,
-                        IsActive = true
-                    };
-                    await _unitOfWork.UserInstructors.AddAsync(assignment);
-                    await _unitOfWork.SaveChangesAsync();
-                }
-            }
+            if (updateUserDto.TrainerId.HasValue)
+                await _userInstructorService.AssignOrReplaceMemberTrainerAsync(id, updateUserDto.TrainerId.Value);
 
             // User types: sync selection if provided (revive soft-deleted links; avoid unique-index clash on re-add)
             if (updateUserDto.UserTypeIds != null)
@@ -312,9 +320,73 @@ namespace GymManagement.Infrastructure.Services
 
                 await _unitOfWork.SyncUserUserTypesAsync(id, validIds);
                 await _unitOfWork.SaveChangesAsync();
+                await _provisioning.SyncFromUserTypeIdsAsync(id, validIds);
             }
 
+            await _provisioning.SyncMemberProfileFromUserAsync(id);
+            await _provisioning.EnsureProfilesForUserAsync(id);
+
+            if (!string.IsNullOrWhiteSpace(updateUserDto.Password))
+                await ApplyAdminPasswordUpdateAsync(user, updateUserDto.Password, updateUserDto.Email);
+
             return await GetUserByIdAsync(id);
+        }
+
+        private async Task ApplyAdminPasswordUpdateAsync(User user, string newPassword, string? loginEmail)
+        {
+            var password = newPassword.Trim();
+            if (password.Length < 6)
+                throw new ArgumentException("Password must be at least 6 characters.");
+
+            var passwordHash = PasswordHasher.Hash(password);
+
+            var authUser = (await _unitOfWork.AuthUsers.GetAllAsync())
+                .FirstOrDefault(a => a.UserId == user.Id);
+
+            var emailForAuth = authUser?.Email?.Trim();
+            if (string.IsNullOrWhiteSpace(emailForAuth))
+                emailForAuth = loginEmail?.Trim();
+
+            if (string.IsNullOrWhiteSpace(emailForAuth))
+                throw new ArgumentException(
+                    "Login email is required to set a password for a user who does not have a login account yet.");
+
+            var emailLower = emailForAuth.ToLowerInvariant();
+
+            if (authUser == null)
+            {
+                var existingAuth = (await _unitOfWork.AuthUsers.GetAllAsync())
+                    .FirstOrDefault(a => string.Equals(a.Email, emailLower, StringComparison.OrdinalIgnoreCase));
+                if (existingAuth != null)
+                    throw new ConflictException("Email already exists in another account.");
+
+                authUser = new AuthUser
+                {
+                    Email = emailForAuth,
+                    PasswordHash = passwordHash,
+                    UserId = user.Id,
+                };
+                await _unitOfWork.AuthUsers.AddAsync(authUser);
+            }
+            else
+            {
+                authUser.PasswordHash = passwordHash;
+                authUser.FailedLoginAttempts = 0;
+                authUser.LockoutEnd = null;
+                _unitOfWork.AuthUsers.Update(authUser);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+
+            var trainers = await _unitOfWork.Trainers.GetAllAsync();
+            var isTrainer = trainers.Any(t => t.UserId == user.Id);
+            var accountRole = isTrainer ? Role.Instructor : Role.User;
+            await AuthUserRoleHelper.EnsureUserHasAppRoleAsync(
+                _unitOfWork,
+                user.Id,
+                AuthUserRoleHelper.MapRoleEnumToAppRoleName(accountRole));
+            await _unitOfWork.SaveChangesAsync();
+            await _provisioning.EnsureProfilesForUserAsync(user.Id);
         }
 
         public async Task<bool> DeleteUserAsync(int id)
@@ -322,6 +394,7 @@ namespace GymManagement.Infrastructure.Services
             var user = await _unitOfWork.Users.GetByIdAsync(id);
             if (user == null) return false;
 
+            await _provisioning.SoftDeleteProfilesForUserAsync(id);
             _unitOfWork.Users.Delete(user);
             await _unitOfWork.SaveChangesAsync();
             return true;
@@ -519,13 +592,69 @@ namespace GymManagement.Infrastructure.Services
                 dto.CurrentMembershipStartDate = bestMembership.StartDate;
             }
 
-            var activeAssignments = (await _unitOfWork.UserInstructors.FindAsync(ui =>
-                ui.UserId == userId && ui.IsActive && !ui.EndDate.HasValue)).ToList();
-            var primary = activeAssignments
-                .OrderByDescending(ui => ui.AssignmentDate)
-                .FirstOrDefault();
-            if (primary != null)
-                dto.AssignedTrainerId = primary.TrainerId;
+            var map = await GetActiveTrainerAssignmentByUserIdsAsync(new HashSet<int> { userId });
+            EnrichWithTrainerAssignment(dto, map.GetValueOrDefault(userId));
+            await EnrichProfileIdsAsync(dto, userId);
+        }
+
+        private async Task EnrichProfileIdsAsync(UserDto dto, int userId)
+        {
+            var member = await _unitOfWork.Members.FirstOrDefaultAsync(m => m.UserId == userId);
+            if (member != null)
+                dto.MemberProfileId = member.Id;
+
+            var trainer = await _unitOfWork.Trainers.FirstOrDefaultAsync(t => t.UserId == userId);
+            if (trainer != null)
+                dto.TrainerProfileId = trainer.Id;
+
+            var staff = await _unitOfWork.Staff.FirstOrDefaultAsync(s => s.UserId == userId);
+            if (staff != null)
+                dto.StaffProfileId = staff.Id;
+        }
+
+        private async Task<Dictionary<int, (int TrainerId, string TrainerName)>> GetActiveTrainerAssignmentByUserIdsAsync(
+            HashSet<int> userIds)
+        {
+            if (userIds.Count == 0)
+                return new Dictionary<int, (int, string)>();
+
+            var assignments = (await _unitOfWork.UserInstructors.FindAsync(ui =>
+                userIds.Contains(ui.UserId) && ui.IsActive && !ui.EndDate.HasValue)).ToList();
+            if (assignments.Count == 0)
+                return new Dictionary<int, (int, string)>();
+
+            var primaryByUser = assignments
+                .GroupBy(a => a.UserId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.AssignmentDate).First());
+
+            var trainerIds = primaryByUser.Values.Select(a => a.TrainerId).Distinct().ToList();
+            var trainers = (await _unitOfWork.Trainers.FindAsync(t => trainerIds.Contains(t.Id))).ToDictionary(t => t.Id);
+            var trainerUserIds = trainers.Values.Select(t => t.UserId).Distinct().ToList();
+            var trainerUsers = (await _unitOfWork.Users.FindAsync(u => trainerUserIds.Contains(u.Id)))
+                .ToDictionary(u => u.Id);
+
+            var result = new Dictionary<int, (int, string)>();
+            foreach (var entry in primaryByUser)
+            {
+                var userId = entry.Key;
+                var assignment = entry.Value;
+                if (!trainers.TryGetValue(assignment.TrainerId, out var trainer))
+                    continue;
+                var name = trainerUsers.TryGetValue(trainer.UserId, out var tu)
+                    ? $"{tu.FirstName} {tu.LastName}".Trim()
+                    : $"Trainer #{trainer.Id}";
+                result[userId] = (assignment.TrainerId, name);
+            }
+
+            return result;
+        }
+
+        private static void EnrichWithTrainerAssignment(UserDto dto, (int TrainerId, string TrainerName)? assignment)
+        {
+            if (assignment == null)
+                return;
+            dto.AssignedTrainerId = assignment.Value.TrainerId;
+            dto.AssignedTrainerName = assignment.Value.TrainerName;
         }
 
         private static UserDetailDto MapDetailToDto(UserDetail detail)

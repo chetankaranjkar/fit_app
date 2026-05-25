@@ -43,6 +43,8 @@ export interface User {
   trainerId?: number | null
   /** Active trainer assignment for edit-form prefill (GET user by id). */
   assignedTrainerId?: number | null
+  /** Coach display name when assignedTrainerId is set (list/detail APIs). */
+  assignedTrainerName?: string | null
   currentMembershipPlanId?: number | null
   currentMembershipStartDate?: string | null
   /** After create/update membership when billing is unpaid; use to open collect-payment flow. */
@@ -109,4 +111,8 @@ export interface UpdateUserDto {
   trainerId?: number | null
   /** User type IDs to assign. Replaces existing. */
   userTypeIds?: number[] | null
+  /** Admin: set a new login password (min 6 characters). Omit to leave unchanged. */
+  password?: string | null
+  /** Login email when creating a new account (if user has no login yet). */
+  email?: string | null
 }

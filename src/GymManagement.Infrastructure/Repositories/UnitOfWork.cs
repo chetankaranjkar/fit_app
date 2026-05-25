@@ -46,6 +46,8 @@ namespace GymManagement.Infrastructure.Repositories
         private IRepository<UserType>? _userTypes;
         private IRepository<UserUserType>? _userUserTypes;
         private IRepository<UserRole>? _userRoles;
+        private IRepository<Member>? _members;
+        private IRepository<Staff>? _staff;
         private IRepository<DietPlan>? _dietPlans;
         private IRepository<GymQrCode>? _gymQrCodes;
         private IRepository<GymLead>? _gymLeads;
@@ -161,6 +163,12 @@ namespace GymManagement.Infrastructure.Repositories
 
         public IRepository<UserRole> UserRoles =>
             _userRoles ??= new Repository<UserRole>(_context);
+
+        public IRepository<Member> Members =>
+            _members ??= new Repository<Member>(_context);
+
+        public IRepository<Staff> Staff =>
+            _staff ??= new Repository<Staff>(_context);
 
         public IRepository<DietPlan> DietPlans => 
             _dietPlans ??= new Repository<DietPlan>(_context);

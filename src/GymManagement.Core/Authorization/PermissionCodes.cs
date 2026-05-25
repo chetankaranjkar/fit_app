@@ -29,4 +29,22 @@ public static class PermissionCodes
 
     /// <summary>Manage coupons / promo codes.</summary>
     public const string Coupons = "COUPONS";
+
+    /// <summary>Retail products and POS sales.</summary>
+    public const string RetailPos = "RETAIL_POS";
+
+    /// <summary>Manage PT packages, assignments, and configuration.</summary>
+    public const string ManagePtPackages = "MANAGE_PT_PACKAGES";
+
+    /// <summary>Book, reschedule, and cancel PT sessions.</summary>
+    public const string BookPtSessions = "BOOK_PT_SESSIONS";
+
+    /// <summary>Manage trainer PT schedules and leave.</summary>
+    public const string ManagePtSchedules = "MANAGE_PT_SCHEDULES";
+
+    /// <summary>View trainer PT earnings and commissions.</summary>
+    public const string ViewTrainerEarnings = "VIEW_TRAINER_EARNINGS";
+
+    /// <summary>View PT reports and export data.</summary>
+    public const string ViewPtReports = "VIEW_PT_REPORTS";
 }

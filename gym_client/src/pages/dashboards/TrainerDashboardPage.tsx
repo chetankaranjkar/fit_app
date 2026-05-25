@@ -11,11 +11,20 @@ import { userSchedulesService } from '../../services/userSchedules.service'
 import { attendanceService } from '../../services/attendance.service'
 import type { User } from '../../types/user'
 import type { UserScheduleDto } from '../../types/userSchedule'
+import { workoutTrackingService } from '../../services/workoutTracking.service'
 
 export function TrainerDashboardPage() {
   const { userName } = getDashboardUser()
   const session = authService.getCurrentUser()
   const trainerId = session?.trainerId
+
+  const { data: memberWorkouts } = useQuery({
+    queryKey: ['trainer-member-workouts'],
+    queryFn: async () => {
+      const { data } = await workoutTrackingService.trainerMemberWorkouts(12)
+      return data
+    },
+  })
 
   const { data, isLoading } = useQuery({
     queryKey: ['trainer-dashboard', trainerId],
@@ -123,6 +132,25 @@ export function TrainerDashboardPage() {
             <Link to="/dashboard/users" className="mt-2 inline-block text-xs text-orange-400 hover:underline">
               All clients →
             </Link>
+          </GlassPanel>
+
+          <GlassPanel role="trainer" title="Recent client workouts" subtitle="Live tracking">
+            <ul className="divide-y divide-white/5">
+              {(memberWorkouts ?? []).slice(0, 6).map((w) => (
+                <li key={w.sessionId} className="flex items-center justify-between py-3 text-sm">
+                  <div>
+                    <p className="font-medium text-white">{w.memberName}</p>
+                    <p className="text-xs text-slate-500">{w.planName ?? 'Workout'} · {w.status}</p>
+                  </div>
+                  <span className="text-xs text-orange-300">
+                    {w.completionPercent != null ? `${Math.round(w.completionPercent)}%` : '—'}
+                  </span>
+                </li>
+              ))}
+              {!(memberWorkouts?.length) ? (
+                <li className="py-6 text-center text-sm text-slate-500">No tracked workouts yet.</li>
+              ) : null}
+            </ul>
           </GlassPanel>
 
           <GlassPanel role="trainer" title="Client progress" subtitle="Focus list">

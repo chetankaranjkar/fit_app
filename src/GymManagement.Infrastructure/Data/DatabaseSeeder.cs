@@ -108,6 +108,8 @@ namespace GymManagement.Infrastructure.Data
                 new { Name = "Trainer", Description = "Trainer or coach" },
                 new { Name = "Staff", Description = "Gym staff member" },
                 new { Name = "Member", Description = "Gym member" },
+                new { Name = "Receptionist", Description = "Front desk / reception" },
+                new { Name = "Accountant", Description = "Billing and accounts" },
             };
             foreach (var t in types)
             {
@@ -225,7 +227,7 @@ namespace GymManagement.Infrastructure.Data
         /// </summary>
         private async Task EnsureRolesExistAsync()
         {
-            var roleNames = new[] { "ADMIN", "STAFF", "TRAINER", "MEMBER" };
+            var roleNames = new[] { "ADMIN", "STAFF", "TRAINER", "MEMBER", "RECEPTIONIST", "ACCOUNTANT" };
             foreach (var name in roleNames)
             {
                 var exists = await _unitOfWork.AppRoles.FirstOrDefaultAsync(r => r.Name == name);
@@ -360,6 +362,11 @@ namespace GymManagement.Infrastructure.Data
                 new { Code = PermissionCodes.LeadsCrm, Name = "Leads CRM", Description = "Lead pipeline, reception dashboard, conversion" },
                 new { Code = PermissionCodes.LeadsTrainer, Name = "Leads (trainer)", Description = "View assigned lead trials and update trial feedback" },
                 new { Code = PermissionCodes.RetailPos, Name = "Retail POS", Description = "Retail products, categories, inventory, and POS checkout" },
+                new { Code = PermissionCodes.ManagePtPackages, Name = "Manage PT packages", Description = "Create and manage personal training packages and assignments" },
+                new { Code = PermissionCodes.BookPtSessions, Name = "Book PT sessions", Description = "Book, reschedule, and cancel personal training sessions" },
+                new { Code = PermissionCodes.ManagePtSchedules, Name = "Manage PT schedules", Description = "Manage trainer availability, schedules, and leave" },
+                new { Code = PermissionCodes.ViewTrainerEarnings, Name = "View trainer earnings", Description = "View trainer PT earnings and commission data" },
+                new { Code = PermissionCodes.ViewPtReports, Name = "View PT reports", Description = "Access personal training reports and exports" },
             };
             foreach (var p in permissions)
             {
@@ -404,6 +411,18 @@ namespace GymManagement.Infrastructure.Data
             await LinkAsync("TRAINER", PermissionCodes.LeadsTrainer);
             await LinkAsync("ADMIN", PermissionCodes.RetailPos);
             await LinkAsync("STAFF", PermissionCodes.RetailPos);
+            await LinkAsync("ADMIN", PermissionCodes.ManagePtPackages);
+            await LinkAsync("ADMIN", PermissionCodes.BookPtSessions);
+            await LinkAsync("ADMIN", PermissionCodes.ManagePtSchedules);
+            await LinkAsync("ADMIN", PermissionCodes.ViewTrainerEarnings);
+            await LinkAsync("ADMIN", PermissionCodes.ViewPtReports);
+            await LinkAsync("STAFF", PermissionCodes.ManagePtPackages);
+            await LinkAsync("STAFF", PermissionCodes.BookPtSessions);
+            await LinkAsync("STAFF", PermissionCodes.ManagePtSchedules);
+            await LinkAsync("STAFF", PermissionCodes.ViewPtReports);
+            await LinkAsync("TRAINER", PermissionCodes.BookPtSessions);
+            await LinkAsync("TRAINER", PermissionCodes.ManagePtSchedules);
+            await LinkAsync("TRAINER", PermissionCodes.ViewTrainerEarnings);
         }
 
         /// <summary>Links every seeded <see cref="Permission"/> to the ADMIN <see cref="AppRole"/> (idempotent).</summary>

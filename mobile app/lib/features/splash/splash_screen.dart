@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/auth_providers.dart';
 import '../../providers/me_providers.dart';
+import '../../services/me_service.dart';
 import '../../theme/app_colors.dart';
 import '../media/onboarding_profile_photo_screen.dart';
 import 'package:pulsefit/widgets/pulsefit_logo.dart';
@@ -28,6 +29,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       if (state.status == AuthBootstrapStatus.signedIn) {
         try {
           await ref.read(profileProvider.future);
+          await MeService.instance.flushPendingWorkoutSessions();
         } catch (_) {}
         if (!mounted) return;
         final prefs = await SharedPreferences.getInstance();

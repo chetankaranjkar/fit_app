@@ -23,6 +23,11 @@ const AUTH_PERMISSION_CODES = {
   createMember: 'CREATE_MEMBER',
   leadsCrm: 'LEADS_CRM',
   leadsTrainer: 'LEADS_TRAINER',
+  managePtPackages: 'MANAGE_PT_PACKAGES',
+  bookPtSessions: 'BOOK_PT_SESSIONS',
+  managePtSchedules: 'MANAGE_PT_SCHEDULES',
+  viewTrainerEarnings: 'VIEW_TRAINER_EARNINGS',
+  viewPtReports: 'VIEW_PT_REPORTS',
 } as const
 
 function normalizeLoginResponse(raw: Record<string, unknown>): LoginResponse {

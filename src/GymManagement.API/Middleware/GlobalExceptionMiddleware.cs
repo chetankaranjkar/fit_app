@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using GymManagement.Core.Exceptions;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace GymManagement.API.Middleware;
 
@@ -11,11 +14,16 @@ public sealed class GlobalExceptionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<GlobalExceptionMiddleware> _logger;
+    private readonly IHostEnvironment _environment;
 
-    public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
+    public GlobalExceptionMiddleware(
+        RequestDelegate next,
+        ILogger<GlobalExceptionMiddleware> logger,
+        IHostEnvironment environment)
     {
         _next = next;
         _logger = logger;
+        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -27,7 +35,7 @@ public sealed class GlobalExceptionMiddleware
         catch (Exception ex)
         {
             var traceId = Activity.Current?.Id ?? context.TraceIdentifier;
-            var (statusCode, title, detail, type) = MapException(ex);
+            var (statusCode, title, detail, type) = MapException(ex, _environment);
             _logger.LogError(ex, "Unhandled exception mapped to {StatusCode}. TraceId: {TraceId}", statusCode, traceId);
 
             if (context.Response.HasStarted)
@@ -53,7 +61,7 @@ public sealed class GlobalExceptionMiddleware
         }
     }
 
-    private static (int StatusCode, string Title, string Detail, string Type) MapException(Exception ex)
+    private static (int StatusCode, string Title, string Detail, string Type) MapException(Exception ex, IHostEnvironment environment)
     {
         return ex switch
         {
@@ -92,11 +100,46 @@ public sealed class GlobalExceptionMiddleware
                 "Forbidden.",
                 string.IsNullOrWhiteSpace(unauthorizedEx.Message) ? "You are not allowed to perform this action." : unauthorizedEx.Message,
                 "https://httpstatuses.com/403"),
-            _ => (
-                StatusCodes.Status500InternalServerError,
-                "An unexpected error occurred.",
-                "The server could not process this request. Please retry or contact support.",
-                "https://httpstatuses.com/500")
+            _ => MapUnhandled(ex, environment)
         };
+    }
+
+    private static (int StatusCode, string Title, string Detail, string Type) MapUnhandled(Exception ex, IHostEnvironment environment)
+    {
+        var sqlMessage = FindSqlExceptionMessage(ex);
+        if (sqlMessage != null
+            && sqlMessage.Contains("Retail_ProductCategories", StringComparison.OrdinalIgnoreCase))
+        {
+            return (
+                StatusCodes.Status500InternalServerError,
+                "Retail database schema is missing.",
+                "Run database migrations (dotnet ef database update) or restart the API so AutoMigrate applies AddRetailCatalogTables.",
+                "https://httpstatuses.com/500");
+        }
+
+        var detail = "The server could not process this request. Please retry or contact support.";
+        if (environment.IsDevelopment())
+        {
+            var dev = ex.GetBaseException().Message;
+            if (!string.IsNullOrWhiteSpace(dev))
+                detail = dev;
+        }
+
+        return (
+            StatusCodes.Status500InternalServerError,
+            "An unexpected error occurred.",
+            detail,
+            "https://httpstatuses.com/500");
+    }
+
+    private static string? FindSqlExceptionMessage(Exception ex)
+    {
+        for (var current = ex; current != null; current = current.InnerException)
+        {
+            if (current is SqlException sql)
+                return sql.Message;
+        }
+
+        return null;
     }
 }

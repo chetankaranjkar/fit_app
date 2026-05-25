@@ -2,6 +2,8 @@ import '../core/api_client.dart';
 import '../core/api_exception.dart';
 import '../models/me_models.dart';
 import 'workout_pending_queue.dart';
+import 'workout_template_cache.dart';
+import 'workout_tracking_repository.dart';
 
 /// Calls into the backend `/api/me/*` self-service endpoints.
 class MeService {
@@ -44,15 +46,17 @@ class MeService {
         .toList();
   }
 
-  /// Retries locally queued workout completions (offline save).
+  /// Retries offline live workouts + legacy batch completions.
   Future<int> flushPendingWorkoutSessions() async {
-    return WorkoutPendingQueue.instance.drain((workoutPlanId, durationMinutes, sets) async {
+    var synced = await WorkoutTrackingRepository.instance.syncOfflineLiveSession();
+    synced += await WorkoutPendingQueue.instance.drain((workoutPlanId, durationMinutes, sets) async {
       await completeWorkoutSession(
         workoutPlanId: workoutPlanId,
         durationMinutes: durationMinutes,
         sets: sets,
       );
     });
+    return synced;
   }
 
   Future<MeMembership?> getMembership() async {
@@ -103,7 +107,9 @@ class MeService {
       '/me/workout-plans/$planId/session',
       query: {'utcOffsetMinutes': offset},
     );
-    return MeWorkoutSessionTemplate.fromJson(res.data ?? {});
+    final template = MeWorkoutSessionTemplate.fromJson(res.data ?? {});
+    await WorkoutTemplateCache.instance.save(planId, template);
+    return template;
   }
 
   Future<MeDietPlan?> getDietPlan() async {

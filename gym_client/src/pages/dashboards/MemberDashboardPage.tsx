@@ -6,6 +6,7 @@ import { HeroStat } from '../../components/dashboard/premium/HeroStat'
 import { TrendAreaChart } from '../../components/dashboard/premium/TrendAreaChart'
 import { getDashboardUser } from '../../lib/dashboardUser'
 import { meService } from '../../services/me.service'
+import { WorkoutDashboardWidget } from '../../modules/workout-tracking'
 
 export function MemberDashboardPage() {
   const { userName } = getDashboardUser()
@@ -112,6 +113,8 @@ export function MemberDashboardPage() {
             </Link>
           </GlassPanel>
         </div>
+
+        <WorkoutDashboardWidget />
 
         <div className="grid gap-6 lg:grid-cols-2">
           <GlassPanel role="member" title="Attendance" subtitle="Last 30 days">

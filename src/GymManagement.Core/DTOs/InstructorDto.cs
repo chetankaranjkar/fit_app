@@ -64,6 +64,22 @@ namespace GymManagement.Core.DTOs
         public int? MaxClients { get; set; }
     }
 
+    public class TrainerAssignedClientDto
+    {
+        public int UserId { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? ProfilePicture { get; set; }
+        public DateTime? AssignedOn { get; set; }
+        public string? MembershipPlan { get; set; }
+    }
+
+    public class AssignTrainerClientRequest
+    {
+        public int UserId { get; set; }
+    }
+
     public class UpdateTrainerDto
     {
         public string? EmployeeCode { get; set; }

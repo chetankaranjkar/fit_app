@@ -46,6 +46,10 @@ namespace GymManagement.Domain.Entities
         public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
         /// <summary>Optional trainer profile when this user is also a trainer.</summary>
         public Trainer? Trainer { get; set; }
+        /// <summary>Optional gym member profile.</summary>
+        public Member? Member { get; set; }
+        /// <summary>Optional staff profile (reception, accounts, operations).</summary>
+        public Staff? StaffProfile { get; set; }
         /// <summary>Login (AuthUsers) when this user has an account.</summary>
         public AuthUser? AuthUser { get; set; }
         public ICollection<LoginActivity> LoginActivities { get; set; } = new List<LoginActivity>();

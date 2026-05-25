@@ -38,6 +38,18 @@ A comprehensive Gym Management System built with .NET 9.0 (Entity Framework Core
    - Store progress pictures
    - Add notes for each measurement
 
+## Documentation (flows & conventions)
+
+All flow, identity, and reuse docs are in **[docs/knowledge-base/](docs/knowledge-base/README.md)**:
+
+- **[docs/knowledge-base/README.md](docs/knowledge-base/README.md)** — index (start here)
+- **[APPLICATION_FLOWS.md](docs/knowledge-base/APPLICATION_FLOWS.md)** — product flows, API map, identity model
+- **[REUSE_AND_CONVENTIONS.md](docs/knowledge-base/REUSE_AND_CONVENTIONS.md)** — reuse catalog & checklists
+- **[USER_ROLE_ARCHITECTURE.md](docs/knowledge-base/USER_ROLE_ARCHITECTURE.md)** — roles, profiles, provisioning
+- **[AGENTS.md](AGENTS.md)** — quick index for AI assistants
+
+Also: [docs/CodeWorkflow.md](docs/CodeWorkflow.md) · [docs/PT_MODULE.md](docs/PT_MODULE.md) · [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+
 ## Architecture
 
 ### Backend (.NET)

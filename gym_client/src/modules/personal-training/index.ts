@@ -1,0 +1,5 @@
+export { PtDashboardPage } from './pages/PtDashboardPage'
+export { PtPackagesPage } from './pages/PtPackagesPage'
+export { PtAssignPackagePage } from './pages/PtAssignPackagePage'
+export { PtSessionsPage } from './pages/PtSessionsPage'
+export { PtReportsPage } from './pages/PtReportsPage'

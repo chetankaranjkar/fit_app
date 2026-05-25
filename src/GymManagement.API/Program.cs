@@ -193,12 +193,14 @@ builder.Services.AddHostedService<PaymentBillingReminderHostedService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Register Services
+builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<IExerciseService, ExerciseService>();
 builder.Services.AddScoped<IBodyPartService, BodyPartService>();
 builder.Services.AddScoped<IBodyPartMuscleService, BodyPartMuscleService>();
 builder.Services.AddScoped<IWorkoutPlanService, WorkoutPlanService>();
+builder.Services.AddScoped<IWorkoutTrackingService, WorkoutTrackingService>();
 builder.Services.AddScoped<IUserScheduleService, UserScheduleService>();
 builder.Services.AddScoped<ITrainerService, TrainerService>();
 builder.Services.AddScoped<ILoginPayloadFactory, LoginPayloadFactory>();
@@ -243,6 +245,15 @@ builder.Services.AddScoped<GymManagement.Core.Services.Retail.IProductCategorySe
 builder.Services.AddScoped<GymManagement.Core.Services.Retail.IProductService, GymManagement.Infrastructure.Services.Retail.ProductService>();
 builder.Services.AddScoped<GymManagement.Core.Services.Retail.IInventoryService, GymManagement.Infrastructure.Services.Retail.InventoryService>();
 builder.Services.AddScoped<GymManagement.Core.Services.Retail.IPosOrderService, GymManagement.Infrastructure.Services.Retail.PosOrderService>();
+builder.Services.AddScoped<GymManagement.Core.Services.PersonalTraining.IPtPackageService, GymManagement.Infrastructure.Services.PersonalTraining.PtPackageService>();
+builder.Services.AddScoped<GymManagement.Core.Services.PersonalTraining.IMemberPtPackageService, GymManagement.Infrastructure.Services.PersonalTraining.MemberPtPackageService>();
+builder.Services.AddScoped<GymManagement.Core.Services.PersonalTraining.ITrainerScheduleService, GymManagement.Infrastructure.Services.PersonalTraining.TrainerScheduleService>();
+builder.Services.AddScoped<GymManagement.Core.Services.PersonalTraining.IPtSessionService, GymManagement.Infrastructure.Services.PersonalTraining.PtSessionService>();
+builder.Services.AddScoped<GymManagement.Core.Services.PersonalTraining.IPtAttendanceService, GymManagement.Infrastructure.Services.PersonalTraining.PtAttendanceService>();
+builder.Services.AddScoped<GymManagement.Core.Services.PersonalTraining.ITrainerCommissionService, GymManagement.Infrastructure.Services.PersonalTraining.TrainerCommissionService>();
+builder.Services.AddScoped<GymManagement.Core.Services.PersonalTraining.IPtDashboardService, GymManagement.Infrastructure.Services.PersonalTraining.PtDashboardService>();
+builder.Services.AddScoped<GymManagement.Core.Services.PersonalTraining.IPtReportService, GymManagement.Infrastructure.Services.PersonalTraining.PtReportService>();
+builder.Services.AddScoped<GymManagement.Core.Services.PersonalTraining.IPtNotificationService, GymManagement.Infrastructure.Services.PersonalTraining.PtNotificationService>();
 
 builder.Services.AddScoped<IBranchCrudService, BranchCrudService>();
 builder.Services.AddScoped<IOrganizationService, OrganizationService>();
@@ -804,6 +815,7 @@ else
         await DatabaseBootstrap.SeedIfNoAccountsAsync(app.Services, logger);
         await DatabaseBootstrap.EnsureDefaultOrganizationAsync(app.Services, logger);
         await DatabaseBootstrap.EnsureRetailCatalogAsync(app.Services, logger);
+        await DatabaseBootstrap.EnsurePtPermissionsAsync(app.Services, logger);
     }
 }
 

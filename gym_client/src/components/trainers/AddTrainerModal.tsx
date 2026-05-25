@@ -3,9 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
+import { getApiErrorMessage } from '../../lib/apiErrors'
 import { trainersService } from '../../services/trainers.service'
 import { usersService } from '../../services/users.service'
-import type { CreateTrainerDto, TrainerGender } from '../../types/trainer'
+import { userTypesService } from '../../services/userTypes.service'
+import type { CreateUserDto } from '../../types/user'
+import type { CreateTrainerDto, TrainerGender, UpdateTrainerDto } from '../../types/trainer'
 import {
   AVAILABILITY_STATUSES,
   COMMON_CERTIFICATIONS,
@@ -23,10 +26,17 @@ interface Props {
 }
 
 type WizardStep = 0 | 1 | 2
+type AddMode = 'existing' | 'new'
 
 interface FormState {
   userId: number
-  employeeCode: string
+  newFirstName: string
+  newLastName: string
+  newEmail: string
+  newPhone: string
+  newPassword: string
+  newDateOfBirth: string
+  newGender: string
   gender: TrainerGender | ''
   specialization: string
   secondarySpecializations: string[]
@@ -53,7 +63,13 @@ interface FormState {
 
 const EMPTY: FormState = {
   userId: 0,
-  employeeCode: '',
+  newFirstName: '',
+  newLastName: '',
+  newEmail: '',
+  newPhone: '',
+  newPassword: '',
+  newDateOfBirth: '',
+  newGender: '',
   gender: '',
   specialization: '',
   secondarySpecializations: [],
@@ -91,8 +107,38 @@ const controlClass =
 
 /* ---------- component ---------- */
 
+function buildTrainerExtras(form: FormState): Omit<CreateTrainerDto, 'userId'> {
+  return {
+    gender: form.gender || undefined,
+    specialization: form.specialization.trim() || undefined,
+    secondarySpecializations: form.secondarySpecializations.length
+      ? joinCsv(form.secondarySpecializations)
+      : undefined,
+    experienceYears: form.experienceYears === '' ? undefined : Number(form.experienceYears),
+    certifications: form.certifications.length ? joinCsv(form.certifications) : undefined,
+    languagesSpoken: form.languagesSpoken.trim() || undefined,
+    joiningDate: form.joiningDate || undefined,
+    employmentType: form.employmentType || undefined,
+    sessionRate: form.sessionRate === '' ? undefined : Number(form.sessionRate),
+    hourlyRate: form.hourlyRate === '' ? undefined : Number(form.hourlyRate),
+    currency: form.currency || undefined,
+    maxClients: form.maxClients === '' ? undefined : Number(form.maxClients),
+    workingDays: form.workingDays.length ? form.workingDays.join(',') : undefined,
+    workingHoursStart: form.workingHoursStart || undefined,
+    workingHoursEnd: form.workingHoursEnd || undefined,
+    availabilityStatus: form.availabilityStatus || undefined,
+    bio: form.bio.trim() || undefined,
+    profilePicture: form.profilePicture.trim() || undefined,
+    instagramUrl: form.instagramUrl.trim() || undefined,
+    linkedinUrl: form.linkedinUrl.trim() || undefined,
+    websiteUrl: form.websiteUrl.trim() || undefined,
+    isPersonalTrainer: form.isPersonalTrainer,
+  }
+}
+
 export function AddTrainerModal({ open, onClose }: Props) {
   const queryClient = useQueryClient()
+  const [mode, setMode] = useState<AddMode>('existing')
   const [step, setStep] = useState<WizardStep>(0)
   const [form, setForm] = useState<FormState>(EMPTY)
   const [error, setError] = useState<string | null>(null)
@@ -120,21 +166,68 @@ export function AddTrainerModal({ open, onClose }: Props) {
     [users, trainerUserIds]
   )
 
+  const { data: userTypes = [] } = useQuery({
+    queryKey: ['user-types'],
+    queryFn: async () => {
+      const { data } = await userTypesService.getAll()
+      return Array.isArray(data) ? data : []
+    },
+    enabled: open,
+  })
+  const trainerUserTypeId = useMemo(
+    () => userTypes.find((ut: { name: string }) => ut.name === 'Trainer')?.id as number | undefined,
+    [userTypes],
+  )
+
   const createMutation = useMutation({
-    mutationFn: (dto: CreateTrainerDto) => trainersService.create(dto),
+    mutationFn: async () => {
+      const extras = buildTrainerExtras(form)
+      if (mode === 'existing') {
+        await trainersService.create({ userId: form.userId, ...extras })
+        return
+      }
+
+      const hireDate = form.joiningDate || new Date().toISOString().slice(0, 10)
+      const userPayload: CreateUserDto = {
+        firstName: form.newFirstName.trim(),
+        lastName: form.newLastName.trim(),
+        email: form.newEmail.trim(),
+        phone: form.newPhone.trim() || null,
+        dateOfBirth: form.newDateOfBirth || '1990-01-01',
+        gender: form.newGender || form.gender || 'Prefer not to say',
+        isActive: true,
+        password: form.newPassword.trim() || undefined,
+        role: 2,
+        userTypeIds: trainerUserTypeId ? [trainerUserTypeId] : [],
+        instructorSpecialization: form.specialization.trim() || null,
+        instructorBio: form.bio.trim() || null,
+        instructorHireDate: hireDate,
+      }
+      const { data: createdUser } = await usersService.create(userPayload)
+      const { data: allTrainers } = await trainersService.getAll()
+      const trainer = allTrainers.find((t) => t.userId === createdUser.id)
+      if (!trainer) {
+        await trainersService.create({ userId: createdUser.id, ...extras })
+        return
+      }
+      const updateDto: UpdateTrainerDto = { ...extras }
+      await trainersService.update(trainer.id, updateDto)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trainers'] })
       queryClient.invalidateQueries({ queryKey: ['trainer-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
       reset()
       onClose()
     },
-    onError: (err: Error) => setError(err.message || 'Failed to add trainer'),
+    onError: (err: unknown) => setError(getApiErrorMessage(err, 'Failed to add trainer')),
   })
 
   const reset = () => {
     setForm(EMPTY)
     setError(null)
     setStep(0)
+    setMode('existing')
   }
 
   const handleClose = () => {
@@ -155,53 +248,43 @@ export function AddTrainerModal({ open, onClose }: Props) {
     })
 
   const canNext = (() => {
-    if (step === 0) return form.userId > 0
-    if (step === 1) return true // profession is optional-ish
+    if (step === 0) {
+      if (mode === 'existing') return form.userId > 0
+      return (
+        form.newFirstName.trim().length > 0 &&
+        form.newLastName.trim().length > 0 &&
+        form.newEmail.trim().length > 0
+      )
+    }
+    if (step === 1) return true
     return true
   })()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (!form.userId) {
+    if (mode === 'existing' && !form.userId) {
       setError('Please select a user to link as this trainer.')
       setStep(0)
       return
     }
-
-    const dto: CreateTrainerDto = {
-      userId: form.userId,
-      employeeCode: form.employeeCode.trim() || undefined,
-      gender: form.gender || undefined,
-      specialization: form.specialization.trim() || undefined,
-      secondarySpecializations: form.secondarySpecializations.length
-        ? joinCsv(form.secondarySpecializations)
-        : undefined,
-      experienceYears: form.experienceYears === '' ? undefined : Number(form.experienceYears),
-      certifications: form.certifications.length ? joinCsv(form.certifications) : undefined,
-      languagesSpoken: form.languagesSpoken.trim() || undefined,
-      joiningDate: form.joiningDate || undefined,
-      employmentType: form.employmentType || undefined,
-      sessionRate: form.sessionRate === '' ? undefined : Number(form.sessionRate),
-      hourlyRate: form.hourlyRate === '' ? undefined : Number(form.hourlyRate),
-      currency: form.currency || undefined,
-      maxClients: form.maxClients === '' ? undefined : Number(form.maxClients),
-      workingDays: form.workingDays.length ? form.workingDays.join(',') : undefined,
-      workingHoursStart: form.workingHoursStart || undefined,
-      workingHoursEnd: form.workingHoursEnd || undefined,
-      availabilityStatus: form.availabilityStatus || undefined,
-      bio: form.bio.trim() || undefined,
-      profilePicture: form.profilePicture.trim() || undefined,
-      instagramUrl: form.instagramUrl.trim() || undefined,
-      linkedinUrl: form.linkedinUrl.trim() || undefined,
-      websiteUrl: form.websiteUrl.trim() || undefined,
-      isPersonalTrainer: form.isPersonalTrainer,
+    if (mode === 'new') {
+      if (!form.newFirstName.trim() || !form.newLastName.trim() || !form.newEmail.trim()) {
+        setError('First name, last name, and email are required for a new trainer.')
+        setStep(0)
+        return
+      }
+      if (!trainerUserTypeId) {
+        setError('Trainer user type is missing in the database. Contact an administrator.')
+        setStep(0)
+        return
+      }
     }
-
-    createMutation.mutate(dto)
+    createMutation.mutate()
   }
 
-  const selectedUser = usersNotTrainers.find((u) => u.id === form.userId)
+  const selectedUser =
+    mode === 'existing' ? usersNotTrainers.find((u) => u.id === form.userId) : undefined
 
   return (
     <Modal open={open} onClose={handleClose} title="Add trainer" size="wide" scrollable>
@@ -256,6 +339,74 @@ export function AddTrainerModal({ open, onClose }: Props) {
         {/* step 0 — identity */}
         {step === 0 && (
           <div className="space-y-4">
+            <div className="flex gap-2 rounded-xl border border-white/10 bg-white/5 p-1">
+              <button
+                type="button"
+                onClick={() => setMode('existing')}
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  mode === 'existing' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Link existing user
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('new')}
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  mode === 'new' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Create new trainer
+              </button>
+            </div>
+
+            {mode === 'new' ? (
+              <>
+                <p className="text-xs text-slate-400">
+                  Creates a <strong className="text-slate-300">User</strong> with user type{' '}
+                  <strong className="text-slate-300">Trainer</strong> only (login role: Instructor), plus a{' '}
+                  <strong className="text-slate-300">Trainer</strong> profile row.
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Input
+                    label="First name"
+                    value={form.newFirstName}
+                    onChange={(e) => update('newFirstName', e.target.value)}
+                    required
+                  />
+                  <Input
+                    label="Last name"
+                    value={form.newLastName}
+                    onChange={(e) => update('newLastName', e.target.value)}
+                    required
+                  />
+                  <Input
+                    label="Email (login)"
+                    type="email"
+                    value={form.newEmail}
+                    onChange={(e) => update('newEmail', e.target.value)}
+                    required
+                  />
+                  <Input
+                    label="Phone"
+                    value={form.newPhone}
+                    onChange={(e) => update('newPhone', e.target.value)}
+                  />
+                  <Input
+                    label="Password (optional)"
+                    type="password"
+                    value={form.newPassword}
+                    onChange={(e) => update('newPassword', e.target.value)}
+                  />
+                  <Input
+                    label="Date of birth"
+                    type="date"
+                    value={form.newDateOfBirth}
+                    onChange={(e) => update('newDateOfBirth', e.target.value)}
+                  />
+                </div>
+              </>
+            ) : (
             <div>
               <label className={labelClass}>Link an existing user</label>
               <select
@@ -268,6 +419,11 @@ export function AddTrainerModal({ open, onClose }: Props) {
                 <option value="" className="bg-slate-900">
                   Select a user (member)
                 </option>
+                {usersNotTrainers.length === 0 ? (
+                  <option value="" disabled className="bg-slate-900">
+                    No users available — create a user under Users first
+                  </option>
+                ) : null}
                 {usersNotTrainers.map((u) => (
                   <option key={u.id} value={u.id} className="bg-slate-900">
                     {(u.firstName ?? '') + ' ' + (u.lastName ?? '')}
@@ -277,12 +433,13 @@ export function AddTrainerModal({ open, onClose }: Props) {
               </select>
               <p className="mt-1 text-xs text-slate-500">
                 {usersNotTrainers.length === 0
-                  ? 'No eligible users — add members in Users first; they will appear here.'
+                  ? 'No eligible users — use “Create new trainer” or add a user under Users first.'
                   : 'Only users who are not already trainers are listed.'}
               </p>
             </div>
+            )}
 
-            {selectedUser && (
+            {mode === 'existing' && selectedUser && (
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                 <div className="flex items-center gap-3">
                   <div className="flex size-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 text-sm font-semibold text-white">
@@ -298,31 +455,28 @@ export function AddTrainerModal({ open, onClose }: Props) {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Input
-                label="Employee code"
-                value={form.employeeCode}
-                onChange={(e) => update('employeeCode', e.target.value)}
-                placeholder="e.g. TRN-0042"
-              />
-              <div>
-                <label className={labelClass}>Gender</label>
-                <select
-                  aria-label="Gender"
-                  value={form.gender}
-                  onChange={(e) => update('gender', e.target.value as TrainerGender | '')}
-                  className={controlClass}
-                >
-                  <option value="" className="bg-slate-900">
-                    Prefer not to say
+            <p className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs text-slate-300">
+              Employee code is assigned automatically when you save (format{' '}
+              <span className="font-mono text-slate-200">TRN-{new Date().getFullYear()}-######</span>).
+            </p>
+
+            <div>
+              <label className={labelClass}>Gender</label>
+              <select
+                aria-label="Gender"
+                value={form.gender}
+                onChange={(e) => update('gender', e.target.value as TrainerGender | '')}
+                className={controlClass}
+              >
+                <option value="" className="bg-slate-900">
+                  Prefer not to say
+                </option>
+                {TRAINER_GENDERS.map((g) => (
+                  <option key={g} value={g} className="bg-slate-900">
+                    {g}
                   </option>
-                  {TRAINER_GENDERS.map((g) => (
-                    <option key={g} value={g} className="bg-slate-900">
-                      {g}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                ))}
+              </select>
             </div>
 
             <Input

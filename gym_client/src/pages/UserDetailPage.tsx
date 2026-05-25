@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -14,6 +14,7 @@ import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
+import { getApiErrorMessage } from '../lib/apiErrors'
 import { usersService } from '../services/users.service'
 import { fileUploadService } from '../services/fileUpload.service'
 import { bodyMetricsService } from '../services/bodyMetrics.service'
@@ -33,8 +34,7 @@ import {
 import { DietAssignmentsSection } from '../components/users/DietAssignmentsSection'
 import { MemberReportExports } from '../components/users/MemberReportExports'
 import { MemberPaymentHistoryTab } from '../components/users/MemberPaymentHistoryTab'
-import { ProfilePhotoCameraModal } from '../components/users/ProfilePhotoCameraModal'
-import { getCameraErrorMessage, requestUserCamera, stopMediaStream } from '../lib/cameraMedia'
+import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
 import { formatInr } from '../lib/formatInr'
 import type { User, UpdateUserDto } from '../types/user'
 import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
@@ -118,6 +118,22 @@ function userTypeIdsFromUser(user: User) {
   return rows
     .map((t) => (typeof t.id === 'number' ? t.id : t.Id))
     .filter((id): id is number => typeof id === 'number' && Number.isFinite(id) && id > 0)
+}
+
+/** Keeps Member type when editing profile so members do not vanish from the Users list. */
+function mergeUserTypeIdsForSave(
+  selected: number[] | undefined,
+  user: User,
+  allTypes: { id: number; name: string }[],
+): number[] | undefined {
+  if (!selected || selected.length === 0) return undefined
+  const memberType = allTypes.find((t) => t.name === 'Member')
+  if (!memberType) return selected
+  const hadMember = user.userTypes?.some((t) => t.name === 'Member')
+  if (hadMember && !selected.includes(memberType.id)) {
+    return [...selected, memberType.id]
+  }
+  return selected
 }
 
 interface TabDef {
@@ -209,12 +225,9 @@ export function UserDetailPage() {
     trainerId?: number
   } | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
-  const [profilePhotoUploading, setProfilePhotoUploading] = useState(false)
-  const [profileCameraOpen, setProfileCameraOpen] = useState(false)
-  const [profileCameraAcquiring, setProfileCameraAcquiring] = useState(false)
-  const [profileCameraStream, setProfileCameraStream] = useState<MediaStream | null>(null)
-  const [profileCameraError, setProfileCameraError] = useState<string | null>(null)
-  const profilePhotoFileInputRef = useRef<HTMLInputElement>(null)
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loginPasswordConfirm, setLoginPasswordConfirm] = useState('')
+  const [loginEmail, setLoginEmail] = useState('')
   const [detailForm, setDetailForm] = useState<CreateUserDetailDto>({
     userId: 0,
     height: 0,
@@ -473,15 +486,22 @@ export function UserDetailPage() {
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['user', id] })
       queryClient.invalidateQueries({ queryKey: ['users'] })
+      if (updated?.assignedTrainerId) {
+        queryClient.invalidateQueries({ queryKey: ['trainer-clients', updated.assignedTrainerId] })
+      }
+      queryClient.invalidateQueries({ queryKey: ['trainer-clients'] })
       setEditProfileOpen(false)
       setProfileForm({})
+      setLoginPassword('')
+      setLoginPasswordConfirm('')
+      setLoginEmail('')
       setProfileError(null)
       const p = updated?.pendingPaymentCollection
       if (p?.membershipId && p.membershipPaymentId) {
         navigate(`/dashboard/payments/collect?membershipId=${p.membershipId}&userId=${p.userId}`)
       }
     },
-    onError: (err: Error) => setProfileError(err.message || 'Failed to update profile'),
+    onError: (err: unknown) => setProfileError(getApiErrorMessage(err, 'Failed to update profile')),
   })
 
   const createScheduleMutation = useMutation({
@@ -817,6 +837,7 @@ export function UserDetailPage() {
   }
 
   const handleOpenEditProfile = () => {
+    queryClient.invalidateQueries({ queryKey: ['trainers'] })
     const fromList = pickMembershipRowForPrefill(userMemberships)
     const apiPlanId =
       user.currentMembershipPlanId != null && user.currentMembershipPlanId > 0
@@ -856,81 +877,43 @@ export function UserDetailPage() {
       userTypeIds: userTypeIdsFromUser(user),
     })
     setProfileError(null)
+    setLoginPassword('')
+    setLoginPasswordConfirm('')
+    setLoginEmail(user.email?.trim() ?? user.username?.trim() ?? '')
     setEditProfileOpen(true)
   }
 
-  const closeProfileCamera = () => {
-    stopMediaStream(profileCameraStream)
-    setProfileCameraStream(null)
-    setProfileCameraError(null)
-    setProfileCameraOpen(false)
-  }
-
-  const openProfileCamera = async () => {
-    stopMediaStream(profileCameraStream)
-    setProfileCameraStream(null)
-    setProfileCameraError(null)
-    setProfileCameraAcquiring(true)
-    try {
-      const stream = await requestUserCamera()
-      setProfileCameraStream(stream)
-      setProfileCameraOpen(true)
-    } catch (err: unknown) {
-      setProfileCameraError(getCameraErrorMessage(err))
-      setProfileCameraOpen(true)
-      toast.error('Could not access the camera.')
-    } finally {
-      setProfileCameraAcquiring(false)
-    }
-  }
-
   const handleCloseEditProfile = () => {
+    setLoginPassword('')
+    setLoginPasswordConfirm('')
+    setLoginEmail('')
     setEditProfileOpen(false)
-    closeProfileCamera()
     setProfileForm({})
     setEditProfileBaseline(null)
     setProfileError(null)
-    setProfilePhotoUploading(false)
-  }
-
-  const uploadProfilePhotoFile = async (file: File) => {
-    if (!Number.isFinite(id) || id <= 0) return
-    setProfilePhotoUploading(true)
-    setProfileError(null)
-    try {
-      const { data } = await fileUploadService.uploadUserProfileImage(id, file)
-      const url = data.imageUrl?.trim()
-      if (!url) throw new Error('Server did not return imageUrl')
-      setProfileForm((f) => ({ ...f, profilePictureUrl: url }))
-      await usersService.update(id, { profilePictureUrl: url })
-      await queryClient.invalidateQueries({ queryKey: ['user', id] })
-      await queryClient.invalidateQueries({ queryKey: ['users'] })
-      toast.success('Profile photo saved.')
-      closeProfileCamera()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Upload failed'
-      setProfileError(msg)
-      toast.error(msg)
-      throw err
-    } finally {
-      setProfilePhotoUploading(false)
-    }
-  }
-
-  const handleProfilePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    await uploadProfilePhotoFile(file)
-  }
-
-  const handleProfilePhotoFromCamera = async (file: File) => {
-    await uploadProfilePhotoFile(file)
   }
 
   const handleSubmitProfile = (e: React.FormEvent) => {
     e.preventDefault()
     setProfileError(null)
+
+    const pwd = loginPassword.trim()
+    const hasLogin = Boolean(user.username?.trim() || user.email?.trim())
+    if (pwd) {
+      if (pwd.length < 6) {
+        setProfileError('Password must be at least 6 characters.')
+        return
+      }
+      if (pwd !== loginPasswordConfirm.trim()) {
+        setProfileError('Password and confirmation do not match.')
+        return
+      }
+      if (!hasLogin && !loginEmail.trim()) {
+        setProfileError('Login email is required when creating a new login for this member.')
+        return
+      }
+    }
+
     const baseline = editProfileBaseline
     const formPlanId = profileForm.planId && profileForm.planId > 0 ? profileForm.planId : undefined
     const formStart = normalizeEditProfileDate(profileForm.membershipStartDate)
@@ -963,11 +946,10 @@ export function UserDetailPage() {
       planId: !membershipUnchanged && formPlanId ? formPlanId : undefined,
       membershipStartDate:
         !membershipUnchanged && formPlanId ? profileForm.membershipStartDate || undefined : undefined,
-      trainerId: !trainerUnchanged && formTrainerId ? formTrainerId : undefined,
-      userTypeIds:
-        profileForm.userTypeIds && profileForm.userTypeIds.length > 0
-          ? profileForm.userTypeIds
-          : undefined,
+      trainerId: !trainerUnchanged ? (formTrainerId ?? 0) : undefined,
+      userTypeIds: mergeUserTypeIdsForSave(profileForm.userTypeIds, user, userTypes),
+      password: pwd || undefined,
+      email: pwd && !hasLogin ? loginEmail.trim() : undefined,
     }
     updateProfileMutation.mutate(payload)
   }
@@ -1264,15 +1246,6 @@ export function UserDetailPage() {
             </form>
           </Modal>
 
-          <ProfilePhotoCameraModal
-            open={profileCameraOpen}
-            stream={profileCameraStream}
-            error={profileCameraError}
-            onClose={closeProfileCamera}
-            onRetry={() => void openProfileCamera()}
-            onCapture={handleProfilePhotoFromCamera}
-            busy={profilePhotoUploading}
-          />
           <Modal
             open={editProfileOpen}
             onClose={handleCloseEditProfile}
@@ -1294,72 +1267,70 @@ export function UserDetailPage() {
                   onChange={(e) => setProfileForm((f) => ({ ...f, lastName: e.target.value }))}
                   required
                 />
-                <p className="text-sm text-slate-500 sm:col-span-2">
-                  Email: {user.email} (cannot be changed)
-                </p>
                 <div className="sm:col-span-2 space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <div>
-                    <p className={labelClass}>Profile photo</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Upload a file (JPG, PNG, GIF, WebP — max 5MB), use your webcam, or set a URL below. Upload saves
-                      immediately to this member&apos;s profile.
+                    <p className={labelClass}>Login account</p>
+                    {user.username?.trim() || user.email?.trim() ? (
+                      <p className="mt-1 text-sm text-slate-300">
+                        {user.username?.trim() || user.email?.trim()}
+                        <span className="text-slate-500"> · used to sign in (email cannot be changed here)</span>
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-amber-200/90">No login yet — set email and password below.</p>
+                    )}
+                    <p className="mt-2 text-xs text-slate-500">
+                      Enter a new password to reset login or enable sign-in. Leave password blank to keep unchanged.
                     </p>
                   </div>
-                  <input
-                    ref={profilePhotoFileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp"
-                    className="sr-only"
-                    disabled={profilePhotoUploading}
-                    onChange={handleProfilePhotoFileChange}
-                    aria-label="Upload profile photo from files"
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={profilePhotoUploading}
-                      onClick={() => profilePhotoFileInputRef.current?.click()}
-                    >
-                      {profilePhotoUploading ? 'Uploading…' : 'From device'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={profilePhotoUploading || profileCameraAcquiring}
-                      onClick={() => void openProfileCamera()}
-                    >
-                      {profileCameraAcquiring ? 'Opening camera…' : 'Use camera'}
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    {profileForm.profilePictureUrl ? (
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={profileForm.profilePictureUrl}
-                          alt=""
-                          className="size-14 rounded-full border border-white/15 object-cover"
-                        />
-                        <span className="max-w-[200px] truncate text-xs text-slate-500" title={profileForm.profilePictureUrl}>
-                          {profileForm.profilePictureUrl}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
+                  {!user.username?.trim() && !user.email?.trim() && (
+                    <Input
+                      label="Login email"
+                      type="email"
+                      autoComplete="off"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="member@example.com"
+                      required={loginPassword.length > 0}
+                    />
+                  )}
                   <Input
-                    label="Picture URL (optional)"
-                    value={profileForm.profilePictureUrl ?? ''}
-                    placeholder="/uploads/profiles/users/… or https://…"
-                    onChange={(e) =>
-                      setProfileForm((f) => ({ ...f, profilePictureUrl: e.target.value || undefined }))
-                    }
+                    label="New password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="Min 6 characters"
                   />
-                  <p className="text-xs text-slate-500">
-                    Use upload above, or paste a link. Save profile to persist URL-only changes.
-                  </p>
+                  <Input
+                    label="Confirm password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={loginPasswordConfirm}
+                    onChange={(e) => setLoginPasswordConfirm(e.target.value)}
+                  />
                 </div>
+                {Number.isFinite(id) && id > 0 && (
+                  <ProfilePhotoEditor
+                    className="sm:col-span-2"
+                    imageUrl={profileForm.profilePictureUrl ?? ''}
+                    onImageUrlChange={(url) =>
+                      setProfileForm((f) => ({ ...f, profilePictureUrl: url || undefined }))
+                    }
+                    subjectLabel="member"
+                    onError={setProfileError}
+                    uploadFile={async (file) => {
+                      const { data } = await fileUploadService.uploadUserProfileImage(id, file)
+                      const url = data.imageUrl?.trim()
+                      if (!url) throw new Error('Server did not return imageUrl')
+                      return url
+                    }}
+                    persistUrl={async (url) => {
+                      await usersService.update(id, { profilePictureUrl: url })
+                      await queryClient.invalidateQueries({ queryKey: ['user', id] })
+                      await queryClient.invalidateQueries({ queryKey: ['users'] })
+                    }}
+                  />
+                )}
                 <Input
                   label="Phone"
                   value={profileForm.phone ?? ''}
@@ -1470,9 +1441,13 @@ export function UserDetailPage() {
                   </div>
                 )}
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>Assign trainer (optional)</label>
+                  <label className={labelClass}>Personal coach (optional)</label>
+                  <p className="mb-2 text-xs text-slate-500">
+                    Assigns this member to a coach. Appears on the trainer&apos;s Clients tab. This is not the same as
+                    user type &quot;Trainer&quot; (staff role).
+                  </p>
                   <select
-                    aria-label="Trainer"
+                    aria-label="Personal coach"
                     value={profileForm.trainerId ?? ''}
                     onChange={(e) =>
                       setProfileForm((f) => ({
@@ -1483,12 +1458,11 @@ export function UserDetailPage() {
                     className={selectClass}
                   >
                     <option value="" className="bg-slate-900">None</option>
-                    {trainers
-                      .filter((i) => i.isActive)
-                      .map((i) => (
-                        <option key={i.id} value={i.id} className="bg-slate-900">
+                    {trainers.map((i) => (
+                        <option key={i.id} value={i.id} className="bg-slate-900" disabled={!i.isActive}>
                           {i.firstName} {i.lastName}
                           {i.specialization ? ` – ${i.specialization}` : ''}
+                          {!i.isActive ? ' (inactive)' : ''}
                         </option>
                       ))}
                   </select>
@@ -1496,7 +1470,8 @@ export function UserDetailPage() {
                 <div className="sm:col-span-2">
                   <label className={labelClass}>User types</label>
                   <p className="mb-2 text-xs text-slate-500">
-                    Select one or more types (e.g. Admin, Trainer, Staff, Member).
+                    Member = gym member list. Trainer = staff coach profile (Trainers page). Members should keep the
+                    Member type.
                   </p>
                   <div className="flex flex-wrap gap-3">
                     {userTypesLoading && <p className="text-sm text-slate-400">Loading user types…</p>}
@@ -2241,6 +2216,16 @@ function DetailsTab({
           accent="from-amber-400 to-orange-500"
         >
           <InfoRow label="Preferred time" value={user.preferredGymTime ?? '—'} />
+          <InfoRow
+            label="Personal coach"
+            value={
+              user.assignedTrainerName
+                ? user.assignedTrainerName
+                : user.assignedTrainerId
+                  ? `Trainer #${user.assignedTrainerId}`
+                  : '—'
+            }
+          />
           <InfoRow
             label="Status"
             value={

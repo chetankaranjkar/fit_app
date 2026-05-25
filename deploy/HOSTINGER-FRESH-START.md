@@ -212,6 +212,14 @@ compose up -d --force-recreate
 
 If logs show `Invalid object name 'membership_payments'`, pull latest `main` (coupon migration must run **after** `MembershipPaymentsEnterprise`).
 
+If logs show `CouponAppliedAt` **specified more than once**, the duplicate `AddRetailPosModule` migration conflicted with `EnterpriseCouponBilling`:
+
+```bash
+cd /opt/gym
+git pull --ff-only origin main
+./deploy/scripts/fix-duplicate-coupon-migration.sh
+```
+
 ---
 
 ## `git pull` blocked by local changes?

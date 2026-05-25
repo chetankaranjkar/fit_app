@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace GymManagement.API.Extensions;
 
-/// <summary>Access to effective permissions attached by <see cref="PermissionResolutionMiddleware"/> (JWT <c>permission</c> claims first).</summary>
+/// <summary>Access to effective permissions attached by <see cref="PermissionResolutionMiddleware"/> (JWT + live DB merge).</summary>
 public static class HttpContextPermissionExtensions
 {
     public static IReadOnlyList<PermissionDto> GetEffectivePermissions(this HttpContext httpContext)

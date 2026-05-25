@@ -157,5 +157,27 @@ public static class DatabaseBootstrap
         }
 
         await unitOfWork.SaveChangesAsync();
+
+        var adminRole = await unitOfWork.AppRoles.FirstOrDefaultAsync(r => r.Name == "ADMIN");
+        if (adminRole == null)
+            return;
+
+        var allPerms = await unitOfWork.Permissions.GetAllAsync();
+        foreach (var p in allPerms)
+        {
+            var exists = await unitOfWork.RolePermissions.ExistsAsync(rp =>
+                rp.RoleId == adminRole.Id && rp.PermissionId == p.Id);
+            if (exists)
+                continue;
+
+            await unitOfWork.RolePermissions.AddAsync(new RolePermission
+            {
+                RoleId = adminRole.Id,
+                PermissionId = p.Id,
+                CreatedDate = DateTime.UtcNow,
+            });
+        }
+
+        await unitOfWork.SaveChangesAsync();
     }
 }

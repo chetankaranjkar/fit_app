@@ -55,6 +55,17 @@ namespace GymManagement.Infrastructure.Services
         }
 
         /// <inheritdoc />
+        public async Task<IReadOnlyList<string>> GetAllPermissionCodesAsync()
+        {
+            return await _db.Permissions
+                .AsNoTracking()
+                .Select(p => p.Code)
+                .Distinct()
+                .OrderBy(c => c)
+                .ToListAsync();
+        }
+
+        /// <inheritdoc />
         public async Task<IReadOnlyList<AppRoleDto>> GetUserAppRolesAsync(int userId)
         {
             var rows = await _db.UserRoles

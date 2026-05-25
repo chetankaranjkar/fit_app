@@ -22,5 +22,8 @@ namespace GymManagement.Core.Services
         /// Application roles (<see cref="AppRoleDto"/>) assigned to the user via <c>UserRoles</c>.
         /// </summary>
         Task<IReadOnlyList<AppRoleDto>> GetUserAppRolesAsync(int userId);
+
+        /// <summary>All permission codes defined in the system (for ADMIN effective set).</summary>
+        Task<IReadOnlyList<string>> GetAllPermissionCodesAsync();
     }
 }

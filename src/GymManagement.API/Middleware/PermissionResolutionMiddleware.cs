@@ -6,8 +6,7 @@ namespace GymManagement.API.Middleware;
 
 /// <summary>
 /// After JWT authentication: attaches effective permissions to <see cref="HttpContext.Items"/>.
-/// Prefer <see cref="JwtClaimTypes.Permission"/> claims on the token (no DB); if no such claims exist (legacy tokens),
-/// loads from <see cref="IRbacService"/> using profile <c>Users.Id</c>.
+/// Merges <see cref="JwtClaimTypes.Permission"/> claims with live DB permissions so new grants apply without re-login.
 /// </summary>
 public sealed class PermissionResolutionMiddleware
 {
@@ -27,31 +26,40 @@ public sealed class PermissionResolutionMiddleware
                 .Select(c => c.Value)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Select(s => s.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (fromClaims.Count > 0)
-            {
-                context.Items[EffectivePermissionCodesKey] = new HashSet<string>(fromClaims, StringComparer.OrdinalIgnoreCase);
-                context.Items[EffectivePermissionsKey] = fromClaims
-                    .Select(code => new PermissionDto { Id = 0, Code = code, Name = code })
-                    .ToList();
-            }
-            else
-            {
-                var profileUserId = ResolveProfileUserId(context);
+            var profileUserId = ResolveProfileUserId(context);
+            IReadOnlyList<PermissionDto> fromDb = Array.Empty<PermissionDto>();
+            if (profileUserId.HasValue)
+                fromDb = await rbac.GetUserPermissionsAsync(profileUserId.Value);
 
-                IReadOnlyList<PermissionDto> list;
-                if (profileUserId.HasValue)
-                    list = await rbac.GetUserPermissionsAsync(profileUserId.Value);
-                else
-                    list = Array.Empty<PermissionDto>();
-
-                context.Items[EffectivePermissionsKey] = list;
-                context.Items[EffectivePermissionCodesKey] = new HashSet<string>(
-                    list.Select(p => p.Code), StringComparer.OrdinalIgnoreCase);
+            var mergedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var code in fromClaims)
+                mergedCodes.Add(code);
+            foreach (var p in fromDb)
+            {
+                if (!string.IsNullOrWhiteSpace(p.Code))
+                    mergedCodes.Add(p.Code.Trim());
             }
+
+            // ADMIN role: allow any permission that exists in the system (covers newly added codes).
+            if (context.User.IsInRole("ADMIN"))
+            {
+                var allCodes = await rbac.GetAllPermissionCodesAsync();
+                foreach (var code in allCodes)
+                    mergedCodes.Add(code);
+            }
+
+            context.Items[EffectivePermissionCodesKey] = mergedCodes;
+            context.Items[EffectivePermissionsKey] = mergedCodes
+                .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
+                .Select(code =>
+                {
+                    var dto = fromDb.FirstOrDefault(p =>
+                        string.Equals(p.Code, code, StringComparison.OrdinalIgnoreCase));
+                    return dto ?? new PermissionDto { Id = 0, Code = code, Name = code };
+                })
+                .ToList();
         }
 
         await _next(context);

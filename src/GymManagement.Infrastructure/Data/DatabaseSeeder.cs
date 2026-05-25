@@ -359,6 +359,7 @@ namespace GymManagement.Infrastructure.Data
                 new { Code = "MANAGE_MEMBERS", Name = "Manage members", Description = "Update or delete users and profile details" },
                 new { Code = PermissionCodes.LeadsCrm, Name = "Leads CRM", Description = "Lead pipeline, reception dashboard, conversion" },
                 new { Code = PermissionCodes.LeadsTrainer, Name = "Leads (trainer)", Description = "View assigned lead trials and update trial feedback" },
+                new { Code = PermissionCodes.RetailPos, Name = "Retail POS", Description = "Retail products, categories, inventory, and POS checkout" },
             };
             foreach (var p in permissions)
             {
@@ -401,6 +402,8 @@ namespace GymManagement.Infrastructure.Data
             await LinkAsync("STAFF", PermissionCodes.UsersAccess);
             await LinkAsync("STAFF", PermissionCodes.VIEW_ATTENDANCE);
             await LinkAsync("TRAINER", PermissionCodes.LeadsTrainer);
+            await LinkAsync("ADMIN", PermissionCodes.RetailPos);
+            await LinkAsync("STAFF", PermissionCodes.RetailPos);
         }
 
         /// <summary>Links every seeded <see cref="Permission"/> to the ADMIN <see cref="AppRole"/> (idempotent).</summary>

@@ -98,17 +98,64 @@ public static class DatabaseBootstrap
     {
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         try
         {
             if (!await db.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false))
                 return;
 
+            await EnsureRetailPosPermissionAsync(unitOfWork, logger, cancellationToken).ConfigureAwait(false);
             await RetailDatabaseSeeder.SeedAsync(db, logger, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Retail catalog seed failed.");
         }
+    }
+
+    private static async Task EnsureRetailPosPermissionAsync(
+        IUnitOfWork unitOfWork,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        const string code = "RETAIL_POS";
+        var perm = await unitOfWork.Permissions.FirstOrDefaultAsync(p => p.Code == code);
+        if (perm == null)
+        {
+            await unitOfWork.Permissions.AddAsync(new Permission
+            {
+                Code = code,
+                Name = "Retail POS",
+                Description = "Retail products, categories, inventory, and POS checkout",
+            });
+            await unitOfWork.SaveChangesAsync();
+            perm = await unitOfWork.Permissions.FirstOrDefaultAsync(p => p.Code == code);
+        }
+
+        if (perm == null)
+            return;
+
+        foreach (var roleName in new[] { "ADMIN", "STAFF" })
+        {
+            var role = await unitOfWork.AppRoles.FirstOrDefaultAsync(r => r.Name == roleName);
+            if (role == null)
+                continue;
+
+            var linked = await unitOfWork.RolePermissions.ExistsAsync(rp =>
+                rp.RoleId == role.Id && rp.PermissionId == perm.Id);
+            if (linked)
+                continue;
+
+            await unitOfWork.RolePermissions.AddAsync(new RolePermission
+            {
+                RoleId = role.Id,
+                PermissionId = perm.Id,
+                CreatedDate = DateTime.UtcNow,
+            });
+            logger.LogInformation("Linked {Permission} to role {Role}.", code, roleName);
+        }
+
+        await unitOfWork.SaveChangesAsync();
     }
 }

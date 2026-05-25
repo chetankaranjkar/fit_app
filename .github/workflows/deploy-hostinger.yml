@@ -48,7 +48,7 @@ jobs:
         run: |
           URL="${{ secrets.HOSTINGER_HEALTH_URL }}"
           if [ -z "${URL}" ]; then
-            URL="http://${{ secrets.HOSTINGER_SSH_HOST }}/api/health/ready"
+            URL="http://${{ secrets.HOSTINGER_SSH_HOST }}/health/ready"
           fi
           echo "Checking ${URL}"
           curl -fsS --retry 12 --retry-delay 10 --retry-all-errors "${URL}"

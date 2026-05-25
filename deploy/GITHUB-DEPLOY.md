@@ -43,7 +43,7 @@ Open: **GitHub repo → Settings → Secrets and variables → Actions → New r
 | `HOSTINGER_SSH_KEY` | Full private key (`gym_hostinger_deploy`, including `BEGIN`/`END` lines) | Yes |
 | `HOSTINGER_SSH_PORT` | `22` (only if non-default) | No |
 | `HOSTINGER_DEPLOY_PATH` | `/opt/gym` (only if clone is elsewhere) | No |
-| `HOSTINGER_HEALTH_URL` | `http://187.127.169.135/api/health/ready` | No |
+| `HOSTINGER_HEALTH_URL` | `http://187.127.169.135/health/ready` (testing gateway) | No |
 
 ---
 
@@ -77,7 +77,8 @@ After secrets are set, push to `main` or run the workflow manually.
 
 - **Actions** tab: green **CI**, then green **Deploy to Hostinger**
 - Browser: [http://187.127.169.135/](http://187.127.169.135/)
-- API: `curl http://187.127.169.135/api/health/ready`
+- API (testing gateway): `curl http://187.127.169.135/health/ready`
+- Deploy commit: `curl http://187.127.169.135/api/deploy-info`
 
 ---
 

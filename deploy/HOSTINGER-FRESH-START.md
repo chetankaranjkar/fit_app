@@ -115,14 +115,15 @@ On the VPS:
 ```bash
 cd /opt/gym
 docker ps
-curl -s http://127.0.0.1/api/health/ready
+curl -s http://127.0.0.1/health/ready
 ./deploy/scripts/logs.sh api --tail 30
 ```
 
 In your browser:
 
 - Site: http://187.127.169.135/
-- API: http://187.127.169.135/api/health/ready
+- API: http://187.127.169.135/health/ready
+- Deploy commit: http://187.127.169.135/api/deploy-info
 
 Default login (change after first login): `admin@gym.com` / `admin123`
 

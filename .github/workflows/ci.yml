@@ -53,6 +53,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Production build (vite)
+        run: npm run build
+
   e2e-smoke:
     name: Smoke E2E
     runs-on: ubuntu-latest

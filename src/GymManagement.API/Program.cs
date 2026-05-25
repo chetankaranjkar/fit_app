@@ -238,6 +238,12 @@ builder.Services.AddScoped<GymManagement.Core.Services.LockerMgmt.ILockerAssignm
 builder.Services.AddScoped<GymManagement.Core.Services.LockerMgmt.ILockerAccessLogService, GymManagement.Infrastructure.Services.LockerMgmt.LockerAccessLogService>();
 builder.Services.AddScoped<GymManagement.Core.Services.LockerMgmt.ILockerMaintenanceService, GymManagement.Infrastructure.Services.LockerMgmt.LockerMaintenanceService>();
 
+// Retail / POS module (isolated; tables under Retail_* prefix)
+builder.Services.AddScoped<GymManagement.Core.Services.Retail.IProductCategoryService, GymManagement.Infrastructure.Services.Retail.ProductCategoryService>();
+builder.Services.AddScoped<GymManagement.Core.Services.Retail.IProductService, GymManagement.Infrastructure.Services.Retail.ProductService>();
+builder.Services.AddScoped<GymManagement.Core.Services.Retail.IInventoryService, GymManagement.Infrastructure.Services.Retail.InventoryService>();
+builder.Services.AddScoped<GymManagement.Core.Services.Retail.IPosOrderService, GymManagement.Infrastructure.Services.Retail.PosOrderService>();
+
 builder.Services.AddScoped<IBranchCrudService, BranchCrudService>();
 builder.Services.AddScoped<IOrganizationService, OrganizationService>();
 builder.Services.AddScoped<IBranchQrAccessService, BranchQrAccessService>();
@@ -797,6 +803,7 @@ else
     {
         await DatabaseBootstrap.SeedIfNoAccountsAsync(app.Services, logger);
         await DatabaseBootstrap.EnsureDefaultOrganizationAsync(app.Services, logger);
+        await DatabaseBootstrap.EnsureRetailCatalogAsync(app.Services, logger);
     }
 }
 

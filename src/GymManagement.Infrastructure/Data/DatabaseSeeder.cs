@@ -86,6 +86,8 @@ namespace GymManagement.Infrastructure.Data
             // Kept isolated in GymOps tables; idempotent.
             await SeedGymOpsEquipmentAndMaintenanceAsync();
             await _context.SaveChangesAsync();
+
+            await RetailDatabaseSeeder.SeedAsync(_context);
         }
 
         private async Task SeedUserTypesAsync()

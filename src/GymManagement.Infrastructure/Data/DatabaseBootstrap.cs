@@ -87,4 +87,28 @@ public static class DatabaseBootstrap
             logger.LogWarning(ex, "Could not create default organization.");
         }
     }
+
+    /// <summary>
+    /// Adds demo retail categories and products (idempotent by category name + SKU).
+    /// </summary>
+    public static async Task EnsureRetailCatalogAsync(
+        IServiceProvider services,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        try
+        {
+            if (!await db.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false))
+                return;
+
+            await RetailDatabaseSeeder.SeedAsync(db, logger, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Retail catalog seed failed.");
+        }
+    }
 }

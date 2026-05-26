@@ -1,9 +1,13 @@
 import { api } from '../lib/api'
 import type {
+  ActiveWorkoutActiveResponse,
   ActiveWorkoutSession,
   MemberWorkoutSummary,
+  MemberWorkoutTimeline,
+  WorkoutAdminMonitoring,
   WorkoutDashboard,
   WorkoutExerciseHistory,
+  WorkoutSessionDetail,
   WorkoutSessionExercise,
 } from '../types/workoutTracking'
 
@@ -15,7 +19,12 @@ export const workoutTrackingService = {
   start: (body: { memberId: number; workoutPlanId: number; utcOffsetMinutes?: number }) =>
     api.post<ActiveWorkoutSession>(`${base}/start`, body),
 
-  getActive: (memberId: number) => api.get<ActiveWorkoutSession>(`${base}/active/${memberId}`),
+  getActive: (memberId: number) => api.get<ActiveWorkoutActiveResponse>(`${base}/active/${memberId}`),
+
+  getActiveSession: async (memberId: number) => {
+    const { data } = await api.get<ActiveWorkoutActiveResponse>(`${base}/active/${memberId}`)
+    return data.session
+  },
 
   logSet: (body: {
     workoutSessionExerciseId: number
@@ -41,4 +50,13 @@ export const workoutTrackingService = {
 
   trainerMemberWorkouts: (take = 30) =>
     api.get<MemberWorkoutSummary[]>(`${base}/trainer/members`, { params: { take } }),
+
+  trainerMemberTimeline: (memberId: number, take = 40) =>
+    api.get<MemberWorkoutTimeline>(`${base}/trainer/members/${memberId}/timeline`, { params: { take } }),
+
+  sessionDetail: (sessionId: number) =>
+    api.get<WorkoutSessionDetail>(`${base}/session/${sessionId}/detail`),
+
+  adminMonitoring: (take = 50) =>
+    api.get<WorkoutAdminMonitoring>(`${base}/admin/monitoring`, { params: { take } }),
 }

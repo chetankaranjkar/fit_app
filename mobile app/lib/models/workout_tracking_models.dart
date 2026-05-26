@@ -17,6 +17,10 @@ class ActiveWorkoutSession {
   final bool isOffline;
   /// Workout marked complete locally; waiting for `POST /workout/complete`.
   final bool pendingCompleteSync;
+  /// Server metadata from `GET /api/workout/active/{memberId}`.
+  final DateTime? lastSyncedAt;
+  final DateTime? serverTimeUtc;
+  final bool pendingOfflineChanges;
 
   const ActiveWorkoutSession({
     required this.sessionId,
@@ -33,6 +37,9 @@ class ActiveWorkoutSession {
     required this.exercises,
     this.isOffline = false,
     this.pendingCompleteSync = false,
+    this.lastSyncedAt,
+    this.serverTimeUtc,
+    this.pendingOfflineChanges = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -50,6 +57,9 @@ class ActiveWorkoutSession {
         'exercises': exercises.map((e) => e.toJson()).toList(),
         'isOffline': isOffline,
         'pendingCompleteSync': pendingCompleteSync,
+        if (lastSyncedAt != null) 'lastSyncedAt': lastSyncedAt!.toIso8601String(),
+        if (serverTimeUtc != null) 'serverTimeUtc': serverTimeUtc!.toIso8601String(),
+        'pendingOfflineChanges': pendingOfflineChanges,
       };
 
   ActiveWorkoutSession copyWith({
@@ -62,6 +72,9 @@ class ActiveWorkoutSession {
     List<WorkoutExerciseGroup>? exercises,
     bool? isOffline,
     bool? pendingCompleteSync,
+    DateTime? lastSyncedAt,
+    DateTime? serverTimeUtc,
+    bool? pendingOfflineChanges,
   }) =>
       ActiveWorkoutSession(
         sessionId: sessionId ?? this.sessionId,
@@ -78,6 +91,9 @@ class ActiveWorkoutSession {
         exercises: exercises ?? this.exercises,
         isOffline: isOffline ?? this.isOffline,
         pendingCompleteSync: pendingCompleteSync ?? this.pendingCompleteSync,
+        lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+        serverTimeUtc: serverTimeUtc ?? this.serverTimeUtc,
+        pendingOfflineChanges: pendingOfflineChanges ?? this.pendingOfflineChanges,
       );
 
   factory ActiveWorkoutSession.fromJson(Map<String, dynamic> json) {
@@ -99,6 +115,9 @@ class ActiveWorkoutSession {
           .toList(),
       isOffline: json['isOffline'] == true,
       pendingCompleteSync: json['pendingCompleteSync'] == true,
+      lastSyncedAt: _dt(json['lastSyncedAt']),
+      serverTimeUtc: _dt(json['serverTimeUtc']),
+      pendingOfflineChanges: json['pendingOfflineChanges'] == true,
     );
   }
 }

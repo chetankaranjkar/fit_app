@@ -150,6 +150,16 @@ const WorkoutAssignmentsPage = lazy(() =>
     default: m.WorkoutAssignmentsPage,
   })),
 )
+const TrainerMemberWorkoutTimelinePage = lazy(() =>
+  import('../pages/training/TrainerMemberWorkoutTimelinePage').then((m) => ({
+    default: m.TrainerMemberWorkoutTimelinePage,
+  })),
+)
+const WorkoutAdminMonitoringPage = lazy(() =>
+  import('../pages/training/WorkoutAdminMonitoringPage').then((m) => ({
+    default: m.WorkoutAdminMonitoringPage,
+  })),
+)
 const RolesPage = lazy(() =>
   import('../pages/RolesPage').then((m) => ({ default: m.RolesPage })),
 )
@@ -315,6 +325,14 @@ const router = createBrowserRouter([
               {
                 path: '/dashboard/training/workout-assignments',
                 element: withSuspense(<WorkoutAssignmentsPage />),
+              },
+              {
+                path: '/dashboard/training/member-workouts/:memberId',
+                element: withSuspense(<TrainerMemberWorkoutTimelinePage />),
+              },
+              {
+                path: '/dashboard/training/workout-monitoring',
+                element: withSuspense(<WorkoutAdminMonitoringPage />),
               },
               { path: '/dashboard/diet-plans', element: withSuspense(<DietPlansDashboardPage />) },
               { path: '/dashboard/diet-plans/list', element: withSuspense(<DietPlansPage />) },

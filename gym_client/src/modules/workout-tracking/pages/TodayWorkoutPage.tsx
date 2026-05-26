@@ -34,7 +34,7 @@ export function TodayWorkoutPage() {
     queryKey: ['workout-active', memberId],
     queryFn: async () => {
       try {
-        const { data } = await workoutTrackingService.getActive(memberId!)
+        const data = await workoutTrackingService.getActiveSession(memberId!)
         return data
       } catch (err: unknown) {
         const status = (err as { response?: { status?: number } })?.response?.status

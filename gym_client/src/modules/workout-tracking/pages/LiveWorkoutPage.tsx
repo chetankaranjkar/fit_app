@@ -27,7 +27,7 @@ export function LiveWorkoutPage() {
   const { data: session, isLoading, refetch } = useQuery({
     queryKey: ['workout-active', memberId],
     queryFn: async () => {
-      const { data } = await workoutTrackingService.getActive(memberId!)
+      const data = await workoutTrackingService.getActiveSession(memberId!)
       return data
     },
     enabled: memberId != null,

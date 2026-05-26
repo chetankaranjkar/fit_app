@@ -57,6 +57,19 @@ public sealed class ActiveWorkoutSessionDto
     public int TotalSets { get; set; }
     public decimal TotalVolume { get; set; }
     public IReadOnlyList<WorkoutSessionGroupDto> Exercises { get; set; } = Array.Empty<WorkoutSessionGroupDto>();
+    public DateTime? LastSyncedAt { get; set; }
+    public DateTime? ServerTimeUtc { get; set; }
+    public bool PendingOfflineChanges { get; set; }
+}
+
+/// <summary>Envelope for GET active — session plus sync metadata.</summary>
+public sealed class ActiveWorkoutActiveResponseDto
+{
+    public ActiveWorkoutSessionDto Session { get; set; } = null!;
+    public decimal CompletionPercent { get; set; }
+    public DateTime? LastSyncedAt { get; set; }
+    public bool PendingOfflineChanges { get; set; }
+    public DateTime ServerTimeUtc { get; set; }
 }
 
 public sealed class WorkoutExerciseHistoryEntryDto
@@ -90,6 +103,32 @@ public sealed class WorkoutDashboardDto
     public DateTime? LastWorkoutDateUtc { get; set; }
     public decimal AverageCompletionPercent { get; set; }
     public ActiveWorkoutSessionDto? ActiveSession { get; set; }
+}
+
+public sealed class MemberWorkoutTimelineDto
+{
+    public int MemberId { get; set; }
+    public string MemberName { get; set; } = string.Empty;
+    public IReadOnlyList<MemberWorkoutSummaryDto> Sessions { get; set; } = Array.Empty<MemberWorkoutSummaryDto>();
+    public decimal AdherencePercent { get; set; }
+    public int CompletedThisWeek { get; set; }
+}
+
+public sealed class WorkoutSessionDetailDto
+{
+    public ActiveWorkoutSessionDto Session { get; set; } = null!;
+    public int DurationMinutes { get; set; }
+    public int CompletedExercises { get; set; }
+    public decimal TotalVolume { get; set; }
+    public decimal AdherencePercent { get; set; }
+}
+
+public sealed class WorkoutAdminMonitoringDto
+{
+    public int ActiveLiveSessions { get; set; }
+    public int CompletedToday { get; set; }
+    public IReadOnlyList<MemberWorkoutSummaryDto> ActiveSessions { get; set; } = Array.Empty<MemberWorkoutSummaryDto>();
+    public IReadOnlyList<MemberWorkoutSummaryDto> RecentCompleted { get; set; } = Array.Empty<MemberWorkoutSummaryDto>();
 }
 
 public sealed class MemberWorkoutSummaryDto

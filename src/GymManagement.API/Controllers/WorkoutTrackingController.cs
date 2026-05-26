@@ -52,8 +52,8 @@ public sealed class WorkoutTrackingController : ControllerBase
     }
 
     [HttpGet("active/{memberId:int}")]
-    [ProducesResponseType(typeof(ActiveWorkoutSessionDto), StatusCodes.Status200OK)]
-    public async Task<ActionResult<ActiveWorkoutSessionDto>> GetActive(int memberId, CancellationToken ct)
+    [ProducesResponseType(typeof(ActiveWorkoutActiveResponseDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ActiveWorkoutActiveResponseDto>> GetActive(int memberId, CancellationToken ct)
     {
         try
         {
@@ -168,6 +168,48 @@ public sealed class WorkoutTrackingController : ControllerBase
         if (!userId.HasValue) return Unauthorized();
         var memberId = await _tracking.ResolveMemberIdForUserAsync(userId.Value, ct);
         return memberId == null ? NotFound(new { message = "Member profile not found." }) : Ok(new { memberId });
+    }
+
+    [HttpGet("trainer/members/{memberId:int}/timeline")]
+    [ProducesResponseType(typeof(MemberWorkoutTimelineDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MemberWorkoutTimelineDto>> TrainerMemberTimeline(
+        int memberId,
+        [FromQuery] int take = 40,
+        CancellationToken ct = default)
+    {
+        var userId = ResolveUserId();
+        if (!userId.HasValue) return Unauthorized();
+        try
+        {
+            return Ok(await _tracking.GetMemberTimelineForTrainerAsync(userId.Value, memberId, take, ct));
+        }
+        catch (NotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+    }
+
+    [HttpGet("session/{sessionId:int}/detail")]
+    [ProducesResponseType(typeof(WorkoutSessionDetailDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<WorkoutSessionDetailDto>> SessionDetail(int sessionId, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _tracking.GetSessionDetailAsync(sessionId, ResolveUserId(), ct));
+        }
+        catch (NotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+    }
+
+    [HttpGet("admin/monitoring")]
+    [ProducesResponseType(typeof(WorkoutAdminMonitoringDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<WorkoutAdminMonitoringDto>> AdminMonitoring(
+        [FromQuery] int take = 50,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            return Ok(await _tracking.GetAdminMonitoringAsync(take, ct));
+        }
+        catch (UnauthorizedAccessException) { return Forbid(); }
     }
 
     /// <summary>Trainer view: recent workouts for assigned members.</summary>

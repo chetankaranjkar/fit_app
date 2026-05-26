@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-05-25 (live workout tracking, `WorkoutSessionExercises`).
+**Last updated:** 2026-05-26 (workout recovery + Hive offline sync).
 
 ---
 
@@ -246,9 +246,16 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 
 **Code:** `WorkoutTrackingService`, `WorkoutTrackingController`, `gym_client/src/modules/workout-tracking/`.
 
-**Mobile (PulseFit / `mobile app/`):** same APIs via `WorkoutTrackingRepository` (offline: `SharedPreferences` + `WorkoutTemplateCache`). Auto-sync on splash sign-in and pull-to-refresh (`MeService.flushPendingWorkoutSessions`). Route `/workouts/live`; **START WORKOUT** on plan detail.
+**Mobile (PulseFit / `mobile app/`):** `SessionRecoveryService` (local → server → start), `OfflineWorkoutRepository` (Hive), `SyncManager` (queue, 60s periodic, connectivity), autosave every 20s. Mirror after each online log; clear only on confirmed complete. Sync chip on Home / Profile / Live.
 
-**Migrate:** `dotnet ef database update --project src/GymManagement.Infrastructure --startup-project src/GymManagement.API` (migration `AddWorkoutTrackingSessionExercises`).
+| Role | API | Web route |
+|------|-----|-----------|
+| Trainer timeline | `GET /api/workout/trainer/members/{memberId}/timeline` | `/dashboard/training/member-workouts/:memberId` |
+| Admin monitoring | `GET /api/workout/admin/monitoring` | `/dashboard/training/workout-monitoring` |
+
+**Active API** `GET /api/workout/active/{memberId}` returns envelope (`session`, `lastSyncedAt`, `serverTimeUtc`). Unique index: one `InProgress` session per member.
+
+**Migrate:** `dotnet ef database update --project src/GymManagement.Infrastructure --startup-project src/GymManagement.API` (migrations `AddWorkoutTrackingSessionExercises`, `WorkoutOneActiveSessionPerMember`).
 
 ---
 

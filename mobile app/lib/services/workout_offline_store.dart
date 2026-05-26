@@ -1,40 +1,31 @@
-import 'dart:convert';
-
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../models/workout_tracking_models.dart';
+import '../workout_sync/sync/workout_sync_bootstrap.dart';
+import '../workout_sync/offline/offline_workout_repository.dart';
 
-/// On-device live workout session (SharedPreferences).
+/// Back-compat facade — delegates to [OfflineWorkoutRepository] (Hive).
 class WorkoutOfflineStore {
   WorkoutOfflineStore._();
   static final WorkoutOfflineStore instance = WorkoutOfflineStore._();
 
-  static const _sessionKey = 'pulsefit_offline_live_workout_session';
+  final _repo = OfflineWorkoutRepository.instance;
 
   Future<ActiveWorkoutSession?> loadSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_sessionKey);
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      return ActiveWorkoutSession.fromJson(json);
-    } catch (_) {
-      return null;
-    }
+    await WorkoutSyncBootstrap.ensureStarted();
+    return _repo.loadSession();
   }
 
   Future<void> saveSession(ActiveWorkoutSession session) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_sessionKey, jsonEncode(session.toJson()));
+    await WorkoutSyncBootstrap.ensureStarted();
+    await _repo.saveSession(session);
   }
 
   Future<void> clearSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_sessionKey);
+    await WorkoutSyncBootstrap.ensureStarted();
+    await _repo.clearSnapshot();
   }
 
   Future<bool> hasPendingSession() async {
-    final s = await loadSession();
-    return s != null && (s.isOffline || s.pendingCompleteSync);
+    await WorkoutSyncBootstrap.ensureStarted();
+    return _repo.hasPendingSession();
   }
 }

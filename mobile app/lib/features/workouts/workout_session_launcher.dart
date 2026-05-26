@@ -18,8 +18,7 @@ Future<void> launchLiveWorkoutSession(
   final repo = WorkoutTrackingRepository.instance;
   try {
     final memberId = await ref.read(memberIdProvider.future);
-    var session = await repo.getActive(memberId);
-    session ??= await repo.start(
+    final session = await repo.resolveOrStart(
       memberId: memberId,
       workoutPlanId: plan.id,
     );

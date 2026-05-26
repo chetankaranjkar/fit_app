@@ -1,16 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/app_config.dart';
 import '../../providers/auth_providers.dart';
-import '../../providers/me_providers.dart';
-import '../../services/me_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 import '../media/onboarding_profile_photo_screen.dart';
 import 'package:pulsefit/widgets/pulsefit_logo.dart';
 
+/// Splash: navigate quickly; no Hive/network on this screen.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -19,33 +21,70 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
+  String? _hint;
+  bool _leftSplash = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await ref.read(authControllerProvider.notifier).bootstrap();
-      if (!mounted) return;
-      final state = ref.read(authControllerProvider);
-      if (state.status == AuthBootstrapStatus.signedIn) {
-        try {
-          await ref.read(profileProvider.future);
-          await MeService.instance.flushPendingWorkoutSessions();
-        } catch (_) {}
-        if (!mounted) return;
-        final prefs = await SharedPreferences.getInstance();
-        if (!mounted) return;
-        final dismissed = prefs.getBool(kProfilePhotoPromptDismissedKey) ?? false;
-        final pic = ref.read(profileProvider).asData?.value.profilePictureUrl;
-        final missing = pic == null || pic.trim().isEmpty;
-        if (missing && !dismissed) {
-          context.go('/onboarding/photo');
-        } else {
-          context.go('/home');
-        }
-      } else {
-        context.go('/login');
-      }
+    Timer(const Duration(milliseconds: 1200), () {
+      _openLogin(reason: 'failsafe');
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_boot()));
+  }
+
+  Future<void> _boot() async {
+    if (!AppConfig.looksLikeEmulatorDefault && mounted) {
+      setState(() {
+        _hint =
+            'Physical phone: build with --dart-define=API_BASE_URL=http://YOUR_PC_IP:5104';
+      });
+    }
+
+    var hasCache = false;
+    try {
+      hasCache = await ref
+          .read(authControllerProvider.notifier)
+          .bootstrapFromCache()
+          .timeout(const Duration(seconds: 2), onTimeout: () => false);
+    } catch (_) {
+      hasCache = false;
+    }
+
+    if (!mounted || _leftSplash) return;
+
+    if (hasCache) {
+      await _openHome();
+    } else {
+      _openLogin(reason: 'signed-out');
+    }
+  }
+
+  void _openLogin({required String reason}) {
+    if (!mounted || _leftSplash) return;
+    _leftSplash = true;
+    debugPrint('Splash → login ($reason)');
+    context.go('/login');
+  }
+
+  Future<void> _openHome() async {
+    if (!mounted || _leftSplash) return;
+    _leftSplash = true;
+    debugPrint('Splash → home');
+
+    try {
+      final prefs = await SharedPreferences.getInstance()
+          .timeout(const Duration(seconds: 2));
+      final dismissed = prefs.getBool(kProfilePhotoPromptDismissedKey) ?? false;
+      if (!mounted) return;
+      if (!dismissed) {
+        context.go('/onboarding/photo');
+        return;
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    context.go('/home');
   }
 
   @override
@@ -54,7 +93,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       backgroundColor: AppColors.bgDark,
       child: Stack(
         children: [
-          // ── Deep gym-dark gradient background ─────────────────────────────
           const Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -67,43 +105,40 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               ),
             ),
           ),
-          // ── Ambient orange glow ────────────────────────────────────────────
-          Center(
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.accent.withValues(alpha: 0.22),
-                    AppColors.accent.withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // ── Main content ──────────────────────────────────────────────────
           SafeArea(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Spacer(flex: 2),
-                const PulseFitBrandBlock(compact: false, showTagline: true)
-                    .animate()
-                    .fadeIn(duration: 500.ms)
-                    .scale(
-                      begin: const Offset(0.92, 0.92),
-                      end: const Offset(1.0, 1.0),
-                      curve: Curves.easeOutCubic,
-                      duration: 600.ms,
+                const PulseFitBrandBlock(compact: false, showTagline: true),
+                const SizedBox(height: AppSpacing.xl),
+                const CupertinoActivityIndicator(
+                  color: AppColors.accent,
+                  radius: 14,
+                ),
+                if (_hint != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                    child: Text(
+                      _hint!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 12, color: AppColors.accent),
                     ),
+                  ),
+                ],
                 const Spacer(flex: 2),
-                CupertinoActivityIndicator(
-                  color: AppColors.accent.withValues(alpha: 0.7),
-                  radius: 12,
-                ).animate().fadeIn(delay: 500.ms, duration: 400.ms),
-                const SizedBox(height: 56),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                  child: CupertinoButton(
+                    onPressed: () => _openLogin(reason: 'manual'),
+                    child: const Text(
+                      'Continue to sign in',
+                      style: TextStyle(color: AppColors.accent),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
               ],
             ),
           ),

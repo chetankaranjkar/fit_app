@@ -19,7 +19,9 @@ import '../../widgets/press_scale.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
 import 'profile_edit_sheet.dart';
+import '../../providers/sync_status_provider.dart';
 import '../../widgets/skeleton_shimmer.dart';
+import '../../widgets/sync_status_chip.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -37,15 +39,17 @@ class ProfileScreen extends ConsumerWidget {
             child: CustomScrollView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           slivers: [
-            const CupertinoSliverNavigationBar(
-              largeTitle: Text('Profile'),
+            CupertinoSliverNavigationBar(
+              largeTitle: const Text('Profile'),
               border: null,
+              trailing: const SyncStatusChip(),
             ),
             CupertinoSliverRefreshControl(
               onRefresh: () async {
                 await MeService.instance.flushPendingWorkoutSessions();
                 ref.invalidate(profileProvider);
                 await ref.read(profileProvider.future);
+                invalidateSyncStatus(ref);
               },
             ),
             SliverPadding(

@@ -1,9 +1,8 @@
 import '../core/api_client.dart';
 import '../core/api_exception.dart';
 import '../models/me_models.dart';
-import 'workout_pending_queue.dart';
+import '../workout_sync/sync/sync_manager.dart';
 import 'workout_template_cache.dart';
-import 'workout_tracking_repository.dart';
 
 /// Calls into the backend `/api/me/*` self-service endpoints.
 class MeService {
@@ -46,17 +45,10 @@ class MeService {
         .toList();
   }
 
-  /// Retries offline live workouts + legacy batch completions.
+  /// Retries offline live workouts, sync queue, and legacy batch completions.
   Future<int> flushPendingWorkoutSessions() async {
-    var synced = await WorkoutTrackingRepository.instance.syncOfflineLiveSession();
-    synced += await WorkoutPendingQueue.instance.drain((workoutPlanId, durationMinutes, sets) async {
-      await completeWorkoutSession(
-        workoutPlanId: workoutPlanId,
-        durationMinutes: durationMinutes,
-        sets: sets,
-      );
-    });
-    return synced;
+    final result = await SyncManager.instance.syncAll(reason: 'flush');
+    return result.syncedCount;
   }
 
   Future<MeMembership?> getMembership() async {
@@ -137,8 +129,6 @@ class MeService {
     );
     return MeWorkoutSessionCompleted.fromJson(res.data ?? {});
   }
-
-  // —— Media (profile + transformation photos) ————————————————————
 
   Future<MeProfile> uploadProfilePhoto(
     List<int> bytes,

@@ -20,6 +20,37 @@ export type WorkoutSessionGroup = {
   sets: WorkoutSessionExercise[]
 }
 
+export type ActiveWorkoutActiveResponse = {
+  session: ActiveWorkoutSession
+  completionPercent: number
+  lastSyncedAt?: string | null
+  pendingOfflineChanges: boolean
+  serverTimeUtc: string
+}
+
+export type MemberWorkoutTimeline = {
+  memberId: number
+  memberName: string
+  sessions: MemberWorkoutSummary[]
+  adherencePercent: number
+  completedThisWeek: number
+}
+
+export type WorkoutSessionDetail = {
+  session: ActiveWorkoutSession
+  durationMinutes: number
+  completedExercises: number
+  totalVolume: number
+  adherencePercent: number
+}
+
+export type WorkoutAdminMonitoring = {
+  activeLiveSessions: number
+  completedToday: number
+  activeSessions: MemberWorkoutSummary[]
+  recentCompleted: MemberWorkoutSummary[]
+}
+
 export type ActiveWorkoutSession = {
   sessionId: number
   memberId: number

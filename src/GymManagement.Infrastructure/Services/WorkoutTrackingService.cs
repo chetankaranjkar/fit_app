@@ -28,14 +28,18 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         var (member, userId) = await ResolveMemberAsync(dto.MemberId, ct);
         await EnsureCanAccessMemberAsync(member.Id, userId, callerUserId, ct);
 
-        var hasActive = await _db.WorkoutSessions.AnyAsync(s =>
-            s.MemberId == member.Id
-            && !s.IsDeleted
-            && (s.Status == WorkoutSessionStatus.InProgress
-                || (s.Status == null && !s.IsCompleted && s.SessionStartUtc != null)),
-            ct);
-        if (hasActive)
-            throw new ConflictException("This member already has an active workout session.");
+        var existing = await FindActiveSessionEntityAsync(member.Id, ct);
+        if (existing != null)
+        {
+            var existingPlanName = existing.WorkoutPlanId.HasValue
+                ? await _db.WorkoutPlans.AsNoTracking()
+                    .Where(p => p.Id == existing.WorkoutPlanId)
+                    .Select(p => p.Name)
+                    .FirstOrDefaultAsync(ct)
+                : null;
+            return await MapActiveSessionAsync(existing.Id, existingPlanName, ct)
+                ?? throw new InvalidOperationException("Failed to load active session.");
+        }
 
         if (!dto.WorkoutPlanId.HasValue || dto.WorkoutPlanId <= 0)
             throw new InvalidOperationException("WorkoutPlanId is required to start a tracked session.");
@@ -94,7 +98,7 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             ?? throw new InvalidOperationException("Failed to load started session.");
     }
 
-    public async Task<ActiveWorkoutSessionDto?> GetActiveAsync(int memberId, int? callerUserId, CancellationToken ct = default)
+    public async Task<ActiveWorkoutActiveResponseDto?> GetActiveAsync(int memberId, int? callerUserId, CancellationToken ct = default)
     {
         var (member, userId) = await ResolveMemberAsync(memberId, ct);
         await EnsureCanAccessMemberAsync(member.Id, userId, callerUserId, ct);
@@ -109,7 +113,22 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
                 .FirstOrDefaultAsync(ct)
             : null;
 
-        return await MapActiveSessionAsync(session.Id, planName, ct);
+        var mapped = await MapActiveSessionAsync(session.Id, planName, ct);
+        if (mapped == null) return null;
+
+        var now = DateTime.UtcNow;
+        mapped.LastSyncedAt = session.UpdatedDate ?? session.SessionStartUtc ?? now;
+        mapped.ServerTimeUtc = now;
+        mapped.PendingOfflineChanges = false;
+
+        return new ActiveWorkoutActiveResponseDto
+        {
+            Session = mapped,
+            CompletionPercent = mapped.CompletionPercent,
+            LastSyncedAt = mapped.LastSyncedAt,
+            PendingOfflineChanges = false,
+            ServerTimeUtc = now,
+        };
     }
 
     public async Task<WorkoutSessionExerciseDto> LogSetAsync(LogWorkoutSetRequestDto dto, int? callerUserId, CancellationToken ct = default)
@@ -287,7 +306,7 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             ? 0m
             : completed.Where(c => c.CompletionPercent.HasValue).Select(c => c.CompletionPercent!.Value).DefaultIfEmpty(0).Average();
 
-        var active = await GetActiveAsync(member.Id, callerUserId, ct);
+        var activeEnvelope = await GetActiveAsync(member.Id, callerUserId, ct);
 
         return new WorkoutDashboardDto
         {
@@ -297,7 +316,130 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             WorkoutsThisWeek = workoutsThisWeek,
             LastWorkoutDateUtc = completed.FirstOrDefault()?.SessionDate,
             AverageCompletionPercent = Math.Round(avgCompletion, 1),
-            ActiveSession = active,
+            ActiveSession = activeEnvelope?.Session,
+        };
+    }
+
+    public async Task<MemberWorkoutTimelineDto> GetMemberTimelineForTrainerAsync(
+        int trainerUserId, int memberId, int take = 40, CancellationToken ct = default)
+    {
+        take = Math.Clamp(take, 1, 100);
+        var (member, userId) = await ResolveMemberAsync(memberId, ct);
+        await EnsureTrainerCanAccessMemberAsync(trainerUserId, member.Id, userId, ct);
+
+        var userMap = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.FirstName, u.LastName })
+            .FirstOrDefaultAsync(ct);
+        var memberName = userMap == null
+            ? $"Member #{member.Id}"
+            : $"{userMap.FirstName} {userMap.LastName}".Trim();
+
+        var sessions = await _db.WorkoutSessions.AsNoTracking()
+            .Where(s => s.MemberId == member.Id && !s.IsDeleted)
+            .OrderByDescending(s => s.SessionDate)
+            .Take(take)
+            .ToListAsync(ct);
+
+        var summaries = await MapSessionSummariesAsync(sessions, ct);
+        var weekStart = DateTime.UtcNow.Date.AddDays(-(int)DateTime.UtcNow.DayOfWeek);
+        var weekSessions = sessions.Where(s => s.SessionDate >= weekStart).ToList();
+        var completedWeek = weekSessions.Count(s =>
+            s.Status == WorkoutSessionStatus.Completed || s.IsCompleted);
+        var adherence = weekSessions.Count == 0
+            ? 0m
+            : Math.Round(100m * completedWeek / weekSessions.Count, 1);
+
+        return new MemberWorkoutTimelineDto
+        {
+            MemberId = member.Id,
+            MemberName = memberName,
+            Sessions = summaries,
+            AdherencePercent = adherence,
+            CompletedThisWeek = completedWeek,
+        };
+    }
+
+    public async Task<WorkoutSessionDetailDto> GetSessionDetailAsync(int sessionId, int? callerUserId, CancellationToken ct = default)
+    {
+        var session = await _db.WorkoutSessions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, ct)
+            ?? throw new NotFoundException("Workout session not found.");
+
+        if (session.MemberId == null)
+            throw new InvalidOperationException("Session has no member.");
+
+        await EnsureCanAccessMemberAsync(session.MemberId.Value, session.UserId ?? 0, callerUserId, ct);
+
+        var planName = session.WorkoutPlanId.HasValue
+            ? await _db.WorkoutPlans.AsNoTracking()
+                .Where(p => p.Id == session.WorkoutPlanId)
+                .Select(p => p.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var mapped = await MapActiveSessionAsync(session.Id, planName, ct)
+            ?? throw new NotFoundException("Workout session not found.");
+
+        var sets = await _db.WorkoutSessionExercises.AsNoTracking()
+            .Where(x => x.WorkoutSessionId == sessionId)
+            .ToListAsync(ct);
+
+        var completedExercises = sets
+            .Where(s => s.IsCompleted)
+            .Select(s => s.ExerciseId)
+            .Distinct()
+            .Count();
+
+        var totalExercises = sets.Select(s => s.ExerciseId).Distinct().Count();
+        var adherence = totalExercises == 0
+            ? 0m
+            : Math.Round(100m * completedExercises / totalExercises, 1);
+
+        var duration = session.DurationMinutes;
+        if (!duration.HasValue && session.SessionStartUtc.HasValue && session.SessionEndUtc.HasValue)
+        {
+            duration = Math.Max(1, (int)(session.SessionEndUtc.Value - session.SessionStartUtc.Value).TotalMinutes);
+        }
+
+        return new WorkoutSessionDetailDto
+        {
+            Session = mapped,
+            DurationMinutes = duration ?? 0,
+            CompletedExercises = completedExercises,
+            TotalVolume = mapped.TotalVolume,
+            AdherencePercent = adherence,
+        };
+    }
+
+    public async Task<WorkoutAdminMonitoringDto> GetAdminMonitoringAsync(int take = 50, CancellationToken ct = default)
+    {
+        take = Math.Clamp(take, 1, 200);
+        var today = DateTime.UtcNow.Date;
+
+        var activeEntities = await _db.WorkoutSessions.AsNoTracking()
+            .Where(s => !s.IsDeleted && s.Status == WorkoutSessionStatus.InProgress && s.MemberId != null)
+            .OrderByDescending(s => s.SessionStartUtc ?? s.SessionDate)
+            .Take(take)
+            .ToListAsync(ct);
+
+        var completedToday = await _db.WorkoutSessions.AsNoTracking()
+            .CountAsync(s => !s.IsDeleted
+                && (s.Status == WorkoutSessionStatus.Completed || s.IsCompleted)
+                && s.SessionDate >= today, ct);
+
+        var recentCompleted = await _db.WorkoutSessions.AsNoTracking()
+            .Where(s => !s.IsDeleted && (s.Status == WorkoutSessionStatus.Completed || s.IsCompleted))
+            .OrderByDescending(s => s.SessionDate)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return new WorkoutAdminMonitoringDto
+        {
+            ActiveLiveSessions = activeEntities.Count,
+            CompletedToday = completedToday,
+            ActiveSessions = await MapSessionSummariesAsync(activeEntities, ct),
+            RecentCompleted = await MapSessionSummariesAsync(recentCompleted, ct),
         };
     }
 
@@ -541,5 +683,53 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         }
 
         return streak;
+    }
+
+    private async Task EnsureTrainerCanAccessMemberAsync(
+        int trainerUserId, int memberId, int memberUserId, CancellationToken ct)
+    {
+        await EnsureCanAccessMemberAsync(memberId, memberUserId, trainerUserId, ct);
+    }
+
+    private async Task<IReadOnlyList<MemberWorkoutSummaryDto>> MapSessionSummariesAsync(
+        List<WorkoutSession> sessions, CancellationToken ct)
+    {
+        if (sessions.Count == 0) return Array.Empty<MemberWorkoutSummaryDto>();
+
+        var memberIds = sessions.Where(s => s.MemberId.HasValue).Select(s => s.MemberId!.Value).Distinct().ToList();
+        var members = await _db.Members.AsNoTracking()
+            .Where(m => memberIds.Contains(m.Id))
+            .ToListAsync(ct);
+        var userIds = members.Select(m => m.UserId).ToList();
+        var userMap = await _db.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}".Trim(), ct);
+
+        var planIds = sessions.Where(s => s.WorkoutPlanId.HasValue).Select(s => s.WorkoutPlanId!.Value).Distinct().ToList();
+        var planNames = planIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await _db.WorkoutPlans.AsNoTracking()
+                .Where(p => planIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Name, ct);
+
+        return sessions
+            .Where(s => s.MemberId.HasValue)
+            .Select(s =>
+            {
+                var m = members.First(x => x.Id == s.MemberId!.Value);
+                userMap.TryGetValue(m.UserId, out var name);
+                return new MemberWorkoutSummaryDto
+                {
+                    SessionId = s.Id,
+                    MemberId = m.Id,
+                    MemberName = name ?? $"Member #{m.Id}",
+                    PlanName = s.WorkoutPlanId.HasValue && planNames.TryGetValue(s.WorkoutPlanId.Value, out var pn) ? pn : null,
+                    SessionDateUtc = s.SessionDate,
+                    Status = s.Status ?? (s.IsCompleted ? WorkoutSessionStatus.Completed : WorkoutSessionStatus.InProgress),
+                    CompletionPercent = s.CompletionPercent,
+                    TotalVolume = s.TotalVolume,
+                };
+            })
+            .ToList();
     }
 }

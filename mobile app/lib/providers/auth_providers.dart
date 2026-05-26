@@ -15,17 +15,38 @@ class AuthBootstrapState {
 class AuthController extends StateNotifier<AuthBootstrapState> {
   AuthController() : super(const AuthBootstrapState(AuthBootstrapStatus.unknown));
 
-  Future<void> bootstrap() async {
-    final cached = await AuthService.instance.readCachedSession();
-    if (cached == null || cached.token.isEmpty) {
+  /// Fast path for splash: cached token only (no network).
+  Future<bool> bootstrapFromCache() async {
+    try {
+      final cached = await AuthService.instance.readCachedSession();
+      if (cached == null || cached.token.isEmpty) {
+        state = const AuthBootstrapState(AuthBootstrapStatus.signedOut);
+        return false;
+      }
+      state = AuthBootstrapState(AuthBootstrapStatus.signedIn, cached);
+      return true;
+    } catch (_) {
       state = const AuthBootstrapState(AuthBootstrapStatus.signedOut);
-      return;
+      return false;
     }
-    final refreshed = await AuthService.instance.tryRefresh();
-    state = AuthBootstrapState(
-      AuthBootstrapStatus.signedIn,
-      refreshed ?? cached,
-    );
+  }
+
+  /// Refresh token when online; safe to call after navigation.
+  Future<void> bootstrap() async {
+    try {
+      final cached = await AuthService.instance.readCachedSession();
+      if (cached == null || cached.token.isEmpty) {
+        state = const AuthBootstrapState(AuthBootstrapStatus.signedOut);
+        return;
+      }
+      final refreshed = await AuthService.instance.tryRefresh();
+      state = AuthBootstrapState(
+        AuthBootstrapStatus.signedIn,
+        refreshed ?? cached,
+      );
+    } catch (_) {
+      state = const AuthBootstrapState(AuthBootstrapStatus.signedOut);
+    }
   }
 
   Future<LoginResponse> login(String identifier, String password) async {

@@ -394,6 +394,10 @@ namespace GymManagement.Infrastructure.Data
                     .HasForeignKey(e => e.WorkoutPlanId)
                     .IsRequired(false)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => e.MemberId)
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0 AND [Status] = N'InProgress' AND [MemberId] IS NOT NULL")
+                    .HasDatabaseName("IX_WorkoutSessions_OneInProgressPerMember");
             });
 
             modelBuilder.Entity<WorkoutSessionExercise>(entity =>

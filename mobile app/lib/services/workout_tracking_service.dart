@@ -35,17 +35,33 @@ class WorkoutTrackingService {
     return ActiveWorkoutSession.fromJson(res.data ?? {});
   }
 
-  /// Returns null when no active session (404).
+  /// Returns null when no active session (404). Supports envelope + legacy flat JSON.
   Future<ActiveWorkoutSession?> getActive(int memberId) async {
     try {
       final res = await ApiClient.instance.get<Map<String, dynamic>>(
         '/workout/active/$memberId',
       );
-      return ActiveWorkoutSession.fromJson(res.data ?? {});
+      final data = res.data ?? {};
+      final sessionMap = data['session'] is Map
+          ? Map<String, dynamic>.from(data['session'] as Map)
+          : Map<String, dynamic>.from(data);
+      final session = ActiveWorkoutSession.fromJson(sessionMap);
+      return session.copyWith(
+        lastSyncedAt: _parseDt(data['lastSyncedAt']) ?? _parseDt(sessionMap['lastSyncedAt']),
+        serverTimeUtc: _parseDt(data['serverTimeUtc']) ?? _parseDt(sessionMap['serverTimeUtc']),
+        pendingOfflineChanges: data['pendingOfflineChanges'] == true ||
+            sessionMap['pendingOfflineChanges'] == true,
+      );
     } on ApiException catch (e) {
       if (e.statusCode == 404) return null;
       rethrow;
     }
+  }
+
+  static DateTime? _parseDt(dynamic v) {
+    if (v == null) return null;
+    if (v is String) return DateTime.tryParse(v);
+    return null;
   }
 
   Future<TrackedWorkoutSet> logSet({

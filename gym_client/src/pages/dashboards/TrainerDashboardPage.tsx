@@ -139,7 +139,12 @@ export function TrainerDashboardPage() {
               {(memberWorkouts ?? []).slice(0, 6).map((w) => (
                 <li key={w.sessionId} className="flex items-center justify-between py-3 text-sm">
                   <div>
-                    <p className="font-medium text-white">{w.memberName}</p>
+                    <Link
+                      to={`/dashboard/training/member-workouts/${w.memberId}`}
+                      className="font-medium text-white hover:text-orange-300"
+                    >
+                      {w.memberName}
+                    </Link>
                     <p className="text-xs text-slate-500">{w.planName ?? 'Workout'} · {w.status}</p>
                   </div>
                   <span className="text-xs text-orange-300">

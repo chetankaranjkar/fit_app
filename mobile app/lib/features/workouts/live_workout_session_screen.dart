@@ -8,8 +8,13 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_exception.dart';
 import '../../models/workout_tracking_models.dart';
 import '../../providers/me_providers.dart';
+import '../../providers/sync_status_provider.dart';
 import '../../providers/workout_tracking_providers.dart';
 import '../../services/workout_tracking_repository.dart';
+import '../../widgets/sync_status_chip.dart';
+import '../../workout_sync/models/workout_sync_enums.dart';
+import '../../workout_sync/sync/session_autosave_service.dart';
+import '../../workout_sync/sync/sync_manager.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -36,6 +41,8 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
   int? _savingSetId;
   Timer? _timer;
   int _elapsedSec = 0;
+  int _currentExerciseIndex = 0;
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -45,40 +52,70 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
   }
 
   Future<void> _bootstrap() async {
-    if (_session != null) {
-      _startTimer(_session!.startTimeUtc);
-      setState(() => _loading = false);
-      return;
-    }
     try {
       final memberId = await ref.read(memberIdProvider.future);
-      final active = await _repo.getActive(memberId);
+      final snap = await _repo.restoreSnapshot(memberId);
+      var session = _session ?? snap?.session ?? await _repo.getActive(memberId);
+      if (session != null) {
+        session = await _repo.reloadSession(session) ?? session;
+      }
       if (!mounted) return;
+      final elapsed = snap?.elapsedSeconds;
       setState(() {
-        _session = active;
+        _session = session;
         _loading = false;
+        _currentExerciseIndex = snap?.currentExerciseIndex ?? 0;
+        if (elapsed != null && elapsed > 0) {
+          _elapsedSec = elapsed;
+        }
       });
-      if (active?.startTimeUtc != null) _startTimer(active!.startTimeUtc);
+      if (session?.startTimeUtc != null) {
+        _startTimer(session!.startTimeUtc, preserveElapsed: elapsed != null && elapsed > 0);
+      }
+      final offset = snap?.scrollOffset ?? 0;
+      if (offset > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(offset);
+          }
+        });
+      }
+      _bindAutosave();
+      unawaited(SyncManager.instance.syncAll(reason: 'live-open'));
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _startTimer(DateTime? startUtc) {
+  void _bindAutosave() {
+    SessionAutosaveService.instance.bind(
+      readSession: () => _session,
+      readElapsedSeconds: () => _elapsedSec,
+      readExerciseIndex: () => _currentExerciseIndex,
+      readScrollOffset: () =>
+          _scrollController.hasClients ? _scrollController.offset : 0,
+    );
+  }
+
+  void _startTimer(DateTime? startUtc, {bool preserveElapsed = false}) {
     _timer?.cancel();
     if (startUtc == null) return;
-    void tick() {
+    if (!preserveElapsed) {
+      _elapsedSec = DateTime.now().difference(startUtc.toLocal()).inSeconds.clamp(0, 99999);
+    }
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
       setState(() {
         _elapsedSec = DateTime.now().difference(startUtc.toLocal()).inSeconds.clamp(0, 99999);
       });
-    }
-    tick();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+    });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    SessionAutosaveService.instance.stop();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -117,6 +154,7 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
       ref.invalidate(workoutTrackingDashboardProvider);
       ref.invalidate(workoutSessionHistoryProvider);
       ref.invalidate(activeWorkoutProvider);
+      invalidateSyncStatus(ref);
     } on ApiException catch (e) {
       if (!mounted) return;
       _alert('Could not save set', e.message);
@@ -135,6 +173,7 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
       ref.invalidate(activeWorkoutProvider);
       ref.invalidate(workoutTrackingDashboardProvider);
       ref.invalidate(workoutSessionHistoryProvider);
+      invalidateSyncStatus(ref);
       if (!mounted) return;
       context.pop();
       if (result.isOffline && result.pendingCompleteSync) {
@@ -251,10 +290,16 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
       navigationBar: CupertinoNavigationBar(
         middle: Text(session.planName ?? 'Live workout'),
         border: null,
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _completing ? null : () => context.pop(),
-          child: const Text('Close'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SyncStatusChip(compact: true),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _completing ? null : () => context.pop(),
+              child: const Text('Close'),
+            ),
+          ],
         ),
       ),
       child: Stack(
@@ -262,24 +307,7 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
           const Positioned.fill(child: PremiumBackground()),
           Column(
             children: [
-              if (session.isOffline)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 8),
-                  color: AppColors.accent.withValues(alpha: 0.2),
-                  child: Row(
-                    children: [
-                      const Icon(CupertinoIcons.wifi_slash, size: 16, color: AppColors.accent),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Offline mode — data saves on this device and syncs when online.',
-                          style: AppType.footnote.copyWith(color: AppColors.accent),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              _WorkoutSyncBanner(session: session),
               Padding(
                 padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
                 child: GlassCard(
@@ -335,6 +363,7 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
               ),
               Expanded(
                 child: ListView(
+                  controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.lg,
                     AppSpacing.md,
@@ -342,14 +371,19 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
                     100,
                   ),
                   children: [
-                    for (final group in session.exercises) ...[
-                      _ExerciseBlock(
-                        group: group,
-                        memberId: session.memberId,
-                        savingSetId: _savingSetId,
-                        onSave: _saveSet,
+                    for (var i = 0; i < session.exercises.length; i++) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: _ExerciseBlock(
+                          group: session.exercises[i],
+                          memberId: session.memberId,
+                          savingSetId: _savingSetId,
+                          onSave: (set, w, r, d) {
+                            setState(() => _currentExerciseIndex = i);
+                            return _saveSet(set, w, r, d);
+                          },
+                        ),
                       ),
-                      const SizedBox(height: AppSpacing.md),
                     ],
                   ],
                 ),
@@ -369,6 +403,58 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
           ),
         ],
       ),
+    );
+  }
+}
+
+class _WorkoutSyncBanner extends ConsumerWidget {
+  const _WorkoutSyncBanner({required this.session});
+
+  final ActiveWorkoutSession session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sync = ref.watch(syncStatusProvider);
+    return sync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (status) {
+        if (!session.isOffline && status.displayState == WorkoutSyncDisplayState.synced) {
+          return const SizedBox.shrink();
+        }
+        final color = session.isOffline || status.displayState == WorkoutSyncDisplayState.offline
+            ? AppColors.accent
+            : AppColors.danger;
+        final message = session.isOffline
+            ? 'Offline — sets save on this device (${status.pendingCount} pending upload).'
+            : status.isSyncing
+                ? 'Syncing your workout…'
+                : 'Sync pending — ${status.pendingCount} item(s) waiting to upload.';
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 8),
+          color: color.withValues(alpha: 0.2),
+          child: Row(
+            children: [
+              if (status.isSyncing)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: CupertinoActivityIndicator(radius: 8, color: color),
+                )
+              else
+                Icon(
+                  session.isOffline ? CupertinoIcons.wifi_slash : CupertinoIcons.arrow_2_circlepath,
+                  size: 16,
+                  color: color,
+                ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(message, style: AppType.footnote.copyWith(color: color)),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

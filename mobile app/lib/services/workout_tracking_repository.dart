@@ -3,37 +3,91 @@ import 'dart:math' as math;
 import '../core/api_exception.dart';
 import '../models/me_models.dart';
 import '../models/workout_tracking_models.dart';
-import 'workout_offline_store.dart';
+import '../workout_sync/models/local_workout_snapshot.dart';
+import '../workout_sync/offline/offline_workout_repository.dart';
+import '../workout_sync/sync/workout_sync_bootstrap.dart';
+import '../workout_sync/recovery/session_recovery_service.dart';
+import '../workout_sync/sync/session_autosave_service.dart';
+import '../workout_sync/sync/sync_manager.dart';
+import '../workout_sync/sync/workout_sync_log.dart';
+import 'workout_pending_queue.dart';
 import 'workout_template_cache.dart';
 import 'workout_tracking_service.dart';
 
-/// Online-first live workout tracking with SharedPreferences fallback.
+/// Live workout tracking: online API + Hive mirror + recovery + sync queue.
 class WorkoutTrackingRepository {
   WorkoutTrackingRepository._();
   static final WorkoutTrackingRepository instance = WorkoutTrackingRepository._();
 
   final _api = WorkoutTrackingService.instance;
-  final _offline = WorkoutOfflineStore.instance;
+  final _offline = OfflineWorkoutRepository.instance;
+  final _recovery = SessionRecoveryService.instance;
+  final _sync = SyncManager.instance;
   final _templates = WorkoutTemplateCache.instance;
+
+  Future<void> _ensureReady() async {
+    await WorkoutSyncBootstrap.ensureStarted();
+  }
 
   static bool _isOfflineError(Object e) =>
       e is ApiException && (e.isNetwork || e.statusCode == 503);
 
-  /// Sync offline live session. Call on app open / pull-to-refresh (with legacy queue in MeService).
-  Future<int> syncOfflineLiveSession() => _syncOfflineLiveSession();
+  Future<int> syncOfflineLiveSession() async {
+    await _ensureReady();
+    final result = await _sync.syncAll(reason: 'legacy-flush');
+    return result.syncedCount;
+  }
 
-  Future<bool> hasPendingOfflineWorkout() => _offline.hasPendingSession();
+  Future<bool> hasPendingOfflineWorkout() async {
+    await _ensureReady();
+    return _offline.hasPendingSession();
+  }
+
+  Future<bool> hasPendingSync() async {
+    await _ensureReady();
+    if (await _offline.hasPendingSession()) return true;
+    return (await WorkoutPendingQueue.instance.pendingCount()) > 0;
+  }
+
+  /// Recovery order: local → server → start (never if active exists).
+  Future<ActiveWorkoutSession> resolveOrStart({
+    required int memberId,
+    required int workoutPlanId,
+  }) async {
+    await _ensureReady();
+    final restored = await _recovery.restoreWorkoutSession(memberId);
+    if (restored != null) return restored.session;
+
+    try {
+      return await start(memberId: memberId, workoutPlanId: workoutPlanId);
+    } on ApiException catch (e) {
+      if (e.statusCode == 409) {
+        final active = await _recovery.restoreActiveSession(memberId);
+        if (active != null) return active;
+      }
+      rethrow;
+    }
+  }
+
+  Future<LocalWorkoutSnapshot?> restoreSnapshot(int memberId) async {
+    await _ensureReady();
+    return _recovery.restoreWorkoutSession(memberId);
+  }
 
   Future<ActiveWorkoutSession> start({
     required int memberId,
     required int workoutPlanId,
   }) async {
+    await _ensureReady();
+    final existing = await _recovery.restoreActiveSession(memberId);
+    if (existing != null) return existing;
+
     try {
       final session = await _api.start(
         memberId: memberId,
         workoutPlanId: workoutPlanId,
       );
-      await _offline.clearSession();
+      await _mirrorSnapshot(session);
       return session;
     } catch (e) {
       if (!_isOfflineError(e)) rethrow;
@@ -42,23 +96,9 @@ class WorkoutTrackingRepository {
   }
 
   Future<ActiveWorkoutSession?> getActive(int memberId) async {
-    try {
-      final online = await _api.getActive(memberId);
-      if (online != null) {
-        await _offline.clearSession();
-        return online;
-      }
-    } catch (e) {
-      if (!_isOfflineError(e)) rethrow;
-    }
-    final local = await _offline.loadSession();
-    if (local != null &&
-        local.memberId == memberId &&
-        local.status == 'InProgress' &&
-        !local.pendingCompleteSync) {
-      return local;
-    }
-    return null;
+    await _ensureReady();
+    final snap = await _recovery.restoreWorkoutSession(memberId);
+    return snap?.session;
   }
 
   Future<TrackedWorkoutSet> logSet({
@@ -69,6 +109,7 @@ class WorkoutTrackingRepository {
     required bool isCompleted,
     String? notes,
   }) async {
+    await _ensureReady();
     if (session.isOffline || session.sessionId <= 0) {
       return _logSetOffline(
         session: session,
@@ -77,18 +118,39 @@ class WorkoutTrackingRepository {
         actualWeight: actualWeight,
         isCompleted: isCompleted,
         notes: notes,
+        enqueueSync: true,
       );
     }
     try {
-      final row = await _api.logSet(
+      await _api.logSet(
         workoutSessionExerciseId: workoutSessionExerciseId,
         actualReps: actualReps,
         actualWeight: actualWeight,
         isCompleted: isCompleted,
         notes: notes,
       );
-      await _offline.clearSession();
-      return row;
+      final refreshed = await _api.getActive(session.memberId);
+      if (refreshed != null) {
+        await _mirrorSnapshot(refreshed);
+        final row = _findSet(refreshed, workoutSessionExerciseId);
+        if (row != null) return row;
+      }
+      final mirrored = await _offline.loadSession();
+      if (mirrored != null) {
+        final row = _findSet(mirrored, workoutSessionExerciseId);
+        if (row != null) return row;
+      }
+      return TrackedWorkoutSet(
+        id: workoutSessionExerciseId,
+        exerciseId: 0,
+        exerciseName: '',
+        setNumber: 1,
+        targetReps: actualReps ?? 0,
+        isCompleted: isCompleted,
+        actualReps: actualReps,
+        actualWeight: actualWeight,
+        notes: notes,
+      );
     } catch (e) {
       if (!_isOfflineError(e)) rethrow;
       final base = (await _offline.loadSession()) ?? session;
@@ -99,49 +161,120 @@ class WorkoutTrackingRepository {
         actualWeight: actualWeight,
         isCompleted: isCompleted,
         notes: notes,
+        enqueueSync: true,
       );
     }
   }
 
   Future<ActiveWorkoutSession> complete(ActiveWorkoutSession session) async {
+    await _ensureReady();
     if (session.isOffline || session.sessionId <= 0) {
-      final done = session.copyWith(
+      final done = _recalculate(session.copyWith(
         status: 'Completed',
         pendingCompleteSync: true,
         isOffline: true,
-      );
-      final recalc = _recalculate(done);
-      await _offline.saveSession(recalc);
-      return recalc;
+      ));
+      await _mirrorSnapshot(done);
+      await _sync.enqueueComplete(done);
+      return done;
     }
     try {
       final result = await _api.complete(session.sessionId);
-      await _offline.clearSession();
+      await _offline.clearSnapshot();
       return result;
     } catch (e) {
       if (!_isOfflineError(e)) rethrow;
-      final done = session.copyWith(
+      final done = _recalculate(session.copyWith(
         status: 'Completed',
         pendingCompleteSync: true,
         isOffline: true,
-      );
-      final recalc = _recalculate(done);
-      await _offline.saveSession(recalc);
-      return recalc;
+      ));
+      await _mirrorSnapshot(done);
+      await _sync.enqueueComplete(done);
+      return done;
     }
   }
 
-  /// Reload session from API or local store after a set save.
   Future<ActiveWorkoutSession?> reloadSession(ActiveWorkoutSession current) async {
+    await _ensureReady();
     if (current.isOffline || current.sessionId <= 0) {
       return _offline.loadSession();
     }
     try {
-      return await _api.getActive(current.memberId);
+      final online = await _api.getActive(current.memberId);
+      if (online != null) {
+        final merged = await _mergeWithLocalIfAhead(online, current.memberId);
+        await _mirrorSnapshot(merged);
+        return merged;
+      }
+      return _offline.loadSession();
     } catch (e) {
       if (_isOfflineError(e)) return _offline.loadSession();
       rethrow;
     }
+  }
+
+  Future<void> saveUiState({
+    required ActiveWorkoutSession session,
+    required int elapsedSeconds,
+    required int currentExerciseIndex,
+    double scrollOffset = 0,
+  }) async {
+    await _ensureReady();
+    await SessionAutosaveService.instance.persist(
+      session: session,
+      elapsedSeconds: elapsedSeconds,
+      currentExerciseIndex: currentExerciseIndex,
+      scrollOffset: scrollOffset,
+    );
+  }
+
+  Future<LocalWorkoutSnapshot?> loadLocalSnapshot() async {
+    await _ensureReady();
+    return _offline.loadSnapshot();
+  }
+
+  Future<void> _mirrorSnapshot(ActiveWorkoutSession session) async {
+    if (session.status == 'Completed' && !session.pendingCompleteSync) {
+      await _offline.clearSnapshot();
+      return;
+    }
+    final existing = await _offline.loadSnapshot();
+    await _offline.saveSnapshot(LocalWorkoutSnapshot(
+      session: session.copyWith(isOffline: false),
+      currentExerciseIndex: existing?.currentExerciseIndex ?? 0,
+      elapsedSeconds: existing?.elapsedSeconds ?? 0,
+      scrollOffset: existing?.scrollOffset ?? 0,
+      lastUpdatedAt: DateTime.now().toUtc(),
+      lastSyncedAt: session.lastSyncedAt ?? DateTime.now().toUtc(),
+      pendingActions: existing?.pendingActions ?? const [],
+    ));
+  }
+
+  Future<ActiveWorkoutSession> _mergeWithLocalIfAhead(
+    ActiveWorkoutSession server,
+    int memberId,
+  ) async {
+    final local = await _offline.loadSnapshot();
+    if (local == null ||
+        local.session.memberId != memberId ||
+        local.session.pendingCompleteSync) {
+      return server;
+    }
+    if (local.session.sessionId > 0 &&
+        server.sessionId > 0 &&
+        local.session.sessionId != server.sessionId) {
+      return server;
+    }
+    if (local.session.completedSets > server.completedSets) {
+      return local.session.copyWith(
+        sessionId: server.sessionId > 0 ? server.sessionId : local.session.sessionId,
+        isOffline: false,
+        lastSyncedAt: server.lastSyncedAt,
+        serverTimeUtc: server.serverTimeUtc,
+      );
+    }
+    return server;
   }
 
   Future<ActiveWorkoutSession> _startOffline({
@@ -159,7 +292,8 @@ class WorkoutTrackingRepository {
       template: template,
       offline: true,
     );
-    await _offline.saveSession(session);
+    await _mirrorSnapshot(session);
+    WorkoutSyncLog.info('Started offline session for plan $workoutPlanId');
     return session;
   }
 
@@ -170,6 +304,7 @@ class WorkoutTrackingRepository {
     double? actualWeight,
     required bool isCompleted,
     String? notes,
+    bool enqueueSync = false,
   }) async {
     final updated = _updateSetInSession(
       session,
@@ -180,83 +315,18 @@ class WorkoutTrackingRepository {
       notes: notes,
     );
     final recalc = _recalculate(updated.copyWith(isOffline: true));
-    await _offline.saveSession(recalc);
+    await _mirrorSnapshot(recalc);
+    if (enqueueSync) {
+      await _sync.enqueueLogSet(
+        session: recalc,
+        workoutSessionExerciseId: setId,
+        actualReps: actualReps,
+        actualWeight: actualWeight,
+        isCompleted: isCompleted,
+        notes: notes,
+      );
+    }
     return _findSet(recalc, setId)!;
-  }
-
-  Future<int> _syncOfflineLiveSession() async {
-    final offline = await _offline.loadSession();
-    if (offline == null) return 0;
-    if (!offline.isOffline && !offline.pendingCompleteSync) {
-      await _offline.clearSession();
-      return 0;
-    }
-
-    try {
-      var server = offline.sessionId > 0
-          ? await _api.getActive(offline.memberId)
-          : null;
-
-      if (server == null && offline.workoutPlanId != null) {
-        try {
-          server = await _api.start(
-            memberId: offline.memberId,
-            workoutPlanId: offline.workoutPlanId!,
-          );
-        } on ApiException catch (e) {
-          if (e.statusCode == 409) {
-            server = await _api.getActive(offline.memberId);
-          } else {
-            rethrow;
-          }
-        }
-      }
-
-      if (server == null) return 0;
-
-      final idMap = _mapSetIds(offline, server);
-
-      for (final entry in idMap.entries) {
-        final localSet = _findSet(offline, entry.key);
-        if (localSet == null) continue;
-        if (!localSet.isCompleted &&
-            localSet.actualReps == null &&
-            localSet.actualWeight == null) {
-          continue;
-        }
-        await _api.logSet(
-          workoutSessionExerciseId: entry.value,
-          actualReps: localSet.actualReps,
-          actualWeight: localSet.actualWeight,
-          isCompleted: localSet.isCompleted,
-          notes: localSet.notes,
-        );
-      }
-
-      if (offline.pendingCompleteSync || offline.status == 'Completed') {
-        await _api.complete(server.sessionId);
-      }
-
-      await _offline.clearSession();
-      return 1;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  Map<int, int> _mapSetIds(ActiveWorkoutSession offline, ActiveWorkoutSession server) {
-    final map = <int, int>{};
-    for (final gOff in offline.exercises) {
-      final gSrv = server.exercises.where((g) => g.exerciseId == gOff.exerciseId).toList();
-      if (gSrv.isEmpty) continue;
-      final gServer = gSrv.first;
-      for (final sOff in gOff.sets) {
-        final match = gServer.sets.where((s) => s.setNumber == sOff.setNumber).toList();
-        if (match.isEmpty) continue;
-        map[sOff.id] = match.first.id;
-      }
-    }
-    return map;
   }
 
   TrackedWorkoutSet? _findSet(ActiveWorkoutSession session, int setId) {

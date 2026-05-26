@@ -5,8 +5,14 @@ class SecureStorage {
   SecureStorage._();
 
   static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      // Samsung / One UI: recover instead of hanging when keystore is slow.
+      resetOnError: true,
+    ),
   );
+
+  static const _readTimeout = Duration(seconds: 3);
 
   static const String _kAccessToken = 'auth.access_token';
   static const String _kRefreshToken = 'auth.refresh_token';
@@ -16,12 +22,14 @@ class SecureStorage {
   static Future<void> writeAccessToken(String token) =>
       _storage.write(key: _kAccessToken, value: token);
 
-  static Future<String?> readAccessToken() => _storage.read(key: _kAccessToken);
+  static Future<String?> readAccessToken() =>
+      _storage.read(key: _kAccessToken).timeout(_readTimeout, onTimeout: () => null);
 
   static Future<void> writeRefreshToken(String token) =>
       _storage.write(key: _kRefreshToken, value: token);
 
-  static Future<String?> readRefreshToken() => _storage.read(key: _kRefreshToken);
+  static Future<String?> readRefreshToken() =>
+      _storage.read(key: _kRefreshToken).timeout(_readTimeout, onTimeout: () => null);
 
   static Future<void> writeRefreshExpiry(String? iso) =>
       _storage.write(key: _kRefreshExpiry, value: iso);
@@ -31,7 +39,8 @@ class SecureStorage {
   static Future<void> writeUserJson(String json) =>
       _storage.write(key: _kUserJson, value: json);
 
-  static Future<String?> readUserJson() => _storage.read(key: _kUserJson);
+  static Future<String?> readUserJson() =>
+      _storage.read(key: _kUserJson).timeout(_readTimeout, onTimeout: () => null);
 
   static Future<void> clear() async {
     await _storage.delete(key: _kAccessToken);

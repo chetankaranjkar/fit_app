@@ -21,7 +21,9 @@ import '../../widgets/stat_tile.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
 import '../workouts/widgets/workout_dashboard_card.dart';
+import '../../providers/sync_status_provider.dart';
 import '../../providers/workout_tracking_providers.dart';
+import '../../widgets/sync_status_chip.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -41,9 +43,10 @@ class HomeScreen extends ConsumerWidget {
             child: CustomScrollView(
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               slivers: [
-                const CupertinoSliverNavigationBar(
-                  largeTitle: Text('Today'),
+                CupertinoSliverNavigationBar(
+                  largeTitle: const Text('Today'),
                   border: null,
+                  trailing: const SyncStatusChip(),
                 ),
                 CupertinoSliverRefreshControl(
                   onRefresh: () async {
@@ -51,6 +54,7 @@ class HomeScreen extends ConsumerWidget {
                     ref.invalidate(dashboardProvider);
                     ref.invalidate(workoutTrackingDashboardProvider);
                     ref.invalidate(activeWorkoutProvider);
+                    invalidateSyncStatus(ref);
                   },
                 ),
                 dashboard.when(

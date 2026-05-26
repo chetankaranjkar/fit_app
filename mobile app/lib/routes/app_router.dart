@@ -24,18 +24,43 @@ final _rootNavKey = GlobalKey<NavigatorState>();
 final appRouter = GoRouter(
   navigatorKey: _rootNavKey,
   initialLocation: '/splash',
+  errorBuilder: (context, state) => CupertinoPageScaffold(
+    child: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(CupertinoIcons.exclamationmark_triangle, size: 40),
+              const SizedBox(height: 12),
+              Text(
+                state.error?.toString() ?? 'Navigation error',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              CupertinoButton.filled(
+                onPressed: () => context.go('/login'),
+                child: const Text('Go to login'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ),
   routes: [
     GoRoute(
       path: '/splash',
-      pageBuilder: (_, __) => _fadePage(const SplashScreen()),
+      pageBuilder: (_, __) => _plainPage(const SplashScreen()),
     ),
     GoRoute(
       path: '/login',
-      pageBuilder: (_, __) => _fadePage(const LoginScreen()),
+      pageBuilder: (_, __) => _plainPage(const LoginScreen()),
     ),
     GoRoute(
       path: '/onboarding/photo',
-      pageBuilder: (_, __) => _fadePage(const OnboardingProfilePhotoScreen()),
+      pageBuilder: (_, __) => _plainPage(const OnboardingProfilePhotoScreen()),
     ),
     GoRoute(
       path: '/scanner',
@@ -57,13 +82,13 @@ final appRouter = GoRouter(
         StatefulShellBranch(routes: [
           GoRoute(
             path: '/home',
-            pageBuilder: (_, __) => _fadePage(const HomeScreen()),
+            pageBuilder: (_, __) => _plainPage(const HomeScreen()),
           ),
         ]),
         StatefulShellBranch(routes: [
           GoRoute(
             path: '/workouts',
-            pageBuilder: (_, __) => _fadePage(const WorkoutsScreen()),
+            pageBuilder: (_, __) => _plainPage(const WorkoutsScreen()),
             routes: [
               GoRoute(
                 path: 'live',
@@ -105,19 +130,19 @@ final appRouter = GoRouter(
         StatefulShellBranch(routes: [
           GoRoute(
             path: '/diet',
-            pageBuilder: (_, __) => _fadePage(const DietScreen()),
+            pageBuilder: (_, __) => _plainPage(const DietScreen()),
           ),
         ]),
         StatefulShellBranch(routes: [
           GoRoute(
             path: '/progress',
-            pageBuilder: (_, __) => _fadePage(const ProgressScreen()),
+            pageBuilder: (_, __) => _plainPage(const ProgressScreen()),
           ),
         ]),
         StatefulShellBranch(routes: [
           GoRoute(
             path: '/profile',
-            pageBuilder: (_, __) => _fadePage(const ProfileScreen()),
+            pageBuilder: (_, __) => _plainPage(const ProfileScreen()),
           ),
         ]),
       ],
@@ -125,20 +150,10 @@ final appRouter = GoRouter(
   ],
 );
 
-CustomTransitionPage<T> _fadePage<T>(Widget child) {
-  return CustomTransitionPage<T>(
-    child: child,
-    transitionDuration: const Duration(milliseconds: 280),
-    transitionsBuilder: (_, animation, __, child) {
-      final fade = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-      return FadeTransition(opacity: fade, child: child);
-    },
-  );
-}
+/// Instant show — avoids blank screen when [FadeTransition] stays at opacity 0 after [GoRouter.go].
+CupertinoPage<T> _plainPage<T>(Widget child) => CupertinoPage<T>(child: child);
 
-CupertinoPage<T> _slidePage<T>(Widget child) {
-  return CupertinoPage<T>(child: child);
-}
+CupertinoPage<T> _slidePage<T>(Widget child) => CupertinoPage<T>(child: child);
 
 class _MissingPlan extends StatelessWidget {
   const _MissingPlan();

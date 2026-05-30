@@ -46,6 +46,7 @@ const dietSubItems = [
   { path: '/dashboard/diet-plans', label: 'Dashboard' },
   { path: '/dashboard/diet-plans/list', label: 'All Diet Plans' },
   { path: '/dashboard/diet-plans/assign', label: 'Assign to Users' },
+  { path: '/dashboard/supplements/master', label: 'Supplement Catalog' },
 ] as const
 
 const gymOpsSubItems = [

@@ -34,6 +34,8 @@ public sealed class WorkoutSessionExerciseDto
     public bool IsCompleted { get; set; }
     public string? Notes { get; set; }
     public decimal? SetVolume { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public int? CompletedByUserId { get; set; }
 }
 
 public sealed class WorkoutSessionGroupDto

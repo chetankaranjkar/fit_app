@@ -147,11 +147,34 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
 
         await EnsureCanAccessMemberAsync(session.MemberId.Value, session.UserId ?? 0, callerUserId, ct);
 
+        if (dto.IsCompleted)
+        {
+            var reps = dto.ActualReps ?? row.ActualReps;
+            var weight = dto.ActualWeight ?? row.ActualWeight;
+            if (!reps.HasValue || reps.Value <= 0)
+                throw new BadRequestException("Actual reps are required and must be greater than zero to complete a set.");
+            if (!weight.HasValue || weight.Value < 0)
+                throw new BadRequestException("Actual weight is required and cannot be negative to complete a set.");
+        }
+
         if (dto.ActualReps.HasValue) row.ActualReps = dto.ActualReps;
         if (dto.ActualWeight.HasValue) row.ActualWeight = dto.ActualWeight;
         if (dto.DurationSeconds.HasValue) row.DurationSeconds = dto.DurationSeconds;
         if (dto.RestSeconds.HasValue) row.RestSeconds = dto.RestSeconds;
+
+        var wasCompleted = row.IsCompleted;
         row.IsCompleted = dto.IsCompleted;
+        if (dto.IsCompleted && !wasCompleted)
+        {
+            row.CompletedAt = DateTime.UtcNow;
+            row.CompletedByUserId = callerUserId;
+        }
+        else if (!dto.IsCompleted)
+        {
+            row.CompletedAt = null;
+            row.CompletedByUserId = null;
+        }
+
         if (dto.Notes != null) row.Notes = dto.Notes.Trim();
 
         session.UpdatedDate = DateTime.UtcNow;
@@ -599,6 +622,8 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             RestSeconds = s.RestSeconds,
             IsCompleted = s.IsCompleted,
             Notes = s.Notes,
+            CompletedAt = s.CompletedAt,
+            CompletedByUserId = s.CompletedByUserId,
             SetVolume = s.IsCompleted && s.ActualReps.HasValue
                 ? (s.ActualWeight ?? 0) * s.ActualReps.Value
                 : null,

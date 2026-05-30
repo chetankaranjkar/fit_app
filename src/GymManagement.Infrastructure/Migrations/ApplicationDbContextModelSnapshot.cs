@@ -1375,6 +1375,263 @@ namespace GymManagement.Infrastructure.Migrations
                     b.ToTable("GymQrWorkoutSessions", (string)null);
                 });
 
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserEmergencyContact", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Mobile")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Relationship")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserHealthProfileId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserHealthProfileId");
+
+                    b.ToTable("users_emergency_contacts", (string)null);
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserHealthProfile", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AlcoholFrequency")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DoctorClinic")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DoctorContactNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("DoctorName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ExerciseRestrictions")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("HealthOverview")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastAssessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool?>("ParqChestPainDuringExercise")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ParqDizzinessOrFainting")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ParqDoctorAdvisedAgainstExercise")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ParqRecentSurgery")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ParqShortnessOfBreath")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("RiskLevel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal?>("SleepHours")
+                        .HasPrecision(4, 1)
+                        .HasColumnType("decimal(4,1)");
+
+                    b.Property<string>("SmokingStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("StressLevel")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("users_health_profile", (string)null);
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserInjury", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BodyPart")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InjuryType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserHealthProfileId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserHealthProfileId");
+
+                    b.ToTable("users_injuries", (string)null);
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserMedicalCondition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ConditionCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CustomConditionName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserHealthProfileId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserHealthProfileId");
+
+                    b.ToTable("users_medical_conditions", (string)null);
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserMedication", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Dosage")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MedicationName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserHealthProfileId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserHealthProfileId");
+
+                    b.ToTable("users_medications", (string)null);
+                });
+
             modelBuilder.Entity("GymManagement.Domain.Entities.Invoice", b =>
                 {
                     b.Property<int>("Id")
@@ -3847,6 +4104,132 @@ namespace GymManagement.Infrastructure.Migrations
                     b.ToTable("Staff", (string)null);
                 });
 
+            modelBuilder.Entity("GymManagement.Domain.Entities.Supplements.MemberSupplement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AssignedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Dosage")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("SupplementMasterId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Timing")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedByUserId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("SupplementMasterId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("StartDate", "EndDate");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("member_supplements", (string)null);
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Supplements.SupplementMaster", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DefaultDosage")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("IsActive", "IsDeleted");
+
+                    b.ToTable("supplements_master", (string)null);
+                });
+
             modelBuilder.Entity("GymManagement.Domain.Entities.Trainer", b =>
                 {
                     b.Property<int>("Id")
@@ -5057,7 +5440,10 @@ namespace GymManagement.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MemberId");
+                    b.HasIndex("MemberId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_WorkoutSessions_OneInProgressPerMember")
+                        .HasFilter("[IsDeleted] = 0 AND [Status] = N'InProgress' AND [MemberId] IS NOT NULL");
 
                     b.HasIndex("UserId");
 
@@ -5080,6 +5466,12 @@ namespace GymManagement.Infrastructure.Migrations
                     b.Property<decimal?>("ActualWeight")
                         .HasPrecision(10, 2)
                         .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CompletedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -5386,6 +5778,61 @@ namespace GymManagement.Infrastructure.Migrations
                     b.Navigation("Branch");
 
                     b.Navigation("Member");
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserEmergencyContact", b =>
+                {
+                    b.HasOne("GymManagement.Domain.Entities.Health.UserHealthProfile", "HealthProfile")
+                        .WithMany("EmergencyContacts")
+                        .HasForeignKey("UserHealthProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("HealthProfile");
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserHealthProfile", b =>
+                {
+                    b.HasOne("GymManagement.Domain.Entities.User", "User")
+                        .WithOne("HealthProfile")
+                        .HasForeignKey("GymManagement.Domain.Entities.Health.UserHealthProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserInjury", b =>
+                {
+                    b.HasOne("GymManagement.Domain.Entities.Health.UserHealthProfile", "HealthProfile")
+                        .WithMany("Injuries")
+                        .HasForeignKey("UserHealthProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("HealthProfile");
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserMedicalCondition", b =>
+                {
+                    b.HasOne("GymManagement.Domain.Entities.Health.UserHealthProfile", "HealthProfile")
+                        .WithMany("MedicalConditions")
+                        .HasForeignKey("UserHealthProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("HealthProfile");
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserMedication", b =>
+                {
+                    b.HasOne("GymManagement.Domain.Entities.Health.UserHealthProfile", "HealthProfile")
+                        .WithMany("Medications")
+                        .HasForeignKey("UserHealthProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("HealthProfile");
                 });
 
             modelBuilder.Entity("GymManagement.Domain.Entities.Invoice", b =>
@@ -6027,6 +6474,49 @@ namespace GymManagement.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("GymManagement.Domain.Entities.Supplements.MemberSupplement", b =>
+                {
+                    b.HasOne("GymManagement.Domain.Entities.User", "AssignedByUser")
+                        .WithMany()
+                        .HasForeignKey("AssignedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GymManagement.Domain.Entities.Retail.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GymManagement.Domain.Entities.Supplements.SupplementMaster", "SupplementMaster")
+                        .WithMany("MemberSupplements")
+                        .HasForeignKey("SupplementMasterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GymManagement.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AssignedByUser");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("SupplementMaster");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.Supplements.SupplementMaster", b =>
+                {
+                    b.HasOne("GymManagement.Domain.Entities.Retail.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("GymManagement.Domain.Entities.Trainer", b =>
                 {
                     b.HasOne("GymManagement.Domain.Entities.Organization", "Organization")
@@ -6500,6 +6990,17 @@ namespace GymManagement.Infrastructure.Migrations
                     b.Navigation("Logs");
                 });
 
+            modelBuilder.Entity("GymManagement.Domain.Entities.Health.UserHealthProfile", b =>
+                {
+                    b.Navigation("EmergencyContacts");
+
+                    b.Navigation("Injuries");
+
+                    b.Navigation("MedicalConditions");
+
+                    b.Navigation("Medications");
+                });
+
             modelBuilder.Entity("GymManagement.Domain.Entities.Invoice", b =>
                 {
                     b.Navigation("InvoiceItems");
@@ -6605,6 +7106,11 @@ namespace GymManagement.Infrastructure.Migrations
                     b.Navigation("SubCategories");
                 });
 
+            modelBuilder.Entity("GymManagement.Domain.Entities.Supplements.SupplementMaster", b =>
+                {
+                    b.Navigation("MemberSupplements");
+                });
+
             modelBuilder.Entity("GymManagement.Domain.Entities.Trainer", b =>
                 {
                     b.Navigation("AssignedUserDietPlans");
@@ -6631,6 +7137,8 @@ namespace GymManagement.Infrastructure.Migrations
                     b.Navigation("BodyImages");
 
                     b.Navigation("Feedbacks");
+
+                    b.Navigation("HealthProfile");
 
                     b.Navigation("InstructorAssignments");
 

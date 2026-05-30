@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-05-26 (workout recovery + Hive offline sync).
+**Last updated:** 2026-05-31 (Supplement Tracking module).
 
 ---
 
@@ -224,6 +224,48 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 | Upload photo | `POST /api/FileUpload/profile/user/{userId}` |
 | Permissions | `GET /api/Users/{id}/permissions` |
 | Live workout tracking | `/api/workout/*` (see §14) |
+| Health profile | `/api/HealthProfile` (see §15) |
+
+---
+
+## 15. Health Profile (medical screening)
+
+Normalized tables: `users_health_profile`, `users_medical_conditions`, `users_medications`, `users_injuries`, `users_emergency_contacts`. Risk level (`Low` / `Moderate` / `High`) computed on save via `HealthProfileRiskEngine`.
+
+| Step | API | UI |
+|------|-----|-----|
+| Staff edit member | `PUT /api/HealthProfile/user/{userId}` | `/dashboard/users/:userId/health-profile` |
+| Member self-service | `PUT /api/HealthProfile/me` | `/dashboard/member/health-profile` |
+| Trainer / staff read | `GET /api/HealthProfile/user/{userId}/summary` | User detail banner, workout assignment modal |
+
+Trainers assigned via `UserInstructors` can read (not write) a client's profile. Assign workouts only after reviewing summary panel.
+
+**Code:** `HealthProfileService`, `HealthProfileController`, `gym_client/src/modules/health-profile/`.
+
+---
+
+## 16. Supplement Tracking (member protocols)
+
+Catalog + assignments (distinct from legacy `UserSupplements` free-text table and from retail POS inventory).
+
+| Table | Purpose |
+|-------|---------|
+| `supplements_master` | Name, category, default dosage, active flag, optional `ProductId` → `Retail_Products` |
+| `member_supplements` | Per-member assignment: dosage, timing, dates, status, assigned-by, optional product link |
+
+| Step | API | UI |
+|------|-----|-----|
+| Manage catalog | `GET/POST/PUT/DELETE /api/SupplementMaster` | `/dashboard/supplements/master` |
+| Assign to member | `POST /api/MemberSupplements` | User detail panel, `/dashboard/users/:userId/supplements` |
+| Member read | `GET /api/MemberSupplements/me` | `/dashboard/member/supplements` |
+| Trainer/staff read | `GET /api/MemberSupplements/user/{id}` | User detail (compact), full page + timeline |
+| Analytics | `GET /api/MemberSupplements/analytics` | Catalog page dashboard strip |
+
+**Auth:** trainers read/write clients via `UserInstructors`; staff via `UsersAccess`; members read own assignments only.
+
+**Code:** `SupplementTrackingService`, `SupplementMasterController`, `MemberSupplementsController`, `gym_client/src/modules/supplement-tracking/`.
+
+**Migrate:** `20260530194055_AddSupplementTrackingModule`.
 
 ---
 

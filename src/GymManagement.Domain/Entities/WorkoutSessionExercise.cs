@@ -19,6 +19,8 @@ public class WorkoutSessionExercise
     public bool IsCompleted { get; set; }
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAt { get; set; }
+    public int? CompletedByUserId { get; set; }
 
     public WorkoutSession WorkoutSession { get; set; } = null!;
     public Exercise Exercise { get; set; } = null!;

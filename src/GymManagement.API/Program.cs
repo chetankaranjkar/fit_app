@@ -210,6 +210,8 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IUserInstructorService, UserInstructorService>();
 builder.Services.AddScoped<ITrainerFeedbackService, TrainerFeedbackService>();
 builder.Services.AddScoped<IBodyMetricsService, BodyMetricsService>();
+builder.Services.AddScoped<IHealthProfileService, GymManagement.Infrastructure.Services.Health.HealthProfileService>();
+builder.Services.AddScoped<ISupplementTrackingService, GymManagement.Infrastructure.Services.Supplements.SupplementTrackingService>();
 builder.Services.AddScoped<IAttendanceLogService, AttendanceLogService>();
 builder.Services.AddScoped<IUserBodyImageService, UserBodyImageService>();
 builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();

@@ -1,0 +1,5 @@
+export { HealthProfileStepper } from './components/HealthProfileStepper'
+export { TrainerHealthAlertPanel } from './components/TrainerHealthAlertPanel'
+export { HealthRiskBadge } from './components/HealthRiskBadge'
+export { healthProfileService } from './services/healthProfile.service'
+export * from './types/healthProfile'

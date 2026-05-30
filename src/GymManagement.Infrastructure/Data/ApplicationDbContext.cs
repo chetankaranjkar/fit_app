@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using GymManagement.Domain.Entities;
 using GymManagement.Domain.Entities.GymOps;
+using GymManagement.Domain.Entities.Health;
+using GymManagement.Domain.Entities.Supplements;
 using GymManagement.Domain.Entities.LockerMgmt;
 
 namespace GymManagement.Infrastructure.Data
@@ -34,6 +36,13 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<Trainer> Trainers { get; set; }
         public DbSet<Member> Members { get; set; }
         public DbSet<Staff> Staff { get; set; }
+        public DbSet<UserHealthProfile> UserHealthProfiles { get; set; }
+        public DbSet<UserMedicalCondition> UserMedicalConditions { get; set; }
+        public DbSet<UserMedication> UserMedications { get; set; }
+        public DbSet<UserInjury> UserInjuries { get; set; }
+        public DbSet<UserEmergencyContact> UserEmergencyContacts { get; set; }
+        public DbSet<SupplementMaster> SupplementMasters { get; set; }
+        public DbSet<MemberSupplement> MemberSupplements { get; set; }
         public DbSet<AuthUser> AuthUsers { get; set; }
         public DbSet<LoginActivity> LoginActivities { get; set; }
         public DbSet<BodyPart> BodyParts { get; set; }
@@ -208,6 +217,126 @@ namespace GymManagement.Infrastructure.Data
                     .WithOne(u => u.StaffProfile)
                     .HasForeignKey<Staff>(e => e.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<UserHealthProfile>(entity =>
+            {
+                entity.ToTable("users_health_profile");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.UserId).IsUnique();
+                entity.Property(e => e.HealthOverview).HasMaxLength(4000);
+                entity.Property(e => e.SmokingStatus).HasMaxLength(30);
+                entity.Property(e => e.AlcoholFrequency).HasMaxLength(30);
+                entity.Property(e => e.StressLevel).HasMaxLength(20);
+                entity.Property(e => e.SleepHours).HasPrecision(4, 1);
+                entity.Property(e => e.DoctorName).HasMaxLength(150);
+                entity.Property(e => e.DoctorClinic).HasMaxLength(200);
+                entity.Property(e => e.DoctorContactNumber).HasMaxLength(30);
+                entity.Property(e => e.RiskLevel).HasMaxLength(20);
+                entity.Property(e => e.ExerciseRestrictions).HasMaxLength(4000);
+                entity.HasOne(e => e.User)
+                    .WithOne(u => u.HealthProfile)
+                    .HasForeignKey<UserHealthProfile>(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<UserMedicalCondition>(entity =>
+            {
+                entity.ToTable("users_medical_conditions");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.ConditionCode).HasMaxLength(50);
+                entity.Property(e => e.CustomConditionName).HasMaxLength(200);
+                entity.Property(e => e.Notes).HasMaxLength(1000);
+                entity.HasOne(e => e.HealthProfile)
+                    .WithMany(p => p.MedicalConditions)
+                    .HasForeignKey(e => e.UserHealthProfileId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<UserMedication>(entity =>
+            {
+                entity.ToTable("users_medications");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.MedicationName).HasMaxLength(200);
+                entity.Property(e => e.Dosage).HasMaxLength(100);
+                entity.Property(e => e.Reason).HasMaxLength(500);
+                entity.HasOne(e => e.HealthProfile)
+                    .WithMany(p => p.Medications)
+                    .HasForeignKey(e => e.UserHealthProfileId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<UserInjury>(entity =>
+            {
+                entity.ToTable("users_injuries");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.BodyPart).HasMaxLength(80);
+                entity.Property(e => e.InjuryType).HasMaxLength(80);
+                entity.Property(e => e.Status).HasMaxLength(30);
+                entity.Property(e => e.Notes).HasMaxLength(1000);
+                entity.HasOne(e => e.HealthProfile)
+                    .WithMany(p => p.Injuries)
+                    .HasForeignKey(e => e.UserHealthProfileId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<UserEmergencyContact>(entity =>
+            {
+                entity.ToTable("users_emergency_contacts");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).HasMaxLength(150);
+                entity.Property(e => e.Relationship).HasMaxLength(80);
+                entity.Property(e => e.Mobile).HasMaxLength(20);
+                entity.HasOne(e => e.HealthProfile)
+                    .WithMany(p => p.EmergencyContacts)
+                    .HasForeignKey(e => e.UserHealthProfileId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<SupplementMaster>(entity =>
+            {
+                entity.ToTable("supplements_master");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).HasMaxLength(200);
+                entity.Property(e => e.Category).HasMaxLength(50);
+                entity.Property(e => e.Description).HasMaxLength(2000);
+                entity.Property(e => e.DefaultDosage).HasMaxLength(120);
+                entity.HasIndex(e => e.Category);
+                entity.HasIndex(e => new { e.IsActive, e.IsDeleted });
+                entity.HasOne(e => e.Product)
+                    .WithMany()
+                    .HasForeignKey(e => e.ProductId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<MemberSupplement>(entity =>
+            {
+                entity.ToTable("member_supplements");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Dosage).HasMaxLength(120);
+                entity.Property(e => e.Timing).HasMaxLength(40);
+                entity.Property(e => e.Notes).HasMaxLength(2000);
+                entity.Property(e => e.Status).HasMaxLength(30);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => new { e.UserId, e.Status });
+                entity.HasIndex(e => e.SupplementMasterId);
+                entity.HasIndex(e => new { e.StartDate, e.EndDate });
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.SupplementMaster)
+                    .WithMany(s => s.MemberSupplements)
+                    .HasForeignKey(e => e.SupplementMasterId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.AssignedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.AssignedByUserId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne(e => e.Product)
+                    .WithMany()
+                    .HasForeignKey(e => e.ProductId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
 
             // Configure Trainer (linked to User; only trainer-specific columns)
@@ -1128,6 +1257,13 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<GymQrCode>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<LoginActivity>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<UserBodyImage>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<UserHealthProfile>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<UserMedicalCondition>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<UserMedication>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<UserInjury>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<UserEmergencyContact>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<SupplementMaster>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<MemberSupplement>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<MembershipPlan>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<UserMembership>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<Payment>().HasQueryFilter(e => !e.IsDeleted);

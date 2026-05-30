@@ -1,5 +1,7 @@
 namespace GymManagement.Domain.Entities
 {
+    using Health;
+
     /// <summary>
     /// <b>Profile</b> (person record). RBAC: <see cref="AuthUser"/> → <c>Users</c> → <see cref="UserRole"/> (role mapping)
     /// → <see cref="AppRole"/> → <see cref="RolePermission"/> → <see cref="Permission"/>.
@@ -50,6 +52,8 @@ namespace GymManagement.Domain.Entities
         public Member? Member { get; set; }
         /// <summary>Optional staff profile (reception, accounts, operations).</summary>
         public Staff? StaffProfile { get; set; }
+        /// <summary>Health assessment &amp; medical screening profile.</summary>
+        public UserHealthProfile? HealthProfile { get; set; }
         /// <summary>Login (AuthUsers) when this user has an account.</summary>
         public AuthUser? AuthUser { get; set; }
         public ICollection<LoginActivity> LoginActivities { get; set; } = new List<LoginActivity>();

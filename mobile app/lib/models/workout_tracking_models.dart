@@ -165,6 +165,8 @@ class TrackedWorkoutSet {
   final bool isCompleted;
   final String? notes;
   final double? setVolume;
+  final DateTime? completedAt;
+  final int? completedByUserId;
 
   const TrackedWorkoutSet({
     required this.id,
@@ -180,6 +182,8 @@ class TrackedWorkoutSet {
     required this.isCompleted,
     this.notes,
     this.setVolume,
+    this.completedAt,
+    this.completedByUserId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -196,6 +200,8 @@ class TrackedWorkoutSet {
         'isCompleted': isCompleted,
         if (notes != null) 'notes': notes,
         if (setVolume != null) 'setVolume': setVolume,
+        if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
+        if (completedByUserId != null) 'completedByUserId': completedByUserId,
       };
 
   TrackedWorkoutSet copyWith({
@@ -204,6 +210,8 @@ class TrackedWorkoutSet {
     bool? isCompleted,
     String? notes,
     double? setVolume,
+    DateTime? completedAt,
+    int? completedByUserId,
   }) =>
       TrackedWorkoutSet(
         id: id,
@@ -219,6 +227,8 @@ class TrackedWorkoutSet {
         isCompleted: isCompleted ?? this.isCompleted,
         notes: notes ?? this.notes,
         setVolume: setVolume ?? this.setVolume,
+        completedAt: completedAt ?? this.completedAt,
+        completedByUserId: completedByUserId ?? this.completedByUserId,
       );
 
   factory TrackedWorkoutSet.fromJson(Map<String, dynamic> json) {
@@ -236,6 +246,8 @@ class TrackedWorkoutSet {
       isCompleted: json['isCompleted'] == true,
       notes: json['notes']?.toString(),
       setVolume: _double(json['setVolume']),
+      completedAt: _dt(json['completedAt']),
+      completedByUserId: _int(json['completedByUserId']),
     );
   }
 }

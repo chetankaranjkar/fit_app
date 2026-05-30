@@ -48,6 +48,8 @@ export const ROLE_NAV: Record<DashboardRole, NavItem[]> = {
     { path: '/dashboard/member/workouts', label: 'Workouts', icon: 'workouts' },
     { path: '/dashboard/member/diet', label: 'Diet', icon: 'diet' },
     { path: '/dashboard/member/progress', label: 'Progress', icon: 'progress' },
+    { path: '/dashboard/member/health-profile', label: 'Health Profile', icon: 'profile' },
+    { path: '/dashboard/member/supplements', label: 'Supplements', icon: 'diet' },
     { path: '/dashboard/profile', label: 'Profile', icon: 'profile' },
   ],
 }
@@ -78,6 +80,7 @@ export const ROLE_NAV_GROUPS: Record<DashboardRole, NavGroup[]> = {
         { path: '/dashboard/diet-plans', label: 'Diet dashboard' },
         { path: '/dashboard/diet-plans/list', label: 'All diet plans' },
         { path: '/dashboard/diet-plans/assign', label: 'Assign to clients' },
+        { path: '/dashboard/supplements/master', label: 'Supplement catalog' },
       ],
     },
   ],

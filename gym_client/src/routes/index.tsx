@@ -43,8 +43,23 @@ const MemberProgressPage = lazy(() =>
 const MemberProfilePage = lazy(() =>
   import('../pages/member/MemberProfilePage').then((m) => ({ default: m.MemberProfilePage })),
 )
+const MemberHealthProfilePage = lazy(() =>
+  import('../pages/member/MemberHealthProfilePage').then((m) => ({ default: m.MemberHealthProfilePage })),
+)
 const MemberPortalPage = lazy(() =>
   import('../pages/member/MemberPortalPage').then((m) => ({ default: m.MemberPortalPage })),
+)
+const UserHealthProfilePage = lazy(() =>
+  import('../pages/health/UserHealthProfilePage').then((m) => ({ default: m.UserHealthProfilePage })),
+)
+const SupplementMasterPage = lazy(() =>
+  import('../modules/supplement-tracking').then((m) => ({ default: m.SupplementMasterPage })),
+)
+const UserSupplementsPage = lazy(() =>
+  import('../modules/supplement-tracking').then((m) => ({ default: m.UserSupplementsPage })),
+)
+const MemberSupplementsPage = lazy(() =>
+  import('../modules/supplement-tracking').then((m) => ({ default: m.MemberSupplementsPage })),
 )
 const ReceptionCrmPage = lazy(() =>
   import('../pages/reception/ReceptionCrmPage').then((m) => ({ default: m.ReceptionCrmPage })),
@@ -276,6 +291,10 @@ const router = createBrowserRouter([
               { path: '/dashboard/users', element: withSuspense(<UsersPage />) },
               { path: '/dashboard/attendance', element: withSuspense(<AttendancePage />) },
               { path: '/dashboard/users/:userId', element: withSuspense(<UserDetailPage />) },
+              { path: '/dashboard/users/:userId/health-profile', element: withSuspense(<UserHealthProfilePage />) },
+              { path: '/dashboard/users/:userId/supplements', element: withSuspense(<UserSupplementsPage />) },
+              { path: '/dashboard/supplements/master', element: withSuspense(<SupplementMasterPage />) },
+              { path: '/dashboard/member/supplements', element: withSuspense(<MemberSupplementsPage />) },
               { path: '/dashboard/membership-plans', element: withSuspense(<MembershipPlansPage />) },
               { path: '/dashboard/user-memberships', element: withSuspense(<UserMembershipsPage />) },
               { path: '/dashboard/payments', element: withSuspense(<PaymentsPage />) },
@@ -302,6 +321,7 @@ const router = createBrowserRouter([
               { path: '/dashboard/member/diet', element: withSuspense(<MemberDietPage />) },
               { path: '/dashboard/member/progress', element: withSuspense(<MemberProgressPage />) },
               { path: '/dashboard/member/portal', element: withSuspense(<MemberPortalPage />) },
+              { path: '/dashboard/member/health-profile', element: withSuspense(<MemberHealthProfilePage />) },
               { path: '/dashboard/training/body-parts', element: withSuspense(<BodyPartsPage />) },
               { path: '/dashboard/training/exercises', element: withSuspense(<ExercisesPage />) },
               {

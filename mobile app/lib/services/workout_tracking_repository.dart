@@ -354,12 +354,16 @@ class WorkoutTrackingRepository {
           final reps = actualReps ?? s.actualReps;
           final weight = actualWeight ?? s.actualWeight;
           final vol = isCompleted && reps != null ? (weight ?? 0) * reps : null;
+          final completedAt = isCompleted
+              ? (s.completedAt ?? DateTime.now().toUtc())
+              : null;
           sets.add(s.copyWith(
             actualReps: actualReps ?? s.actualReps,
             actualWeight: actualWeight ?? s.actualWeight,
             isCompleted: isCompleted,
             notes: notes ?? s.notes,
             setVolume: vol,
+            completedAt: completedAt,
           ));
         } else {
           sets.add(s);

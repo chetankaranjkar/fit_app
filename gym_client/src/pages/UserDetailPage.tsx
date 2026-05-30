@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Area,
@@ -33,6 +33,9 @@ import {
 } from '../components/users/UserOnboardingChecklist'
 import { DietAssignmentsSection } from '../components/users/DietAssignmentsSection'
 import { MemberReportExports } from '../components/users/MemberReportExports'
+import { TrainerHealthAlertPanel } from '../modules/health-profile/components/TrainerHealthAlertPanel'
+import { healthProfileService } from '../modules/health-profile/services/healthProfile.service'
+import { MemberSupplementsPanel } from '../modules/supplement-tracking/components/MemberSupplementsPanel'
 import { MemberPaymentHistoryTab } from '../components/users/MemberPaymentHistoryTab'
 import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
 import { formatInr } from '../lib/formatInr'
@@ -2164,8 +2167,36 @@ function DetailsTab({
   const activeWorkoutPlanIds = new Set(activeWorkoutSchedules.map((s) => s.workoutPlanId))
   const hasWorkoutAssignment = activeWorkoutSchedules.length > 0
 
+  const { data: healthSummary, isLoading: healthSummaryLoading } = useQuery({
+    queryKey: ['health-profile-summary', user.id],
+    queryFn: async () => {
+      const { data } = await healthProfileService.getSummaryByUserId(user.id)
+      return data
+    },
+  })
+
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <TrainerHealthAlertPanel summary={healthSummary} loading={healthSummaryLoading} />
+        <Link
+          to={`/dashboard/users/${user.id}/health-profile`}
+          className="glass-card shrink-0 rounded-2xl border border-[rgba(245,196,0,0.25)] px-5 py-4 text-center transition hover:border-[#F5C400]/50 tiger-glow-soft lg:min-w-[200px]"
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#F5C400]/80">
+            Health Profile
+          </p>
+          <p className="mt-1 text-sm font-semibold text-white">
+            {healthSummary?.isCompleted ? 'View / update' : 'Complete screening →'}
+          </p>
+        </Link>
+      </div>
+      <MemberSupplementsPanel
+        userId={user.id}
+        memberName={`${user.firstName} ${user.lastName}`.trim()}
+        canManage={!viewMode}
+        compact={viewMode}
+      />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <InfoCard
           title="Personal"

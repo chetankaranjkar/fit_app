@@ -16,6 +16,8 @@ import { userSchedulesService } from '../../services/userSchedules.service'
 import { usersService } from '../../services/users.service'
 import { workoutPlansService } from '../../services/workoutPlans.service'
 import { trainersService } from '../../services/trainers.service'
+import { TrainerHealthAlertPanel } from '../../modules/health-profile/components/TrainerHealthAlertPanel'
+import { healthProfileService } from '../../modules/health-profile/services/healthProfile.service'
 import type { AssignWorkoutPlanDto, ScheduleType, UserScheduleDto } from '../../types/userSchedule'
 import type { User } from '../../types/user'
 import type { WorkoutPlan } from '../../types/workoutPlan'
@@ -97,6 +99,16 @@ export function WorkoutAssignmentsPage() {
       const { data } = await trainersService.getAll()
       return Array.isArray(data) ? (data as Trainer[]) : []
     },
+  })
+
+  const selectedMemberId = !bulkAssignMembers && form.userId > 0 ? form.userId : 0
+  const { data: assignHealthSummary, isLoading: assignHealthLoading } = useQuery({
+    queryKey: ['health-profile-summary', selectedMemberId],
+    queryFn: async () => {
+      const { data } = await healthProfileService.getSummaryByUserId(selectedMemberId)
+      return data
+    },
+    enabled: modalOpen && selectedMemberId > 0,
   })
 
   useEffect(() => {
@@ -404,6 +416,9 @@ export function WorkoutAssignmentsPage() {
                 ))}
               </select>
             </div>
+          )}
+          {selectedMemberId > 0 && (
+            <TrainerHealthAlertPanel summary={assignHealthSummary} loading={assignHealthLoading} compact />
           )}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">Workout plan</label>

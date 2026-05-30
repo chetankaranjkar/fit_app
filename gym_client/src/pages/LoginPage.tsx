@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
+import { TigerLogo } from '../components/marketing/TigerLogo'
 import { LoginForm } from '../features/auth/components/LoginForm'
 import { authService } from '../services/auth.service'
 import { getPostLoginPath, resolveDashboardRole } from '../features/auth/roleRouting'
@@ -51,23 +52,16 @@ export function LoginPage() {
 
       <div className="relative w-full max-w-sm">
         {/* Brand */}
-        <div className="login-logo mb-6 text-center">
-          <Link to="/" className="inline-flex items-center gap-2">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] text-white shadow-lg shadow-purple-500/30">
-              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 8h2v8H6m10-8h2v8h-2M8 12h8M4 10h2v4H4m14-4h2v4h-2" />
-              </svg>
-            </span>
-            <span className="bg-[linear-gradient(135deg,#60a5fa,#c084fc)] bg-clip-text text-2xl font-bold tracking-tight text-transparent">
-              PulseFit
-            </span>
+        <div className="login-logo mb-6 flex justify-center">
+          <Link to="/" aria-label="Tiger Fitness — home">
+            <TigerLogo variant="full" size={72} />
           </Link>
         </div>
 
         <div className="login-card glass-card-strong border-gradient-neon rounded-2xl p-6">
           <div className="mb-5 text-center">
             <h1 className="text-xl font-semibold text-white">Welcome back</h1>
-            <p className="mt-1 text-xs text-slate-400">Sign in to your PulseFit admin account</p>
+            <p className="mt-1 text-xs text-slate-400">Sign in to your Tiger Fitness account</p>
           </div>
           {sessionExpiredMessage && (
             <div

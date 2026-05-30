@@ -1,22 +1,33 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap");
 @import "tailwindcss";
 @import "locomotive-scroll/dist/locomotive-scroll.css";
 
 @theme {
-  --font-sans: "DM Sans", system-ui, sans-serif;
+  /* Typography — Tiger Fitness uses Bebas Neue / Oswald for display, Montserrat for body */
+  --font-sans: "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bebas Neue", "Oswald", "Montserrat", system-ui, sans-serif;
 
-  /* Neon brand palette */
-  --color-neon-blue: #3b82f6;
-  --color-neon-blue-500: #60a5fa;
-  --color-neon-purple: #a855f7;
-  --color-neon-purple-500: #c084fc;
-  --color-neon-cyan: #22d3ee;
+  /* Tiger Fitness brand palette */
+  --color-tiger-gold: #f5c400;
+  --color-tiger-gold-300: #ffd942;
+  --color-tiger-gold-500: #f5c400;
+  --color-tiger-gold-600: #d9a400;
+  --color-tiger-gold-700: #b58800;
+  --color-tiger-gold-soft: rgba(245, 196, 0, 0.2);
 
-  /* Dark surface palette */
-  --color-surface-950: #050510;
-  --color-surface-900: #0b0b1a;
-  --color-surface-800: #111127;
-  --color-surface-700: #1a1a34;
+  /* Surface palette (deep blacks) */
+  --color-ink-950: #000000;
+  --color-ink-900: #050505;
+  --color-ink-850: #0a0a0a;
+  --color-ink-800: #111111;
+  --color-ink-700: #1a1a1a;
+  --color-ink-600: #222222;
+
+  /* Foreground */
+  --color-mute-100: #ffffff;
+  --color-mute-200: #e5e5e5;
+  --color-mute-300: #b0b0b0;
+  --color-mute-400: #888888;
+  --color-mute-500: #555555;
 }
 
 html {
@@ -28,24 +39,33 @@ html {
 
 body {
   font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
   overflow-x: hidden;
   width: 100%;
   max-width: 100vw;
-  color: #e5e7eb;
-  background-color: #050510;
+  color: #ffffff;
+  background-color: #000000;
   background-image:
-    radial-gradient(ellipse 80% 60% at 10% -10%, rgba(59, 130, 246, 0.18), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 100% 0%, rgba(168, 85, 247, 0.18), transparent 60%),
-    radial-gradient(ellipse 90% 70% at 50% 110%, rgba(34, 211, 238, 0.08), transparent 60%),
-    linear-gradient(180deg, #050510 0%, #07071a 60%, #050510 100%);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(245, 196, 0, 0.10), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 30%, rgba(245, 196, 0, 0.06), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 0% 90%, rgba(245, 196, 0, 0.05), transparent 60%),
+    linear-gradient(180deg, #000000 0%, #050505 50%, #000000 100%);
   background-attachment: fixed;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Display headings utility class */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
 }
 
 /* Thinner dark scrollbars globally */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+  scrollbar-color: rgba(245, 196, 0, 0.35) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -58,12 +78,12 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: rgba(148, 163, 184, 0.35);
+  background-color: rgba(245, 196, 0, 0.35);
   border-radius: 3px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(168, 85, 247, 0.6);
+  background-color: rgba(245, 196, 0, 0.6);
 }
 
 /* Shimmer animation for skeletons */
@@ -90,23 +110,58 @@ body {
   animation: float-slow 12s ease-in-out infinite;
 }
 
-/* Pulse glow for badges / accents */
+/* Pulse glow — gold */
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.45);
+    box-shadow: 0 0 0 0 rgba(245, 196, 0, 0.55);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+    box-shadow: 0 0 0 10px rgba(245, 196, 0, 0);
   }
 }
 
 .animate-pulse-glow {
-  animation: pulse-glow 2.5s ease-in-out infinite;
+  animation: pulse-glow 2.4s ease-in-out infinite;
 }
 
-/* Smooth focus transitions with neon ring */
+/* Slow tiger-stripe scan animation for hero backgrounds */
+@keyframes stripe-scan {
+  0% { transform: translateX(-30%); }
+  100% { transform: translateX(30%); }
+}
+
+.animate-stripe-scan {
+  animation: stripe-scan 18s ease-in-out infinite alternate;
+}
+
+/* Hero tiger watermark — diagonal drift top-left → bottom-right, then hold */
+@keyframes tiger-watermark-drift {
+  0% {
+    transform: translate(calc(-50% - 30vw), calc(-50% - 26vh));
+  }
+  100% {
+    transform: translate(calc(-50% + 30vw), calc(-50% + 26vh));
+  }
+}
+
+.animate-tiger-watermark-drift {
+  animation: tiger-watermark-drift 3s ease-out forwards;
+  will-change: transform;
+}
+
+/* Seamless marquee — pair with two identical halves */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 28s linear infinite;
+}
+
+/* Gold focus ring */
 *:focus-visible {
-  outline: 2px solid #60a5fa;
+  outline: 2px solid #f5c400;
   outline-offset: 2px;
 }
 
@@ -120,62 +175,101 @@ body {
   will-change: transform, opacity;
 }
 
-/* Custom selection color */
+/* Custom selection color — tiger gold */
 ::selection {
-  background-color: rgba(168, 85, 247, 0.35);
+  background-color: rgba(245, 196, 0, 0.35);
   color: #ffffff;
 }
 
-/* ----- Reusable utility classes ----- */
+/* ----- Reusable Tiger Fitness utility classes ----- */
 
-/* Glassmorphism card */
+/* Glassmorphism — onyx tone */
 .glass-card {
-  background-color: rgba(17, 17, 39, 0.55);
+  background-color: rgba(17, 17, 17, 0.55);
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(245, 196, 0, 0.12);
   box-shadow:
-    0 8px 32px 0 rgba(0, 0, 0, 0.45),
+    0 8px 32px 0 rgba(0, 0, 0, 0.6),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
 }
 
 .glass-card-strong {
-  background-color: rgba(11, 11, 26, 0.75);
+  background-color: rgba(10, 10, 10, 0.78);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(245, 196, 0, 0.18);
   box-shadow:
-    0 12px 40px 0 rgba(0, 0, 0, 0.55),
+    0 12px 40px 0 rgba(0, 0, 0, 0.7),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
 }
 
-/* Neon gradient accent (blue -> purple) */
-.gradient-neon {
-  background-image: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #a855f7 100%);
+/* Tiger gold gradients */
+.gradient-tiger {
+  background-image: linear-gradient(135deg, #ffd942 0%, #f5c400 50%, #d9a400 100%);
 }
 
-.gradient-neon-text {
-  background-image: linear-gradient(135deg, #60a5fa 0%, #c084fc 100%);
+.gradient-tiger-soft {
+  background-image: linear-gradient(135deg, rgba(255, 217, 66, 0.18), rgba(245, 196, 0, 0.06));
+}
+
+.gradient-tiger-text {
+  background-image: linear-gradient(135deg, #ffd942 0%, #f5c400 50%, #d9a400 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-/* Soft neon border (top) */
-.border-gradient-neon {
+/* Gold border with stroke gradient */
+.border-gradient-tiger {
   position: relative;
 }
-.border-gradient-neon::before {
+.border-gradient-tiger::before {
   content: "";
   position: absolute;
   inset: 0;
   padding: 1px;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.6), rgba(192, 132, 252, 0.6));
+  background: linear-gradient(135deg, rgba(255, 217, 66, 0.6), rgba(217, 164, 0, 0.6));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
   pointer-events: none;
+}
+
+/* Gold glow shadow */
+.tiger-glow {
+  box-shadow: 0 14px 40px -10px rgba(245, 196, 0, 0.55);
+}
+
+.tiger-glow-soft {
+  box-shadow: 0 8px 24px -6px rgba(245, 196, 0, 0.35);
+}
+
+/* Hero CTA — visible by default (GSAP may animate opacity) */
+.hero-cta-primary {
+  background-image: linear-gradient(135deg, #ffd942 0%, #f5c400 50%, #d9a400 100%);
+  box-shadow: 0 12px 32px -8px rgba(245, 196, 0, 0.55);
+  opacity: 1;
+}
+
+.hero-cta-primary:hover {
+  box-shadow: 0 16px 40px -8px rgba(245, 196, 0, 0.7);
+}
+
+.hero-cta-secondary {
+  opacity: 1;
+}
+
+/* Hairline stripe pattern inspired by tiger stripes */
+.tiger-stripes {
+  background-image: repeating-linear-gradient(
+    115deg,
+    transparent 0px,
+    transparent 18px,
+    rgba(245, 196, 0, 0.06) 18px,
+    rgba(245, 196, 0, 0.06) 22px
+  );
 }
 
 /* Dashboard: native scroll on mobile (Locomotive disabled below lg) */
@@ -196,5 +290,13 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Reserve space at the very bottom on mobile so the sticky action bar
+   never overlaps the last bit of content (e.g. footer copyright). */
+@media (max-width: 1023px) {
+  body {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 5rem);
   }
 }

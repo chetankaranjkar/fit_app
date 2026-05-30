@@ -12,6 +12,7 @@ import {
   type NavItem,
 } from './roleNavConfig'
 import { linkPrefetchProps, prefetchRoute } from '../../routes/prefetch'
+import { BrandLogo } from '../brand/BrandLogo'
 
 const iconMap: Record<NavIcon, ReactNode> = {
   dashboard: (
@@ -195,15 +196,12 @@ export function RoleSidebar({
       <div
         className={`flex items-center gap-3 border-b border-white/[0.06] p-4 ${collapsed ? 'justify-center' : ''}`}
       >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white">
-          P
-        </span>
-        {!collapsed && (
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-white">{brand.title}</p>
-            <p className="truncate text-[10px] uppercase tracking-widest text-slate-500">{brand.subtitle}</p>
-          </div>
-        )}
+        <BrandLogo
+          to="/dashboard"
+          collapsed={collapsed}
+          size={collapsed ? 40 : 44}
+          showSubtitle={collapsed ? undefined : brand.subtitle}
+        />
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">

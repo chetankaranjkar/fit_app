@@ -7,7 +7,7 @@ import { BackToTop } from './components/ui/BackToTop'
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ScrollProgress color="#f59e0b" height={3} />
+      <ScrollProgress color="#F5C400" height={3} />
       <AppRoutes />
       <BackToTop threshold={300} />
     </QueryClientProvider>

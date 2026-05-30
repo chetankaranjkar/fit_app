@@ -6,9 +6,10 @@ interface Props {
   name?: string
   duration?: string
   result?: string
+  trainer?: string
 }
 
-export function BeforeAfterSlider({ before, after, name, duration, result }: Props) {
+export function BeforeAfterSlider({ before, after, name, duration, result, trainer }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState(50)
   const dragging = useRef(false)
@@ -45,7 +46,7 @@ export function BeforeAfterSlider({ before, after, name, duration, result }: Pro
   return (
     <div
       ref={wrapRef}
-      className="group relative aspect-[4/5] select-none overflow-hidden rounded-3xl border border-white/10 bg-black shadow-[0_30px_80px_-30px_rgba(139,92,246,0.45)]"
+      className="group relative aspect-[4/5] select-none overflow-hidden rounded-3xl border border-[rgba(245,196,0,0.25)] bg-black shadow-[0_30px_80px_-30px_rgba(245,196,0,0.45)]"
       onMouseDown={(e) => {
         dragging.current = true
         setFromClientX(e.clientX)
@@ -74,37 +75,45 @@ export function BeforeAfterSlider({ before, after, name, duration, result }: Pro
       />
 
       {/* Labels */}
-      <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur">
+      <span className="font-display absolute left-3 top-3 rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur">
         Before
       </span>
-      <span className="absolute right-3 top-3 rounded-full bg-[linear-gradient(135deg,#3b82f6,#a855f7)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+      <span className="font-display absolute right-3 top-3 rounded-full gradient-tiger px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-black tiger-glow-soft">
         After
       </span>
 
       {/* Divider line + handle */}
       <div className="pointer-events-none absolute inset-y-0" style={{ left: `${pos}%` }}>
-        <div className="absolute inset-y-0 -left-px w-0.5 bg-white/80 shadow-[0_0_20px_rgba(255,255,255,0.5)]" />
-        <div className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-white/90 p-2 shadow-lg backdrop-blur">
-          <svg viewBox="0 0 24 24" className="size-4 text-slate-900" fill="none" stroke="currentColor" strokeWidth={2.2}>
+        <div className="absolute inset-y-0 -left-px w-0.5 bg-[#F5C400] shadow-[0_0_20px_rgba(245,196,0,0.7)]" />
+        <div className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[rgba(245,196,0,0.5)] bg-black p-2 shadow-[0_8px_24px_-4px_rgba(245,196,0,0.6)] backdrop-blur">
+          <svg viewBox="0 0 24 24" className="size-4 text-[#F5C400]" fill="none" stroke="currentColor" strokeWidth={2.4}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 6l-6 6 6 6M16 6l6 6-6 6" />
           </svg>
         </div>
       </div>
 
       {/* Info footer */}
-      {(name || duration || result) && (
-        <div className="absolute inset-x-3 bottom-3 rounded-2xl border border-white/10 bg-[rgba(5,6,16,0.8)] p-3 backdrop-blur">
+      {(name || duration || result || trainer) && (
+        <div className="absolute inset-x-3 bottom-3 rounded-2xl border border-[rgba(245,196,0,0.25)] bg-black/80 p-3 backdrop-blur">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              {name && <p className="truncate text-sm font-semibold text-white">{name}</p>}
-              {duration && <p className="text-xs text-slate-400">{duration}</p>}
+              {name && <p className="font-display truncate text-sm font-semibold uppercase tracking-wide text-white">{name}</p>}
+              {duration && <p className="truncate text-xs text-[#B0B0B0]">{duration}</p>}
             </div>
             {result && (
-              <span className="shrink-0 rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/20">
+              <span className="font-display shrink-0 rounded-full gradient-tiger px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-black">
                 {result}
               </span>
             )}
           </div>
+          {trainer && (
+            <div className="mt-2 flex items-center gap-1.5 border-t border-[rgba(245,196,0,0.15)] pt-2 text-[11px] text-[#9a9a9a]">
+              <svg viewBox="0 0 24 24" className="size-3.5 text-[#F5C400]" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Coached by <span className="font-semibold text-white">{trainer}</span>
+            </div>
+          )}
         </div>
       )}
     </div>

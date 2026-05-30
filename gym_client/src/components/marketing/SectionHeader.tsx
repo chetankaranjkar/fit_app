@@ -22,35 +22,33 @@ export function SectionHeader({
   return (
     <div
       ref={ref}
-      className={`mx-auto ${align === 'center' ? 'text-center' : 'text-left'} max-w-2xl ${className}`}
+      className={`mx-auto ${align === 'center' ? 'text-center' : 'text-left'} max-w-3xl ${className}`}
     >
       {eyebrow && (
         <span
           data-reveal-child
-          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300 backdrop-blur"
+          className="inline-flex items-center gap-2 rounded-full border border-[rgba(245,196,0,0.3)] bg-[rgba(245,196,0,0.06)] px-3.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.24em] text-[#F5C400] backdrop-blur"
         >
-          <span className="size-1.5 rounded-full bg-gradient-to-r from-blue-400 to-purple-400" />
+          <span className="size-1.5 rounded-full bg-[#F5C400] shadow-[0_0_10px_rgba(245,196,0,0.8)]" />
           {eyebrow}
         </span>
       )}
       <h2
         data-reveal-child
-        className="mt-5 text-balance text-3xl font-bold leading-[1.1] tracking-tight text-white sm:text-4xl md:text-5xl"
+        className="font-display mt-5 text-balance text-4xl font-bold uppercase leading-[0.95] tracking-[0.01em] text-white sm:text-5xl md:text-6xl lg:text-7xl"
       >
         {title}
         {highlight && (
           <>
             {' '}
-            <span className="bg-[linear-gradient(135deg,#60a5fa_0%,#a78bfa_50%,#e879f9_100%)] bg-clip-text text-transparent">
-              {highlight}
-            </span>
+            <span className="gradient-tiger-text">{highlight}</span>
           </>
         )}
       </h2>
       {subtitle && (
         <p
           data-reveal-child
-          className="mt-5 text-base leading-relaxed text-slate-400 sm:text-lg"
+          className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-[#B0B0B0] sm:text-lg"
         >
           {subtitle}
         </p>

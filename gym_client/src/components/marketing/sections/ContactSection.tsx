@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useRevealOnScroll } from '../../../lib/animations/useRevealOnScroll'
-import { SectionHeader } from '../SectionHeader'
 
 interface FormState {
   name: string
@@ -46,28 +45,48 @@ export function ContactSection() {
   }
 
   return (
-    <section id="contact" className="relative py-28 sm:py-36">
-      <div className="mx-auto max-w-7xl px-5 sm:px-8">
-        <SectionHeader
-          eyebrow="Start"
-          title="Book your"
-          highlight="free trial session"
-          subtitle="A no-pressure 60-minute movement assessment + a tour. You'll leave with a custom starter plan whether you join or not."
+    <section id="contact" className="relative overflow-hidden py-28 sm:py-36">
+      {/* Cinematic background */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <img
+          src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=2000&q=85&auto=format&fit=crop"
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover opacity-15"
         />
+        <div className="absolute inset-0 bg-black/70" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[rgba(245,196,0,0.4)] to-transparent" />
+      </div>
+
+      <div className="mx-auto max-w-7xl px-5 sm:px-8">
+        {/* Big headline */}
+        <div className="text-center">
+          <span className="font-display inline-flex items-center gap-2 rounded-full border border-[rgba(245,196,0,0.3)] bg-[rgba(245,196,0,0.06)] px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#F5C400] backdrop-blur">
+            <span className="size-1.5 rounded-full bg-[#F5C400] shadow-[0_0_10px_rgba(245,196,0,0.8)]" />
+            Start Today
+          </span>
+          <h2 className="font-display mt-6 text-balance text-5xl font-bold uppercase leading-[0.92] tracking-tight text-white sm:text-7xl lg:text-8xl">
+            Train Like A <span className="gradient-tiger-text">Tiger.</span>
+          </h2>
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-[#B0B0B0] sm:text-lg">
+            Book a no-pressure 60-minute movement assessment plus a tour. You'll
+            leave with a custom starter plan whether you join or not.
+          </p>
+        </div>
 
         <div className="mt-16 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           {/* Left info panel */}
           <div
             ref={leftRef}
-            className="relative overflow-hidden rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(59,130,246,0.1),rgba(168,85,247,0.08))] p-8 backdrop-blur sm:p-10"
+            className="relative overflow-hidden rounded-3xl border border-[rgba(245,196,0,0.25)] bg-[linear-gradient(135deg,rgba(245,196,0,0.1),rgba(245,196,0,0.02))] p-8 backdrop-blur sm:p-10"
           >
-            <div className="absolute -right-10 -top-10 size-48 rounded-full bg-[radial-gradient(circle,rgba(139,92,246,0.3),transparent_60%)] blur-2xl" />
+            <div className="absolute -right-10 -top-10 size-48 rounded-full bg-[radial-gradient(circle,rgba(245,196,0,0.3),transparent_60%)] blur-2xl" />
 
-            <h3 className="text-2xl font-bold text-white sm:text-3xl">
+            <h3 className="font-display text-3xl font-bold uppercase tracking-tight text-white sm:text-4xl">
               A few ways to say hi.
             </h3>
-            <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
-              Pick whatever's easiest. We reply within a few hours during studio hours.
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-[#B0B0B0]">
+              Pick whichever's easiest. We reply within a few hours during studio hours.
             </p>
 
             <div className="mt-8 space-y-4">
@@ -75,7 +94,7 @@ export function ContactSection() {
                 href="https://wa.me/919999999999"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-[#25D366]/50 hover:bg-[#25D366]/5"
+                className="group flex items-center gap-4 rounded-2xl border border-[rgba(245,196,0,0.15)] bg-white/[0.04] p-4 transition hover:border-[#25D366]/50 hover:bg-[#25D366]/5"
               >
                 <span className="flex size-11 items-center justify-center rounded-xl bg-[#25D366]/15 text-[#25D366]">
                   <svg viewBox="0 0 24 24" className="size-5" fill="currentColor">
@@ -84,49 +103,49 @@ export function ContactSection() {
                 </span>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-white">WhatsApp</p>
-                  <p className="text-xs text-slate-400">Fastest reply · +91 99999 99999</p>
+                  <p className="text-xs text-[#888]">Fastest reply · +91 99999 99999</p>
                 </div>
-                <svg viewBox="0 0 24 24" className="size-4 text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-white" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <svg viewBox="0 0 24 24" className="size-4 text-[#666] transition group-hover:translate-x-0.5 group-hover:text-white" fill="none" stroke="currentColor" strokeWidth={2.4}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                 </svg>
               </a>
 
               <a
-                href="mailto:hello@ironpulse.fit"
-                className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-blue-400/50 hover:bg-blue-400/5"
+                href="mailto:hello@tigerfitness.in"
+                className="group flex items-center gap-4 rounded-2xl border border-[rgba(245,196,0,0.15)] bg-white/[0.04] p-4 transition hover:border-[#F5C400]/55 hover:bg-[rgba(245,196,0,0.06)]"
               >
-                <span className="flex size-11 items-center justify-center rounded-xl bg-blue-400/15 text-blue-300">
+                <span className="flex size-11 items-center justify-center rounded-xl bg-[rgba(245,196,0,0.15)] text-[#F5C400]">
                   <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V7zM4 7l8 6 8-6" />
                   </svg>
                 </span>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-white">Email</p>
-                  <p className="text-xs text-slate-400">hello@ironpulse.fit</p>
+                  <p className="text-xs text-[#888]">hello@tigerfitness.in</p>
                 </div>
-                <svg viewBox="0 0 24 24" className="size-4 text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-white" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <svg viewBox="0 0 24 24" className="size-4 text-[#666] transition group-hover:translate-x-0.5 group-hover:text-white" fill="none" stroke="currentColor" strokeWidth={2.4}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                 </svg>
               </a>
 
-              <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <span className="flex size-11 items-center justify-center rounded-xl bg-purple-400/15 text-purple-300">
+              <div className="flex items-center gap-4 rounded-2xl border border-[rgba(245,196,0,0.15)] bg-white/[0.04] p-4">
+                <span className="flex size-11 items-center justify-center rounded-xl bg-[rgba(245,196,0,0.15)] text-[#F5C400]">
                   <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 11a3 3 0 100-6 3 3 0 000 6zM12 22s8-8 8-14a8 8 0 10-16 0c0 6 8 14 8 14z" />
                   </svg>
                 </span>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-white">Studio</p>
-                  <p className="text-xs text-slate-400">5th Flr · Ceejay House · Worli, Mumbai</p>
+                  <p className="text-xs text-[#888]">5th Flr · Ceejay House · Worli, Mumbai</p>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <div className="mt-8 rounded-2xl border border-[rgba(245,196,0,0.15)] bg-black/40 p-4">
+              <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-[#F5C400]">
                 Studio hours
               </p>
-              <div className="mt-2 grid grid-cols-2 gap-y-1 text-sm text-slate-300">
+              <div className="mt-2 grid grid-cols-2 gap-y-1 text-sm text-[#B0B0B0]">
                 <span>Mon – Fri</span>
                 <span className="text-right text-white">5:00 am – 11:00 pm</span>
                 <span>Sat – Sun</span>
@@ -138,30 +157,34 @@ export function ContactSection() {
           {/* Right form */}
           <div
             ref={rightRef}
-            className="relative overflow-hidden rounded-3xl border border-white/10 bg-[rgba(10,12,30,0.9)] p-8 backdrop-blur sm:p-10"
+            className="relative overflow-hidden rounded-3xl border border-[rgba(245,196,0,0.25)] bg-black/70 p-8 backdrop-blur sm:p-10"
           >
             {submitted ? (
               <div className="flex h-full flex-col items-center justify-center text-center">
-                <div className="flex size-16 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300">
-                  <svg viewBox="0 0 24 24" className="size-8" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <div className="flex size-16 items-center justify-center rounded-full bg-[rgba(245,196,0,0.15)] text-[#F5C400]">
+                  <svg viewBox="0 0 24 24" className="size-8" fill="none" stroke="currentColor" strokeWidth={2.4}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <h3 className="mt-5 text-2xl font-bold text-white">You're on the list.</h3>
-                <p className="mt-2 max-w-sm text-sm text-slate-400">
+                <h3 className="font-display mt-5 text-3xl font-bold uppercase tracking-wide text-white">
+                  You're on the list.
+                </h3>
+                <p className="mt-2 max-w-sm text-sm text-[#B0B0B0]">
                   A coach will reach out within 24 hours to book your free trial. In the meantime, check your email.
                 </p>
                 <button
                   type="button"
                   onClick={() => setSubmitted(false)}
-                  className="mt-6 rounded-full border border-white/15 bg-white/[0.03] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+                  className="mt-6 rounded-full border border-[rgba(245,196,0,0.3)] bg-white/[0.03] px-5 py-2.5 font-sans text-xs font-bold uppercase tracking-[0.08em] text-white transition hover:border-[#F5C400] hover:bg-[rgba(245,196,0,0.08)]"
                 >
-                  Send another
+                  Send Another
                 </button>
               </div>
             ) : (
               <form onSubmit={onSubmit} className="space-y-5">
-                <h3 className="text-2xl font-bold text-white">Tell us about you</h3>
+                <h3 className="font-display text-3xl font-bold uppercase tracking-tight text-white">
+                  Tell us about you
+                </h3>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Full name" error={errors.name}>
@@ -169,7 +192,7 @@ export function ContactSection() {
                       value={form.name}
                       onChange={(e) => set('name', e.target.value)}
                       placeholder="Jane Lifter"
-                      className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20"
+                      className="w-full rounded-xl border border-[rgba(245,196,0,0.15)] bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-[#666] outline-none transition focus:border-[#F5C400] focus:ring-2 focus:ring-[rgba(245,196,0,0.2)]"
                     />
                   </Field>
                   <Field label="Email" error={errors.email}>
@@ -178,7 +201,7 @@ export function ContactSection() {
                       value={form.email}
                       onChange={(e) => set('email', e.target.value)}
                       placeholder="jane@example.com"
-                      className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20"
+                      className="w-full rounded-xl border border-[rgba(245,196,0,0.15)] bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-[#666] outline-none transition focus:border-[#F5C400] focus:ring-2 focus:ring-[rgba(245,196,0,0.2)]"
                     />
                   </Field>
                 </div>
@@ -189,7 +212,7 @@ export function ContactSection() {
                     value={form.phone}
                     onChange={(e) => set('phone', e.target.value)}
                     placeholder="+91 98765 43210"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20"
+                    className="w-full rounded-xl border border-[rgba(245,196,0,0.15)] bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-[#666] outline-none transition focus:border-[#F5C400] focus:ring-2 focus:ring-[rgba(245,196,0,0.2)]"
                   />
                 </Field>
 
@@ -202,8 +225,8 @@ export function ContactSection() {
                         onClick={() => set('goal', g)}
                         className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
                           form.goal === g
-                            ? 'border-purple-400/50 bg-purple-400/15 text-white'
-                            : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/25 hover:text-white'
+                            ? 'border-[#F5C400] bg-[rgba(245,196,0,0.18)] text-white'
+                            : 'border-[rgba(245,196,0,0.15)] bg-white/[0.03] text-[#B0B0B0] hover:border-[rgba(245,196,0,0.4)] hover:text-white'
                         }`}
                       >
                         {g}
@@ -218,23 +241,24 @@ export function ContactSection() {
                     onChange={(e) => set('message', e.target.value)}
                     rows={3}
                     placeholder="Injuries, schedule constraints, or specific questions…"
-                    className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20"
+                    className="w-full resize-none rounded-xl border border-[rgba(245,196,0,0.15)] bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-[#666] outline-none transition focus:border-[#F5C400] focus:ring-2 focus:ring-[rgba(245,196,0,0.2)]"
                   />
                 </Field>
 
                 <button
                   type="submit"
-                  className="group relative w-full overflow-hidden rounded-full px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_40px_-12px_rgba(139,92,246,0.65)] transition hover:scale-[1.01] active:scale-[0.98]"
+                  className="group relative w-full overflow-hidden rounded-full px-6 py-4 font-sans text-sm font-bold uppercase tracking-[0.06em] text-black tiger-glow transition hover:scale-[1.01] active:scale-[0.98]"
                 >
-                  <span className="absolute inset-0 bg-[linear-gradient(135deg,#3b82f6_0%,#8b5cf6_50%,#a855f7_100%)]" />
+                  <span className="absolute inset-0 gradient-tiger" />
+                  <span className="absolute inset-0 translate-y-full bg-white transition-transform duration-500 group-hover:translate-y-0" />
                   <span className="relative flex items-center justify-center gap-2">
-                    Book my free trial
-                    <svg viewBox="0 0 24 24" className="size-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                    Book My Free Trial
+                    <svg viewBox="0 0 24 24" className="size-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                     </svg>
                   </span>
                 </button>
-                <p className="text-center text-[11px] text-slate-500">
+                <p className="text-center text-[11px] text-[#666]">
                   By submitting you agree to our lightweight privacy policy. No spam, ever.
                 </p>
               </form>
@@ -257,7 +281,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+      <span className="mb-1.5 block font-display text-xs font-semibold uppercase tracking-[0.18em] text-[#F5C400]">
         {label}
       </span>
       {children}

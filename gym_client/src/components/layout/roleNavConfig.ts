@@ -88,9 +88,9 @@ export const ROLE_BRAND: Record<
   DashboardRole,
   { title: string; subtitle: string; accent: 'admin' | 'trainer' | 'member' }
 > = {
-  admin: { title: 'PulseFit', subtitle: 'Business Suite', accent: 'admin' },
-  trainer: { title: 'PulseFit', subtitle: 'Coach Hub', accent: 'trainer' },
-  member: { title: 'PulseFit', subtitle: 'Member', accent: 'member' },
+  admin: { title: 'Tiger Fitness', subtitle: 'Business Suite', accent: 'admin' },
+  trainer: { title: 'Tiger Fitness', subtitle: 'Coach Hub', accent: 'trainer' },
+  member: { title: 'Tiger Fitness', subtitle: 'Member', accent: 'member' },
 }
 
 export function getTrainerNavItems(): NavItem[] {

@@ -14,6 +14,7 @@ import {
   STAFF_FRONT_DESK_LINKS,
 } from '../../features/auth/navPermissions'
 import { linkPrefetchProps, prefetchRoute } from '../../routes/prefetch'
+import { BrandLogo } from '../brand/BrandLogo'
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -201,14 +202,11 @@ interface SidebarNavProps {
 }
 
 export function SidebarNav({
-  userName,
-  userAvatarUrl,
   collapsed,
   onToggleCollapse,
   mobileOpen = false,
   onCloseMobile,
 }: SidebarNavProps) {
-  const displayName = userName?.trim() || 'User'
   const location = useLocation()
   const navigate = useNavigate()
   const isUserPath = userSubItems.some(
@@ -339,27 +337,12 @@ export function SidebarNav({
     >
         {/* ── Brand bar ── */}
         <div className={`flex items-center border-b border-white/[0.06] px-3 py-4 ${collapsed ? 'justify-center px-2' : 'gap-3'}`}>
-          {/* Logo mark */}
-          <div className="relative flex size-9 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] text-white shadow-lg shadow-purple-500/30">
-            <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 8h2v8H6m10-8h2v8h-2M8 12h8M4 10h2v4H4m14-4h2v4h-2" />
-            </svg>
-            {/* Pulse dot */}
-            <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5 items-center justify-center">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
-              <span className="relative h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            </span>
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="truncate bg-[linear-gradient(135deg,#60a5fa,#c084fc)] bg-clip-text text-sm font-extrabold uppercase tracking-widest text-transparent leading-none">
-                PulseFit
-              </p>
-              <p className="truncate text-[9px] uppercase tracking-[0.2em] text-slate-600 mt-0.5">
-                {staffFrontDesk ? 'Front Desk' : 'Admin Suite'}
-              </p>
-            </div>
-          )}
+          <BrandLogo
+            to="/dashboard"
+            collapsed={collapsed}
+            size={collapsed ? 40 : 44}
+            showSubtitle={collapsed ? undefined : staffFrontDesk ? 'Front Desk' : 'Admin Suite'}
+          />
         </div>
 
         {/* Collapse toggle (desktop) */}

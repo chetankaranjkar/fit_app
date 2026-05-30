@@ -14,59 +14,55 @@ interface Plan {
   yearly: number
   features: string[]
   highlight?: boolean
-  accent: string
 }
 
 const PLANS: Plan[] = [
   {
     id: 'starter',
-    name: 'Starter',
-    tag: 'New to lifting',
-    description: 'Open-gym access and monthly coach check-ins to get started right.',
+    name: 'Prowl',
+    tag: 'Get started',
+    description: 'Open-gym access and onboarding to begin your Tiger Fitness journey.',
     monthly: 2499,
     yearly: 24990,
-    accent: 'from-blue-500/20 to-blue-500/5',
     features: [
-      'Open-gym access · 24/7',
+      '24/7 studio access',
       'Onboarding assessment',
       '1 group class / week',
-      'Body composition scan / mo',
-      'App-based workout log',
+      'Body composition scan / month',
+      'Tiger Fitness app',
     ],
   },
   {
     id: 'performance',
-    name: 'Performance',
+    name: 'Hunter',
     tag: 'Most popular',
-    description: 'Our signature plan. Small-group coaching + programming tailored to your data.',
+    description: 'Our signature plan. Small-group coaching plus programming tailored to your data.',
     monthly: 5999,
     yearly: 59990,
     highlight: true,
-    accent: 'from-purple-500/25 to-blue-500/10',
     features: [
-      'Everything in Starter',
-      'Small-group coaching · 4x/wk',
+      'Everything in Prowl',
+      'Small-group coaching · 4×/wk',
       'Personalised programming',
       'Monthly strategy review',
       'InBody + recovery scans',
       'Nutrition guidance',
-      'Full recovery-suite access',
+      'Full recovery suite',
     ],
   },
   {
     id: 'elite',
-    name: 'Elite',
+    name: 'Apex',
     tag: 'For athletes',
-    description: '1-on-1 coaching, full-stack testing, and concierge nutrition.',
+    description: '1-on-1 coaching, full-stack testing, and concierge nutrition. The full pride.',
     monthly: 12999,
     yearly: 129990,
-    accent: 'from-fuchsia-500/20 to-rose-500/5',
     features: [
-      'Everything in Performance',
+      'Everything in Hunter',
       'Private 1-on-1 coaching',
       'VO₂ max + DEXA quarterly',
       'Dedicated nutritionist',
-      'Physio access · 2x/mo',
+      'Physio · 2×/month',
       'Custom supplement protocol',
       'Priority class booking',
     ],
@@ -87,24 +83,26 @@ export function PlansSection() {
 
   return (
     <section id="plans" className="relative py-28 sm:py-36">
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[rgba(245,196,0,0.4)] to-transparent" />
+
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
         <SectionHeader
           eyebrow="Membership"
           title="Plans that match"
           highlight="your ambition"
-          subtitle="Transparent pricing, no contracts, cancel anytime. Annual plans get two months free."
+          subtitle="Transparent pricing. No contracts. Cancel anytime. Annual plans get two months free."
         />
 
         {/* Billing toggle */}
-        <div className="mt-10 flex justify-center">
+        <div className="mt-12 flex justify-center">
           <div
             role="tablist"
             aria-label="Billing cycle"
-            className="relative inline-flex rounded-full border border-white/10 bg-white/[0.04] p-1 backdrop-blur"
+            className="relative inline-flex rounded-full border border-[rgba(245,196,0,0.25)] bg-black/50 p-1 backdrop-blur"
           >
             <span
               aria-hidden
-              className={`absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-[linear-gradient(135deg,#3b82f6_0%,#8b5cf6_50%,#a855f7_100%)] transition-all duration-300 ${
+              className={`absolute inset-y-1 w-[calc(50%-4px)] rounded-full gradient-tiger tiger-glow-soft transition-all duration-300 ${
                 cycle === 'monthly' ? 'left-1' : 'left-[calc(50%+3px)]'
               }`}
             />
@@ -115,13 +113,17 @@ export function PlansSection() {
                 role="tab"
                 aria-selected={cycle === c}
                 onClick={() => setCycle(c)}
-                className={`relative z-10 min-w-[128px] rounded-full px-5 py-2 text-sm font-semibold transition ${
-                  cycle === c ? 'text-white' : 'text-slate-300 hover:text-white'
+                className={`relative z-10 min-w-[140px] rounded-full px-5 py-2 font-sans text-xs font-bold uppercase tracking-[0.08em] transition ${
+                  cycle === c ? 'text-black' : 'text-white/75 hover:text-white'
                 }`}
               >
                 {c === 'monthly' ? 'Monthly' : 'Yearly'}
                 {c === 'yearly' && (
-                  <span className="ml-2 rounded-full bg-emerald-400/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-200">
+                  <span
+                    className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                      cycle === 'yearly' ? 'bg-black/15 text-black' : 'bg-emerald-400/15 text-emerald-200'
+                    }`}
+                  >
                     -17%
                   </span>
                 )}
@@ -138,40 +140,38 @@ export function PlansSection() {
               <article
                 key={plan.id}
                 data-plan
-                className={`relative flex flex-col overflow-hidden rounded-3xl border p-7 transition-all duration-500 ${
+                className={`group relative flex flex-col overflow-hidden rounded-3xl border p-8 transition-all duration-500 ${
                   plan.highlight
-                    ? 'border-purple-400/30 bg-[rgba(12,14,34,0.9)] shadow-[0_30px_80px_-20px_rgba(139,92,246,0.4)]'
-                    : 'border-white/5 bg-white/[0.02] hover:-translate-y-1 hover:border-white/15'
+                    ? 'border-[rgba(245,196,0,0.55)] bg-[#0a0a0a] shadow-[0_30px_80px_-20px_rgba(245,196,0,0.55)] lg:scale-[1.05]'
+                    : 'border-[rgba(245,196,0,0.15)] bg-[#0a0a0a]/70 backdrop-blur hover:-translate-y-1 hover:border-[rgba(245,196,0,0.45)]'
                 }`}
               >
                 {plan.highlight && (
                   <>
-                    <div className={`pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br ${plan.accent}`} />
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-400/60 to-transparent" />
+                    <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,rgba(245,196,0,0.18),transparent_60%)]" />
+                    <div className="absolute inset-x-0 top-0 h-px gradient-tiger" />
+                    <span className="font-sans absolute right-6 top-6 inline-flex items-center gap-1.5 rounded-full gradient-tiger px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-black tiger-glow-soft">
+                      <svg viewBox="0 0 24 24" className="size-3" fill="currentColor" aria-hidden>
+                        <path d="M12 2l2.9 6.9L22 10l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.2L2 10l7.1-1.1L12 2z" />
+                      </svg>
+                      Most Popular
+                    </span>
                   </>
                 )}
 
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                      {plan.tag}
-                    </p>
-                    <h3 className="mt-1 text-2xl font-bold text-white">{plan.name}</h3>
-                  </div>
-                  {plan.highlight && (
-                    <span className="rounded-full bg-[linear-gradient(135deg,#3b82f6,#a855f7)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
-                      Popular
-                    </span>
-                  )}
-                </div>
-
-                <p className="mt-3 text-sm leading-relaxed text-slate-400">{plan.description}</p>
+                <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-[#F5C400]">
+                  {plan.tag}
+                </p>
+                <h3 className="font-display mt-2 text-4xl font-bold uppercase tracking-tight text-white">
+                  {plan.name}
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-[#B0B0B0]">{plan.description}</p>
 
                 <div className="mt-7 flex items-end gap-2">
-                  <span className="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-5xl font-bold leading-none text-transparent">
+                  <span className="font-display text-5xl font-bold leading-none text-white">
                     {formatPrice(price)}
                   </span>
-                  <span className="mb-1 text-sm font-medium text-slate-500">{perLabel}</span>
+                  <span className="mb-1 text-sm font-medium text-[#888]">{perLabel}</span>
                 </div>
                 {cycle === 'yearly' && (
                   <p className="mt-1 text-xs text-emerald-300">
@@ -179,11 +179,13 @@ export function PlansSection() {
                   </p>
                 )}
 
-                <ul className="mt-7 space-y-3 text-sm">
+                <div className="my-7 h-px bg-gradient-to-r from-transparent via-[rgba(245,196,0,0.25)] to-transparent" />
+
+                <ul className="space-y-3 text-sm">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-3 text-slate-300">
-                      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="size-3">
+                    <li key={f} className="flex items-start gap-3 text-white/85">
+                      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[rgba(245,196,0,0.15)] text-[#F5C400] ring-1 ring-[rgba(245,196,0,0.3)]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.2} className="size-3">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       </span>
@@ -195,21 +197,21 @@ export function PlansSection() {
                 <button
                   type="button"
                   onClick={() => scrollToSection('contact')}
-                  className={`mt-8 w-full rounded-full px-5 py-3 text-sm font-semibold transition active:scale-[0.98] ${
+                  className={`mt-9 w-full rounded-full px-5 py-3.5 font-sans text-sm font-bold uppercase tracking-[0.06em] transition active:scale-[0.98] ${
                     plan.highlight
-                      ? 'bg-[linear-gradient(135deg,#3b82f6_0%,#8b5cf6_50%,#a855f7_100%)] text-white shadow-[0_12px_30px_-8px_rgba(139,92,246,0.6)] hover:scale-[1.02]'
-                      : 'border border-white/15 bg-white/[0.03] text-white hover:border-white/30 hover:bg-white/[0.08]'
+                      ? 'gradient-tiger text-black tiger-glow hover:scale-[1.02]'
+                      : 'border border-[rgba(245,196,0,0.35)] bg-white/[0.03] text-white hover:border-[#F5C400] hover:bg-[rgba(245,196,0,0.08)]'
                   }`}
                 >
-                  {plan.highlight ? 'Start free trial' : 'Choose plan'}
+                  {plan.highlight ? 'Start Free Trial' : 'Choose Plan'}
                 </button>
               </article>
             )
           })}
         </div>
 
-        <p className="mt-10 text-center text-xs text-slate-500">
-          All plans include a 7-day satisfaction guarantee. GST applicable where relevant.
+        <p className="mt-12 text-center text-xs uppercase tracking-[0.18em] text-[#666]">
+          7-day satisfaction guarantee · GST applicable where relevant
         </p>
       </div>
     </section>

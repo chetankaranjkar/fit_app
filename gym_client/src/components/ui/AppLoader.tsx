@@ -1,23 +1,19 @@
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
+import { TigerLogo } from '../marketing/TigerLogo'
+
+const STATUS_LINES = [
+  'Preparing your workspace',
+  'Loading modules',
+  'Almost there',
+] as const
 
 /**
- * Premium full-screen loader used as the Suspense fallback for route-level
- * code splitting. Designed with the "PulseFit" brand language:
- *
- *   * Dark ambient background + soft radial gradient washes
- *   * Subtle grid backdrop for depth
- *   * Orbiting gradient ring around the brand mark
- *   * Gently pulsing logo tile
- *   * Indeterminate shimmer bar
- *   * Gradient wordmark + rotating status caption
- *
- * UX detail: the whole container starts at `opacity: 0` and only fades in
- * after a 200ms delay. If the lazy chunk resolves quickly (most cases, thanks
- * to warmup + optimizeDeps), the loader never becomes visible \u2014 no flash.
+ * Full-screen Suspense fallback — Tiger Fitness brand.
+ * Fades in after 200ms so fast chunk loads never flash the overlay.
  */
 export function AppLoader({
-  message = 'Preparing your workspace',
+  message = STATUS_LINES[0],
 }: {
   message?: string
 }) {
@@ -26,22 +22,36 @@ export function AppLoader({
   const ringRef = useRef<SVGGElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
   const captionRef = useRef<HTMLParagraphElement>(null)
+  const glowRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const root = rootRef.current
     if (!root) return
 
+    const captions = [message, ...STATUS_LINES.filter((l) => l !== message)]
+
     const ctx = gsap.context(() => {
       gsap.fromTo(
         root,
         { opacity: 0 },
-        { opacity: 1, duration: 0.35, delay: 0.2, ease: 'power2.out' },
+        { opacity: 1, duration: 0.4, delay: 0.2, ease: 'power2.out' },
       )
+
+      if (glowRef.current) {
+        gsap.to(glowRef.current, {
+          scale: 1.15,
+          opacity: 0.55,
+          duration: 2.4,
+          ease: 'sine.inOut',
+          yoyo: true,
+          repeat: -1,
+        })
+      }
 
       if (markRef.current) {
         gsap.to(markRef.current, {
-          scale: 1.07,
-          duration: 1.2,
+          scale: 1.05,
+          duration: 1.4,
           ease: 'sine.inOut',
           yoyo: true,
           repeat: -1,
@@ -51,42 +61,37 @@ export function AppLoader({
       if (ringRef.current) {
         gsap.to(ringRef.current, {
           rotate: 360,
-          duration: 2.6,
+          duration: 2.2,
           ease: 'none',
           repeat: -1,
-          transformOrigin: 'center',
+          transformOrigin: '50% 50%',
         })
       }
 
       if (barRef.current) {
         gsap.fromTo(
           barRef.current,
-          { xPercent: -120 },
+          { xPercent: -110 },
           {
-            xPercent: 220,
-            duration: 1.5,
-            ease: 'power1.inOut',
+            xPercent: 210,
+            duration: 1.25,
+            ease: 'power2.inOut',
             repeat: -1,
           },
         )
       }
 
       if (captionRef.current) {
-        const captions = [
-          message,
-          'Optimising layout',
-          'Almost there',
-        ]
         const el = captionRef.current
         let i = 0
         const tl = gsap.timeline({ repeat: -1, defaults: { ease: 'power2.inOut' } })
         captions.forEach(() => {
-          tl.to(el, { opacity: 0, duration: 0.35, delay: 1.4 })
+          tl.to(el, { opacity: 0, duration: 0.3, delay: 1.2 })
             .call(() => {
               i = (i + 1) % captions.length
-              el.textContent = captions[i]
+              el.textContent = captions[i]!
             })
-            .to(el, { opacity: 1, duration: 0.35 })
+            .to(el, { opacity: 1, duration: 0.3 })
         })
       }
     }, root)
@@ -100,123 +105,111 @@ export function AppLoader({
       role="status"
       aria-live="polite"
       aria-label="Loading"
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-[#070716] text-slate-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-[#050505] text-white"
       style={{ opacity: 0 }}
     >
-      {/* Ambient gradient washes */}
+      {/* Ambient gold washes */}
       <div
+        ref={glowRef}
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-30%] h-[80vmin] w-[80vmin] -translate-x-1/2 rounded-full blur-3xl"
+        className="pointer-events-none absolute left-1/2 top-1/3 size-[70vmin] -translate-x-1/2 rounded-full opacity-40 blur-3xl"
         style={{
           background:
-            'radial-gradient(circle, rgba(59,130,246,0.28), transparent 60%)',
+            'radial-gradient(circle, rgba(245,196,0,0.35), transparent 62%)',
         }}
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 bottom-[-30%] h-[70vmin] w-[70vmin] -translate-x-1/2 rounded-full blur-3xl"
+        className="pointer-events-none absolute bottom-[-15%] right-[-10%] size-[55vmin] rounded-full blur-3xl"
         style={{
           background:
-            'radial-gradient(circle, rgba(168,85,247,0.22), transparent 60%)',
-        }}
-      />
-      {/* Grid backdrop */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          opacity: 0.05,
-          backgroundImage:
-            'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)',
-          backgroundSize: '48px 48px',
-          maskImage:
-            'radial-gradient(ellipse at center, black 40%, transparent 75%)',
-          WebkitMaskImage:
-            'radial-gradient(ellipse at center, black 40%, transparent 75%)',
+            'radial-gradient(circle, rgba(217,164,0,0.18), transparent 65%)',
         }}
       />
 
-      <div className="relative flex flex-col items-center gap-7">
-        {/* Orbiting ring + brand mark */}
-        <div className="relative flex size-28 items-center justify-center">
-          <svg
-            viewBox="0 0 100 100"
-            className="absolute inset-0 size-full"
-            aria-hidden
-          >
-            <defs>
-              <linearGradient id="al-ring" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#60a5fa" />
-                <stop offset="100%" stopColor="#c084fc" />
-              </linearGradient>
-            </defs>
-            {/* Faint full circle */}
-            <circle
-              cx="50"
-              cy="50"
-              r="46"
-              fill="none"
-              stroke="rgba(148,163,184,0.14)"
-              strokeWidth="1.25"
-            />
-            {/* Rotating gradient arc */}
-            <g ref={ringRef}>
+      {/* Tiger stripes + drifting watermark */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-40 tiger-stripes" />
+      <img
+        src="/tiger-fitness-logo.png"
+        alt=""
+        aria-hidden
+        className="animate-tiger-watermark-drift pointer-events-none absolute left-1/2 top-1/2 w-[min(90vw,520px)] object-contain opacity-[0.07] blur-[1px]"
+      />
+
+      {/* Vignette */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_40px_rgba(0,0,0,0.75)]"
+      />
+
+      <div className="relative flex w-full max-w-sm flex-col items-center px-6">
+        <div className="glass-card-strong border-gradient-tiger relative flex w-full flex-col items-center gap-6 rounded-3xl px-8 py-10 tiger-glow-soft">
+          {/* Orbiting gold ring + logo */}
+          <div className="relative flex size-32 items-center justify-center">
+            <svg
+              viewBox="0 0 100 100"
+              className="absolute inset-0 size-full"
+              aria-hidden
+            >
+              <defs>
+                <linearGradient id="app-loader-ring" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#ffd942" />
+                  <stop offset="50%" stopColor="#f5c400" />
+                  <stop offset="100%" stopColor="#d9a400" />
+                </linearGradient>
+              </defs>
               <circle
                 cx="50"
                 cy="50"
                 r="46"
                 fill="none"
-                stroke="url(#al-ring)"
-                strokeWidth="2"
-                strokeDasharray="60 260"
-                strokeLinecap="round"
+                stroke="rgba(245,196,0,0.12)"
+                strokeWidth="1.5"
               />
-            </g>
-          </svg>
-          <div
-            ref={markRef}
-            className="relative flex size-16 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#3b82f6,#a855f7)] text-white shadow-[0_10px_40px_-10px_rgba(168,85,247,0.7)]"
-          >
-            <svg
-              className="size-7"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.2}
-                d="M6 8h2v8H6m10-8h2v8h-2M8 12h8M4 10h2v4H4m14-4h2v4h-2"
-              />
+              <g ref={ringRef}>
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="46"
+                  fill="none"
+                  stroke="url(#app-loader-ring)"
+                  strokeWidth="2.5"
+                  strokeDasharray="72 240"
+                  strokeLinecap="round"
+                />
+              </g>
             </svg>
+            <div
+              ref={markRef}
+              className="relative flex size-[4.5rem] items-center justify-center rounded-2xl border border-[rgba(245,196,0,0.25)] bg-black/60 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+            >
+              <TigerLogo variant="mark" size={64} />
+            </div>
           </div>
-        </div>
 
-        {/* Wordmark */}
-        <div className="flex flex-col items-center gap-1.5">
-          <p className="bg-[linear-gradient(135deg,#60a5fa,#c084fc)] bg-clip-text text-lg font-bold uppercase tracking-[0.32em] text-transparent">
-            PulseFit
-          </p>
+          <div className="flex flex-col items-center gap-2 text-center">
+            <p className="font-display text-3xl font-bold uppercase leading-none tracking-[0.12em] text-white">
+              Tiger <span className="gradient-tiger-text">Fitness</span>
+            </p>
+            <p className="font-sans text-[10px] font-semibold uppercase tracking-[0.35em] text-[#F5C400]/80">
+              Train Like A Tiger
+            </p>
+          </div>
+
+          {/* Progress shimmer */}
+          <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-inset ring-[rgba(245,196,0,0.15)]">
+            <div
+              ref={barRef}
+              className="absolute inset-y-0 left-0 w-2/5 rounded-full gradient-tiger opacity-90"
+            />
+          </div>
+
           <p
             ref={captionRef}
-            className="text-[11px] uppercase tracking-[0.2em] text-slate-500"
+            className="font-sans min-h-[1rem] text-center text-[11px] font-medium uppercase tracking-[0.22em] text-[#888]"
           >
             {message}
           </p>
-        </div>
-
-        {/* Indeterminate shimmer bar */}
-        <div className="relative h-1 w-56 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-inset ring-white/5">
-          <div
-            ref={barRef}
-            className="absolute inset-y-0 left-0 w-1/2 rounded-full"
-            style={{
-              background:
-                'linear-gradient(90deg, transparent 0%, rgba(96,165,250,0.6) 40%, rgba(192,132,252,0.85) 60%, transparent 100%)',
-            }}
-          />
         </div>
       </div>
     </div>

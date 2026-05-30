@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { scrollToSection } from '../../lib/animations/useSmoothScroll'
+import { TigerLogo } from './TigerLogo'
 
 const NAV_LINKS = [
-  { id: 'programs', label: 'Programs' },
+  { id: 'features', label: 'Features' },
+  { id: 'plans', label: 'Plans' },
   { id: 'trainers', label: 'Trainers' },
-  { id: 'plans', label: 'Pricing' },
   { id: 'gallery', label: 'Transformations' },
-  { id: 'testimonials', label: 'Stories' },
+  { id: 'facility', label: 'Facility' },
+  { id: 'app', label: 'App' },
   { id: 'contact', label: 'Contact' },
 ]
 
@@ -31,37 +33,30 @@ export function MarketingNav() {
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'border-b border-white/5 bg-[rgba(7,8,20,0.72)] backdrop-blur-xl'
+          ? 'border-b border-[rgba(245,196,0,0.18)] bg-[rgba(0,0,0,0.78)] backdrop-blur-xl'
           : 'border-b border-transparent bg-transparent'
       }`}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
         <Link
           to="/"
-          className="group flex items-center gap-2 text-lg font-bold tracking-tight text-white"
+          aria-label="Tiger Fitness — home"
+          className="group flex items-center"
         >
-          <span className="flex size-8 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#8b5cf6_50%,#a855f7_100%)] shadow-[0_8px_24px_-6px_rgba(139,92,246,0.55)]">
-            <svg viewBox="0 0 24 24" className="size-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 6l12 12M18 6L6 18" />
-              <path d="M4 12h2M18 12h2" />
-            </svg>
-          </span>
-          <span>
-            IRON<span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">PULSE</span>
-          </span>
+          <TigerLogo variant="full" size={44} />
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="hidden items-center gap-7 lg:flex">
           {NAV_LINKS.map((l) => (
             <button
               key={l.id}
               type="button"
               onClick={() => onLinkClick(l.id)}
-              className="group/navlink relative text-sm font-medium text-slate-300 transition hover:text-white"
+              className="group/navlink relative font-sans text-[12px] font-semibold uppercase tracking-[0.08em] text-white/75 transition hover:text-white"
             >
               {l.label}
-              <span className="pointer-events-none absolute -bottom-1 left-0 h-px w-0 bg-gradient-to-r from-blue-400 to-purple-400 transition-all duration-300 group-hover/navlink:w-full" />
+              <span className="pointer-events-none absolute -bottom-1.5 left-0 h-px w-0 bg-[#F5C400] shadow-[0_0_10px_rgba(245,196,0,0.6)] transition-all duration-300 group-hover/navlink:w-full" />
             </button>
           ))}
         </nav>
@@ -69,16 +64,16 @@ export function MarketingNav() {
         <div className="flex items-center gap-2">
           <Link
             to="/login"
-            className="hidden rounded-full px-4 py-2 text-sm font-semibold text-slate-200 transition hover:text-white md:inline-block"
+            className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/85 transition hover:border-[rgba(245,196,0,0.45)] hover:text-white md:inline-block"
           >
             Sign in
           </Link>
           <button
             type="button"
-            onClick={() => onLinkClick('contact')}
-            className="relative hidden overflow-hidden rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_-8px_rgba(139,92,246,0.7)] transition hover:scale-[1.02] active:scale-[0.98] md:inline-flex"
+            onClick={() => onLinkClick('plans')}
+            className="relative hidden overflow-hidden rounded-full px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-black tiger-glow transition hover:scale-[1.03] active:scale-[0.97] md:inline-flex"
           >
-            <span className="absolute inset-0 bg-[linear-gradient(135deg,#3b82f6_0%,#8b5cf6_50%,#a855f7_100%)]" />
+            <span className="absolute inset-0 gradient-tiger" />
             <span className="relative">Join now</span>
           </button>
 
@@ -86,8 +81,9 @@ export function MarketingNav() {
           <button
             type="button"
             aria-label="Toggle navigation"
+            aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((v) => !v)}
-            className="inline-flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 md:hidden"
+            className="inline-flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 lg:hidden"
           >
             <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
               {mobileOpen ? (
@@ -109,9 +105,9 @@ export function MarketingNav() {
 
       {/* Mobile drawer */}
       <div
-        className={`md:hidden ${
-          mobileOpen ? 'max-h-96 border-t border-white/5' : 'max-h-0'
-        } overflow-hidden bg-[rgba(7,8,20,0.96)] backdrop-blur-xl transition-[max-height] duration-300`}
+        className={`lg:hidden ${
+          mobileOpen ? 'max-h-[36rem] border-t border-[rgba(245,196,0,0.18)]' : 'max-h-0'
+        } overflow-hidden bg-[rgba(0,0,0,0.96)] backdrop-blur-xl transition-[max-height] duration-300`}
       >
         <nav className="flex flex-col gap-1 p-4">
           {NAV_LINKS.map((l) => (
@@ -119,7 +115,7 @@ export function MarketingNav() {
               key={l.id}
               type="button"
               onClick={() => onLinkClick(l.id)}
-              className="rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-200 transition hover:bg-white/5"
+              className="rounded-xl px-3 py-2.5 text-left font-sans text-sm font-semibold uppercase tracking-[0.08em] text-white/85 transition hover:bg-white/5 hover:text-[#F5C400]"
             >
               {l.label}
             </button>
@@ -127,14 +123,14 @@ export function MarketingNav() {
           <div className="mt-2 flex gap-2">
             <Link
               to="/login"
-              className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-center text-sm font-semibold text-slate-200 transition hover:bg-white/5"
+              className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-[0.16em] text-white/85 transition hover:bg-white/5"
             >
               Sign in
             </Link>
             <button
               type="button"
-              onClick={() => onLinkClick('contact')}
-              className="flex-1 rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#8b5cf6_50%,#a855f7_100%)] px-4 py-2.5 text-sm font-semibold text-white"
+              onClick={() => onLinkClick('plans')}
+              className="flex-1 rounded-xl bg-[linear-gradient(135deg,#FFD942_0%,#F5C400_50%,#D9A400_100%)] px-4 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-black"
             >
               Join now
             </button>

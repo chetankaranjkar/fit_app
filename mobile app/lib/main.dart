@@ -52,7 +52,7 @@ class _PulseFitAppState extends State<PulseFitApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
     return CupertinoApp.router(
-      title: 'PulseFit',
+      title: 'Tiger Fitness',
       debugShowCheckedModeBanner: false,
       theme: buildCupertinoTheme(brightness),
       routerConfig: appRouter,

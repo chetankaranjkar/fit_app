@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:camera/camera.dart';
 
 import '../../animations/app_motion.dart';
+import '../../core/media_permissions.dart';
 import '../../core/media_urls.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
@@ -15,15 +16,41 @@ import 'image_editor_sheet.dart';
 
 enum PremiumMediaKind { profile, progress }
 
+/// Camera, gallery, or file browser — used by profile edit and progress photos.
+enum PremiumMediaSource { camera, gallery, files }
+
 String _extForKind(PremiumMediaKind kind) => kind == PremiumMediaKind.profile ? 'profile' : 'progress';
 
 /// Pick → edit (zoom/rotate/crop) → compress → JPEG bytes for upload.
 Future<PremiumPickResult?> runPremiumMediaCapture(
   BuildContext context, {
   required PremiumMediaKind kind,
+  PremiumMediaSource? source,
 }) async {
-  final source = await _pickSource(context);
-  if (!context.mounted || source == null) return null;
+  final selected = source ?? await _pickSource(context);
+  if (!context.mounted || selected == null) return null;
+
+  final mapped = switch (selected) {
+    PremiumMediaSource.camera => _MediaSource.camera,
+    PremiumMediaSource.gallery => _MediaSource.gallery,
+    PremiumMediaSource.files => _MediaSource.files,
+  };
+
+  return _captureFromSource(context, kind: kind, source: mapped);
+}
+
+Future<PremiumPickResult?> _captureFromSource(
+  BuildContext context, {
+  required PremiumMediaKind kind,
+  required _MediaSource source,
+}) async {
+  final nav = Navigator.of(context, rootNavigator: true);
+
+  if (source == _MediaSource.camera) {
+    if (!await ensureCameraPermission(context)) return null;
+  } else if (source == _MediaSource.gallery) {
+    if (!await ensureGalleryPermission(context)) return null;
+  }
 
   Uint8List? raw;
   var name = '${_extForKind(kind)}_${DateTime.now().millisecondsSinceEpoch}.jpg';
@@ -45,7 +72,7 @@ Future<PremiumPickResult?> runPremiumMediaCapture(
             raw = await x.readAsBytes();
             name = x.name.isNotEmpty ? x.name : name;
           } else {
-            raw = await Navigator.of(context).push<Uint8List>(
+            raw = await nav.push<Uint8List>(
               CupertinoPageRoute(
                 fullscreenDialog: true,
                 builder: (_) => CameraCapturePage(cameras: cams),
@@ -118,9 +145,10 @@ Future<PremiumPickResult?> runPremiumMediaCapture(
 
 enum _MediaSource { camera, gallery, files }
 
-Future<_MediaSource?> _pickSource(BuildContext context) {
-  return showCupertinoModalPopup<_MediaSource>(
+Future<PremiumMediaSource?> _pickSource(BuildContext context) {
+  return showCupertinoModalPopup<PremiumMediaSource>(
     context: context,
+    useRootNavigator: true,
     builder: (ctx) => Container(
       padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(ctx).bottom + 20, top: 12),
       decoration: BoxDecoration(
@@ -148,21 +176,21 @@ Future<_MediaSource?> _pickSource(BuildContext context) {
               icon: CupertinoIcons.camera_fill,
               label: 'Take photo',
               subtitle: kIsWeb ? 'Webcam (browser)' : 'Camera / USB camera',
-              onTap: () => Navigator.pop(ctx, _MediaSource.camera),
+              onTap: () => Navigator.pop(ctx, PremiumMediaSource.camera),
             ).animate().fadeIn(duration: AppFx.quick, delay: 40.ms),
             _glassTile(
               ctx,
               icon: CupertinoIcons.photo_fill_on_rectangle_fill,
               label: 'Gallery',
               subtitle: 'Photos library',
-              onTap: () => Navigator.pop(ctx, _MediaSource.gallery),
+              onTap: () => Navigator.pop(ctx, PremiumMediaSource.gallery),
             ).animate().fadeIn(duration: AppFx.quick, delay: 80.ms),
             _glassTile(
               ctx,
               icon: CupertinoIcons.folder_fill,
               label: 'Files',
               subtitle: 'Browse files',
-              onTap: () => Navigator.pop(ctx, _MediaSource.files),
+              onTap: () => Navigator.pop(ctx, PremiumMediaSource.files),
             ).animate().fadeIn(duration: AppFx.quick, delay: 120.ms),
             const SizedBox(height: 8),
             CupertinoButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),

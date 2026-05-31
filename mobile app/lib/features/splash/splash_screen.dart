@@ -10,7 +10,7 @@ import '../../providers/auth_providers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../media/onboarding_profile_photo_screen.dart';
-import 'package:pulsefit/widgets/pulsefit_logo.dart';
+import '../../widgets/tiger_fitness_logo.dart';
 
 /// Splash: navigate quickly; no Hive/network on this screen.
 class SplashScreen extends ConsumerStatefulWidget {
@@ -90,7 +90,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: AppColors.bgDark,
+      backgroundColor: const Color(0xFF000000),
       child: Stack(
         children: [
           const Positioned.fill(
@@ -99,7 +99,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF0D0D0F), Color(0xFF1A1005), Color(0xFF0D0D0F)],
+                  colors: [Color(0xFF000000), Color(0xFF0A0A0A), Color(0xFF000000)],
                   stops: [0.0, 0.5, 1.0],
                 ),
               ),
@@ -110,7 +110,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Spacer(flex: 2),
-                const PulseFitBrandBlock(compact: false, showTagline: true),
+                const TigerFitnessBrandBlock(compact: false, showTagline: true),
                 const SizedBox(height: AppSpacing.xl),
                 const CupertinoActivityIndicator(
                   color: AppColors.accent,

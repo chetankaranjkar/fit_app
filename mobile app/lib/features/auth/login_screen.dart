@@ -11,7 +11,7 @@ import '../../animations/app_motion.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_text_field.dart';
-import 'package:pulsefit/widgets/pulsefit_logo.dart';
+import '../../widgets/tiger_fitness_logo.dart';
 
 /// Freeletics-inspired: near-black canvas, bold wordmark, single strong CTA rail.
 class LoginScreen extends ConsumerStatefulWidget {
@@ -121,7 +121,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 28),
-                      const PulseFitBrandBlock(compact: false, showTagline: true)
+                      const TigerFitnessBrandBlock(compact: false, showTagline: true)
                           .animate()
                           .fadeIn(duration: AppFx.regular)
                           .moveY(begin: 8, end: 0, curve: Curves.easeOutCubic),

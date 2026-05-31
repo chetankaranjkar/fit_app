@@ -48,7 +48,9 @@ public sealed class WebRootImageStorage
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (!AllowedExtensions.Contains(extension))
             throw new InvalidOperationException("Invalid file extension");
-        if (string.IsNullOrWhiteSpace(file.ContentType) || !AllowedMimeTypes.Contains(file.ContentType))
+
+        var contentType = ResolveContentType(file.ContentType, extension);
+        if (string.IsNullOrWhiteSpace(contentType) || !AllowedMimeTypes.Contains(contentType))
             throw new InvalidOperationException("Invalid MIME type");
 
         var uploadRoot = Path.Combine(_environment.ContentRootPath, "wwwroot");
@@ -80,6 +82,28 @@ public sealed class WebRootImageStorage
         var normalizedFolder = relativeFolder.Replace('\\', '/').Trim('/');
         var imageUrl = $"/{normalizedFolder}/{fileName}";
         return (imageUrl, filePath);
+    }
+
+    private static string ResolveContentType(string? reportedContentType, string extension)
+    {
+        if (!string.IsNullOrWhiteSpace(reportedContentType) && AllowedMimeTypes.Contains(reportedContentType))
+            return reportedContentType;
+
+        // Mobile clients (Flutter/Dio) may send application/octet-stream or omit the part content-type.
+        if (string.Equals(reportedContentType, "application/octet-stream", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(reportedContentType))
+        {
+            return extension switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                _ => reportedContentType ?? string.Empty,
+            };
+        }
+
+        return reportedContentType ?? string.Empty;
     }
 
     private static async Task<bool> IsSupportedImageSignatureAsync(Stream stream, CancellationToken cancellationToken)

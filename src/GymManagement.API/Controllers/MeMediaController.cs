@@ -43,6 +43,8 @@ public sealed class MeMediaController : ControllerBase
     {
         var userId = ResolveUserIdFromClaims();
         if (userId == null) return Unauthorized();
+        if (file == null || file.Length == 0)
+            return BadRequest("No file uploaded. Use multipart form field named 'file'.");
 
         try
         {

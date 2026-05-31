@@ -1,8 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_exception.dart';
+import '../../core/media_urls.dart';
 import '../../models/me_models.dart';
 import '../../providers/me_providers.dart';
 import '../../services/me_service.dart';
@@ -25,8 +27,9 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
   late final TextEditingController _first;
   late final TextEditingController _last;
   late final TextEditingController _phone;
-  late final TextEditingController _photoUrl;
+  late String? _photoUrl;
   bool _saving = false;
+  bool _uploadingPhoto = false;
 
   @override
   void initState() {
@@ -35,7 +38,7 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
     _first = TextEditingController(text: p.firstName);
     _last = TextEditingController(text: p.lastName);
     _phone = TextEditingController(text: p.phone ?? '');
-    _photoUrl = TextEditingController(text: p.profilePictureUrl ?? '');
+    _photoUrl = p.profilePictureUrl;
   }
 
   @override
@@ -43,19 +46,18 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
     _first.dispose();
     _last.dispose();
     _phone.dispose();
-    _photoUrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    if (_saving) return;
+    if (_saving || _uploadingPhoto) return;
     setState(() => _saving = true);
     try {
       await MeService.instance.updateProfile(
         firstName: _first.text.trim(),
         lastName: _last.text.trim(),
         phone: _phone.text.trim().isEmpty ? '' : _phone.text.trim(),
-        profilePictureUrl: _photoUrl.text.trim().isEmpty ? '' : _photoUrl.text.trim(),
+        profilePictureUrl: (_photoUrl ?? '').trim().isEmpty ? '' : _photoUrl!.trim(),
       );
       if (!mounted) return;
       ref.invalidate(profileProvider);
@@ -64,79 +66,65 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showCupertinoDialog<void>(
-        context: context,
-        builder: (c) => CupertinoAlertDialog(
-          title: const Text('Update failed'),
-          content: Text(e.message),
-          actions: [
-            CupertinoDialogAction(onPressed: () => Navigator.pop(c), child: const Text('OK')),
-          ],
-        ),
-      );
+      _showError('Update failed', e.message);
     } on Object catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showCupertinoDialog<void>(
-        context: context,
-        builder: (c) => CupertinoAlertDialog(
-          title: const Text('Update failed'),
-          content: Text('$e'),
-          actions: [
-            CupertinoDialogAction(onPressed: () => Navigator.pop(c), child: const Text('OK')),
-          ],
-        ),
-      );
+      _showError('Update failed', '$e');
     }
   }
 
-  Future<void> _uploadPhoto() async {
+  Future<void> _pickPhoto(PremiumMediaSource source) async {
+    if (_uploadingPhoto || _saving) return;
     HapticFeedback.selectionClick();
-    final picked = await runPremiumMediaCapture(context, kind: PremiumMediaKind.profile);
+    final picked = await runPremiumMediaCapture(
+      context,
+      kind: PremiumMediaKind.profile,
+      source: source,
+    );
     if (!mounted || picked == null) return;
-    setState(() => _saving = true);
+
+    setState(() => _uploadingPhoto = true);
     try {
       final profile = await MeService.instance.uploadProfilePhoto(picked.bytes, picked.fileName);
       if (!mounted) return;
-      _photoUrl.text = profile.profilePictureUrl ?? '';
+      setState(() => _photoUrl = profile.profilePictureUrl);
       ref.invalidate(profileProvider);
       ref.invalidate(dashboardProvider);
-      showCupertinoDialog<void>(
-        context: context,
-        builder: (c) => CupertinoAlertDialog(
-          title: const Text('Photo updated'),
-          content: const Text('Your new profile picture has been saved.'),
-          actions: [CupertinoDialogAction(isDefaultAction: true, onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-        ),
-      );
+      HapticFeedback.mediumImpact();
     } on ApiException catch (e) {
       if (!mounted) return;
-      showCupertinoDialog<void>(
-        context: context,
-        builder: (c) => CupertinoAlertDialog(
-          title: const Text('Upload failed'),
-          content: Text(e.message),
-          actions: [CupertinoDialogAction(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-        ),
-      );
+      _showError('Upload failed', e.message);
     } on Object catch (e) {
       if (!mounted) return;
-      showCupertinoDialog<void>(
-        context: context,
-        builder: (c) => CupertinoAlertDialog(
-          title: const Text('Upload failed'),
-          content: Text('$e'),
-          actions: [CupertinoDialogAction(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-        ),
-      );
+      _showError('Upload failed', '$e');
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() => _uploadingPhoto = false);
     }
+  }
+
+  void _showError(String title, String message) {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (c) => CupertinoAlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          CupertinoDialogAction(onPressed: () => Navigator.pop(c), child: const Text('OK')),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final initials = widget.initial.initials;
+    final resolvedPhoto = _photoUrl != null && MediaUrls.resolve(_photoUrl!).isNotEmpty
+        ? MediaUrls.resolve(_photoUrl!)
+        : null;
+    final busy = _saving || _uploadingPhoto;
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.resolveSurface(context),
@@ -161,29 +149,18 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
               ),
               const SizedBox(height: AppSpacing.lg),
               Text('Edit profile', style: AppType.title2.copyWith(color: AppColors.resolveText(context))),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.lg),
+              _ProfilePhotoSection(
+                photoUrl: resolvedPhoto,
+                initials: initials,
+                uploading: _uploadingPhoto,
+                onCamera: busy ? null : () => _pickPhoto(PremiumMediaSource.camera),
+                onGallery: busy ? null : () => _pickPhoto(PremiumMediaSource.gallery),
+              ),
+              const SizedBox(height: AppSpacing.lg),
               _LabeledField(label: 'First name', controller: _first),
               _LabeledField(label: 'Last name', controller: _last),
               _LabeledField(label: 'Phone', controller: _phone, keyboardType: TextInputType.phone),
-              CupertinoButton.filled(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                onPressed: _saving ? null : _uploadPhoto,
-                child: _saving
-                    ? const CupertinoActivityIndicator(color: CupertinoColors.white)
-                    : const Text('Upload profile photo'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _LabeledField(
-                label: 'Or paste photo URL',
-                controller: _photoUrl,
-                placeholder: 'https://…',
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Advanced: public image URL. Most members use Upload above.',
-                style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
-              ),
               const SizedBox(height: AppSpacing.xl),
               Row(
                 children: [
@@ -192,7 +169,7 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       color: AppColors.resolveSurfaceAlt(context),
                       borderRadius: BorderRadius.circular(AppRadius.lg),
-                      onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                      onPressed: busy ? null : () => Navigator.of(context).pop(),
                       child: Text('Cancel', style: AppType.button.copyWith(color: AppColors.resolveText(context))),
                     ),
                   ),
@@ -202,7 +179,7 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       borderRadius: BorderRadius.circular(AppRadius.lg),
                       color: AppColors.accent,
-                      onPressed: _saving ? null : _save,
+                      onPressed: busy ? null : _save,
                       child: _saving
                           ? const CupertinoActivityIndicator(color: CupertinoColors.white)
                           : Text('Save', style: AppType.button.copyWith(color: CupertinoColors.white)),
@@ -218,17 +195,158 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
   }
 }
 
+class _ProfilePhotoSection extends StatelessWidget {
+  const _ProfilePhotoSection({
+    required this.photoUrl,
+    required this.initials,
+    required this.uploading,
+    required this.onCamera,
+    required this.onGallery,
+  });
+
+  final String? photoUrl;
+  final String initials;
+  final bool uploading;
+  final VoidCallback? onCamera;
+  final VoidCallback? onGallery;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppColors.neonGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.neonPurple.withValues(alpha: 0.35),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: photoUrl != null
+                  ? CachedNetworkImage(
+                      imageUrl: photoUrl!,
+                      fit: BoxFit.cover,
+                      width: 96,
+                      height: 96,
+                      placeholder: (_, __) => const CupertinoActivityIndicator(color: CupertinoColors.white),
+                      errorWidget: (_, __, ___) => _InitialsAvatar(initials: initials),
+                    )
+                  : _InitialsAvatar(initials: initials),
+            ),
+            if (uploading)
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: CupertinoColors.black.withValues(alpha: 0.45),
+                ),
+                alignment: Alignment.center,
+                child: const CupertinoActivityIndicator(color: CupertinoColors.white),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'Profile photo',
+          style: AppType.subhead.copyWith(
+            color: AppColors.resolveText(context),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Take a new photo or choose one from your gallery.',
+          textAlign: TextAlign.center,
+          style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: AppColors.resolveSurfaceAlt(context),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                onPressed: onCamera,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(CupertinoIcons.camera_fill, size: 18, color: AppColors.accent),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Camera',
+                      style: AppType.button.copyWith(color: AppColors.resolveText(context)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: AppColors.resolveSurfaceAlt(context),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                onPressed: onGallery,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(CupertinoIcons.photo_fill_on_rectangle_fill, size: 18, color: AppColors.accent),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Gallery',
+                      style: AppType.button.copyWith(color: AppColors.resolveText(context)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _InitialsAvatar extends StatelessWidget {
+  const _InitialsAvatar({required this.initials});
+
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        initials,
+        style: AppType.title2.copyWith(
+          color: CupertinoColors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 class _LabeledField extends StatelessWidget {
   const _LabeledField({
     required this.label,
     required this.controller,
-    this.placeholder,
     this.keyboardType,
   });
 
   final String label;
   final TextEditingController controller;
-  final String? placeholder;
   final TextInputType? keyboardType;
 
   @override
@@ -242,7 +360,6 @@ class _LabeledField extends StatelessWidget {
           const SizedBox(height: 4),
           CupertinoTextField(
             controller: controller,
-            placeholder: placeholder,
             keyboardType: keyboardType,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
             decoration: BoxDecoration(

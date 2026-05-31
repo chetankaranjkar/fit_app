@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
 import 'api_exception.dart';
 import 'app_config.dart';
 import 'secure_storage.dart';
@@ -12,7 +13,6 @@ class ApiClient {
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 30),
       sendTimeout: const Duration(seconds: 20),
-      headers: const {'Content-Type': 'application/json'},
       validateStatus: (status) => status != null && status >= 200 && status < 600,
     ));
 
@@ -32,7 +32,8 @@ class ApiClient {
         final path = response.requestOptions.path;
         if (path.contains('/Auth/login') ||
             path.contains('/Auth/refresh') ||
-            response.requestOptions.extra['auth_retry'] == true) {
+            response.requestOptions.extra['auth_retry'] == true ||
+            response.requestOptions.data is FormData) {
           onUnauthorized?.call();
           return handler.next(response);
         }
@@ -64,6 +65,8 @@ class ApiClient {
   /// Configure listeners/handlers (e.g. force logout on auth failure).
   void Function()? onUnauthorized;
 
+  static final _jsonOptions = Options(contentType: Headers.jsonContentType);
+
   Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) async {
     try {
       final res = await _dio.get<T>(path, queryParameters: query);
@@ -80,7 +83,12 @@ class ApiClient {
     Map<String, dynamic>? query,
   }) async {
     try {
-      final res = await _dio.post<T>(path, data: body, queryParameters: query);
+      final res = await _dio.post<T>(
+        path,
+        data: body,
+        queryParameters: query,
+        options: _jsonOptions,
+      );
       _ensureOk(res);
       return res;
     } on DioException catch (e) {
@@ -96,9 +104,18 @@ class ApiClient {
     Map<String, dynamic>? formFields,
     ProgressCallback? onSendProgress,
   }) async {
+    if (fileBytes.isEmpty) {
+      throw ApiException('Photo data is empty. Try taking the photo again.');
+    }
+
     try {
+      final safeName = _normalizeUploadFileName(fileName);
       final map = <String, dynamic>{
-        'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
+        'file': MultipartFile.fromBytes(
+          fileBytes,
+          filename: safeName,
+          contentType: MediaType('image', 'jpeg'),
+        ),
       };
       if (formFields != null) {
         for (final e in formFields.entries) {
@@ -112,6 +129,10 @@ class ApiClient {
         path,
         data: form,
         onSendProgress: onSendProgress,
+        options: Options(
+          sendTimeout: const Duration(minutes: 2),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
       );
       _ensureOk(res);
       return res;
@@ -120,9 +141,18 @@ class ApiClient {
     }
   }
 
+  static String _normalizeUploadFileName(String fileName) {
+    final trimmed = fileName.trim();
+    if (trimmed.isEmpty) return 'profile.jpg';
+    final lower = trimmed.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return trimmed;
+    if (lower.endsWith('.png') || lower.endsWith('.webp')) return trimmed;
+    return '$trimmed.jpg';
+  }
+
   Future<Response<T>> put<T>(String path, {Object? body}) async {
     try {
-      final res = await _dio.put<T>(path, data: body);
+      final res = await _dio.put<T>(path, data: body, options: _jsonOptions);
       _ensureOk(res);
       return res;
     } on DioException catch (e) {
@@ -161,32 +191,48 @@ class ApiClient {
       if (AppConfig.looksLikeEmulatorDefault) {
         return ApiException(
           'Cannot reach server at $root. Rebuild with your VPS or PC IP, e.g.\n'
-          'flutter build apk --dart-define=API_BASE_URL=http://187.127.169.135',
+          'flutter build apk --dart-define=API_BASE_URL=https://tigerfitness.tech',
         );
       }
       return ApiException(
-        'Cannot reach server at $root. Check VPS is running (gym-gateway on port 80), '
-        'Hostinger firewall allows port 80, and use http:// not https:// until SSL is set up.',
+        'Cannot reach server at $root. Check your connection and try again.',
       );
     }
     if (e.type == DioExceptionType.badCertificate) {
       return ApiException(
-        'TLS certificate error for ${AppConfig.apiHost}. Use http:// for IP-only VPS, or fix SSL.',
+        'TLS certificate error for ${AppConfig.apiHost}. Contact support if this persists.',
+      );
+    }
+    final status = e.response?.statusCode;
+    if (status == 401) {
+      return ApiException(
+        'Session expired. Sign out and sign in again, then retry the upload.',
+        statusCode: status,
+        data: e.response?.data,
+      );
+    }
+    if (status == 413) {
+      return ApiException(
+        'Photo is too large. Try a smaller image (max 5 MB).',
+        statusCode: status,
+        data: e.response?.data,
       );
     }
     return ApiException(
-      _extractMessage(e.response?.data) ?? e.message ?? 'Network error (${AppConfig.apiRoot})',
-      statusCode: e.response?.statusCode,
+      _extractMessage(e.response?.data) ??
+          e.message ??
+          'Upload failed (${AppConfig.apiRoot}${status != null ? ', status $status' : ''})',
+      statusCode: status,
       data: e.response?.data,
     );
   }
 
   String? _extractMessage(dynamic data) {
-    if (data is String && data.trim().isNotEmpty) return data;
+    if (data is String && data.trim().isNotEmpty) return data.trim();
     if (data is Map) {
       for (final key in const ['message', 'Message', 'detail', 'title', 'error']) {
         final value = data[key];
-        if (value is String && value.trim().isNotEmpty) return value;
+        if (value is String && value.trim().isNotEmpty) return value.trim();
       }
     }
     return null;

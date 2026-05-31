@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using GymManagement.API.Attributes;
 using GymManagement.API.Services;
 using GymManagement.Core.Authorization;
-using GymManagement.Core.Services;
+using GymManagement.Infrastructure.Data;
 
 namespace GymManagement.API.Controllers
 {
@@ -14,14 +15,17 @@ namespace GymManagement.API.Controllers
     {
         private readonly ILogger<FileUploadController> _logger;
         private readonly WebRootImageStorage _storage;
+        private readonly ApplicationDbContext _db;
         private const long ProfileMaxBytes = 5 * 1024 * 1024;
         private const long BodyImageMaxBytes = 10 * 1024 * 1024;
 
         public FileUploadController(
             WebRootImageStorage storage,
+            ApplicationDbContext db,
             ILogger<FileUploadController> logger)
         {
             _storage = storage;
+            _db = db;
             _logger = logger;
         }
 
@@ -34,11 +38,17 @@ namespace GymManagement.API.Controllers
 
             try
             {
+                var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+                if (user == null) return NotFound();
+
+                var prefix = $"user_{userId}_";
                 var (imageUrl, _) = await _storage.SaveAsync(
                     file,
                     Path.Combine("uploads", "profiles", "users").Replace('\\', '/'),
                     ProfileMaxBytes,
-                    prefixToCleanup: $"user_{userId}_",
+                    prefixToCleanup: prefix,
+                    namePrefix: prefix,
+                    previousManagedImageUrl: user.ProfilePictureUrl,
                     cancellationToken: cancellationToken);
                 return Ok(new { imageUrl });
             }
@@ -57,13 +67,25 @@ namespace GymManagement.API.Controllers
         [HasPermission(PermissionCodes.TrainerAccess)]
         public async Task<ActionResult<string>> UploadTrainerProfileImage(int trainerId, IFormFile file, CancellationToken cancellationToken = default)
         {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded. Use multipart form field named 'file'.");
+
             try
             {
+                var trainer = await _db.Trainers.AsNoTracking().FirstOrDefaultAsync(t => t.Id == trainerId, cancellationToken);
+                if (trainer == null) return NotFound();
+
+                var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == trainer.UserId, cancellationToken);
+                var previous = trainer.ProfilePicture ?? user?.ProfilePictureUrl;
+                var prefix = $"trainer_{trainerId}_";
+
                 var (imageUrl, _) = await _storage.SaveAsync(
                     file,
                     Path.Combine("uploads", "profiles", "trainers").Replace('\\', '/'),
                     ProfileMaxBytes,
-                    prefixToCleanup: $"trainer_{trainerId}_",
+                    prefixToCleanup: prefix,
+                    namePrefix: prefix,
+                    previousManagedImageUrl: previous,
                     cancellationToken: cancellationToken);
                 return Ok(new { imageUrl });
             }

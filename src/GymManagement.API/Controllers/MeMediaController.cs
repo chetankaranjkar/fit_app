@@ -51,11 +51,16 @@ public sealed class MeMediaController : ControllerBase
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId.Value, cancellationToken);
             if (user == null) return NotFound();
 
+            var previous = user.ProfilePictureUrl;
+            var prefix = $"user_{userId}_";
+
             var (imageUrl, _) = await _imageStorage.SaveAsync(
                 file,
                 relativeFolder: Path.Combine("uploads", "profiles", "users").Replace('\\', '/'),
                 maxBytes: ProfileMaxBytes,
-                prefixToCleanup: $"user_{userId}_",
+                prefixToCleanup: prefix,
+                namePrefix: prefix,
+                previousManagedImageUrl: previous,
                 cancellationToken: cancellationToken);
 
             user.ProfilePictureUrl = imageUrl;

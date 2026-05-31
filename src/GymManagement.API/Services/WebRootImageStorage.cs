@@ -38,6 +38,7 @@ public sealed class WebRootImageStorage
         long maxBytes,
         string? prefixToCleanup,
         string? namePrefix = null,
+        string? previousManagedImageUrl = null,
         CancellationToken cancellationToken = default)
     {
         if (file == null || file.Length == 0)
@@ -74,7 +75,10 @@ public sealed class WebRootImageStorage
             throw new InvalidOperationException(scanResult.Reason ?? "Malware scan failed");
         input.Position = 0;
 
-        var safePrefix = string.IsNullOrWhiteSpace(namePrefix) ? "img_" : SanitizeSegment(namePrefix);
+        var effectiveNamePrefix = string.IsNullOrWhiteSpace(namePrefix)
+            ? prefixToCleanup
+            : namePrefix;
+        var safePrefix = string.IsNullOrWhiteSpace(effectiveNamePrefix) ? "img_" : SanitizeSegment(effectiveNamePrefix);
         var randomToken = Convert.ToHexString(Guid.NewGuid().ToByteArray()).ToLowerInvariant();
         var fileName = $"{safePrefix}{randomToken}{extension}";
         var filePath = Path.Combine(folderPath, fileName);
@@ -102,7 +106,58 @@ public sealed class WebRootImageStorage
 
         var normalizedFolder = relativeFolder.Replace('\\', '/').Trim('/');
         var imageUrl = $"/{normalizedFolder}/{fileName}";
+
+        TryDeletePreviousManagedImage(previousManagedImageUrl, imageUrl);
+
         return (imageUrl, filePath);
+    }
+
+    /// <summary>
+    /// Deletes a prior upload stored under wwwroot/uploads when the URL is app-relative (not external).
+    /// </summary>
+    public bool TryDeleteManagedImage(string? imageUrl)
+    {
+        if (string.IsNullOrWhiteSpace(imageUrl))
+            return false;
+
+        var trimmed = imageUrl.Trim();
+        if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var relative = trimmed.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        var uploadsRoot = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, "wwwroot", "uploads"));
+        var fullPath = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, "wwwroot", relative));
+
+        if (!fullPath.StartsWith(uploadsRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Skipped delete for non-upload path {ImageUrl}", imageUrl);
+            return false;
+        }
+
+        if (!System.IO.File.Exists(fullPath))
+            return false;
+
+        try
+        {
+            System.IO.File.Delete(fullPath);
+            _logger.LogInformation("Deleted previous upload {Path}", fullPath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to delete managed upload {Path}", fullPath);
+            return false;
+        }
+    }
+
+    private void TryDeletePreviousManagedImage(string? previousUrl, string newImageUrl)
+    {
+        if (string.IsNullOrWhiteSpace(previousUrl))
+            return;
+        if (string.Equals(previousUrl.Trim(), newImageUrl.Trim(), StringComparison.OrdinalIgnoreCase))
+            return;
+        TryDeleteManagedImage(previousUrl);
     }
 
     private static string ResolveContentType(string? reportedContentType, string extension)
@@ -169,6 +224,7 @@ public sealed class WebRootImageStorage
             try
             {
                 System.IO.File.Delete(oldFile);
+                _logger.LogInformation("Deleted superseded upload {Path}", oldFile);
             }
             catch (Exception ex)
             {

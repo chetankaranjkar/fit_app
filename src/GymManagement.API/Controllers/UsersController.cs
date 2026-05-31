@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using GymManagement.API.Attributes;
+using GymManagement.API.Services;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Exceptions;
@@ -17,11 +18,16 @@ namespace GymManagement.API.Controllers
     {
         private readonly IUserService _userService;
         private readonly IRbacService _rbacService;
+        private readonly WebRootImageStorage _imageStorage;
 
-        public UsersController(IUserService userService, IRbacService rbacService)
+        public UsersController(
+            IUserService userService,
+            IRbacService rbacService,
+            WebRootImageStorage imageStorage)
         {
             _userService = userService;
             _rbacService = rbacService;
+            _imageStorage = imageStorage;
         }
 
         [HttpGet]
@@ -78,9 +84,21 @@ namespace GymManagement.API.Controllers
         {
             try
             {
+                UserDto? before = null;
+                if (updateUserDto.ProfilePictureUrl != null)
+                    before = await _userService.GetUserByIdAsync(id);
+
                 var user = await _userService.UpdateUserAsync(id, updateUserDto);
                 if (user == null)
                     return NotFound();
+
+                if (before != null
+                    && updateUserDto.ProfilePictureUrl != null
+                    && !string.Equals(before.ProfilePictureUrl, user.ProfilePictureUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    _imageStorage.TryDeleteManagedImage(before.ProfilePictureUrl);
+                }
+
                 return Ok(user);
             }
             catch (ConflictException ex)

@@ -9,6 +9,7 @@ using GymManagement.Core.DTOs;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
+using GymManagement.API.Services;
 
 namespace GymManagement.API.Controllers
 {
@@ -23,11 +24,16 @@ namespace GymManagement.API.Controllers
     {
         private readonly ApplicationDbContext _db;
         private readonly IMembershipPaymentService _membershipPaymentService;
+        private readonly WebRootImageStorage _imageStorage;
 
-        public MeController(ApplicationDbContext db, IMembershipPaymentService membershipPaymentService)
+        public MeController(
+            ApplicationDbContext db,
+            IMembershipPaymentService membershipPaymentService,
+            WebRootImageStorage imageStorage)
         {
             _db = db;
             _membershipPaymentService = membershipPaymentService;
+            _imageStorage = imageStorage;
         }
 
         /// <summary>Payment gate info for mobile / member apps (allowed while access is otherwise blocked).</summary>
@@ -103,9 +109,15 @@ namespace GymManagement.API.Controllers
             if (dto.Phone != null)
                 user.Phone = string.IsNullOrWhiteSpace(dto.Phone) ? null : dto.Phone.Trim();
             if (dto.ProfilePictureUrl != null)
-                user.ProfilePictureUrl = string.IsNullOrWhiteSpace(dto.ProfilePictureUrl)
+            {
+                var previous = user.ProfilePictureUrl;
+                var next = string.IsNullOrWhiteSpace(dto.ProfilePictureUrl)
                     ? null
                     : dto.ProfilePictureUrl.Trim();
+                if (!string.Equals(previous, next, StringComparison.OrdinalIgnoreCase))
+                    _imageStorage.TryDeleteManagedImage(previous);
+                user.ProfilePictureUrl = next;
+            }
 
             await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 

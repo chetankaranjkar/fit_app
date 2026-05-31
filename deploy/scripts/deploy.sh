@@ -19,7 +19,11 @@ fi
 
 echo "==> Building and starting containers..."
 compose build --pull
-compose up -d
+compose up -d --remove-orphans
+
+if ! is_testing_mode; then
+  ensure_production_host_nginx
+fi
 
 echo "==> Waiting for API readiness..."
 for i in $(seq 1 60); do
@@ -60,11 +64,13 @@ if is_testing_mode; then
   echo ""
   echo "Default login (change after first login): admin@gym.com / admin123"
 else
+  echo "  Public URL:       ${APP_URL}"
   echo "  Frontend (local): http://127.0.0.1:${FRONTEND_HOST_PORT:-8080}"
   echo "  API (local):      http://127.0.0.1:${API_HOST_PORT:-5104}/health/ready"
   echo ""
-  echo "Next steps:"
-  echo "  1) sudo ./deploy/scripts/setup-nginx.sh"
-  echo "  2) sudo ./deploy/scripts/setup-ssl.sh"
-  echo "  3) DNS A record for ${DOMAIN} → this server"
+  echo "If ${APP_URL} does not load:"
+  echo "  ./deploy/scripts/diagnose-site.sh"
+  echo "  sudo ./deploy/scripts/setup-nginx.sh   # reload Nginx + SSL config"
+  echo ""
+  echo "DNS A record: ${DOMAIN} → this server's public IP"
 fi

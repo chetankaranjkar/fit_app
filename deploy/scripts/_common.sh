@@ -94,3 +94,39 @@ ensure_port_80_for_testing_gateway() {
 
   echo "Port 80 is free for gym-gateway."
 }
+
+# Production uses host Nginx on :80/:443. Testing uses Docker gym-gateway on :80.
+ensure_production_host_nginx() {
+  if is_testing_mode; then
+    return 0
+  fi
+
+  echo "==> Production mode — ensuring host Nginx (not Docker gateway) serves ${DOMAIN}..."
+
+  # Leftover testing gateway binds public :80 and blocks Certbot / Nginx HTTP.
+  if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'gym-gateway'; then
+    echo "    Removing stale gym-gateway container (testing overlay)..."
+    docker rm -f gym-gateway 2>/dev/null || true
+  fi
+
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo "WARN: systemctl not found — enable host Nginx manually."
+    return 0
+  fi
+
+  if [[ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]]; then
+    echo "WARN: SSL cert not found at /etc/letsencrypt/live/${DOMAIN}/"
+    echo "  After DNS points here, run:"
+    echo "    sudo ./deploy/scripts/setup-nginx.sh"
+    echo "    sudo ./deploy/scripts/setup-ssl.sh"
+    return 0
+  fi
+
+  if [[ "${EUID}" -eq 0 ]]; then
+    "${SCRIPT_DIR}/setup-nginx.sh"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo "${SCRIPT_DIR}/setup-nginx.sh"
+  else
+    echo "WARN: Run as root or with sudo: sudo ./deploy/scripts/setup-nginx.sh"
+  fi
+}

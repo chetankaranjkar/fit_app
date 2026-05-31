@@ -39,6 +39,10 @@ if ! compose up -d --force-recreate --remove-orphans; then
   exit 1
 fi
 
+if ! is_testing_mode; then
+  ensure_production_host_nginx
+fi
+
 echo "==> Waiting for API..."
 sleep 5
 if is_testing_mode; then

@@ -55,7 +55,15 @@ public sealed class WebRootImageStorage
 
         var uploadRoot = Path.Combine(_environment.ContentRootPath, "wwwroot");
         var folderPath = Path.Combine(uploadRoot, relativeFolder.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(folderPath);
+        try
+        {
+            Directory.CreateDirectory(folderPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create upload directory {FolderPath}", folderPath);
+            throw new InvalidOperationException("Upload storage is not available on the server.");
+        }
 
         await using var input = file.OpenReadStream();
         if (!await IsSupportedImageSignatureAsync(input, cancellationToken).ConfigureAwait(false))
@@ -71,9 +79,22 @@ public sealed class WebRootImageStorage
         var fileName = $"{safePrefix}{randomToken}{extension}";
         var filePath = Path.Combine(folderPath, fileName);
 
-        await using (var output = new FileStream(filePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        try
         {
-            await input.CopyToAsync(output, cancellationToken).ConfigureAwait(false);
+            await using (var output = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                await input.CopyToAsync(output, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex, "Permission denied writing upload {FilePath}", filePath);
+            throw new InvalidOperationException("Upload folder is not writable on the server.");
+        }
+        catch (IOException ex)
+        {
+            _logger.LogError(ex, "IO error writing upload {FilePath}", filePath);
+            throw new InvalidOperationException("Could not save the uploaded file.");
         }
 
         if (!string.IsNullOrWhiteSpace(prefixToCleanup))

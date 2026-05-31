@@ -297,6 +297,32 @@ Common causes: wrong `MSSQL_SA_PASSWORD`, SQL not healthy yet, weak `JWT_SECRET_
 
 Some images use `/opt/mssql-tools/bin/sqlcmd` instead of `mssql-tools18`. Edit `deploy/docker-compose.yml` healthcheck path or wait longer (`start_period`).
 
+### Site unreachable after `./deploy/scripts/deploy.sh` (HTTPS timeout)
+
+`deploy.sh` only rebuilds **Docker** containers (127.0.0.1). Public **HTTPS** is served by **host Nginx**, not Docker.
+
+Common causes:
+
+1. **`DEPLOY_MODE=testing` in `deploy/.env`** — disables host Nginx and uses HTTP-only Docker gateway. For `https://yourdomain`, set `DEPLOY_MODE=production` and `DOMAIN=yourdomain`.
+2. **Stale `gym-gateway` container** — testing overlay binds port 80; host Nginx cannot serve HTTP/HTTPS redirects.
+3. **Host Nginx stopped** — testing mode runs `systemctl disable nginx`.
+4. **SSL not installed** — run `setup-ssl.sh` once after DNS is correct.
+
+On the VPS:
+
+```bash
+cd /opt/gym   # or your clone path
+./deploy/scripts/diagnose-site.sh
+
+docker rm -f gym-gateway 2>/dev/null || true
+sudo systemctl enable nginx
+sudo ./deploy/scripts/setup-nginx.sh
+sudo ufw allow 'Nginx Full'
+curl -I https://YOUR_DOMAIN/
+```
+
+If SSL cert is missing: `sudo ./deploy/scripts/setup-ssl.sh`
+
 ### 502 Bad Gateway from Nginx
 
 ```bash

@@ -29,6 +29,9 @@ namespace GymManagement.API.Controllers
         [HasPermission(PermissionCodes.UsersAccess)]
         public async Task<ActionResult<string>> UploadUserProfileImage(int userId, IFormFile file, CancellationToken cancellationToken = default)
         {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded. Use multipart form field named 'file'.");
+
             try
             {
                 var (imageUrl, _) = await _storage.SaveAsync(
@@ -45,7 +48,7 @@ namespace GymManagement.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error uploading user profile image");
+                _logger.LogError(ex, "Error uploading user profile image for user {UserId}", userId);
                 return StatusCode(500, "Error uploading file");
             }
         }

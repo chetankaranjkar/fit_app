@@ -30,9 +30,9 @@ ENV ASPNETCORE_URLS=http://+:8080 \
 COPY --from=build /app/publish .
 COPY deploy/docker/api/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh \
-    && mkdir -p /app/wwwroot/uploads
+    && mkdir -p /app/wwwroot/uploads \
+    && chown -R app:app /app/wwwroot/uploads
 
-USER app
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

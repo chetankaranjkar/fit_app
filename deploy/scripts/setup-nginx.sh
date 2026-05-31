@@ -28,6 +28,9 @@ DEPLOY_MODE="${DEPLOY_MODE:-production}"
 apt-get update -qq
 apt-get install -y nginx gettext-base
 
+# Testing gateway must not hold port 80 when host Nginx is used.
+docker rm -f gym-gateway 2>/dev/null || true
+
 mkdir -p /etc/nginx/snippets
 cp "${DEPLOY_DIR}/nginx/snippets/ssl-params.conf" /etc/nginx/snippets/ssl-params.conf
 
@@ -54,9 +57,29 @@ fi
 ln -sf /etc/nginx/sites-available/gym /etc/nginx/sites-enabled/gym
 rm -f /etc/nginx/sites-enabled/default
 
+# Drop other enabled vhosts that duplicate ${DOMAIN} (common after manual Certbot edits).
+shopt -s nullglob
+for enabled in /etc/nginx/sites-enabled/*; do
+  base="$(basename "${enabled}")"
+  if [[ "${base}" != "gym" ]]; then
+    echo "Removing extra enabled site: ${base}"
+    rm -f "${enabled}"
+  fi
+done
+shopt -u nullglob
+
 nginx -t
 systemctl enable nginx
-systemctl reload nginx
+if systemctl is-active --quiet nginx; then
+  systemctl reload nginx
+else
+  systemctl start nginx
+fi
+
+if ! systemctl is-active --quiet nginx; then
+  echo "ERROR: nginx failed to start. Check: journalctl -u nginx -n 40 --no-pager"
+  exit 1
+fi
 
 if [[ "${DEPLOY_MODE}" == "testing" ]]; then
   echo "Nginx ready — open http://YOUR_VPS_IP (port 80)"

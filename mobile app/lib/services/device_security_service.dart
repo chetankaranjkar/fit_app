@@ -10,7 +10,7 @@ class DeviceSecurityService {
     final uniqueId = await DeviceTrackingService.instance.getOrCreateDeviceUniqueId();
     final res = await ApiClient.instance.get<List<dynamic>>(
       '/me/devices',
-      queryParameters: {'currentDeviceUniqueId': uniqueId},
+      query: {'currentDeviceUniqueId': uniqueId},
     );
     final raw = res.data ?? [];
     return raw
@@ -30,7 +30,7 @@ class DeviceSecurityService {
   Future<List<LoginHistoryItem>> fetchLoginHistory({int take = 50}) async {
     final res = await ApiClient.instance.get<List<dynamic>>(
       '/me/login-history',
-      queryParameters: {'take': take},
+      query: {'take': take},
     );
     final raw = res.data ?? [];
     return raw

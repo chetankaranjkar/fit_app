@@ -84,14 +84,33 @@ export function DashboardLayout({
   const forceLogoutToLogin = async (message: string) => {
     clearSessionTimers()
     setSessionWarningOpen(false)
-    try {
-      await authService.logout()
-    } catch {
-      // Ignore API failure and proceed with local cleanup.
+    if (authService.isAccessTokenValid()) {
+      try {
+        await authService.logout()
+      } catch {
+        // Ignore API failure and proceed with local cleanup.
+      }
     }
     authService.setSessionExpiredMessage(message)
     authService.clearSession()
     navigate('/login', { replace: true })
+  }
+
+  const refreshSessionAndReschedule = async (): Promise<boolean> => {
+    const refreshToken = authService.getRefreshToken()
+    if (!refreshToken) return false
+    try {
+      const { data } = await authService.refresh(refreshToken)
+      const normalized = authService.normalizeLoginResponse(
+        (data ?? {}) as unknown as Record<string, unknown>
+      )
+      if (!normalized.token?.trim()) return false
+      authService.storeSession(normalized)
+      scheduleSessionTimers(normalized.token)
+      return true
+    } catch {
+      return false
+    }
   }
 
   const scheduleSessionTimers = (token: string | null) => {
@@ -105,9 +124,22 @@ export function DashboardLayout({
     expiryAtMsRef.current = expiryMs
 
     const now = Date.now()
+    const msUntilExpiry = expiryMs - now
+
+    // Expired or about to expire — refresh instead of immediate logout (avoids setTimeout(0) flash)
+    if (msUntilExpiry <= SESSION_WARNING_LEAD_SECONDS * 1000) {
+      void (async () => {
+        const refreshed = await refreshSessionAndReschedule()
+        if (!refreshed) {
+          await forceLogoutToLogin('Your session expired. Please login again.')
+        }
+      })()
+      return
+    }
+
     const warningAt = expiryMs - SESSION_WARNING_LEAD_SECONDS * 1000
     const warningDelay = Math.max(warningAt - now, 0)
-    const logoutDelay = Math.max(expiryMs - now, 0)
+    const logoutDelay = msUntilExpiry
 
     warningTimerRef.current = window.setTimeout(() => {
       const left = Math.max(0, Math.ceil((expiryMs - Date.now()) / 1000))
@@ -209,7 +241,7 @@ export function DashboardLayout({
       window.removeEventListener('focus', handleFocus)
       clearSessionTimers()
     }
-  }, [])
+  }, [pathname])
 
   useEffect(() => {
     if (!sessionWarningOpen) return
@@ -234,15 +266,10 @@ export function DashboardLayout({
     }
     try {
       setIsRefreshingSession(true)
-      const { data } = await authService.refresh(refreshToken)
-      const normalized = authService.normalizeLoginResponse(
-        (data ?? {}) as unknown as Record<string, unknown>
-      )
-      if (!normalized.token?.trim()) {
+      const refreshed = await refreshSessionAndReschedule()
+      if (!refreshed) {
         throw new Error('Refresh response did not include token')
       }
-      authService.storeSession(normalized)
-      scheduleSessionTimers(normalized.token)
       setSessionWarningOpen(false)
     } catch {
       await forceLogoutToLogin('Session refresh failed. Please login again.')

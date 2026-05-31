@@ -15,6 +15,7 @@ import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_typography.dart';
 import 'widgets/app_button.dart';
+import 'features/workouts/widgets/plan_set_completion_row.dart';
 import 'widgets/glass_card.dart';
 import 'widgets/premium_background.dart';
 
@@ -274,6 +275,9 @@ class _SessionForm extends StatefulWidget {
 class _SessionFormState extends State<_SessionForm> {
   final Map<int, List<TextEditingController>> _weightByExercise = {};
   final Map<int, List<TextEditingController>> _repsByExercise = {};
+  /// Completed set indices per exerciseId.
+  final Map<int, Set<int>> _completedSetIndices = {};
+  int? _savingSetKey;
   bool _saving = false;
 
   @override
@@ -295,8 +299,11 @@ class _SessionFormState extends State<_SessionForm> {
           text: rSeed > 0 ? '$rSeed' : '',
         ),
       );
+      _completedSetIndices[line.exerciseId] = {};
     }
   }
+
+  int _setKey(int exerciseId, int setIndex) => exerciseId * 1000 + setIndex;
 
   @override
   void dispose() {
@@ -324,6 +331,7 @@ class _SessionFormState extends State<_SessionForm> {
       final wList = _weightByExercise[line.exerciseId]!;
       final rList = _repsByExercise[line.exerciseId]!;
       for (var i = 0; i < wList.length; i++) {
+        if (!(_completedSetIndices[line.exerciseId]?.contains(i) ?? false)) continue;
         final reps = int.tryParse(rList[i].text.trim());
         if (reps == null || reps <= 0) continue;
         final raw = wList[i].text.trim();
@@ -375,7 +383,7 @@ class _SessionFormState extends State<_SessionForm> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Last weight/reps help you progress safely. Adjust fields for each set.',
+                      'Enter weight and reps, then swipe right on each set to log it.',
                       style: AppType.footnote.copyWith(
                         color: AppColors.resolveTextSecondary(context),
                       ),
@@ -442,6 +450,19 @@ class _SessionFormState extends State<_SessionForm> {
                         line: widget.template.exercises[i],
                         weightCtrls: _weightByExercise[widget.template.exercises[i].exerciseId]!,
                         repsCtrls: _repsByExercise[widget.template.exercises[i].exerciseId]!,
+                        completedIndices: _completedSetIndices[widget.template.exercises[i].exerciseId]!,
+                        savingSetKey: _savingSetKey,
+                        onSetCompleted: (setIndex, reps, weight) async {
+                          final exId = widget.template.exercises[i].exerciseId;
+                          setState(() => _savingSetKey = _setKey(exId, setIndex));
+                          await Future<void>.delayed(const Duration(milliseconds: 180));
+                          if (!mounted) return;
+                          setState(() {
+                            _completedSetIndices[exId]!.add(setIndex);
+                            _savingSetKey = null;
+                          });
+                          HapticFeedback.mediumImpact();
+                        },
                       ),
                       if (i < widget.template.exercises.length - 1) const SizedBox(height: AppSpacing.md),
                     ],
@@ -470,11 +491,19 @@ class _ExerciseCard extends StatelessWidget {
     required this.line,
     required this.weightCtrls,
     required this.repsCtrls,
+    required this.completedIndices,
+    required this.savingSetKey,
+    required this.onSetCompleted,
   });
 
   final MeWorkoutExerciseLine line;
   final List<TextEditingController> weightCtrls;
   final List<TextEditingController> repsCtrls;
+  final Set<int> completedIndices;
+  final int? savingSetKey;
+  final Future<void> Function(int setIndex, int reps, double weight) onSetCompleted;
+
+  int _setKey(int setIndex) => line.exerciseId * 1000 + setIndex;
 
   String? _lastLabel() {
     if (line.lastWeightUsed == null && line.lastRepsDone == null && line.lastSessionDateUtc == null) {
@@ -574,53 +603,14 @@ class _ExerciseCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: AppSpacing.md),
-          Text(
-            'Log sets (kg)',
-            style: AppType.caption.copyWith(
-              color: AppColors.resolveTextSecondary(context),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
           for (var i = 0; i < weightCtrls.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 56,
-                    child: Text(
-                      'Set ${i + 1}',
-                      style: AppType.subhead.copyWith(color: AppColors.resolveTextSecondary(context)),
-                    ),
-                  ),
-                  Expanded(
-                    child: CupertinoTextField(
-                      controller: weightCtrls[i],
-                      placeholder: 'kg',
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: CupertinoColors.systemGrey6.resolveFrom(context),
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: CupertinoTextField(
-                      controller: repsCtrls[i],
-                      placeholder: 'reps',
-                      keyboardType: TextInputType.number,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: CupertinoColors.systemGrey6.resolveFrom(context),
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            PlanSetCompletionRow(
+              setNumber: i + 1,
+              weightController: weightCtrls[i],
+              repsController: repsCtrls[i],
+              completed: completedIndices.contains(i),
+              saving: savingSetKey == _setKey(i),
+              onCompleted: (reps, weight) => onSetCompleted(i, reps, weight),
             ),
         ],
       ),

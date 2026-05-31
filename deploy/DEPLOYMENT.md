@@ -17,6 +17,7 @@ Production deployment for this repository using **Docker Compose**, **host Nginx
 | Cache | **Redis 7** (Alpine) | QR replay protection & rate limits |
 | Reverse proxy | **Nginx on host** | TLS, gzip, security headers |
 | Mobile app | Flutter (`mobile app/`) | Not deployed to VPS (separate build) |
+| OTP login | Firebase Phone Auth | Customer-owned Firebase + Blaze billing — see [../docs/FIREBASE_OTP_PRODUCTION.md](../docs/FIREBASE_OTP_PRODUCTION.md) |
 
 **Environment variables (production)** — set in `deploy/.env`, not in source code:
 

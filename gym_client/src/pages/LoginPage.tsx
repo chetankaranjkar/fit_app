@@ -1,39 +1,73 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
 import { TigerLogo } from '../components/marketing/TigerLogo'
 import { LoginForm } from '../features/auth/components/LoginForm'
+import { OtpLoginForm } from '../features/auth/components/OtpLoginForm'
+import { useFirebaseConfig } from '../features/auth/hooks/useFirebaseConfig'
 import { authService } from '../services/auth.service'
 import { getPostLoginPath, resolveDashboardRole } from '../features/auth/roleRouting'
+
+type LoginMode = 'password' | 'otp'
 
 export function LoginPage() {
   const sessionExpiredMessage = authService.popSessionExpiredMessage()
   const navigate = useNavigate()
+  const { data: firebaseConfig } = useFirebaseConfig()
+  const otpEnabled = Boolean(firebaseConfig?.enabled)
+  const [loginMode, setLoginMode] = useState<LoginMode>('password')
 
   useEffect(() => {
-    if (authService.getAccessToken()) {
+    authService.clearSessionIfExpired()
+    if (authService.isAccessTokenValid()) {
       const role = resolveDashboardRole(authService.getCurrentUser())
       navigate(getPostLoginPath(role), { replace: true })
     }
   }, [navigate])
 
   useEffect(() => {
-    gsap.fromTo(
-      '.login-card',
-      { opacity: 0, y: 40, scale: 0.95 },
-      { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: 'back.out(1.2)', delay: 0.2 }
-    )
-    gsap.fromTo(
-      '.login-logo',
-      { y: -20, opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.8, ease: 'power3.out' }
-    )
-    gsap.fromTo(
-      '.login-form > *',
-      { opacity: 0, y: 20 },
-      { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: 'power2.out', delay: 0.5 }
-    )
-  }, [])
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const ctx = gsap.context(() => {
+      if (prefersReduced) {
+        gsap.set(['.login-card', '.login-logo', '.login-form > *'], { opacity: 1, y: 0, scale: 1 })
+        return
+      }
+
+      gsap.fromTo(
+        '.login-card',
+        { opacity: 0, y: 40, scale: 0.95 },
+        {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          duration: 0.7,
+          ease: 'back.out(1.2)',
+          delay: 0.2,
+          clearProps: 'opacity,transform',
+        }
+      )
+      gsap.fromTo(
+        '.login-logo',
+        { y: -20, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.8, ease: 'power3.out', clearProps: 'opacity,transform' }
+      )
+      gsap.fromTo(
+        '.login-form > *',
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.5,
+          stagger: 0.08,
+          ease: 'power2.out',
+          delay: 0.5,
+          clearProps: 'opacity,transform',
+        }
+      )
+    })
+
+    return () => ctx.revert()
+  }, [loginMode, otpEnabled])
 
   return (
     <div className="relative flex min-h-screen w-[100vw] max-w-[100vw] flex-col items-center justify-center overflow-hidden px-4 py-8">
@@ -71,8 +105,48 @@ export function LoginPage() {
               {sessionExpiredMessage}
             </div>
           )}
+          {otpEnabled && (
+            <div
+              className="mb-4 flex rounded-xl border border-white/10 bg-white/5 p-1"
+              role="tablist"
+              aria-label="Sign in method"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={loginMode === 'password'}
+                className={[
+                  'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition',
+                  loginMode === 'password'
+                    ? 'bg-white/10 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200',
+                ].join(' ')}
+                onClick={() => setLoginMode('password')}
+              >
+                Password
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={loginMode === 'otp'}
+                className={[
+                  'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition',
+                  loginMode === 'otp'
+                    ? 'bg-white/10 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200',
+                ].join(' ')}
+                onClick={() => setLoginMode('otp')}
+              >
+                OTP
+              </button>
+            </div>
+          )}
           <div className="login-form">
-            <LoginForm />
+            {loginMode === 'otp' && otpEnabled && firebaseConfig ? (
+              <OtpLoginForm firebaseConfig={firebaseConfig} />
+            ) : (
+              <LoginForm />
+            )}
           </div>
         </div>
 

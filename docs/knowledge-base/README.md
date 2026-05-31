@@ -26,6 +26,7 @@ Central folder for **product flows**, **identity/RBAC architecture**, **reuse ru
 | [../PT_MODULE.md](../PT_MODULE.md) | Personal training packages & sessions |
 | [../USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [../PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md) | Scheduled product work |
+| [../FIREBASE_OTP_PRODUCTION.md](../FIREBASE_OTP_PRODUCTION.md) | Firebase OTP production setup (customer billing) |
 | [../sql/](../sql/) | SQL scripts (workout builder, exercises) |
 
 ---

@@ -140,7 +140,7 @@ class _SwipeToCompleteSetWidgetState extends State<SwipeToCompleteSetWidget>
         ? 'Saving set…'
         : showProgressHint
             ? 'Keep swiping →'
-            : 'Swipe right to complete set';
+            : 'Swipe right to log set';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

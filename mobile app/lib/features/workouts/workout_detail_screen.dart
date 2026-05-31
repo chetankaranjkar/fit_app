@@ -15,6 +15,8 @@ import '../../widgets/press_scale.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
 import 'workout_derived_metrics.dart';
+import 'package:flutter/services.dart';
+import 'widgets/plan_set_completion_row.dart';
 import 'workout_session_launcher.dart';
 
 class WorkoutDetailScreen extends ConsumerWidget {
@@ -315,19 +317,47 @@ class _ExerciseLabCard extends StatefulWidget {
 }
 
 class _ExerciseLabCardState extends State<_ExerciseLabCard> with TickerProviderStateMixin {
-  int _completedSets = 0;
   int? _restLeft;
   Ticker? _restTicker;
+  late final List<TextEditingController> _weightCtrls;
+  late final List<TextEditingController> _repsCtrls;
+  final Set<int> _completedSetIndices = {};
+  int? _savingSetIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    final line = widget.line;
+    final setCount = math.max(1, line.targetSets);
+    final wSeed = line.lastWeightUsed ?? line.suggestedWeight;
+    final rSeed = line.lastRepsDone ?? line.targetReps;
+    _weightCtrls = List.generate(
+      setCount,
+      (_) => TextEditingController(
+        text: wSeed != null && wSeed > 0 ? _fmtNum(wSeed) : '',
+      ),
+    );
+    _repsCtrls = List.generate(
+      setCount,
+      (_) => TextEditingController(text: rSeed > 0 ? '$rSeed' : ''),
+    );
+  }
+
+  String _fmtNum(double v) {
+    if (v == v.roundToDouble()) return '${v.round()}';
+    return v.toStringAsFixed(1);
+  }
 
   @override
   void dispose() {
     _restTicker?.dispose();
+    for (final c in _weightCtrls) {
+      c.dispose();
+    }
+    for (final c in _repsCtrls) {
+      c.dispose();
+    }
     super.dispose();
-  }
-
-  void _bumpSet() {
-    if (_completedSets >= widget.line.targetSets) return;
-    setState(() => _completedSets++);
   }
 
   void _startRest() {
@@ -436,34 +466,34 @@ class _ExerciseLabCardState extends State<_ExerciseLabCard> with TickerProviderS
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: CupertinoButton(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            color: AppColors.surfaceDarkAlt.withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(14),
-                            onPressed: _bumpSet,
-                            child: Text(
-                              'Log set ($_completedSets/${line.targetSets})',
-                              style: FitnessText.chip(context),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: CupertinoButton(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            color: AppColors.neonCyan.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(14),
-                            onPressed: _restLeft == null ? _startRest : null,
-                            child: Text(
-                              _restLeft != null ? 'Rest ${_restLeft}s' : 'Start rest',
-                              style: FitnessText.chip(context, color: AppColors.neonCyan),
-                            ),
-                          ),
-                        ),
-                      ],
+                    for (var i = 0; i < _weightCtrls.length; i++)
+                      PlanSetCompletionRow(
+                        setNumber: i + 1,
+                        weightController: _weightCtrls[i],
+                        repsController: _repsCtrls[i],
+                        completed: _completedSetIndices.contains(i),
+                        saving: _savingSetIndex == i,
+                        onCompleted: (reps, weight) async {
+                          setState(() => _savingSetIndex = i);
+                          await Future<void>.delayed(const Duration(milliseconds: 180));
+                          if (!mounted) return;
+                          setState(() {
+                            _completedSetIndices.add(i);
+                            _savingSetIndex = null;
+                          });
+                          HapticFeedback.mediumImpact();
+                        },
+                      ),
+                    const SizedBox(height: AppSpacing.sm),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      color: AppColors.neonCyan.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(14),
+                      onPressed: _restLeft == null ? _startRest : null,
+                      child: Text(
+                        _restLeft != null ? 'Rest ${_restLeft}s' : 'Start rest',
+                        style: FitnessText.chip(context, color: AppColors.neonCyan),
+                      ),
                     ),
                     if (line.lastWeightUsed != null) ...[
                       const SizedBox(height: AppSpacing.sm),

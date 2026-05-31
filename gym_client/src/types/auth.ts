@@ -46,3 +46,13 @@ export interface CompromisedSession {
   lastLoginTime?: string | null
   lastLoginIpAddress?: string | null
 }
+
+/** Public Firebase web config from GET /Auth/firebase-config */
+export interface FirebasePublicConfig {
+  enabled: boolean
+  apiKey?: string
+  authDomain?: string
+  projectId?: string
+  appId?: string
+  messagingSenderId?: string
+}

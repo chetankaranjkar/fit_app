@@ -15,6 +15,9 @@ namespace GymManagement.Core.Services
         /// </summary>
         Task<LoginAttemptResultDto> LoginAsync(LoginDto loginDto);
 
+        /// <summary>Verify Firebase ID token (phone OTP) and issue JWT for linked gym account.</summary>
+        Task<LoginAttemptResultDto?> FirebaseLoginAsync(FirebaseLoginDto dto);
+
         /// <summary>
         /// Validates refresh token and expiry against <see cref="AuthUser"/>; issues a new JWT using roles from <c>UserRoles</c> and rotates refresh token.
         /// </summary>

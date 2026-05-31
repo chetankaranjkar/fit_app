@@ -12,10 +12,12 @@ namespace GymManagement.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IFirebaseAuthService _firebaseAuth;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, IFirebaseAuthService firebaseAuth)
         {
             _authService = authService;
+            _firebaseAuth = firebaseAuth;
         }
 
         [HttpPost("login")]
@@ -41,6 +43,40 @@ namespace GymManagement.API.Controllers
 
             if (result.IsUnauthorized || result.Success == null)
                 return Unauthorized("Invalid email or password.");
+
+            return Ok(result.Success);
+        }
+
+        /// <summary>Public Firebase web config for OTP login (no secrets).</summary>
+        [HttpGet("firebase-config")]
+        [ProducesResponseType(typeof(FirebasePublicConfigDto), StatusCodes.Status200OK)]
+        public ActionResult<FirebasePublicConfigDto> GetFirebaseConfig() =>
+            Ok(_firebaseAuth.GetPublicConfig());
+
+        /// <summary>Exchange verified Firebase phone OTP ID token for gym JWT.</summary>
+        [HttpPost("firebase-login")]
+        [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(DeviceLimitLoginResponseDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+        public async Task<IActionResult> FirebaseLogin([FromBody] FirebaseLoginDto? dto)
+        {
+            if (!_firebaseAuth.IsEnabled)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Firebase OTP login is not configured." });
+
+            if (dto == null || string.IsNullOrWhiteSpace(dto.IdToken))
+                return BadRequest(new { message = "Firebase ID token is required." });
+
+            var result = await _authService.FirebaseLoginAsync(dto);
+            if (result == null)
+                return Unauthorized(new { message = "Invalid or expired OTP. Try again." });
+
+            if (result.DeviceLimit != null)
+                return Conflict(result.DeviceLimit);
+
+            if (result.IsUnauthorized || result.Success == null)
+                return Unauthorized(new { message = "No gym account is linked to this phone number. Contact your gym admin." });
 
             return Ok(result.Success);
         }
@@ -95,9 +131,12 @@ namespace GymManagement.API.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Logout()
         {
+            if (User?.Identity?.IsAuthenticated != true)
+                return Ok(new { message = "Already logged out." });
+
             var ok = await _authService.LogoutAsync();
             if (!ok)
-                return BadRequest(new { message = "Could not update login session (unknown session or already logged out)." });
+                return Ok(new { message = "Logged out." });
             return Ok(new { message = "Logged out." });
         }
 

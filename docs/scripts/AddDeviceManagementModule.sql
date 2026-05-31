@@ -64,7 +64,7 @@ BEGIN
         CreatedDate DATETIME2 NOT NULL,
         UpdatedDate DATETIME2 NULL,
         IsDeleted BIT NOT NULL DEFAULT 0,
-        CONSTRAINT FK_LoginHistory_Users_UserId FOREIGN KEY (UserId) REFERENCES dbo.Users(Id) ON DELETE CASCADE,
+        CONSTRAINT FK_LoginHistory_Users_UserId FOREIGN KEY (UserId) REFERENCES dbo.Users(Id) ON DELETE NO ACTION,
         CONSTRAINT FK_LoginHistory_UserDevices_DeviceId FOREIGN KEY (DeviceId) REFERENCES dbo.UserDevices(Id) ON DELETE SET NULL
     );
 END

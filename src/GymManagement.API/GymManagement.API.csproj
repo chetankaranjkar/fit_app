@@ -8,6 +8,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="firebase-service-account.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="firebase-service-account.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
@@ -25,6 +33,13 @@
     <ProjectReference Include="..\GymManagement.Infrastructure\GymManagement.Infrastructure.csproj" />
     <ProjectReference Include="..\GymManagement.Core\GymManagement.Core.csproj" />
     <ProjectReference Include="..\GymManagement.Domain\GymManagement.Domain.csproj" />
+  </ItemGroup>
+
+  <!-- Copy Firebase Admin key to output when present (local dev OTP). File is gitignored. -->
+  <ItemGroup>
+    <None Update="firebase-service-account.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

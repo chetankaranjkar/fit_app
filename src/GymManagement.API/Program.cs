@@ -206,6 +206,13 @@ builder.Services.AddScoped<IUserScheduleService, UserScheduleService>();
 builder.Services.AddScoped<ITrainerService, TrainerService>();
 builder.Services.AddScoped<ILoginPayloadFactory, LoginPayloadFactory>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.Configure<FirebaseOptions>(builder.Configuration.GetSection(FirebaseOptions.SectionName));
+var firebaseOpts = builder.Configuration.GetSection(FirebaseOptions.SectionName).Get<FirebaseOptions>() ?? new FirebaseOptions();
+if (firebaseOpts.Enabled && firebaseOpts.HasAdminCredentials)
+    builder.Services.AddSingleton<IFirebaseAuthService, FirebaseAuthService>();
+else
+    builder.Services.AddSingleton<IFirebaseAuthService, NoOpFirebaseAuthService>();
+
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IDeviceSessionService, DeviceSessionService>();
 builder.Services.Configure<DeviceSecurityOptions>(builder.Configuration.GetSection(DeviceSecurityOptions.SectionName));

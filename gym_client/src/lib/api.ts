@@ -115,6 +115,7 @@ api.interceptors.response.use(
     const requestUrlLower = requestUrl.toLowerCase()
     const isAuthRequest =
       requestUrlLower.includes('/auth/login') ||
+      requestUrlLower.includes('/auth/firebase-login') ||
       requestUrlLower.includes('/auth/refresh') ||
       requestUrlLower.includes('/auth/logout')
 
@@ -156,6 +157,7 @@ api.interceptors.response.use(
       const isLoginRequest =
         typeof error.config?.url === 'string' &&
         (error.config.url.toLowerCase().includes('/auth/login') ||
+          error.config.url.toLowerCase().includes('/auth/firebase-login') ||
           error.config.url.toLowerCase().endsWith('auth/login'))
       if (!isLoginRequest) {
         clearSession('Your session expired. Please login again.')

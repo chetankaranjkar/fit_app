@@ -1,0 +1,12 @@
+# Optional overlay when Firebase OTP is enabled.
+# Usage (from deploy/):
+#   cp docker-compose.firebase-otp.example.yml docker-compose.override.yml
+#   # Place secrets/firebase-service-account.json
+#   docker compose up -d --build api
+#
+# See docs/FIREBASE_OTP_PRODUCTION.md
+
+services:
+  api:
+    volumes:
+      - ./secrets/firebase-service-account.json:/app/firebase-service-account.json:ro

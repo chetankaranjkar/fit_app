@@ -6,7 +6,8 @@ export function RequireAuth() {
   const location = useLocation()
   const token = authService.getAccessToken()
 
-  if (!token) {
+  if (!token || !authService.isAccessTokenValid()) {
+    if (token) authService.clearSession()
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
 

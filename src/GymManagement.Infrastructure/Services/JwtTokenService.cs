@@ -100,7 +100,10 @@ namespace GymManagement.Infrastructure.Services
         private string GetAudience() =>
             _configuration["Jwt:Audience"] ?? "GymManagement";
 
-        private int GetAccessTokenMinutes() =>
-            _configuration.GetValue("Jwt:AccessTokenMinutes", 30);
+        private int GetAccessTokenMinutes()
+        {
+            var minutes = _configuration.GetValue("Jwt:AccessTokenMinutes", 480);
+            return minutes > 0 ? minutes : 480;
+        }
     }
 }

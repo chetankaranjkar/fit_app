@@ -54,11 +54,17 @@ Thumbs.db
 *.local
 .env
 .env.*
+firebase-service-account.json
+**/firebase-service-account*.json
+!**/firebase-service-account.json.example
 !.env.example
 !deploy/.env.testing.example
 !deploy/.env.production.example
 exercise_management_api/.env
 deploy/.env
 deploy/backups/
+deploy/secrets/firebase-service-account.json
+deploy/secrets/*.json
+!deploy/secrets/.gitkeep
 
 artifacts/

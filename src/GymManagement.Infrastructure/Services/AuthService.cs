@@ -30,6 +30,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILoginPayloadFactory _loginPayloadFactory;
         private readonly IDeviceSessionService _deviceSessionService;
+        private readonly IFirebaseAuthService _firebaseAuth;
 
         public AuthService(
             IUnitOfWork unitOfWork,
@@ -39,7 +40,8 @@ namespace GymManagement.Infrastructure.Services
             ILogger<AuthService> logger,
             IHttpContextAccessor httpContextAccessor,
             ILoginPayloadFactory loginPayloadFactory,
-            IDeviceSessionService deviceSessionService)
+            IDeviceSessionService deviceSessionService,
+            IFirebaseAuthService firebaseAuth)
         {
             _unitOfWork = unitOfWork;
             _db = db;
@@ -49,6 +51,7 @@ namespace GymManagement.Infrastructure.Services
             _httpContextAccessor = httpContextAccessor;
             _loginPayloadFactory = loginPayloadFactory;
             _deviceSessionService = deviceSessionService;
+            _firebaseAuth = firebaseAuth;
         }
 
         public async Task<LoginAttemptResultDto> LoginAsync(LoginDto loginDto)
@@ -148,6 +151,94 @@ namespace GymManagement.Infrastructure.Services
             await _unitOfWork.SaveChangesAsync();
 
             return await BuildResponseFromAuthUserAsync(authUser, loginDto);
+        }
+
+        /// <inheritdoc />
+        public async Task<LoginAttemptResultDto?> FirebaseLoginAsync(FirebaseLoginDto dto)
+        {
+            ArgumentNullException.ThrowIfNull(dto);
+            if (!_firebaseAuth.IsEnabled)
+                return null;
+
+            var token = dto.IdToken?.Trim();
+            if (string.IsNullOrEmpty(token))
+                return null;
+
+            var payload = await _firebaseAuth.VerifyIdTokenAsync(token).ConfigureAwait(false);
+            if (payload == null)
+                return null;
+
+            var authUser = await ResolveAuthUserFromFirebasePayloadAsync(payload).ConfigureAwait(false);
+            if (authUser == null)
+            {
+                await RecordFirebaseFailedLoginAsync(payload, "No gym account linked to this phone or email");
+                return new LoginAttemptResultDto();
+            }
+
+            authUser.FailedLoginAttempts = 0;
+            _unitOfWork.AuthUsers.Update(authUser);
+            await _unitOfWork.SaveChangesAsync().ConfigureAwait(false);
+
+            var loginDto = new LoginDto
+            {
+                Username = authUser.Email,
+                Email = authUser.Email,
+                Password = string.Empty,
+                Device = dto.Device,
+            };
+
+            return await BuildResponseFromAuthUserAsync(authUser, loginDto).ConfigureAwait(false);
+        }
+
+        private async Task<AuthUser?> ResolveAuthUserFromFirebasePayloadAsync(FirebaseTokenPayload payload)
+        {
+            if (!string.IsNullOrWhiteSpace(payload.PhoneNumber))
+            {
+                var loginDigits = NormalizePhoneDigits(payload.PhoneNumber);
+                if (loginDigits.Length >= 7)
+                {
+                    var phoneCandidates = await _db.AuthUsers
+                        .Include(a => a.User)
+                        .Where(a => a.User != null && a.User.Phone != null)
+                        .ToListAsync()
+                        .ConfigureAwait(false);
+
+                    var match = phoneCandidates.FirstOrDefault(a =>
+                        PhoneMatches(a.User!.Phone, loginDigits));
+                    if (match != null)
+                        return match;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(payload.Email))
+            {
+                var emailLower = payload.Email.Trim().ToLowerInvariant();
+                return await _db.AuthUsers
+                    .Include(a => a.User)
+                    .FirstOrDefaultAsync(a => a.Email.ToLower() == emailLower)
+                    .ConfigureAwait(false);
+            }
+
+            return null;
+        }
+
+        private async Task RecordFirebaseFailedLoginAsync(FirebaseTokenPayload payload, string reason)
+        {
+            try
+            {
+                var (ip, device) = CaptureClientMetadata();
+                _logger.LogWarning(
+                    "Firebase login failed for uid={Uid} phone={Phone}: {Reason}",
+                    payload.Uid,
+                    payload.PhoneNumber,
+                    reason);
+                await RecordLoginActivityCoreAsync(null, null, success: false, sessionId: null, failureReason: reason)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to record Firebase login failure.");
+            }
         }
 
         /// <inheritdoc />
@@ -470,7 +561,7 @@ namespace GymManagement.Infrastructure.Services
         }
 
         private int GetAccessTokenMinutes() =>
-            _configuration.GetValue("Jwt:AccessTokenMinutes", 43200);
+            _configuration.GetValue("Jwt:AccessTokenMinutes", 480);
 
         /// <summary>
         /// JWT <c>role</c> claims: <c>UserRoles</c> → <c>Roles.Name</c> when present; otherwise the same legacy resolution as

@@ -1188,7 +1188,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasOne(e => e.User)
                     .WithMany()
                     .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.Device)
                     .WithMany(d => d.Sessions)
                     .HasForeignKey(e => e.DeviceId)
@@ -1210,7 +1210,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasOne(e => e.User)
                     .WithMany()
                     .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.Device)
                     .WithMany(d => d.LoginHistory)
                     .HasForeignKey(e => e.DeviceId)

@@ -1,36 +1,31 @@
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import toast from 'react-hot-toast'
 import { authService } from '../../../services/auth.service'
 import { getPostLoginPath, resolveDashboardRole } from '../roleRouting'
-import { getLoginErrorMessage } from '../utils/loginErrors'
-import type { LoginCredentials } from '../../../types/auth'
+import { logFirebaseOtpError } from '../utils/firebaseAuthErrors'
 
-export function useLoginMutation() {
+export function useFirebaseOtpLogin() {
   const navigate = useNavigate()
 
   return useMutation({
-    mutationFn: async (credentials: LoginCredentials) => {
-      const { data } = await authService.login(credentials)
+    mutationFn: async (idToken: string) => {
+      const { data } = await authService.firebaseLogin(idToken)
       return authService.normalizeLoginResponse((data ?? {}) as unknown as Record<string, unknown>)
     },
     onSuccess: (data) => {
       const token = data?.token?.trim()
-      if (!token) {
-        toast.error('Login succeeded but no session token was returned. Contact support.')
-        return
-      }
+      if (!token) return
       authService.storeSession(data)
       const role = resolveDashboardRole(data)
       navigate(getPostLoginPath(role), { replace: true })
     },
     onError: (error: { response?: { data?: unknown; status?: number }; message?: string; code?: string }) => {
-      console.error('Login failed:', {
+      logFirebaseOtpError('Gym API firebase-login failed', error)
+      console.error('Firebase OTP login failed:', {
         status: error.response?.status,
         data: error.response?.data,
         message: error.message,
       })
-      toast.error(getLoginErrorMessage(error, 'Invalid username or password.'))
     },
   })
 }

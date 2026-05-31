@@ -2,6 +2,7 @@ import { api } from '../lib/api'
 import type {
   AuthPermission,
   CompromisedSession,
+  FirebasePublicConfig,
   LoginCredentials,
   LoginResponse,
 } from '../types/auth'
@@ -71,6 +72,21 @@ function normalizeLoginResponse(raw: Record<string, unknown>): LoginResponse {
   }
 }
 
+function normalizeFirebaseConfig(raw: Record<string, unknown>): FirebasePublicConfig {
+  const str = (key: string) => {
+    const v = raw[key] ?? raw[key.charAt(0).toUpperCase() + key.slice(1)]
+    return typeof v === 'string' && v.trim() ? v.trim() : undefined
+  }
+  return {
+    enabled: Boolean(raw.enabled ?? raw.Enabled),
+    apiKey: str('apiKey'),
+    authDomain: str('authDomain'),
+    projectId: str('projectId'),
+    appId: str('appId'),
+    messagingSenderId: str('messagingSenderId'),
+  }
+}
+
 function getStoredUserRaw() {
   const raw = localStorage.getItem(AUTH_KEYS.user)
   if (!raw) return null
@@ -79,6 +95,27 @@ function getStoredUserRaw() {
   } catch {
     return null
   }
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split('.')
+  if (parts.length < 2) return null
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
+    return JSON.parse(atob(padded)) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function isAccessTokenValid(token: string | null | undefined): boolean {
+  const value = token?.trim()
+  if (!value) return false
+  const payload = decodeJwtPayload(value)
+  const exp = payload?.exp
+  if (typeof exp !== 'number') return true
+  return exp * 1000 > Date.now() + 30_000
 }
 
 /** Auth API: matches backend AuthController */
@@ -93,6 +130,12 @@ export const authService = {
     if (id.includes('@')) body.email = id
     return api.post<LoginResponse>('/Auth/login', body)
   },
+  fetchFirebaseConfig: async (): Promise<FirebasePublicConfig> => {
+    const { data } = await api.get<Record<string, unknown>>('/Auth/firebase-config')
+    return normalizeFirebaseConfig((data ?? {}) as Record<string, unknown>)
+  },
+  firebaseLogin: (idToken: string) =>
+    api.post<LoginResponse>('/Auth/firebase-login', { idToken }),
   refresh: (refreshToken: string) =>
     api.post<LoginResponse>('/Auth/refresh', { refreshToken }),
   logout: () => api.post('/Auth/logout'),
@@ -111,6 +154,11 @@ export const authService = {
     localStorage.removeItem(AUTH_KEYS.user)
   },
   getAccessToken: () => localStorage.getItem(AUTH_KEYS.token),
+  isAccessTokenValid: () => isAccessTokenValid(localStorage.getItem(AUTH_KEYS.token)),
+  clearSessionIfExpired: () => {
+    const token = localStorage.getItem(AUTH_KEYS.token)
+    if (token && !isAccessTokenValid(token)) authService.clearSession()
+  },
   getCurrentUser: () => {
     const raw = getStoredUserRaw()
     if (!raw) return null

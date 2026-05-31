@@ -213,10 +213,15 @@ class ProfileScreen extends ConsumerWidget {
                   AppleGroupedSection(
                     header: 'Preferences',
                     children: [
+                      _ActionRow(
+                        icon: CupertinoIcons.shield,
+                        label: 'Security & devices',
+                        onTap: () => context.push('/profile/security'),
+                      ),
                       _ActionRow(icon: CupertinoIcons.bell, label: 'Notifications', onTap: () {}),
                       _ActionRow(
                         icon: CupertinoIcons.lock,
-                        label: 'Privacy & security',
+                        label: 'Privacy',
                         onTap: () {},
                       ),
                       _ActionRow(

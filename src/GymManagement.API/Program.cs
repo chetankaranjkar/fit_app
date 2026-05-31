@@ -15,6 +15,7 @@ using GymManagement.Core.Interfaces;
 using GymManagement.Core.Options;
 using GymManagement.Core.Services;
 using GymManagement.Infrastructure.Services;
+using GymManagement.Infrastructure.Configuration;
 using GymManagement.API.Hosting;
 using GymManagement.API.Middleware;
 using StackExchange.Redis;
@@ -206,6 +207,8 @@ builder.Services.AddScoped<ITrainerService, TrainerService>();
 builder.Services.AddScoped<ILoginPayloadFactory, LoginPayloadFactory>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IDeviceSessionService, DeviceSessionService>();
+builder.Services.Configure<DeviceSecurityOptions>(builder.Configuration.GetSection(DeviceSecurityOptions.SectionName));
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IUserInstructorService, UserInstructorService>();
 builder.Services.AddScoped<ITrainerFeedbackService, TrainerFeedbackService>();
@@ -362,6 +365,7 @@ app.UseStaticFiles(new StaticFileOptions
 
 // JWT Bearer: validates the Bearer token in the Authorization header; builds ClaimsPrincipal (sub, userId, role claims).
 app.UseAuthentication();
+app.UseJwtSessionValidation();
 // JWT claims → HttpContext.User; mirror ids/roles on Items.
 app.UseJwtUserContext();
 app.UseMiddleware<MemberPaymentAccessMiddleware>();

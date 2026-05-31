@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-05-31 (Supplement Tracking module).
+**Last updated:** 2026-05-31 (Device management & session security).
 
 ---
 
@@ -301,7 +301,32 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 
 ---
 
-## 12. Improvement backlog (doc-owned)
+## 12. Device management & session security (mobile)
+
+**Tables:** `UserDevices`, `UserSessions`, `LoginHistory` (see migration `20260531130000_AddDeviceManagementModule`).
+
+**Mobile login:** `POST /api/Auth/login` accepts optional `device` payload (unique id, model, platform, app version). Server registers/updates device, enforces **max 3 active devices** (`DeviceSecurity:MaxActiveDevices`), creates `UserSessions` row (JWT `jti` + refresh hash), writes `LoginHistory`, and may return `securityAlert` (new device / unusual location). Device limit → **409** `DEVICE_LIMIT_REACHED` with active device list; client may retry with `removeDeviceId`.
+
+**Session rules:** JWT access **30 days**, refresh **90 days** (`Jwt:AccessTokenMinutes`, `Jwt:RefreshTokenDays`). `JwtSessionValidationMiddleware` rejects revoked mobile sessions; web logins without `UserSessions` row still work.
+
+**Member APIs (`/api/me`):**
+
+| Route | Purpose |
+|-------|---------|
+| `GET /devices?currentDeviceUniqueId=` | List active devices |
+| `DELETE /devices/{id}` | Remove device + invalidate its sessions |
+| `POST /devices/logout-all` | Revoke all sessions for user |
+| `GET /login-history` | Login audit for member |
+
+**Admin:** `GET /api/admin/device-security/analytics` (Reports permission) — dashboard on **Security** page.
+
+**Mobile UI:** Profile → **Security & devices** → device cards, login history, logout all. Login shows device-limit sheet when 409.
+
+**Migrate:** `dotnet ef database update --project src/GymManagement.Infrastructure --startup-project src/GymManagement.API`
+
+---
+
+## 13. Improvement backlog (doc-owned)
 
 Track cross-cutting refactors here; move to PRODUCT_BACKLOG when scheduled.
 
@@ -314,7 +339,7 @@ Track cross-cutting refactors here; move to PRODUCT_BACKLOG when scheduled.
 
 ---
 
-## 13. How to update this doc
+## 14. How to update this doc
 
 When you change a **user-visible flow** or add a **shared component**:
 

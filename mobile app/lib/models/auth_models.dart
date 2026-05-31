@@ -1,4 +1,6 @@
 /// Login response payload from `/api/Auth/login`.
+import 'device_security_models.dart';
+
 class LoginResponse {
   final String token;
   final String? refreshToken;
@@ -9,6 +11,9 @@ class LoginResponse {
   final int? userId;
   final int? trainerId;
   final List<String> appRoles;
+  final String? sessionId;
+  final int? deviceId;
+  final SecurityAlertInfo? securityAlert;
 
   const LoginResponse({
     required this.token,
@@ -20,6 +25,9 @@ class LoginResponse {
     this.userId,
     this.trainerId,
     this.appRoles = const [],
+    this.sessionId,
+    this.deviceId,
+    this.securityAlert,
   });
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
@@ -50,7 +58,16 @@ class LoginResponse {
       userId: (json['userId'] ?? json['UserId']) as int?,
       trainerId: (json['trainerId'] ?? json['TrainerId']) as int?,
       appRoles: roles,
+      sessionId: (json['sessionId'] ?? json['SessionId'])?.toString(),
+      deviceId: (json['deviceId'] ?? json['DeviceId']) as int?,
+      securityAlert: _parseAlert(json['securityAlert'] ?? json['SecurityAlert']),
     );
+  }
+
+  static SecurityAlertInfo? _parseAlert(dynamic raw) {
+    if (raw is Map<String, dynamic>) return SecurityAlertInfo.fromJson(raw);
+    if (raw is Map) return SecurityAlertInfo.fromJson(Map<String, dynamic>.from(raw));
+    return null;
   }
 
   Map<String, dynamic> toJson() => {
@@ -63,5 +80,7 @@ class LoginResponse {
         'userId': userId,
         'trainerId': trainerId,
         'roles': appRoles,
+        'sessionId': sessionId,
+        'deviceId': deviceId,
       };
 }

@@ -6,7 +6,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/app_config.dart';
+import '../../core/api_exception.dart';
 import '../../providers/auth_providers.dart';
+import '../../services/auth_service.dart';
+import 'device_limit_sheet.dart';
 import '../../animations/app_motion.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_button.dart';
@@ -53,10 +56,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     HapticFeedback.selectionClick();
 
     try {
-      await ref.read(authControllerProvider.notifier).login(id, pwd);
+      final session = await ref.read(authControllerProvider.notifier).login(id, pwd);
+      if (!mounted) return;
+
+      if (session.securityAlert != null) {
+        await showCupertinoDialog<void>(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('Security alert'),
+            content: Text(session.securityAlert!.message),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+
       if (!mounted) return;
       context.go('/home');
     } on ApiException catch (e) {
+      final limit = AuthService.instance.parseDeviceLimit(e);
+      if (limit != null && mounted) {
+        final resolved = await showCupertinoModalPopup<bool>(
+          context: context,
+          builder: (_) => DeviceLimitSheet(
+            limit: limit,
+            identifier: id,
+            password: pwd,
+          ),
+        );
+        if (resolved == true && mounted) context.go('/home');
+        return;
+      }
       HapticFeedback.heavyImpact();
       setState(() {
         _error = e.statusCode == 401

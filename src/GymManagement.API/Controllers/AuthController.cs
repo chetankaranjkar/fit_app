@@ -20,9 +20,10 @@ namespace GymManagement.API.Controllers
 
         [HttpPost("login")]
         [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(DeviceLimitLoginResponseDto), StatusCodes.Status409Conflict)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<ActionResult<LoginResponseDto>> Login([FromBody] LoginDto? loginDto)
+        public async Task<IActionResult> Login([FromBody] LoginDto? loginDto)
         {
             if (loginDto == null)
                 return BadRequest("Request body is required.");
@@ -35,12 +36,13 @@ namespace GymManagement.API.Controllers
 
             var result = await _authService.LoginAsync(loginDto);
 
-            if (result == null)
-            {
-                return Unauthorized("Invalid email or password.");
-            }
+            if (result.DeviceLimit != null)
+                return Conflict(result.DeviceLimit);
 
-            return Ok(result);
+            if (result.IsUnauthorized || result.Success == null)
+                return Unauthorized("Invalid email or password.");
+
+            return Ok(result.Success);
         }
 
         /// <summary>Validate refresh token against <c>AuthUsers</c>; return a new JWT (roles from <c>UserRoles</c>).</summary>

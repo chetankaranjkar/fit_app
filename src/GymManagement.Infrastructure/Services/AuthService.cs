@@ -29,6 +29,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly ILogger<AuthService> _logger;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILoginPayloadFactory _loginPayloadFactory;
+        private readonly IDeviceSessionService _deviceSessionService;
 
         public AuthService(
             IUnitOfWork unitOfWork,
@@ -37,7 +38,8 @@ namespace GymManagement.Infrastructure.Services
             IJwtTokenService jwtTokenService,
             ILogger<AuthService> logger,
             IHttpContextAccessor httpContextAccessor,
-            ILoginPayloadFactory loginPayloadFactory)
+            ILoginPayloadFactory loginPayloadFactory,
+            IDeviceSessionService deviceSessionService)
         {
             _unitOfWork = unitOfWork;
             _db = db;
@@ -46,9 +48,10 @@ namespace GymManagement.Infrastructure.Services
             _logger = logger;
             _httpContextAccessor = httpContextAccessor;
             _loginPayloadFactory = loginPayloadFactory;
+            _deviceSessionService = deviceSessionService;
         }
 
-        public async Task<LoginResponseDto?> LoginAsync(LoginDto loginDto)
+        public async Task<LoginAttemptResultDto> LoginAsync(LoginDto loginDto)
         {
             ArgumentNullException.ThrowIfNull(loginDto);
 
@@ -128,8 +131,14 @@ namespace GymManagement.Infrastructure.Services
                     _unitOfWork.AuthUsers.Update(authUser);
                     await _unitOfWork.SaveChangesAsync();
                     await RecordLoginActivityAsync(authUser, success: false, sessionId: null, failureReason: "Invalid password");
+                    if (loginDto.Device != null && authUser.UserId.HasValue)
+                    {
+                        var (ip, _) = CaptureClientMetadata();
+                        await _deviceSessionService.RecordFailedLoginAsync(
+                            authUser.UserId, loginDto.Device, ip, "Invalid password", blocked: false);
+                    }
                 }
-                return null;
+                return new LoginAttemptResultDto();
             }
 
             authUser.FailedLoginAttempts = 0;
@@ -138,7 +147,7 @@ namespace GymManagement.Infrastructure.Services
             _unitOfWork.AuthUsers.Update(authUser);
             await _unitOfWork.SaveChangesAsync();
 
-            return await BuildResponseFromAuthUserAsync(authUser);
+            return await BuildResponseFromAuthUserAsync(authUser, loginDto);
         }
 
         /// <inheritdoc />
@@ -150,10 +159,22 @@ namespace GymManagement.Infrastructure.Services
             if (string.IsNullOrEmpty(raw))
                 return null;
 
-            var authUser = await _db.AuthUsers
+            var mobileSession = await _deviceSessionService.FindSessionByRefreshTokenAsync(raw);
+            if (mobileSession != null)
+            {
+                var authUser = await _db.AuthUsers
+                    .Include(a => a.User)
+                    .FirstOrDefaultAsync(a => a.UserId == mobileSession.UserId);
+                if (authUser == null)
+                    return null;
+
+                return await BuildRefreshResponseAsync(authUser, mobileSession, raw);
+            }
+
+            var authUserLegacy = await _db.AuthUsers
                 .Include(a => a.User)
                 .FirstOrDefaultAsync(a => a.RefreshToken == raw);
-            if (authUser == null)
+            if (authUserLegacy == null)
             {
                 var reusedHash = ComputeTokenHash(raw);
                 var compromisedUser = await _db.AuthUsers
@@ -169,14 +190,25 @@ namespace GymManagement.Infrastructure.Services
                     compromisedUser.PreviousRefreshTokenHash = null;
                     _unitOfWork.AuthUsers.Update(compromisedUser);
                     await _unitOfWork.SaveChangesAsync();
+                    if (compromisedUser.UserId.HasValue)
+                        await _deviceSessionService.InvalidateAllUserSessionsAsync(compromisedUser.UserId.Value);
                 }
                 return null;
             }
-            if (authUser.RefreshTokenExpiry == null || authUser.RefreshTokenExpiry < DateTime.UtcNow)
+            if (authUserLegacy.RefreshTokenExpiry == null || authUserLegacy.RefreshTokenExpiry < DateTime.UtcNow)
                 return null;
-            if (authUser.RefreshTokenCompromisedAt != null)
+            if (authUserLegacy.RefreshTokenCompromisedAt != null)
                 return null;
 
+            return await BuildRefreshResponseAsync(authUserLegacy, null, raw);
+        }
+
+        private async Task<LoginResponseDto?> BuildRefreshResponseAsync(
+            AuthUser authUser,
+            UserSession? mobileSession,
+            string previousRefreshRaw)
+        {
+            _ = previousRefreshRaw;
             var rbac = await _loginPayloadFactory.BuildProfileAndRbacAsync(authUser);
             var role = await ResolveRoleFromAuthUserAsync(authUser);
             var userId = authUser.UserId;
@@ -190,19 +222,37 @@ namespace GymManagement.Infrastructure.Services
 
             var fullName = ResolveFullName(authUser, rbac.Profile, role);
             var roleNames = await GetJwtRoleClaimNamesAsync(authUser);
+            var permissionCodes = ExtractPermissionCodes(rbac.Permissions);
 
             var sessionId = Guid.NewGuid().ToString();
-            var permissionCodes = ExtractPermissionCodes(rbac.Permissions);
             var token = _jwtTokenService.CreateAccessToken(authUser.Id, authUser.UserId, roleNames, permissionCodes, sessionId);
-            var rotatedRefreshToken = AssignRefreshTokenOnUser(authUser);
-            _unitOfWork.AuthUsers.Update(authUser);
-            await _unitOfWork.SaveChangesAsync();
+            var rotatedRefreshToken = mobileSession == null ? AssignRefreshTokenOnUser(authUser) : GenerateRefreshToken();
+            var accessExpiry = DateTime.UtcNow.AddMinutes(GetAccessTokenMinutes());
+            var refreshExpiry = DateTime.UtcNow.AddDays(GetRefreshTokenLifetimeDays());
+
+            if (mobileSession != null)
+            {
+                await _deviceSessionService.RotateSessionTokensAsync(
+                    mobileSession,
+                    sessionId,
+                    token,
+                    rotatedRefreshToken,
+                    accessExpiry,
+                    refreshExpiry);
+            }
+            else
+            {
+                authUser.RefreshTokenExpiry = refreshExpiry;
+                authUser.RefreshToken = rotatedRefreshToken;
+                _unitOfWork.AuthUsers.Update(authUser);
+                await _unitOfWork.SaveChangesAsync();
+            }
 
             return new LoginResponseDto
             {
                 Token = token,
                 RefreshToken = rotatedRefreshToken,
-                RefreshTokenExpiresAt = authUser.RefreshTokenExpiry,
+                RefreshTokenExpiresAt = refreshExpiry,
                 Username = authUser.Email,
                 Email = authUser.Email,
                 Role = role,
@@ -211,7 +261,9 @@ namespace GymManagement.Infrastructure.Services
                 FullName = fullName,
                 Profile = rbac.Profile,
                 Roles = rbac.Roles,
-                Permissions = rbac.Permissions
+                Permissions = rbac.Permissions,
+                SessionId = sessionId,
+                DeviceId = mobileSession?.DeviceId
             };
         }
 
@@ -316,9 +368,8 @@ namespace GymManagement.Infrastructure.Services
         private Task<Role> ResolveRoleFromAuthUserAsync(AuthUser authUser) =>
             AuthUserRoleHelper.ResolveRoleAsync(_unitOfWork, authUser);
 
-        private async Task<LoginResponseDto> BuildResponseFromAuthUserAsync(AuthUser authUser)
+        private async Task<LoginAttemptResultDto> BuildResponseFromAuthUserAsync(AuthUser authUser, LoginDto loginDto)
         {
-            // Profile + permissions for API (uses UserRoles / RbacService internally).
             var rbac = await _loginPayloadFactory.BuildProfileAndRbacAsync(authUser);
 
             var role = await ResolveRoleFromAuthUserAsync(authUser);
@@ -336,34 +387,90 @@ namespace GymManagement.Infrastructure.Services
             if (userId.HasValue && role == Role.User)
                 await LogAttendanceOnLoginAsync(userId.Value, "System Login");
 
-            // JWT role claims: UserRoles first; legacy fallback matches ResolveRoleAsync (see GetJwtRoleClaimNamesAsync).
             var roleNames = await GetJwtRoleClaimNamesAsync(authUser);
-
             var permissionCodes = ExtractPermissionCodes(rbac.Permissions);
             var (token, sessionId) = CreateSessionJwtToken(authUser, roleNames, permissionCodes);
+            var refreshPlain = GenerateRefreshToken();
+            var accessExpiry = DateTime.UtcNow.AddMinutes(GetAccessTokenMinutes());
+            var refreshExpiry = DateTime.UtcNow.AddDays(GetRefreshTokenLifetimeDays());
 
-            var refreshPlain = AssignRefreshTokenOnUser(authUser);
+            var deviceResult = await _deviceSessionService.TryEstablishMobileSessionAsync(
+                new AuthUserContext
+                {
+                    AuthUserId = authUser.Id,
+                    UserId = authUser.UserId,
+                    Email = authUser.Email
+                },
+                loginDto,
+                sessionId,
+                token,
+                refreshPlain,
+                accessExpiry,
+                refreshExpiry);
+
+            if (deviceResult.DeviceLimit != null)
+                return deviceResult;
+
+            if (!deviceResult.Skipped)
+            {
+                await RecordLoginActivityAsync(authUser, success: true, sessionId: sessionId, failureReason: null);
+
+                var mobileMeta = deviceResult.Success;
+                return new LoginAttemptResultDto
+                {
+                    Success = new LoginResponseDto
+                    {
+                        Token = token,
+                        RefreshToken = refreshPlain,
+                        RefreshTokenExpiresAt = refreshExpiry,
+                        Username = authUser.Email,
+                        Email = authUser.Email,
+                        Role = role,
+                        UserId = userId,
+                        TrainerId = trainerId,
+                        FullName = fullName,
+                        Profile = rbac.Profile,
+                        Roles = rbac.Roles,
+                        Permissions = rbac.Permissions,
+                        SessionId = sessionId,
+                        DeviceId = mobileMeta?.DeviceId,
+                        SecurityAlert = mobileMeta?.SecurityAlert
+                    }
+                };
+            }
+
+            authUser.RefreshToken = refreshPlain;
+            authUser.RefreshTokenExpiry = refreshExpiry;
+            authUser.PreviousRefreshTokenHash = null;
+            authUser.RefreshTokenCompromisedAt = null;
             _unitOfWork.AuthUsers.Update(authUser);
             await _unitOfWork.SaveChangesAsync();
 
             await RecordLoginActivityAsync(authUser, success: true, sessionId: sessionId, failureReason: null);
 
-            return new LoginResponseDto
+            return new LoginAttemptResultDto
             {
-                Token = token,
-                RefreshToken = refreshPlain,
-                RefreshTokenExpiresAt = authUser.RefreshTokenExpiry,
-                Username = authUser.Email,
-                Email = authUser.Email,
-                Role = role,
-                UserId = userId,
-                TrainerId = trainerId,
-                FullName = fullName,
-                Profile = rbac.Profile,
-                Roles = rbac.Roles,
-                Permissions = rbac.Permissions
+                Success = new LoginResponseDto
+                {
+                    Token = token,
+                    RefreshToken = refreshPlain,
+                    RefreshTokenExpiresAt = refreshExpiry,
+                    Username = authUser.Email,
+                    Email = authUser.Email,
+                    Role = role,
+                    UserId = userId,
+                    TrainerId = trainerId,
+                    FullName = fullName,
+                    Profile = rbac.Profile,
+                    Roles = rbac.Roles,
+                    Permissions = rbac.Permissions,
+                    SessionId = sessionId
+                }
             };
         }
+
+        private int GetAccessTokenMinutes() =>
+            _configuration.GetValue("Jwt:AccessTokenMinutes", 43200);
 
         /// <summary>
         /// JWT <c>role</c> claims: <c>UserRoles</c> → <c>Roles.Name</c> when present; otherwise the same legacy resolution as
@@ -507,6 +614,8 @@ namespace GymManagement.Infrastructure.Services
                 ?? http.User.FindFirst("jti")?.Value;
             if (!string.IsNullOrEmpty(sessionId))
             {
+                await _deviceSessionService.InvalidateSessionAsync(sessionId);
+
                 var activity = await _unitOfWork.LoginActivities.FirstOrDefaultAsync(la =>
                     la.SessionId == sessionId
                     && la.AuthUserId == authUser.Id
@@ -527,6 +636,34 @@ namespace GymManagement.Infrastructure.Services
             _unitOfWork.AuthUsers.Update(authUser);
 
             await _unitOfWork.SaveChangesAsync();
+            return true;
+        }
+
+        /// <inheritdoc />
+        public async Task<bool> LogoutAllDevicesAsync()
+        {
+            var http = _httpContextAccessor.HttpContext;
+            if (http?.User?.Identity?.IsAuthenticated != true)
+                return false;
+
+            var userIdClaim = http.User.FindFirst(GymManagement.Core.Services.JwtClaimTypes.UserId)?.Value
+                ?? http.User.FindFirst("userId")?.Value;
+            if (!int.TryParse(userIdClaim, out var userId))
+                return false;
+
+            await _deviceSessionService.InvalidateAllUserSessionsAsync(userId);
+
+            var authUser = await _db.AuthUsers.FirstOrDefaultAsync(a => a.UserId == userId);
+            if (authUser != null)
+            {
+                authUser.RefreshToken = null;
+                authUser.RefreshTokenExpiry = null;
+                authUser.PreviousRefreshTokenHash = null;
+                authUser.RefreshTokenCompromisedAt = null;
+                _unitOfWork.AuthUsers.Update(authUser);
+                await _unitOfWork.SaveChangesAsync();
+            }
+
             return true;
         }
 

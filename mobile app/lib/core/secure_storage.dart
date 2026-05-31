@@ -18,6 +18,7 @@ class SecureStorage {
   static const String _kRefreshToken = 'auth.refresh_token';
   static const String _kRefreshExpiry = 'auth.refresh_expiry';
   static const String _kUserJson = 'auth.user_json';
+  static const String _kSessionId = 'auth.session_id';
 
   static Future<void> writeAccessToken(String token) =>
       _storage.write(key: _kAccessToken, value: token);
@@ -42,10 +43,19 @@ class SecureStorage {
   static Future<String?> readUserJson() =>
       _storage.read(key: _kUserJson).timeout(_readTimeout, onTimeout: () => null);
 
-  static Future<void> clear() async {
+  static Future<void> writeSessionId(String sessionId) =>
+      _storage.write(key: _kSessionId, value: sessionId);
+
+  static Future<String?> readSessionId() =>
+      _storage.read(key: _kSessionId).timeout(_readTimeout, onTimeout: () => null);
+
+  static Future<void> clearSession() async {
     await _storage.delete(key: _kAccessToken);
     await _storage.delete(key: _kRefreshToken);
     await _storage.delete(key: _kRefreshExpiry);
     await _storage.delete(key: _kUserJson);
+    await _storage.delete(key: _kSessionId);
   }
+
+  static Future<void> clear() => clearSession();
 }

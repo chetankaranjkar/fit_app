@@ -8,6 +8,7 @@ import '../features/home/home_screen.dart';
 import '../features/diet/diet_screen.dart';
 import '../features/membership/membership_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/profile/security_devices_screen.dart';
 import '../features/progress/progress_screen.dart';
 import '../features/scanner/qr_scanner_screen.dart';
 import '../features/shell/app_shell.dart';
@@ -75,6 +76,18 @@ final appRouter = GoRouter(
       path: '/progress/transformation',
       parentNavigatorKey: _rootNavKey,
       pageBuilder: (_, __) => _slidePage(const TransformationTrackerScreen()),
+    ),
+    GoRoute(
+      path: '/profile/security',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const SecurityDevicesScreen()),
+      routes: [
+        GoRoute(
+          path: 'login-history',
+          parentNavigatorKey: _rootNavKey,
+          pageBuilder: (_, __) => _slidePage(const LoginHistoryScreen()),
+        ),
+      ],
     ),
     StatefulShellRoute.indexedStack(
       builder: (_, __, navigationShell) => AppShell(navigationShell: navigationShell),

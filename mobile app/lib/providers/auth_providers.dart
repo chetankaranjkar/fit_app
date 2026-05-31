@@ -55,6 +55,20 @@ class AuthController extends StateNotifier<AuthBootstrapState> {
     return session;
   }
 
+  Future<LoginResponse> loginWithDeviceReplacement(
+    String identifier,
+    String password,
+    int removeDeviceId,
+  ) async {
+    final session = await AuthService.instance.loginWithDeviceLimitResolution(
+      identifier,
+      password,
+      removeDeviceId,
+    );
+    state = AuthBootstrapState(AuthBootstrapStatus.signedIn, session);
+    return session;
+  }
+
   Future<void> logout() async {
     await AuthService.instance.logout();
     state = const AuthBootstrapState(AuthBootstrapStatus.signedOut);

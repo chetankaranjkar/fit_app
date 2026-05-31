@@ -45,6 +45,9 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<MemberSupplement> MemberSupplements { get; set; }
         public DbSet<AuthUser> AuthUsers { get; set; }
         public DbSet<LoginActivity> LoginActivities { get; set; }
+        public DbSet<UserDevice> UserDevices { get; set; }
+        public DbSet<UserSession> UserSessions { get; set; }
+        public DbSet<LoginHistoryEntry> LoginHistoryEntries { get; set; }
         public DbSet<BodyPart> BodyParts { get; set; }
         public DbSet<BodyPartMuscle> BodyPartMuscles { get; set; }
         public DbSet<Exercise> Exercises { get; set; }
@@ -1152,6 +1155,69 @@ namespace GymManagement.Infrastructure.Data
                 entity.ToTable("UserAchievements");
             });
 
+            // Device management & session security
+            modelBuilder.Entity<UserDevice>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.DeviceUniqueId).IsRequired().HasMaxLength(128);
+                entity.Property(e => e.DeviceName).HasMaxLength(128);
+                entity.Property(e => e.DeviceModel).HasMaxLength(128);
+                entity.Property(e => e.Platform).HasMaxLength(64);
+                entity.Property(e => e.OsVersion).HasMaxLength(64);
+                entity.Property(e => e.AppVersion).HasMaxLength(32);
+                entity.Property(e => e.FirebaseUid).HasMaxLength(128);
+                entity.HasIndex(e => new { e.UserId, e.DeviceUniqueId }).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => e.UserId);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.ToTable("UserDevices");
+            });
+
+            modelBuilder.Entity<UserSession>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.SessionId).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.JwtTokenHash).IsRequired().HasMaxLength(128);
+                entity.Property(e => e.RefreshTokenHash).IsRequired().HasMaxLength(128);
+                entity.HasIndex(e => e.SessionId).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => e.RefreshTokenHash);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.DeviceId);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Device)
+                    .WithMany(d => d.Sessions)
+                    .HasForeignKey(e => e.DeviceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.ToTable("UserSessions");
+            });
+
+            modelBuilder.Entity<LoginHistoryEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.LoginStatus).IsRequired().HasMaxLength(32);
+                entity.Property(e => e.Platform).HasMaxLength(64);
+                entity.Property(e => e.AppVersion).HasMaxLength(32);
+                entity.Property(e => e.IPAddress).HasMaxLength(64);
+                entity.Property(e => e.Location).HasMaxLength(256);
+                entity.Property(e => e.FailureReason).HasMaxLength(255);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.LoginDate);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Device)
+                    .WithMany(d => d.LoginHistory)
+                    .HasForeignKey(e => e.DeviceId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.ToTable("LoginHistory");
+            });
+
             // LoginActivity (auth audit)
             modelBuilder.Entity<LoginActivity>(entity =>
             {
@@ -1256,6 +1322,9 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<AttendanceLog>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<GymQrCode>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<LoginActivity>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<UserDevice>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<UserSession>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<LoginHistoryEntry>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<UserBodyImage>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<UserHealthProfile>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<UserMedicalCondition>().HasQueryFilter(e => !e.IsDeleted);

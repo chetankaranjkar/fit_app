@@ -11,6 +11,7 @@ import { PermissionGate } from '../components/auth/PermissionGate'
 import { usePermission } from '../features/auth/hooks/usePermission'
 import { authService } from '../services/auth.service'
 import type { CompromisedSession } from '../types/auth'
+import { getDeviceSecurityAnalytics, type DeviceSecurityAnalytics } from '../services/device-security.service'
 
 function getDashboardUser() {
   try {
@@ -57,6 +58,8 @@ export function SecurityPage() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
 
+  const [deviceFilter, setDeviceFilter] = useState('')
+
   const { data: sessions = [], isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['auth', 'compromised-sessions', 'security-page'],
     queryFn: async () => {
@@ -64,6 +67,20 @@ export function SecurityPage() {
       return Array.isArray(data) ? data : []
     },
     retry: false,
+    enabled: canReportsAccess,
+  })
+
+  const {
+    data: deviceAnalytics,
+    isLoading: devicesLoading,
+    refetch: refetchDevices,
+  } = useQuery({
+    queryKey: ['admin', 'device-security', deviceFilter, search],
+    queryFn: () =>
+      getDeviceSecurityAnalytics({
+        filter: deviceFilter || undefined,
+        search: search.trim() || undefined,
+      }),
     enabled: canReportsAccess,
   })
 
@@ -138,9 +155,16 @@ export function SecurityPage() {
         eyebrow="Security operations"
         titleBefore=""
         titleGradient="Compromised sessions"
-        subtitle="Monitor refresh-token reuse detections and export incident records."
+        subtitle="Monitor device sessions, login activity, and refresh-token reuse."
         showExport={false}
       >
+        <DeviceAnalyticsPanel
+          analytics={deviceAnalytics}
+          loading={devicesLoading}
+          filter={deviceFilter}
+          onFilterChange={setDeviceFilter}
+          onRefresh={() => void refetchDevices()}
+        />
         <div className="glass-card dashboard-card mb-6 rounded-2xl p-5">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Permission legend</h3>
@@ -266,5 +290,113 @@ function PermissionPill({ label, granted }: { label: string; granted: boolean })
       <span className="mr-1">{granted ? '✓' : '✕'}</span>
       {label}
     </div>
+  )
+}
+
+function DeviceAnalyticsPanel({
+  analytics,
+  loading,
+  filter,
+  onFilterChange,
+  onRefresh,
+}: {
+  analytics?: DeviceSecurityAnalytics
+  loading: boolean
+  filter: string
+  onFilterChange: (value: string) => void
+  onRefresh: () => void
+}) {
+  const stats = [
+    { label: 'Active devices', value: analytics?.totalActiveDevices ?? 0 },
+    { label: 'Multi-device users', value: analytics?.usersWithMultipleDevices ?? 0 },
+    { label: 'Suspicious accounts', value: analytics?.suspiciousAccounts ?? 0 },
+    { label: 'Logins today', value: analytics?.dailyLogins ?? 0 },
+    { label: 'Failed today', value: analytics?.failedLoginsToday ?? 0 },
+  ]
+
+  return (
+    <DashboardTablePanel
+      title="Device & session analytics"
+      description="Mobile device registrations, login volume, and suspicious activity."
+      toolbar={
+        <>
+          <select
+            value={filter}
+            onChange={(e) => onFilterChange(e.target.value)}
+            className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200"
+          >
+            <option value="">All active devices</option>
+            <option value="multiple">Multiple device users</option>
+            <option value="suspicious">Suspicious accounts</option>
+          </select>
+          <Button variant="secondary" onClick={onRefresh} isLoading={loading}>
+            Refresh
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-3 px-6 pb-4 sm:grid-cols-2 lg:grid-cols-5">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400">{s.label}</p>
+            <p className="mt-1 text-2xl font-semibold text-white">{loading ? '…' : s.value}</p>
+          </div>
+        ))}
+      </div>
+      {analytics?.platformBreakdown?.length ? (
+        <div className="px-6 pb-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Platforms</p>
+          <div className="flex flex-wrap gap-2">
+            {analytics.platformBreakdown.map((p) => (
+              <span
+                key={p.platform}
+                className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100"
+              >
+                {p.platform}: {p.count}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="overflow-x-auto px-2 pb-4">
+        <table className="min-w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
+              <th className="px-4 py-3">Member</th>
+              <th className="px-4 py-3">Device</th>
+              <th className="px-4 py-3">Platform</th>
+              <th className="px-4 py-3">Last login</th>
+              <th className="px-4 py-3">Sessions</th>
+              <th className="px-4 py-3">Failed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(analytics?.recentDevices ?? []).map((d) => (
+              <tr key={d.deviceId} className="border-b border-white/5 text-slate-200">
+                <td className="px-4 py-3">
+                  <div className="font-medium">{d.memberName || '—'}</div>
+                  <div className="text-xs text-slate-400">{d.email || '—'}</div>
+                </td>
+                <td className="px-4 py-3">
+                  {d.deviceLabel}
+                  {d.isSuspicious ? (
+                    <span className="ml-2 rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-200">
+                      Suspicious
+                    </span>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3">{d.platform || '—'}</td>
+                <td className="px-4 py-3">{formatDateTime(d.lastLoginDate)}</td>
+                <td className="px-4 py-3">{d.activeSessionCount}</td>
+                <td className="px-4 py-3">{d.failedAttempts}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!loading && (analytics?.recentDevices?.length ?? 0) === 0 && (
+          <p className="py-6 text-center text-slate-400">No device records yet.</p>
+        )}
+      </div>
+    </DashboardTablePanel>
   )
 }

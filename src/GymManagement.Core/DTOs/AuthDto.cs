@@ -11,6 +11,12 @@ namespace GymManagement.Core.DTOs
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
 
+        /// <summary>Mobile device metadata for session + device management.</summary>
+        public DeviceContextDto? Device { get; set; }
+
+        /// <summary>When logging in after device limit, remove this device id first.</summary>
+        public int? RemoveDeviceId { get; set; }
+
         /// <summary>Optional legacy field. Ignored by the server; role is resolved from the account after authentication.</summary>
         /// <remarks>Step 1B: deprecated — do not rely on this property; it may be removed in a future API version.</remarks>
         [Obsolete("Login ignores client-sent role; the API resolves Role from UserRoles (fallback: default admin, user types). Will be removed in a future version.")]
@@ -42,6 +48,31 @@ namespace GymManagement.Core.DTOs
         public IReadOnlyList<AppRoleDto> Roles { get; set; } = Array.Empty<AppRoleDto>();
         /// <summary>Effective permissions via <c>RolePermissions</c> → <c>Permissions</c>.</summary>
         public IReadOnlyList<PermissionDto> Permissions { get; set; } = Array.Empty<PermissionDto>();
+
+        /// <summary>JWT session id (jti) for mobile session management.</summary>
+        public string? SessionId { get; set; }
+
+        /// <summary>Registered device id when login includes device context.</summary>
+        public int? DeviceId { get; set; }
+
+        public SecurityAlertDto? SecurityAlert { get; set; }
+    }
+
+    /// <summary>Login blocked because active device limit was reached.</summary>
+    public class DeviceLimitLoginResponseDto
+    {
+        public string Code { get; set; } = "DEVICE_LIMIT_REACHED";
+        public DeviceLimitErrorDto DeviceLimit { get; set; } = new();
+    }
+
+    public class LoginAttemptResultDto
+    {
+        /// <summary>No device context was supplied; caller should skip mobile session handling.</summary>
+        public bool Skipped { get; set; }
+
+        public LoginResponseDto? Success { get; set; }
+        public DeviceLimitLoginResponseDto? DeviceLimit { get; set; }
+        public bool IsUnauthorized => !Skipped && Success == null && DeviceLimit == null;
     }
 
     public class RegisterDto

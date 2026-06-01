@@ -1,6 +1,24 @@
 /// Login response payload from `/api/Auth/login`.
 import 'device_security_models.dart';
 
+class AccountAuthInfo {
+  const AccountAuthInfo({
+    required this.email,
+    required this.requiresCurrentPassword,
+  });
+
+  final String email;
+  final bool requiresCurrentPassword;
+
+  factory AccountAuthInfo.fromJson(Map<String, dynamic> json) {
+    return AccountAuthInfo(
+      email: (json['email'] ?? json['Email'] ?? '').toString(),
+      requiresCurrentPassword: json['requiresCurrentPassword'] == true ||
+          json['RequiresCurrentPassword'] == true,
+    );
+  }
+}
+
 class LoginResponse {
   final String token;
   final String? refreshToken;

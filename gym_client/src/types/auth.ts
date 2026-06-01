@@ -47,6 +47,17 @@ export interface CompromisedSession {
   lastLoginIpAddress?: string | null
 }
 
+export interface AccountAuthInfo {
+  email: string
+  requiresCurrentPassword: boolean
+}
+
+export interface ChangePasswordPayload {
+  currentPassword?: string
+  newPassword: string
+  confirmPassword: string
+}
+
 /** Public Firebase web config from GET /Auth/firebase-config */
 export interface FirebasePublicConfig {
   enabled: boolean

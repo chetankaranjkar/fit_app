@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
+using GymManagement.API.Extensions;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Services;
@@ -121,6 +122,61 @@ namespace GymManagement.API.Controllers
             }
 
             return Ok(new { message = "Registration successful." });
+        }
+
+        /// <summary>Login email and whether current password is required (any authenticated user).</summary>
+        [Authorize]
+        [HttpGet("account")]
+        [ProducesResponseType(typeof(AccountAuthInfoDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<ActionResult<AccountAuthInfoDto>> GetAccount()
+        {
+            var authUserId = HttpContext.GetJwtAuthUserId();
+            if (authUserId == null)
+                return Unauthorized();
+
+            var info = await _authService.GetAccountAuthInfoAsync(authUserId.Value);
+            if (info == null)
+                return Unauthorized();
+
+            return Ok(info);
+        }
+
+        /// <summary>Change password for the authenticated <c>AuthUsers</c> row.</summary>
+        [Authorize]
+        [HttpPost("change-password")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto? dto)
+        {
+            var authUserId = HttpContext.GetJwtAuthUserId();
+            if (authUserId == null)
+                return Unauthorized(new { message = "Not authenticated." });
+
+            if (dto == null)
+                return BadRequest(new { message = "Request body is required." });
+
+            if (string.IsNullOrWhiteSpace(dto.NewPassword) || string.IsNullOrWhiteSpace(dto.ConfirmPassword))
+                return BadRequest(new { message = "New password and confirmation are required." });
+
+            try
+            {
+                await _authService.ChangePasswordAsync(authUserId.Value, dto);
+                return Ok(new { message = "Password updated successfully." });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         /// <summary>Clears stored refresh token on <c>AuthUsers</c>; sets <c>LogoutTime</c> on <c>LoginActivity</c> when session matches.</summary>

@@ -175,6 +175,8 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 
 **Web OTP (Firebase):** When `Firebase:Enabled` is true and Admin credentials + web config are set, login page shows **Password | OTP** tabs. Client loads public config from `GET /api/Auth/firebase-config`, sends SMS via Firebase Phone Auth, then exchanges the Firebase ID token at `POST /api/Auth/firebase-login`. Backend verifies token with Firebase Admin SDK and matches `AuthUsers` by `Users.Phone` (or email claim). Same JWT/session response as password login. Requires user phone on profile to match verified number.
 
+**Change password (self-service):** Any authenticated user with an `AuthUsers` row can update their own password. `GET /api/Auth/account` returns login email and whether `currentPassword` is required (false for OTP-only accounts with no password hash yet). `POST /api/Auth/change-password` validates current password when required, min length 6, BCrypt hash on `AuthUsers`. **Web:** `/dashboard/profile` → **Password** card (`ChangePasswordCard`). **Mobile:** Profile → **Security & devices** → **Change password** (`/profile/change-password`). Admins can still reset another user’s password via `PUT /api/Users/{id}` (admin only).
+
 ---
 
 ## 10. Reuse catalog (avoid duplication)
@@ -187,6 +189,7 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 | Camera modal | `components/users/ProfilePhotoCameraModal.tsx` | — |
 | Camera helpers | `lib/cameraMedia.ts` | — |
 | API errors | `lib/apiErrors.ts` `getApiErrorMessage` | ad-hoc axios parsing |
+| Change own password | `auth.service.ts` + `ChangePasswordCard` | duplicate forms |
 | Trainers CRUD | `services/trainers.service.ts` | mock `trainers-management` store (legacy) |
 | Users CRUD | `services/users.service.ts` | — |
 | Trainer add wizard | `components/trainers/AddTrainerModal.tsx` | `TrainersManagementPage` mock |

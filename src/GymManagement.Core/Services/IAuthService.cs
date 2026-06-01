@@ -33,5 +33,11 @@ namespace GymManagement.Core.Services
 
         /// <summary>Returns accounts where refresh token reuse was detected and session was revoked.</summary>
         Task<IReadOnlyList<CompromisedSessionDto>> GetCompromisedSessionsAsync();
+
+        /// <summary>Account email and whether a current password is required to set a new one.</summary>
+        Task<AccountAuthInfoDto?> GetAccountAuthInfoAsync(int authUserId);
+
+        /// <summary>Updates password hash for the authenticated account (BCrypt).</summary>
+        Task ChangePasswordAsync(int authUserId, ChangePasswordDto dto);
     }
 }

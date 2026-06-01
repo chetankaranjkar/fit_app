@@ -94,6 +94,31 @@ class SecurityDevicesScreen extends ConsumerWidget {
                               ),
                             const SizedBox(height: AppSpacing.xl),
                             PressScale(
+                              onTap: () => context.push('/profile/change-password'),
+                              child: GlassCard(
+                                child: Row(
+                                  children: [
+                                    Icon(CupertinoIcons.lock_rotation, color: AppColors.accent, size: 20),
+                                    const SizedBox(width: AppSpacing.md),
+                                    Expanded(
+                                      child: Text(
+                                        'Change password',
+                                        style: AppType.body.copyWith(
+                                          color: AppColors.resolveText(context),
+                                        ),
+                                      ),
+                                    ),
+                                    Icon(
+                                      CupertinoIcons.chevron_right,
+                                      size: 14,
+                                      color: AppColors.resolveTextSecondary(context),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            PressScale(
                               onTap: () => context.push('/profile/security/login-history'),
                               child: GlassCard(
                                 child: Row(

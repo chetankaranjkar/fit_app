@@ -657,6 +657,57 @@ namespace GymManagement.Infrastructure.Services
             return string.Empty;
         }
 
+        /// <inheritdoc />
+        public async Task<AccountAuthInfoDto?> GetAccountAuthInfoAsync(int authUserId)
+        {
+            var authUser = await _db.AuthUsers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == authUserId)
+                .ConfigureAwait(false);
+            if (authUser == null)
+                return null;
+
+            var requiresCurrent = !string.IsNullOrWhiteSpace(authUser.PasswordHash);
+            return new AccountAuthInfoDto
+            {
+                Email = authUser.Email,
+                RequiresCurrentPassword = requiresCurrent,
+            };
+        }
+
+        /// <inheritdoc />
+        public async Task ChangePasswordAsync(int authUserId, ChangePasswordDto dto)
+        {
+            ArgumentNullException.ThrowIfNull(dto);
+
+            var newPassword = dto.NewPassword?.Trim() ?? string.Empty;
+            var confirm = dto.ConfirmPassword?.Trim() ?? string.Empty;
+            if (newPassword.Length < 6)
+                throw new ArgumentException("Password must be at least 6 characters.");
+            if (!string.Equals(newPassword, confirm, StringComparison.Ordinal))
+                throw new ArgumentException("New password and confirmation do not match.");
+
+            var authUser = await _db.AuthUsers.FirstOrDefaultAsync(a => a.Id == authUserId).ConfigureAwait(false);
+            if (authUser == null)
+                throw new InvalidOperationException("Account not found.");
+
+            var hasPassword = !string.IsNullOrWhiteSpace(authUser.PasswordHash);
+            if (hasPassword)
+            {
+                var current = dto.CurrentPassword?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(current))
+                    throw new ArgumentException("Current password is required.");
+                if (!PasswordHasher.Verify(current, authUser.PasswordHash))
+                    throw new UnauthorizedAccessException("Current password is incorrect.");
+            }
+
+            authUser.PasswordHash = PasswordHasher.Hash(newPassword);
+            authUser.FailedLoginAttempts = 0;
+            authUser.LockoutEnd = null;
+            _unitOfWork.AuthUsers.Update(authUser);
+            await _unitOfWork.SaveChangesAsync().ConfigureAwait(false);
+        }
+
         public async Task<bool> RegisterAsync(RegisterDto registerDto)
         {
             var email = string.IsNullOrWhiteSpace(registerDto.Email)

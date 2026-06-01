@@ -1,6 +1,8 @@
 import { api } from '../lib/api'
 import type {
+  AccountAuthInfo,
   AuthPermission,
+  ChangePasswordPayload,
   CompromisedSession,
   FirebasePublicConfig,
   LoginCredentials,
@@ -144,6 +146,22 @@ export const authService = {
     api.post<LoginResponse>('/Auth/refresh', { refreshToken }),
   logout: () => api.post('/Auth/logout'),
   getCompromisedSessions: () => api.get<CompromisedSession[]>('/Auth/compromised-sessions'),
+  getAccount: async (): Promise<AccountAuthInfo> => {
+    const { data } = await api.get<Record<string, unknown>>('/Auth/account')
+    const raw = (data ?? {}) as Record<string, unknown>
+    return {
+      email: String(raw.email ?? raw.Email ?? ''),
+      requiresCurrentPassword: Boolean(
+        raw.requiresCurrentPassword ?? raw.RequiresCurrentPassword ?? true,
+      ),
+    }
+  },
+  changePassword: (payload: ChangePasswordPayload) =>
+    api.post('/Auth/change-password', {
+      currentPassword: payload.currentPassword,
+      newPassword: payload.newPassword,
+      confirmPassword: payload.confirmPassword,
+    }),
   normalizeLoginResponse,
   storeSession: (response: LoginResponse | Record<string, unknown>) => {
     const normalized =

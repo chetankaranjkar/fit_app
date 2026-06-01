@@ -78,6 +78,27 @@ class AuthService {
     }
   }
 
+  Future<AccountAuthInfo> getAccount() async {
+    final res = await ApiClient.instance.get<Map<String, dynamic>>('/Auth/account');
+    return AccountAuthInfo.fromJson(res.data ?? {});
+  }
+
+  Future<void> changePassword({
+    required String newPassword,
+    required String confirmPassword,
+    String? currentPassword,
+  }) async {
+    await ApiClient.instance.post(
+      '/Auth/change-password',
+      body: {
+        if (currentPassword != null && currentPassword.isNotEmpty)
+          'currentPassword': currentPassword,
+        'newPassword': newPassword,
+        'confirmPassword': confirmPassword,
+      },
+    );
+  }
+
   Future<void> logout() async {
     try {
       await ApiClient.instance.post('/Auth/logout');

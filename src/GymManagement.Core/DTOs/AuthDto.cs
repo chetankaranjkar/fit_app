@@ -75,6 +75,23 @@ namespace GymManagement.Core.DTOs
         public bool IsUnauthorized => !Skipped && Success == null && DeviceLimit == null;
     }
 
+    /// <summary>Self-service password change for the authenticated <c>AuthUsers</c> account.</summary>
+    public class ChangePasswordDto
+    {
+        /// <summary>Required when the account already has a password hash (email/password login).</summary>
+        public string? CurrentPassword { get; set; }
+        public string NewPassword { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    /// <summary>Login account metadata for password UI (no secrets).</summary>
+    public class AccountAuthInfoDto
+    {
+        public string Email { get; set; } = string.Empty;
+        /// <summary>True when <see cref="ChangePasswordDto.CurrentPassword"/> must be supplied.</summary>
+        public bool RequiresCurrentPassword { get; set; }
+    }
+
     public class RegisterDto
     {
         /// <summary>Deprecated; use <see cref="Email"/>.</summary>

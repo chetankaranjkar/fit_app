@@ -89,8 +89,10 @@ And allow the redirect origin in your OAuth / App Check settings if applicable.
 | API CORS error | `CORS_ORIGIN_0` in `deploy/.env.uat` must be `https://uat.tigerfitness.tech` |
 | SSL error | `sudo certbot certificates`; re-run `setup-ssl-uat.sh` |
 | Wrong database | UAT uses volume `gym_uat_sqlserver_data`, not production’s |
+| `address already in use` on `127.0.0.1:1434` | Another process or stale container holds the SQL host port. Run `./deploy/scripts/fix-uat-sql-port.sh` then redeploy. Or set `SQLSERVER_PUBLISH_PORT=1435` in `deploy/.env.uat` |
 
 ```bash
+./deploy/scripts/fix-uat-sql-port.sh
 docker logs gym-uat-api --tail 80
 sudo nginx -t
 curl -fsS http://127.0.0.1:5105/health/ready

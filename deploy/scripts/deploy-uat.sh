@@ -13,6 +13,9 @@ cd "${REPO_ROOT}"
 echo "==> UAT deploy — ${DOMAIN}"
 echo "    Frontend → 127.0.0.1:${FRONTEND_HOST_PORT:-8081}"
 echo "    API      → 127.0.0.1:${API_HOST_PORT:-5105}"
+echo "    SQL      → 127.0.0.1:${SQLSERVER_PUBLISH_PORT:-1434}"
+
+"${SCRIPT_DIR}/fix-uat-sql-port.sh"
 
 compose_uat build --pull
 compose_uat up -d --remove-orphans

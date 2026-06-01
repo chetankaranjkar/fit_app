@@ -10,12 +10,15 @@ import { meService } from '../../services/me.service'
 export function MemberProfilePage() {
   const { userName } = getDashboardUser()
   const loginUser = authService.getCurrentUser()
+  /** /me/profile requires JWT userId (member profile). Admin/staff auth-only accounts must not call it — 401 triggers global logout. */
+  const hasMemberProfile = Boolean(loginUser?.userId)
   const { data: profile, isError: profileError } = useQuery({
-    queryKey: ['member-profile'],
+    queryKey: ['member-profile', loginUser?.userId],
     queryFn: async () => {
       const { data } = await meService.getProfile()
       return data
     },
+    enabled: hasMemberProfile,
     retry: false,
   })
 
@@ -35,7 +38,7 @@ export function MemberProfilePage() {
               <dt className="text-slate-400">Email</dt>
               <dd className="text-right text-white">{displayEmail}</dd>
             </div>
-            {!profileError && profile ? (
+            {hasMemberProfile && !profileError && profile ? (
               <>
                 <div className="flex justify-between gap-4">
                   <dt className="text-slate-400">Phone</dt>

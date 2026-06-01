@@ -159,7 +159,11 @@ api.interceptors.response.use(
         (error.config.url.toLowerCase().includes('/auth/login') ||
           error.config.url.toLowerCase().includes('/auth/firebase-login') ||
           error.config.url.toLowerCase().endsWith('auth/login'))
-      if (!isLoginRequest) {
+      // Member profile GET 401 when JWT has no profile userId (staff/admin) — not a session expiry.
+      const isMeProfileReadForStaff =
+        requestUrlLower.includes('/me/profile') &&
+        String(error.config?.method ?? 'get').toLowerCase() === 'get'
+      if (!isLoginRequest && !isMeProfileReadForStaff) {
         clearSession('Your session expired. Please login again.')
         window.location.href = '/login'
       }

@@ -241,7 +241,8 @@ export function DashboardLayout({
       window.removeEventListener('focus', handleFocus)
       clearSessionTimers()
     }
-  }, [pathname])
+    // Do not re-run on route change — remounting layout per page already resets timers; pathname here caused refresh/logout flashes on Profile.
+  }, [])
 
   useEffect(() => {
     if (!sessionWarningOpen) return

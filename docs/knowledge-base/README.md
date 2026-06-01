@@ -27,6 +27,8 @@ Central folder for **product flows**, **identity/RBAC architecture**, **reuse ru
 | [../USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [../PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md) | Scheduled product work |
 | [../FIREBASE_OTP_PRODUCTION.md](../FIREBASE_OTP_PRODUCTION.md) | Firebase OTP production setup (customer billing) |
+| [../RELEASE_PROCESS.md](../RELEASE_PROCESS.md) | UAT → main release and deploy workflow |
+| [../../deploy/DEPLOYMENT-UAT.md](../../deploy/DEPLOYMENT-UAT.md) | UAT Docker / Nginx / SSL on VPS |
 | [../sql/](../sql/) | SQL scripts (workout builder, exercises) |
 
 ---

@@ -1,5 +1,7 @@
 # UAT — https://uat.tigerfitness.tech
 
+> **Release workflow (UAT → main):** [docs/RELEASE_PROCESS.md](../docs/RELEASE_PROCESS.md)
+
 UAT runs as a **second Docker stack** on the same VPS as production, with **different host ports** and a **separate Nginx vhost** + SSL certificate.
 
 | | Production | UAT |

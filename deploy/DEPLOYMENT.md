@@ -6,6 +6,8 @@ Production deployment for this repository using **Docker Compose**, **host Nginx
 
 > **UAT environment?** Use **[DEPLOYMENT-UAT.md](./DEPLOYMENT-UAT.md)** — `https://uat.tigerfitness.tech` on the same VPS with separate ports and SSL.
 
+> **How to release (UAT first, then prod)?** See **[docs/RELEASE_PROCESS.md](../docs/RELEASE_PROCESS.md)**.
+
 ---
 
 ## What you are deploying

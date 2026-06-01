@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AppLoader } from '../components/ui/AppLoader'
+import { RouteErrorPage } from '../components/errors/RouteErrorPage'
 import { HelpAppShell } from '../modules/help/HelpAppShell'
 import { RequireAuth } from '../features/auth/components/RequireAuth'
 import { DashboardShell } from '../features/auth/components/DashboardShell'
@@ -285,6 +286,7 @@ function withSuspense(node: ReactNode) {
 const router = createBrowserRouter([
   {
     element: <HelpAppShell />,
+    errorElement: <RouteErrorPage />,
     children: [
       { path: '/', element: withSuspense(<LandingPage />) },
       { path: '/login', element: withSuspense(<LoginPage />) },

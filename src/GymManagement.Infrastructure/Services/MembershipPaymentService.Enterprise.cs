@@ -317,7 +317,7 @@ namespace GymManagement.Infrastructure.Services
                     .ToListAsync(cancellationToken);
                 return new BillingReportDto
                 {
-                    ReportType = reportType,
+                    ReportType = type,
                     FromDate = from,
                     ToDate = toDate.Date,
                     TotalAmount = headers.Sum(h => h.CouponDiscountAmount),
@@ -346,7 +346,7 @@ namespace GymManagement.Infrastructure.Services
                     .ToListAsync(cancellationToken);
                 return new BillingReportDto
                 {
-                    ReportType = reportType,
+                    ReportType = type,
                     FromDate = from,
                     ToDate = toDate.Date,
                     TotalAmount = waiveRows.Sum(w => w.RequestedAmount),
@@ -370,7 +370,7 @@ namespace GymManagement.Infrastructure.Services
                     .ToListAsync(cancellationToken);
                 return new BillingReportDto
                 {
-                    ReportType = reportType,
+                    ReportType = type,
                     FromDate = from,
                     ToDate = toDate.Date,
                     TotalAmount = headers.Sum(h => h.PendingAmount),
@@ -399,7 +399,7 @@ namespace GymManagement.Infrastructure.Services
             var txs = await txQ.OrderBy(t => t.TransactionDate).ToListAsync(cancellationToken);
             return new BillingReportDto
             {
-                ReportType = reportType,
+                ReportType = type,
                 FromDate = from,
                 ToDate = toDate.Date,
                 TotalAmount = txs.Sum(t => t.TransactionAmount),

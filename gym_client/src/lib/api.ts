@@ -119,6 +119,15 @@ api.interceptors.response.use(
       requestUrlLower.includes('/auth/refresh') ||
       requestUrlLower.includes('/auth/logout')
 
+    const requestMethod = String(error.config?.method ?? 'get').toLowerCase()
+    const isBenignUnauthorizedGet =
+      requestMethod === 'get' &&
+      (requestUrlLower.includes('/me/profile') || requestUrlLower.includes('/auth/account'))
+
+    if (error.response?.status === 401 && isBenignUnauthorizedGet) {
+      return Promise.reject(error)
+    }
+
     if (error.response?.status === 401 && !isAuthRequest && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -159,11 +168,7 @@ api.interceptors.response.use(
         (error.config.url.toLowerCase().includes('/auth/login') ||
           error.config.url.toLowerCase().includes('/auth/firebase-login') ||
           error.config.url.toLowerCase().endsWith('auth/login'))
-      // Member profile GET 401 when JWT has no profile userId (staff/admin) — not a session expiry.
-      const isMeProfileReadForStaff =
-        requestUrlLower.includes('/me/profile') &&
-        String(error.config?.method ?? 'get').toLowerCase() === 'get'
-      if (!isLoginRequest && !isMeProfileReadForStaff) {
+      if (!isLoginRequest && !isBenignUnauthorizedGet) {
         clearSession('Your session expired. Please login again.')
         window.location.href = '/login'
       }

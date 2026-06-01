@@ -10,6 +10,7 @@ using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
 using GymManagement.API.Services;
+using GymManagement.API.Extensions;
 
 namespace GymManagement.API.Controllers
 {
@@ -80,7 +81,7 @@ namespace GymManagement.API.Controllers
         [HttpGet("profile")]
         public async Task<ActionResult<MeProfileDto>> GetProfile()
         {
-            var userId = ResolveUserIdFromClaims();
+            var userId = await ResolveProfileUserIdAsync();
             if (userId == null) return Unauthorized();
 
             var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value);
@@ -792,6 +793,21 @@ namespace GymManagement.API.Controllers
             var legacy = User.FindFirst("uid")?.Value ?? User.FindFirst("user_id")?.Value;
             if (int.TryParse(legacy, out var id) && id > 0) return id;
             return null;
+        }
+
+        /// <summary>Profile user id from JWT claims, or <see cref="AuthUser.UserId"/> when the claim was omitted.</summary>
+        private async Task<int?> ResolveProfileUserIdAsync()
+        {
+            var fromClaims = ResolveUserIdFromClaims();
+            if (fromClaims != null)
+                return fromClaims;
+
+            var authUserId = HttpContext.GetJwtAuthUserId();
+            if (authUserId == null)
+                return null;
+
+            var auth = await _db.AuthUsers.AsNoTracking().FirstOrDefaultAsync(a => a.Id == authUserId.Value);
+            return auth?.UserId;
         }
 
         private async Task<MeMembershipDto?> GetActiveMembershipAsync(int userId)

@@ -123,8 +123,9 @@ api.interceptors.response.use(
     const isBenignUnauthorizedGet =
       requestMethod === 'get' &&
       (requestUrlLower.includes('/me/profile') || requestUrlLower.includes('/auth/account'))
+    const isChangePasswordRequest = requestUrlLower.includes('/auth/change-password')
 
-    if (error.response?.status === 401 && isBenignUnauthorizedGet) {
+    if (error.response?.status === 401 && (isBenignUnauthorizedGet || isChangePasswordRequest)) {
       return Promise.reject(error)
     }
 
@@ -168,7 +169,7 @@ api.interceptors.response.use(
         (error.config.url.toLowerCase().includes('/auth/login') ||
           error.config.url.toLowerCase().includes('/auth/firebase-login') ||
           error.config.url.toLowerCase().endsWith('auth/login'))
-      if (!isLoginRequest && !isBenignUnauthorizedGet) {
+      if (!isLoginRequest && !isBenignUnauthorizedGet && !isChangePasswordRequest) {
         clearSession('Your session expired. Please login again.')
         window.location.href = '/login'
       }

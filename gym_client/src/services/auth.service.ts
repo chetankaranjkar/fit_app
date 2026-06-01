@@ -29,6 +29,10 @@ const AUTH_PERMISSION_CODES = {
   managePtSchedules: 'MANAGE_PT_SCHEDULES',
   viewTrainerEarnings: 'VIEW_TRAINER_EARNINGS',
   viewPtReports: 'VIEW_PT_REPORTS',
+  voidPayment: 'VOID_PAYMENT',
+  refundPayment: 'REFUND_PAYMENT',
+  approveWaiveOff: 'APPROVE_WAIVE_OFF',
+  viewFinancialAudit: 'VIEW_FINANCIAL_AUDIT',
 } as const
 
 function normalizeLoginResponse(raw: Record<string, unknown>): LoginResponse {

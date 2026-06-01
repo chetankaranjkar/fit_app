@@ -4,12 +4,17 @@ import { useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { Button } from '../components/ui/Button'
+import { Modal } from '../components/ui/Modal'
 import { Input } from '../components/ui/Input'
 import { membershipPaymentsService } from '../services/membershipPayments.service'
+import { waiveOffRequestsService } from '../services/waiveOffRequests.service'
 import { couponsService } from '../services/coupons.service'
 import { formatInr } from '../lib/formatInr'
 import { getApiErrorMessage } from '../lib/apiErrors'
 import { BillingSummaryCard } from '../components/billing/BillingSummaryCard'
+import { MembershipFinancialSummaryCard } from '../components/billing/MembershipFinancialSummaryCard'
+import { PaymentConfirmationModal } from '../components/billing/PaymentConfirmationModal'
+import { PaymentReceiptModal, type PaymentReceiptData } from '../components/billing/PaymentReceiptModal'
 import {
   MEMBERSHIP_PAYMENT_METHODS,
   computeNetPayable,
@@ -47,11 +52,27 @@ export function CollectMembershipPaymentPage() {
   const [discount, setDiscount] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState<ValidateCouponResponse | null>(null)
   const [selectedCouponCode, setSelectedCouponCode] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [duplicateWarn, setDuplicateWarn] = useState<string | null>(null)
+  const [receipt, setReceipt] = useState<PaymentReceiptData | null>(null)
+  const [receiptOpen, setReceiptOpen] = useState(false)
+  const [waiveOpen, setWaiveOpen] = useState(false)
+  const [waiveAmount, setWaiveAmount] = useState('')
+  const [waiveReason, setWaiveReason] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['membership-payment', membershipId],
     queryFn: async () => {
       const { data: d } = await membershipPaymentsService.byMembership(membershipId)
+      return d
+    },
+    enabled: membershipId > 0 && canPay,
+  })
+
+  const { data: financialSummary } = useQuery({
+    queryKey: ['membership-financial-summary', membershipId],
+    queryFn: async () => {
+      const { data: d } = await membershipPaymentsService.financialSummary(membershipId)
       return d
     },
     enabled: membershipId > 0 && canPay,
@@ -113,11 +134,32 @@ export function CollectMembershipPaymentPage() {
   const installmentKind =
     paidNum > 0 && pendingAfter <= 0.02 ? 'full' : paidNum > 0 && pendingAfter > 0.02 ? 'partial' : null
 
+  const exceedsOutstanding = paidNum > 0 && paidNum - remainingBeforePay > 0.02
+
+  const waiveMutation = useMutation({
+    mutationFn: async () => {
+      if (!data) throw new Error('No billing')
+      const { data: res } = await waiveOffRequestsService.create({
+        membershipPaymentId: data.id,
+        requestedAmount: Number(waiveAmount),
+        reason: waiveReason.trim(),
+      })
+      return res
+    },
+    onSuccess: () => {
+      toast.success('Waive-off request submitted for admin approval')
+      setWaiveOpen(false)
+      setWaiveAmount('')
+      setWaiveReason('')
+    },
+    onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Could not submit waive-off request')),
+  })
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (!data) throw new Error('No data')
-      if (paidNum - remainingBeforePay > 0.02) {
-        throw new Error(`Amount cannot exceed the remaining balance of ${formatInr(remainingBeforePay)}.`)
+      if (exceedsOutstanding) {
+        throw new Error('Payment amount cannot exceed outstanding balance.')
       }
       const body = {
         amount: paidNum,
@@ -132,6 +174,7 @@ export function CollectMembershipPaymentPage() {
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['membership-payment', membershipId] })
+      queryClient.invalidateQueries({ queryKey: ['membership-financial-summary', membershipId] })
       const msg =
         res.paymentStatus === 'Paid' || res.isFullyPaid
           ? 'Full payment recorded. Membership is now active.'
@@ -139,11 +182,30 @@ export function CollectMembershipPaymentPage() {
             ? `Partial payment recorded. Pending ${formatInr(res.pendingAmount)}.`
             : 'Payment recorded.'
       toast.success(msg)
+      const lastTx = [...(res.transactions ?? [])].sort(
+        (a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime(),
+      )[0]
+      if (lastTx) {
+        setReceipt({
+          receiptNumber: lastTx.receiptNumber ?? `TX-${lastTx.id}`,
+          memberName: financialSummary?.memberName ?? 'Member',
+          memberId: financialSummary?.memberCode ?? `M-${res.userId}`,
+          memberPhotoUrl: financialSummary?.memberPhotoUrl,
+          planName: res.planName,
+          amountPaid: lastTx.transactionAmount,
+          paymentMethod: lastTx.transactionMethod,
+          remainingBalance: res.pendingAmount,
+          paymentDate: lastTx.transactionDate,
+        })
+        setReceiptOpen(true)
+      }
+      setConfirmOpen(false)
       setAmount('')
       setNextDue('')
       setDiscount('')
       setAppliedCoupon(null)
       setSelectedCouponCode('')
+      setDuplicateWarn(null)
     },
     onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Failed to record payment')),
   })
@@ -185,22 +247,40 @@ export function CollectMembershipPaymentPage() {
                   {paymentStatusLabel(data.paymentStatus)}
                 </span>
               </div>
-              <BillingSummaryCard
-                className="mt-4"
-                membershipAmount={getMembershipAmount(data)}
-                couponCode={data.couponCode}
-                couponDiscount={data.couponDiscountAmount ?? 0}
-                manualDiscount={data.discountAmount}
-                waiverAmount={data.waiverAmount}
-                finalBilling={net}
-                paidAmount={data.paidAmount}
-                pendingAmount={remainingBeforePay}
-                couponLocked={data.couponLocked}
-              />
+              {financialSummary ? (
+                <MembershipFinancialSummaryCard
+                  className="mt-4"
+                  membershipFee={financialSummary.membershipFee}
+                  couponDiscount={financialSummary.couponDiscount}
+                  approvedWaiveOff={financialSummary.approvedWaiveOff}
+                  netPayable={financialSummary.netPayableAmount}
+                  totalPaid={financialSummary.totalPaid}
+                  outstandingBalance={financialSummary.outstandingBalance}
+                  isOverdue={financialSummary.isOverdue}
+                />
+              ) : (
+                <BillingSummaryCard
+                  className="mt-4"
+                  membershipAmount={getMembershipAmount(data)}
+                  couponCode={data.couponCode}
+                  couponDiscount={data.couponDiscountAmount ?? 0}
+                  manualDiscount={data.discountAmount}
+                  waiverAmount={data.waiverAmount}
+                  finalBilling={net}
+                  paidAmount={data.paidAmount}
+                  pendingAmount={remainingBeforePay}
+                  couponLocked={data.couponLocked}
+                />
+              )}
             </section>
 
             <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-md sm:p-6">
-              <h2 className="text-sm font-semibold text-white">Record payment</h2>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-white">Record payment</h2>
+                <Button type="button" variant="secondary" className="!py-1.5 text-xs" onClick={() => setWaiveOpen(true)}>
+                  Request waive-off
+                </Button>
+              </div>
               {installmentKind && (
                 <p
                   className={`mt-2 rounded-lg border px-3 py-2 text-xs font-medium ${
@@ -330,10 +410,35 @@ export function CollectMembershipPaymentPage() {
                   <Input label="Next due date (required for partial)" type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} />
                 </div>
               )}
+              {exceedsOutstanding && (
+                <p className="mt-3 text-sm text-rose-300">Payment amount cannot exceed outstanding balance.</p>
+              )}
+              {duplicateWarn && (
+                <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                  {duplicateWarn}
+                </p>
+              )}
               <p className="mt-3 text-xs text-slate-500">Remaining after this entry (estimate): {formatInr(pendingAfter)}</p>
               <div className="mt-4 flex justify-end">
-                <Button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending || paidNum <= 0}>
-                  Save payment
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    if (!data || paidNum <= 0 || exceedsOutstanding) return
+                    try {
+                      const { data: dup } = await membershipPaymentsService.checkDuplicate(data.id, paidNum)
+                      if (dup.isDuplicate) {
+                        setDuplicateWarn(dup.message ?? 'Similar payment detected. Please verify before continuing.')
+                      } else {
+                        setDuplicateWarn(null)
+                      }
+                    } catch {
+                      setDuplicateWarn(null)
+                    }
+                    setConfirmOpen(true)
+                  }}
+                  disabled={mutation.isPending || paidNum <= 0 || exceedsOutstanding}
+                >
+                  Review &amp; pay
                 </Button>
               </div>
             </section>
@@ -368,6 +473,62 @@ export function CollectMembershipPaymentPage() {
             </section>
           </>
         )}
+
+        {financialSummary && (
+          <PaymentConfirmationModal
+            open={confirmOpen}
+            onClose={() => setConfirmOpen(false)}
+            onConfirm={() => mutation.mutate()}
+            confirming={mutation.isPending}
+            memberName={financialSummary.memberName ?? 'Member'}
+            memberId={financialSummary.memberCode ?? `M-${financialSummary.userId ?? data?.userId}`}
+            memberPhotoUrl={financialSummary.memberPhotoUrl}
+            planName={data?.planName}
+            summary={financialSummary}
+            paymentAmount={paidNum}
+          />
+        )}
+
+        <Modal open={waiveOpen} onClose={() => setWaiveOpen(false)} title="Request waive-off">
+          <p className="mb-3 text-sm text-slate-400">
+            Waive-off is an admin-approved fee reduction (not a marketing coupon). Pending requests appear under Payments → Waive-off requests.
+          </p>
+          <div className="space-y-3">
+            <Input label="Requested amount (₹)" type="number" value={waiveAmount} onChange={(e) => setWaiveAmount(e.target.value)} />
+            <Input label="Reason" value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} />
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setWaiveOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => waiveMutation.mutate()}
+              disabled={waiveMutation.isPending || !waiveAmount || !waiveReason.trim()}
+            >
+              Submit request
+            </Button>
+          </div>
+        </Modal>
+
+        <PaymentReceiptModal
+          open={receiptOpen}
+          onClose={() => setReceiptOpen(false)}
+          receipt={receipt}
+          onDownloadPdf={
+            data
+              ? () => {
+                  membershipPaymentsService.invoicePdf(data.id).then(({ data: blob }) => {
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `receipt-${receipt?.receiptNumber ?? data.id}.pdf`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  })
+                }
+              : undefined
+          }
+        />
       </div>
     </DashboardLayout>
   )

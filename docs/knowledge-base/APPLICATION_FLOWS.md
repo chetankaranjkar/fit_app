@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-05-31 (Device management & session security).
+**Last updated:** 2026-06-01 (Enterprise membership billing, payments, waive-offs).
 
 ---
 
@@ -303,7 +303,47 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 
 ---
 
-## 12. Device management & session security (mobile)
+## 12. Enterprise membership billing & payments
+
+**Tables:** `membership_payments` (billing header per `user_memberships`), `membership_payment_transactions` (installments with receipt, status, void/refund audit), `waive_off_requests`, `financial_audit_logs`.
+
+### Financial formula
+
+```
+Net Payable = Membership Fee − Coupon Discount − Approved Waive-Off
+Outstanding = Net Payable − Sum(Completed installment amounts)
+```
+
+Only transactions with **Status = Completed** count toward paid/outstanding. **Voided** and **Refunded** rows stay in history but are excluded from totals.
+
+### Routes (web)
+
+| Route | Purpose |
+|-------|---------|
+| `/dashboard/payments` | Billing hub + legacy payment log |
+| `/dashboard/payments/collect?membershipId=` | Collect installment (confirmation modal, duplicate check, receipt) |
+| `/dashboard/payments/history` | Transaction list, filters, void/refund |
+| `/dashboard/payments/waive-offs` | Request list; admin approve/reject |
+| `/dashboard/payments/reports` | Collection, outstanding, coupon, waive-off, void/refund reports + CSV export |
+| User detail → **Payment History** tab | Financial summary card, member ledger, billing table |
+
+### APIs
+
+| Area | Base route |
+|------|------------|
+| Membership billing | `/api/membership-payments` |
+| Waive-off | `/api/waive-off-requests` |
+| Coupon on billing | `/api/membership-payments/{id}/apply-coupon` |
+
+**Permissions:** `Payments` (collect, view), `VOID_PAYMENT` (manager+ void), `REFUND_PAYMENT` (admin refund), `APPROVE_WAIVE_OFF` (admin waive-off), `VIEW_FINANCIAL_AUDIT` (audit log), `Reports` (collection reports).
+
+**Migrate:** `dotnet ef database update --project src/GymManagement.Infrastructure --startup-project src/GymManagement.API` (migration `20260601120000_EnterpriseBillingPaymentsWaiveOff`).
+
+**Code:** `MembershipPaymentService`, `WaiveOffRequestService`, `BillingCalculationService`, `gym_client/src/components/billing/*`, `CollectMembershipPaymentPage`, `MembershipPaymentHistoryPage`, `WaiveOffRequestsPage`.
+
+---
+
+## 13. Device management & session security (mobile)
 
 **Tables:** `UserDevices`, `UserSessions`, `LoginHistory` (see migration `20260531130000_AddDeviceManagementModule`).
 
@@ -328,7 +368,7 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 
 ---
 
-## 13. Improvement backlog (doc-owned)
+## 14. Improvement backlog (doc-owned)
 
 Track cross-cutting refactors here; move to PRODUCT_BACKLOG when scheduled.
 
@@ -341,7 +381,7 @@ Track cross-cutting refactors here; move to PRODUCT_BACKLOG when scheduled.
 
 ---
 
-## 14. How to update this doc
+## 15. How to update this doc
 
 When you change a **user-visible flow** or add a **shared component**:
 

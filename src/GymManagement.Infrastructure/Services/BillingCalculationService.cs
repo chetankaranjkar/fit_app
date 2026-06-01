@@ -23,13 +23,43 @@ namespace GymManagement.Infrastructure.Services
             };
         }
 
-        public void RecalculateHeader(MembershipPayment header)
+        public decimal SumCompletedPayments(IEnumerable<MembershipPaymentTransaction> transactions) =>
+            transactions
+                .Where(t => !t.IsDeleted && t.Status == MembershipPaymentTransactionStatus.Completed)
+                .Sum(t => t.TransactionAmount);
+
+        public void RecalculateHeader(MembershipPayment header, IEnumerable<MembershipPaymentTransaction>? transactions = null)
         {
             NormalizeLegacyDiscount(header);
             var original = GetOriginalAmount(header);
             header.OriginalAmount = original;
             header.FinalBillAmount = GetFinalBillAmount(header, original);
+            if (transactions != null)
+                header.PaidAmount = SumCompletedPayments(transactions);
             header.PendingAmount = Math.Max(0, header.FinalBillAmount - header.PaidAmount);
+        }
+
+        public void ApplyPaidAndPending(MembershipPayment header, IEnumerable<MembershipPaymentTransaction> transactions)
+        {
+            RecalculateHeader(header, transactions);
+            var net = header.FinalBillAmount;
+            var pending = header.PendingAmount;
+            if (pending <= 0.02m)
+            {
+                header.PendingAmount = 0;
+                header.PaymentStatus = MembershipPaymentStatus.Paid;
+                header.NextDueDate = null;
+            }
+            else if (header.PaidAmount > 0)
+            {
+                header.PaymentStatus = MembershipPaymentStatus.Partial;
+            }
+            else if (header.PaymentStatus != MembershipPaymentStatus.Overdue)
+            {
+                header.PaymentStatus = MembershipPaymentStatus.Pending;
+            }
+
+            _ = net;
         }
 
         /// <summary>

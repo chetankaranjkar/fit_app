@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
@@ -120,6 +120,15 @@ export function PaymentsPage() {
       const { data } = await paymentsService.getAll()
       return Array.isArray(data) ? data : []
     },
+  })
+
+  const { data: enterpriseDash } = useQuery({
+    queryKey: ['enterprise-billing-dashboard'],
+    queryFn: async () => {
+      const { data } = await membershipPaymentsService.enterpriseDashboard()
+      return data
+    },
+    enabled: canManagePayments,
   })
 
   const { data: memberships = [] } = useQuery({
@@ -473,6 +482,62 @@ export function PaymentsPage() {
         primaryAction={canManagePayments ? { label: '+ Add payment', onClick: openAdd } : undefined}
         showExport={false}
       >
+        {canManagePayments && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            <Link
+              to="/dashboard/payments/history"
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
+            >
+              Payment history
+            </Link>
+            <Link
+              to="/dashboard/payments/waive-offs"
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
+            >
+              Waive-off requests
+            </Link>
+            <Link
+              to="/dashboard/payments/reports"
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
+            >
+              Billing reports
+            </Link>
+          </div>
+        )}
+
+        {enterpriseDash && (
+          <div className="mb-4 grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
+            <MetricCard
+              title="Outstanding dues"
+              value={formatInrWhole(enterpriseDash.outstandingDues)}
+              gradient="from-amber-500 to-orange-600"
+              icon={paymentIcons.rupee}
+              caption={`${enterpriseDash.overdueMembersCount} overdue`}
+            />
+            <MetricCard
+              title="Today's collections"
+              value={formatInrWhole(enterpriseDash.dailyCollections)}
+              gradient="from-emerald-400 to-teal-500"
+              icon={paymentIcons.rupee}
+              caption="Completed payments only"
+            />
+            <MetricCard
+              title="Pending waive-offs"
+              value={String(enterpriseDash.pendingWaiveOffRequests)}
+              gradient="from-violet-500 to-fuchsia-500"
+              icon={paymentIcons.count}
+              caption="Awaiting admin approval"
+            />
+            <MetricCard
+              title="Voided / refunded"
+              value={`${enterpriseDash.voidedPaymentsCount} / ${enterpriseDash.refundedPaymentsCount}`}
+              gradient="from-slate-500 to-slate-700"
+              icon={paymentIcons.avg}
+              caption="Audit preserved"
+            />
+          </div>
+        )}
+
         <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
           <MetricCard
             title="Transactions"

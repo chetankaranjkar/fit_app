@@ -9,25 +9,28 @@ using EntityInvoiceStatus = GymManagement.Domain.Entities.InvoiceStatus;
 
 namespace GymManagement.Infrastructure.Services
 {
-    public sealed class MembershipPaymentService : IMembershipPaymentService
+    public sealed partial class MembershipPaymentService : IMembershipPaymentService
     {
         private readonly ApplicationDbContext _db;
         private readonly IInvoiceService _invoiceService;
         private readonly ICouponService _couponService;
         private readonly IBillingCalculationService _billing;
+        private readonly IFinancialAuditService _audit;
 
         public MembershipPaymentService(
             IUnitOfWork unitOfWork,
             ApplicationDbContext db,
             IInvoiceService invoiceService,
             ICouponService couponService,
-            IBillingCalculationService billing)
+            IBillingCalculationService billing,
+            IFinancialAuditService audit)
         {
             _ = unitOfWork;
             _db = db;
             _invoiceService = invoiceService;
             _couponService = couponService;
             _billing = billing;
+            _audit = audit;
         }
 
         private static bool IsTrialPlan(MembershipPlan plan)
@@ -244,7 +247,8 @@ namespace GymManagement.Infrastructure.Services
 
         private async Task<MembershipPaymentDto> MapToDtoAsync(MembershipPayment h, CancellationToken ct)
         {
-            var staffIds = h.Transactions.Where(t => !t.IsDeleted).Select(t => t.CollectedByUserId)
+            var staffIds = h.Transactions.Where(t => !t.IsDeleted)
+                .SelectMany(t => new int?[] { t.CollectedByUserId, t.VoidedByUserId, t.RefundedByUserId })
                 .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
             var names = staffIds.Count == 0
                 ? new Dictionary<int, string>()
@@ -254,6 +258,8 @@ namespace GymManagement.Infrastructure.Services
 
             var amounts = _billing.Compute(h);
             var txList = h.Transactions.Where(t => !t.IsDeleted).OrderByDescending(t => t.TransactionDate).ToList();
+            h.PaidAmount = _billing.SumCompletedPayments(txList);
+            h.PendingAmount = Math.Max(0, amounts.FinalBillAmount - h.PaidAmount);
             var timeline = BuildTimeline(h, txList);
             return new MembershipPaymentDto
             {
@@ -292,13 +298,25 @@ namespace GymManagement.Infrastructure.Services
                     .Select(t => new MembershipPaymentTransactionDto
                     {
                         Id = t.Id,
+                        ReceiptNumber = t.ReceiptNumber,
                         TransactionAmount = t.TransactionAmount,
                         TransactionMethod = t.TransactionMethod,
+                        Status = t.Status,
                         ReferenceNumber = t.ReferenceNumber,
                         TransactionDate = t.TransactionDate,
                         Remarks = t.Remarks,
                         CollectedByUserId = t.CollectedByUserId,
                         CollectedByName = t.CollectedByUserId.HasValue && names.TryGetValue(t.CollectedByUserId.Value, out var n) ? n : null,
+                        VoidReason = t.VoidReason,
+                        VoidedByUserId = t.VoidedByUserId,
+                        VoidedByName = t.VoidedByUserId.HasValue && names.TryGetValue(t.VoidedByUserId.Value, out var vn) ? vn : null,
+                        VoidedDate = t.VoidedDate,
+                        RefundAmount = t.RefundAmount,
+                        RefundReason = t.RefundReason,
+                        RefundedByUserId = t.RefundedByUserId,
+                        RefundedByName = t.RefundedByUserId.HasValue && names.TryGetValue(t.RefundedByUserId.Value, out var rn) ? rn : null,
+                        RefundedDate = t.RefundedDate,
+                        CreatedDate = t.CreatedDate,
                     })
                     .ToList(),
                 Timeline = timeline,
@@ -324,12 +342,18 @@ namespace GymManagement.Infrastructure.Services
 
             foreach (var t in transactions.OrderBy(t => t.TransactionDate))
             {
+                var label = t.Status switch
+                {
+                    MembershipPaymentTransactionStatus.Voided => $"Voided: ₹{t.TransactionAmount:N2}",
+                    MembershipPaymentTransactionStatus.Refunded => $"Refunded: ₹{t.TransactionAmount:N2}",
+                    _ => $"Payment: ₹{t.TransactionAmount:N2}",
+                };
                 events.Add(new MembershipBillingTimelineEventDto
                 {
-                    EventType = "payment",
+                    EventType = t.Status == MembershipPaymentTransactionStatus.Completed ? "payment" : t.Status.ToString().ToLowerInvariant(),
                     OccurredAt = t.TransactionDate,
                     Amount = t.TransactionAmount,
-                    Label = $"Payment: ₹{t.TransactionAmount:N2}",
+                    Label = label,
                 });
             }
 
@@ -520,12 +544,11 @@ namespace GymManagement.Infrastructure.Services
                         throw new BadRequestException("Paid amount must be greater than zero.");
 
                     var remaining = Math.Max(0, net - header.PaidAmount);
-                    var newPaid = header.PaidAmount + dto.Amount;
                     if (dto.Amount - remaining > 0.02m)
                         throw new BadRequestException(
-                            $"Payment would exceed the outstanding balance. Remaining due is ₹{remaining:N2}.");
+                            "Payment amount cannot exceed outstanding balance.");
 
-                    var pendingAfter = net - newPaid;
+                    var pendingAfter = net - header.PaidAmount - dto.Amount;
                     var isFullSettlement = pendingAfter <= 0.02m;
                     if (!isFullSettlement && !dto.NextDueDate.HasValue)
                         throw new BadRequestException("Next due date is required for partial payments.");
@@ -533,8 +556,10 @@ namespace GymManagement.Infrastructure.Services
                     var txRow = new MembershipPaymentTransaction
                     {
                         PaymentId = header.Id,
+                        ReceiptNumber = await GenerateReceiptNumberAsync(cancellationToken),
                         TransactionAmount = dto.Amount,
                         TransactionMethod = dto.Method,
+                        Status = MembershipPaymentTransactionStatus.Completed,
                         ReferenceNumber = dto.ReferenceNumber?.Trim(),
                         TransactionDate = dto.TransactionDate.Kind == DateTimeKind.Unspecified
                             ? DateTime.SpecifyKind(dto.TransactionDate, DateTimeKind.Utc)
@@ -544,8 +569,15 @@ namespace GymManagement.Infrastructure.Services
                     };
                     await _db.MembershipPaymentTransactions.AddAsync(txRow, cancellationToken);
 
-                    header.PaidAmount = newPaid;
-                    header.PendingAmount = isFullSettlement ? 0 : pendingAfter;
+                    var allTx = await _db.MembershipPaymentTransactions
+                        .Where(t => t.PaymentId == header.Id && !t.IsDeleted)
+                        .ToListAsync(cancellationToken);
+                    allTx.Add(txRow);
+                    header.PaidAmount = _billing.SumCompletedPayments(allTx);
+                    header.PendingAmount = Math.Max(0, net - header.PaidAmount);
+                    isFullSettlement = header.PendingAmount <= 0.02m;
+                    if (isFullSettlement)
+                        header.PendingAmount = 0;
                     header.LastPaymentMethod = dto.Method;
                     header.PaymentDate = txRow.TransactionDate;
                     header.ReceivedByUserId = staffUserId;
@@ -572,6 +604,16 @@ namespace GymManagement.Infrastructure.Services
                         await CreateOrUpdateFinalInvoiceAsync(header, header.Membership, header.Membership.Plan!, cancellationToken);
 
                     await tx.CommitAsync(cancellationToken);
+
+                    await _audit.LogAsync(
+                        "MembershipPaymentTransaction",
+                        txRow.Id,
+                        "payment_recorded",
+                        staffUserId,
+                        header.Id,
+                        header.UserId,
+                        $"{{\"amount\":{dto.Amount},\"receipt\":\"{txRow.ReceiptNumber}\"}}",
+                        cancellationToken);
                 }
                 catch
                 {
@@ -657,7 +699,9 @@ namespace GymManagement.Infrastructure.Services
                 TotalPendingAmount = pending.Sum(p => p.PendingAmount),
                 OverdueMembersCount = pending.Count(p => p.PaymentStatus == MembershipPaymentStatus.Overdue),
                 TodayCollections = await _db.MembershipPaymentTransactions.AsNoTracking()
-                    .Where(t => !t.IsDeleted && t.TransactionDate >= today && t.TransactionDate < tomorrow)
+                    .Where(t => !t.IsDeleted
+                                && t.Status == MembershipPaymentTransactionStatus.Completed
+                                && t.TransactionDate >= today && t.TransactionDate < tomorrow)
                     .SumAsync(t => t.TransactionAmount, cancellationToken),
                 UpcomingDueCount = pending.Count(p =>
                     p.NextDueDate.HasValue && p.NextDueDate.Value.Date <= today.AddDays(7) && p.PendingAmount > 0),

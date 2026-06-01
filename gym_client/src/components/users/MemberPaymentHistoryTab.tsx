@@ -7,7 +7,13 @@ import { formatInr } from '../../lib/formatInr'
 import { usePermission } from '../../features/auth/hooks/usePermission'
 import { authService } from '../../services/auth.service'
 import { Button } from '../ui/Button'
+import { MembershipFinancialSummaryCard } from '../billing/MembershipFinancialSummaryCard'
 import type { MembershipPaymentDetail } from '../../types/membershipPayment'
+import {
+  computeNetPayable,
+  getMembershipAmount,
+  paymentStatusBadgeClass,
+} from '../billing/membershipPaymentUi'
 
 function statusClass(status: string) {
   const u = status.toLowerCase()
@@ -27,10 +33,24 @@ function lastPaymentDate(row: MembershipPaymentDetail): string | null {
   return row.paymentDate ?? null
 }
 
-export function MemberPaymentHistoryTab({ userId }: { userId: number }) {
+function pickPrimaryBilling(rows: MembershipPaymentDetail[]) {
+  const withBalance = rows.find((r) => r.pendingAmount > 0.02)
+  return withBalance ?? rows[0]
+}
+
+export function MemberPaymentHistoryTab({
+  userId,
+  memberName,
+  memberPhotoUrl,
+}: {
+  userId: number
+  memberName?: string
+  memberPhotoUrl?: string | null
+}) {
   const navigate = useNavigate()
   const canPayments = usePermission(authService.permissionCodes.payments)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [ledgerOpen, setLedgerOpen] = useState(true)
 
   const { data = [], isLoading } = useQuery({
     queryKey: ['membership-payments-user', userId],
@@ -42,6 +62,63 @@ export function MemberPaymentHistoryTab({ userId }: { userId: number }) {
   })
 
   const rows = useMemo(() => [...data].sort((a, b) => b.id - a.id), [data])
+  const primary = useMemo(() => (rows.length ? pickPrimaryBilling(rows) : null), [rows])
+
+  const { data: financialSummary } = useQuery({
+    queryKey: ['membership-financial-summary', primary?.membershipId],
+    queryFn: async () => {
+      const { data: d } = await membershipPaymentsService.financialSummary(primary!.membershipId)
+      return d
+    },
+    enabled: !!primary?.membershipId && canPayments,
+  })
+
+  const { data: ledger } = useQuery({
+    queryKey: ['member-ledger', userId],
+    queryFn: async () => {
+      const { data: d } = await membershipPaymentsService.memberLedger(userId)
+      return d
+    },
+    enabled: userId > 0 && canPayments,
+  })
+
+  const summaryFromRow = useMemo(() => {
+    if (!primary) return null
+    const membershipFee = getMembershipAmount(primary)
+    const couponDiscount = primary.couponDiscountAmount ?? 0
+    const net = computeNetPayable(
+      primary.totalAmount,
+      primary.discountAmount,
+      primary.waiverAmount,
+      primary.netPayableAmount,
+      primary.finalBillAmount,
+      couponDiscount,
+    )
+    return {
+      membershipFee,
+      couponDiscount,
+      approvedWaiveOff: primary.waiverAmount,
+      netPayable: net,
+      totalPaid: primary.paidAmount,
+      outstandingBalance: primary.pendingAmount,
+      isOverdue: primary.paymentStatus === 'Overdue',
+    }
+  }, [primary])
+
+  const summary = financialSummary
+    ? {
+        membershipFee: financialSummary.membershipFee,
+        couponDiscount: financialSummary.couponDiscount,
+        approvedWaiveOff: financialSummary.approvedWaiveOff,
+        netPayable: financialSummary.netPayableAmount,
+        totalPaid: financialSummary.totalPaid,
+        outstandingBalance: financialSummary.outstandingBalance,
+        isOverdue: financialSummary.isOverdue,
+      }
+    : summaryFromRow
+
+  const displayName = memberName ?? financialSummary?.memberName ?? ledger?.memberName ?? 'Member'
+  const photo = memberPhotoUrl ?? financialSummary?.memberPhotoUrl ?? ledger?.profilePictureUrl
 
   async function downloadInvoice(paymentId: number) {
     try {
@@ -87,7 +164,119 @@ export function MemberPaymentHistoryTab({ userId }: { userId: number }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+        <div className="flex flex-wrap items-start gap-4">
+          {photo ? (
+            <img src={photo} alt="" className="size-16 rounded-full border border-white/15 object-cover" />
+          ) : (
+            <div className="flex size-16 items-center justify-center rounded-full bg-white/10 text-xl font-semibold text-slate-300">
+              {displayName.charAt(0)}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-semibold text-white">{displayName}</p>
+            <p className="text-sm text-slate-400">Member ID: M-{userId.toString().padStart(5, '0')}</p>
+            {primary?.planName && (
+              <p className="mt-1 text-sm text-slate-300">
+                Current plan: {primary.planName}
+                <span
+                  className={`ml-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${paymentStatusBadgeClass(primary.paymentStatus)}`}
+                >
+                  {primary.paymentStatus}
+                </span>
+              </p>
+            )}
+            {primary && primary.pendingAmount > 0.02 && (
+              <Button
+                type="button"
+                className="mt-3 !py-1.5 text-xs"
+                onClick={() =>
+                  navigate(`/dashboard/payments/collect?membershipId=${primary.membershipId}&userId=${userId}`)
+                }
+              >
+                Collect payment
+              </Button>
+            )}
+          </div>
+        </div>
+        {summary && (
+          <MembershipFinancialSummaryCard
+            className="mt-4"
+            membershipFee={summary.membershipFee}
+            couponDiscount={summary.couponDiscount}
+            approvedWaiveOff={summary.approvedWaiveOff}
+            netPayable={summary.netPayable}
+            totalPaid={summary.totalPaid}
+            outstandingBalance={summary.outstandingBalance}
+            isOverdue={summary.isOverdue}
+          />
+        )}
+      </section>
+
+      {ledger && ledger.periods.length > 0 && (
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <button
+            type="button"
+            onClick={() => setLedgerOpen((o) => !o)}
+            className="flex w-full items-center justify-between text-left text-sm font-semibold text-white"
+          >
+            Member ledger
+            <span className="text-xs text-slate-500">{ledgerOpen ? 'Hide' : 'Show'}</span>
+          </button>
+          {ledgerOpen && (
+            <div className="mt-4 space-y-4">
+              {ledger.periods.map((period) => (
+                <div key={period.membershipPaymentId} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <p className="font-medium text-slate-200">{period.planName ?? 'Membership'}</p>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-400 sm:grid-cols-3">
+                    <div>
+                      <dt>Fee</dt>
+                      <dd className="text-slate-200">{formatInr(period.membershipFee)}</dd>
+                    </div>
+                    <div>
+                      <dt>Coupon</dt>
+                      <dd className="text-emerald-300">−{formatInr(period.couponDiscount)}</dd>
+                    </div>
+                    <div>
+                      <dt>Waive-off</dt>
+                      <dd className="text-violet-300">−{formatInr(period.approvedWaiveOff)}</dd>
+                    </div>
+                    <div>
+                      <dt>Net</dt>
+                      <dd className="text-white">{formatInr(period.netPayable)}</dd>
+                    </div>
+                    <div>
+                      <dt>Paid</dt>
+                      <dd>{formatInr(period.totalPaid)}</dd>
+                    </div>
+                    <div>
+                      <dt>Outstanding</dt>
+                      <dd className="text-amber-200">{formatInr(period.outstandingBalance)}</dd>
+                    </div>
+                  </dl>
+                  {period.payments.length > 0 && (
+                    <ul className="mt-3 space-y-1 border-t border-white/10 pt-2 text-xs">
+                      {period.payments.map((t) => (
+                        <li key={t.id} className="flex justify-between gap-2 text-slate-300">
+                          <span>
+                            {t.receiptNumber ?? `#${t.id}`} · {t.transactionMethod}
+                            {t.status && t.status !== 'Completed' && (
+                              <span className="ml-1 text-slate-500">({t.status})</span>
+                            )}
+                          </span>
+                          <span className="tabular-nums">{formatInr(t.transactionAmount)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] shadow-lg backdrop-blur-sm">
         <table className="min-w-[720px] w-full text-left text-sm text-slate-200">
           <thead className="border-b border-white/10 bg-white/[0.04] text-xs uppercase tracking-wide text-slate-400">
@@ -155,7 +344,9 @@ export function MemberPaymentHistoryTab({ userId }: { userId: number }) {
                           type="button"
                           variant="secondary"
                           className="!py-1.5 !text-xs"
-                          onClick={() => navigate(`/dashboard/payments/collect?membershipId=${row.membershipId}&userId=${userId}`)}
+                          onClick={() =>
+                            navigate(`/dashboard/payments/collect?membershipId=${row.membershipId}&userId=${userId}`)
+                          }
                         >
                           Collect
                         </Button>
@@ -195,7 +386,7 @@ export function MemberPaymentHistoryTab({ userId }: { userId: number }) {
                                   eventType: 'payment',
                                   occurredAt: t.transactionDate,
                                   amount: t.transactionAmount,
-                                  label: `Payment: ${formatInr(t.transactionAmount)}`,
+                                  label: `${t.receiptNumber ? t.receiptNumber + ' · ' : ''}Payment: ${formatInr(t.transactionAmount)}${t.status && t.status !== 'Completed' ? ` (${t.status})` : ''}`,
                                 }))
                             ).map((ev, i) => (
                               <li

@@ -81,6 +81,81 @@ namespace GymManagement.API.Controllers
             return File(bytes, "application/pdf", $"membership-invoice-{id}.pdf");
         }
 
+        [HttpGet("financial-summary/by-membership/{membershipId:int}")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<MembershipFinancialSummaryDto>> FinancialSummary(int membershipId, CancellationToken ct)
+        {
+            var dto = await _service.GetFinancialSummaryByMembershipIdAsync(membershipId, ct);
+            return dto == null ? NotFound() : Ok(dto);
+        }
+
+        [HttpGet("{id:int}/check-duplicate")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<DuplicatePaymentCheckDto>> CheckDuplicate(
+            int id,
+            [FromQuery] decimal amount,
+            CancellationToken ct) =>
+            Ok(await _service.CheckDuplicatePaymentAsync(id, amount, ct));
+
+        [HttpGet("transactions")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<IReadOnlyList<MembershipPaymentTransactionListDto>>> Transactions(
+            [FromQuery] MembershipPaymentTransactionQuery query,
+            CancellationToken ct) =>
+            Ok(await _service.ListTransactionsAsync(query, ct));
+
+        [HttpPost("transactions/{transactionId:int}/void")]
+        [HasPermission(PermissionCodes.VoidPayment)]
+        public async Task<ActionResult<MembershipPaymentDto>> VoidTransaction(
+            int transactionId,
+            [FromBody] VoidPaymentTransactionDto dto,
+            CancellationToken ct)
+        {
+            var staffUserId = ResolveStaffUserId();
+            if (!staffUserId.HasValue) return Unauthorized();
+            return Ok(await _service.VoidTransactionAsync(transactionId, dto, staffUserId.Value, ct));
+        }
+
+        [HttpPost("transactions/{transactionId:int}/refund")]
+        [HasPermission(PermissionCodes.RefundPayment)]
+        public async Task<ActionResult<MembershipPaymentDto>> RefundTransaction(
+            int transactionId,
+            [FromBody] RefundPaymentTransactionDto dto,
+            CancellationToken ct)
+        {
+            var staffUserId = ResolveStaffUserId();
+            if (!staffUserId.HasValue) return Unauthorized();
+            return Ok(await _service.RefundTransactionAsync(transactionId, dto, staffUserId.Value, ct));
+        }
+
+        [HttpGet("enterprise-dashboard")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<EnterpriseBillingDashboardDto>> EnterpriseDashboard(CancellationToken ct) =>
+            Ok(await _service.GetEnterpriseDashboardAsync(ct));
+
+        [HttpGet("member-ledger/{userId:int}")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<MemberLedgerDto>> MemberLedger(int userId, CancellationToken ct) =>
+            Ok(await _service.GetMemberLedgerAsync(userId, ct));
+
+        [HttpGet("reports/{reportType}")]
+        [HasPermission(PermissionCodes.Reports)]
+        public async Task<ActionResult<BillingReportDto>> Report(
+            string reportType,
+            [FromQuery] DateTime fromDate,
+            [FromQuery] DateTime toDate,
+            CancellationToken ct) =>
+            Ok(await _service.GetReportAsync(reportType, fromDate, toDate, ct));
+
+        [HttpGet("audit-logs")]
+        [HasPermission(PermissionCodes.ViewFinancialAudit)]
+        public async Task<ActionResult<IReadOnlyList<FinancialAuditLogDto>>> AuditLogs(
+            CancellationToken ct,
+            [FromQuery] int? membershipPaymentId,
+            [FromQuery] int? userId,
+            [FromQuery] int take = 50) =>
+            Ok(await _service.GetAuditLogsAsync(membershipPaymentId, userId, take, ct));
+
         private int? ResolveStaffUserId()
         {
             var raw = User.FindFirstValue(JwtClaimTypes.UserId);

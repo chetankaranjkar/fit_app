@@ -73,13 +73,42 @@ namespace GymManagement.Core.DTOs
     public sealed class MembershipPaymentTransactionDto
     {
         public int Id { get; set; }
+        public string ReceiptNumber { get; set; } = string.Empty;
         public decimal TransactionAmount { get; set; }
         public MembershipPaymentMethod TransactionMethod { get; set; }
+        public MembershipPaymentTransactionStatus Status { get; set; } = MembershipPaymentTransactionStatus.Completed;
         public string? ReferenceNumber { get; set; }
         public DateTime TransactionDate { get; set; }
         public string? Remarks { get; set; }
         public int? CollectedByUserId { get; set; }
         public string? CollectedByName { get; set; }
+        public string? VoidReason { get; set; }
+        public int? VoidedByUserId { get; set; }
+        public string? VoidedByName { get; set; }
+        public DateTime? VoidedDate { get; set; }
+        public decimal? RefundAmount { get; set; }
+        public string? RefundReason { get; set; }
+        public int? RefundedByUserId { get; set; }
+        public string? RefundedByName { get; set; }
+        public DateTime? RefundedDate { get; set; }
+        public DateTime CreatedDate { get; set; }
+    }
+
+    public sealed class MembershipFinancialSummaryDto
+    {
+        public decimal MembershipFee { get; set; }
+        public decimal CouponDiscount { get; set; }
+        public decimal ApprovedWaiveOff { get; set; }
+        public decimal NetPayableAmount { get; set; }
+        public decimal TotalPaid { get; set; }
+        public decimal OutstandingBalance { get; set; }
+        public bool IsFullyPaid { get; set; }
+        public bool IsOverdue { get; set; }
+        public string? PlanName { get; set; }
+        public int UserId { get; set; }
+        public string? MemberName { get; set; }
+        public string? MemberPhotoUrl { get; set; }
+        public string? MemberCode { get; set; }
     }
 
     public sealed class RecordMembershipPaymentInstallmentDto

@@ -7,6 +7,18 @@ public static class PermissionCodes
     public const string CreateUsers = "CreateUsers";
     public const string Config = "Config";
     public const string Payments = "Payments";
+
+    /// <summary>Void membership payment transactions (manager+).</summary>
+    public const string VoidPayment = "VOID_PAYMENT";
+
+    /// <summary>Refund membership payment transactions (admin).</summary>
+    public const string RefundPayment = "REFUND_PAYMENT";
+
+    /// <summary>Approve or reject waive-off requests (admin).</summary>
+    public const string ApproveWaiveOff = "APPROVE_WAIVE_OFF";
+
+    /// <summary>View financial audit logs (admin).</summary>
+    public const string ViewFinancialAudit = "VIEW_FINANCIAL_AUDIT";
     public const string TrainerAccess = "TrainerAccess";
     public const string UsersAccess = "UsersAccess";
 

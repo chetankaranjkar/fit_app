@@ -1132,8 +1132,12 @@ export function UserDetailPage() {
           />
         )}
         {activeTab === 'Graph' && <GraphTab chartData={chartData} logs={logs} />}
-        {activeTab === 'Payment History' && Number.isFinite(id) && id > 0 && (
-          <MemberPaymentHistoryTab userId={id} />
+        {activeTab === 'Payment History' && Number.isFinite(id) && id > 0 && user && (
+          <MemberPaymentHistoryTab
+            userId={id}
+            memberName={userDisplayName}
+            memberPhotoUrl={user.profilePictureUrl}
+          />
         )}
         {activeTab === 'In Action' && (
           <InActionTab

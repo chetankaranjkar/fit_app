@@ -92,6 +92,17 @@ const CollectMembershipPaymentPage = lazy(() =>
 const CouponsPage = lazy(() =>
   import('../pages/CouponsPage').then((m) => ({ default: m.CouponsPage })),
 )
+const MembershipPaymentHistoryPage = lazy(() =>
+  import('../pages/MembershipPaymentHistoryPage').then((m) => ({
+    default: m.MembershipPaymentHistoryPage,
+  })),
+)
+const WaiveOffRequestsPage = lazy(() =>
+  import('../pages/WaiveOffRequestsPage').then((m) => ({ default: m.WaiveOffRequestsPage })),
+)
+const BillingReportsPage = lazy(() =>
+  import('../pages/BillingReportsPage').then((m) => ({ default: m.BillingReportsPage })),
+)
 
 // Retail / POS module
 const RetailProductsPage = lazy(() =>
@@ -299,6 +310,9 @@ const router = createBrowserRouter([
               { path: '/dashboard/user-memberships', element: withSuspense(<UserMembershipsPage />) },
               { path: '/dashboard/payments', element: withSuspense(<PaymentsPage />) },
               { path: '/dashboard/payments/collect', element: withSuspense(<CollectMembershipPaymentPage />) },
+              { path: '/dashboard/payments/history', element: withSuspense(<MembershipPaymentHistoryPage />) },
+              { path: '/dashboard/payments/waive-offs', element: withSuspense(<WaiveOffRequestsPage />) },
+              { path: '/dashboard/payments/reports', element: withSuspense(<BillingReportsPage />) },
               { path: '/dashboard/coupons', element: withSuspense(<CouponsPage />) },
               { path: '/dashboard/retail/products', element: withSuspense(<RetailProductsPage />) },
               { path: '/dashboard/retail/categories', element: withSuspense(<RetailCategoriesPage />) },

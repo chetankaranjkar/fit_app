@@ -353,6 +353,10 @@ namespace GymManagement.Infrastructure.Data
                 new { Code = "CreateUsers", Name = "Can create users", Description = "Create and manage users" },
                 new { Code = "Config", Name = "Config", Description = "System configuration access" },
                 new { Code = "Payments", Name = "Create payments and see payment data", Description = "Create payments and view payment-related data" },
+                new { Code = PermissionCodes.VoidPayment, Name = "Void payments", Description = "Void membership payment transactions" },
+                new { Code = PermissionCodes.RefundPayment, Name = "Refund payments", Description = "Refund membership payment transactions" },
+                new { Code = PermissionCodes.ApproveWaiveOff, Name = "Approve waive-off", Description = "Approve or reject fee waive-off requests" },
+                new { Code = PermissionCodes.ViewFinancialAudit, Name = "Financial audit logs", Description = "View immutable financial audit trail" },
                 new { Code = "TrainerAccess", Name = "Trainer access", Description = "Access to trainer/instructor features" },
                 new { Code = "UsersAccess", Name = "Users access", Description = "Access to users and member data" },
                 new { Code = "CREATE_MEMBER", Name = "Create member", Description = "Create new member / user accounts" },
@@ -420,6 +424,12 @@ namespace GymManagement.Infrastructure.Data
             await LinkAsync("STAFF", PermissionCodes.BookPtSessions);
             await LinkAsync("STAFF", PermissionCodes.ManagePtSchedules);
             await LinkAsync("STAFF", PermissionCodes.ViewPtReports);
+            await LinkAsync("STAFF", PermissionCodes.Payments);
+            await LinkAsync("STAFF", PermissionCodes.VoidPayment);
+            await LinkAsync("ADMIN", PermissionCodes.VoidPayment);
+            await LinkAsync("ADMIN", PermissionCodes.RefundPayment);
+            await LinkAsync("ADMIN", PermissionCodes.ApproveWaiveOff);
+            await LinkAsync("ADMIN", PermissionCodes.ViewFinancialAudit);
             await LinkAsync("TRAINER", PermissionCodes.BookPtSessions);
             await LinkAsync("TRAINER", PermissionCodes.ManagePtSchedules);
             await LinkAsync("TRAINER", PermissionCodes.ViewTrainerEarnings);

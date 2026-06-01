@@ -230,6 +230,8 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IBillingCalculationService, BillingCalculationService>();
 builder.Services.AddScoped<IMembershipPaymentService, MembershipPaymentService>();
+builder.Services.AddScoped<IWaiveOffRequestService, WaiveOffRequestService>();
+builder.Services.AddScoped<IFinancialAuditService, FinancialAuditService>();
 builder.Services.AddScoped<ICouponService, CouponService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IRolePermissionService, RolePermissionService>();

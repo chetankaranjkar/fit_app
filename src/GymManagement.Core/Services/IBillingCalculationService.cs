@@ -16,7 +16,14 @@ namespace GymManagement.Core.Services
     public interface IBillingCalculationService
     {
         BillingAmounts Compute(MembershipPayment header);
-        void RecalculateHeader(MembershipPayment header);
+
+        /// <summary>Sum of completed installment amounts only (voided/refunded excluded).</summary>
+        decimal SumCompletedPayments(IEnumerable<MembershipPaymentTransaction> transactions);
+
+        void RecalculateHeader(MembershipPayment header, IEnumerable<MembershipPaymentTransaction>? transactions = null);
+
+        void ApplyPaidAndPending(MembershipPayment header, IEnumerable<MembershipPaymentTransaction> transactions);
+
         decimal GetNetPayable(MembershipPayment header);
     }
 }

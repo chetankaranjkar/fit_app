@@ -46,5 +46,46 @@ namespace GymManagement.Core.Services
         Task<MembershipPaymentDto> RemoveCouponAsync(
             int membershipPaymentId,
             CancellationToken cancellationToken = default);
+
+        Task<MembershipFinancialSummaryDto?> GetFinancialSummaryByMembershipIdAsync(
+            int membershipId,
+            CancellationToken cancellationToken = default);
+
+        Task<DuplicatePaymentCheckDto> CheckDuplicatePaymentAsync(
+            int membershipPaymentId,
+            decimal amount,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<MembershipPaymentTransactionListDto>> ListTransactionsAsync(
+            MembershipPaymentTransactionQuery query,
+            CancellationToken cancellationToken = default);
+
+        Task<MembershipPaymentDto> VoidTransactionAsync(
+            int transactionId,
+            VoidPaymentTransactionDto dto,
+            int staffUserId,
+            CancellationToken cancellationToken = default);
+
+        Task<MembershipPaymentDto> RefundTransactionAsync(
+            int transactionId,
+            RefundPaymentTransactionDto dto,
+            int staffUserId,
+            CancellationToken cancellationToken = default);
+
+        Task<EnterpriseBillingDashboardDto> GetEnterpriseDashboardAsync(CancellationToken cancellationToken = default);
+
+        Task<MemberLedgerDto> GetMemberLedgerAsync(int userId, CancellationToken cancellationToken = default);
+
+        Task<BillingReportDto> GetReportAsync(
+            string reportType,
+            DateTime fromDate,
+            DateTime toDate,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<FinancialAuditLogDto>> GetAuditLogsAsync(
+            int? membershipPaymentId,
+            int? userId,
+            int take,
+            CancellationToken cancellationToken = default);
     }
 }

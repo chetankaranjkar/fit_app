@@ -19,6 +19,7 @@ import {
   DashboardSubpageShell,
   DashboardTablePanel,
 } from '../components/layout/DashboardSubpageShell'
+import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -333,7 +334,7 @@ export function AttendancePage() {
         showExport={false}
         primaryAction={{ label: '+ Check in member', onClick: openCheckIn }}
       >
-        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetricsGrid cols={4}>
           <MetricCard
             title="Visit logs"
             value={stats.total}
@@ -362,7 +363,7 @@ export function AttendancePage() {
             icon={<Users className="size-5" strokeWidth={2} />}
             caption="Distinct people in range"
           />
-        </div>
+        </DashboardMetricsGrid>
 
         <section
           className="glass-card relative overflow-hidden rounded-2xl border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.07] via-transparent to-rose-500/[0.06]"

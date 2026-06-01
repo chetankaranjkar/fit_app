@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
+import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
@@ -565,7 +566,9 @@ export function UserDetailPage() {
   // Computed stats for hero strip — depends on user/details/attendanceLogs
   const heroStats = useMemo(() => {
     const latestDetail = details.length > 0 ? details[0] : null
-    const bmi = latestDetail?.bmi ?? null
+    const latestWeight = latestDetail?.weight ?? currentMetrics?.weightKg ?? null
+    const latestHeight = latestDetail?.height ?? currentMetrics?.heightCm ?? null
+    const bmi = latestDetail?.bmi ?? calculateBmi(latestWeight, latestHeight)
     const age = user ? getAge(user.dateOfBirth) : null
 
     // attendance streak and totals
@@ -612,8 +615,8 @@ export function UserDetailPage() {
     return {
       age,
       bmi,
-      latestWeight: latestDetail?.weight ?? currentMetrics?.weightKg ?? null,
-      latestHeight: latestDetail?.height ?? currentMetrics?.heightCm ?? null,
+      latestWeight,
+      latestHeight,
       streak,
       visitsThisMonth,
       totalVisits: uniqueDays.size,
@@ -2056,7 +2059,7 @@ function ProfileHero({
           </div>
 
           {/* Quick stats strip */}
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          <DashboardMetricsGrid cols={6} className="mt-6">
             <HeroVital
               label="Age"
               value={heroStats.age != null ? String(heroStats.age) : '—'}
@@ -2093,7 +2096,7 @@ function ProfileHero({
               sublabel={`${heroStats.visitsThisMonth} this month`}
               gradient="from-emerald-400 to-teal-500"
             />
-          </div>
+          </DashboardMetricsGrid>
         </div>
       </div>
     </section>
@@ -2112,7 +2115,7 @@ function HeroVital({
   gradient: string
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur transition hover:border-white/20">
+    <div className="group relative h-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur transition sm:hover:border-white/20">
       <div
         aria-hidden
         className={`pointer-events-none absolute -right-4 -top-4 size-14 rounded-full bg-gradient-to-br ${gradient} opacity-20 blur-xl transition-opacity group-hover:opacity-30`}
@@ -2583,14 +2586,14 @@ function DetailCheckpointCard({
             {bmiCat.label}
           </span>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <DashboardMetricsGrid cols={6} className="mt-3">
           <MiniStat label="Height" value={`${detail.height}`} unit="cm" />
           <MiniStat label="Weight" value={`${detail.weight}`} unit="kg" />
           <MiniStat label="BMI" value={detail.bmi.toFixed(1)} />
           <MiniStat label="BMR" value={detail.bmr.toFixed(0)} unit="kcal" />
           <MiniStat label="Body fat" value={detail.bodyFatPercentage != null ? `${detail.bodyFatPercentage}` : '—'} unit="%" />
           <MiniStat label="Muscle" value={detail.muscleMass != null ? `${detail.muscleMass}` : '—'} unit="kg" />
-        </div>
+        </DashboardMetricsGrid>
         {detail.notes && (
           <p className="mt-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-xs text-slate-300">
             <span className="mr-1 font-semibold text-slate-400">Notes:</span>
@@ -2651,14 +2654,14 @@ function MetricsCheckpointCard({
             {bmiCat?.label ?? 'BMI N/A'}
           </span>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <DashboardMetricsGrid cols={6} className="mt-3">
           <MiniStat label="Height" value={metric.heightCm != null ? `${metric.heightCm}` : '—'} unit="cm" />
           <MiniStat label="Weight" value={`${metric.weightKg}`} unit="kg" />
           <MiniStat label="BMI" value={bmi != null ? bmi.toFixed(1) : '—'} />
           <MiniStat label="BMR" value="—" unit="kcal" />
           <MiniStat label="Body fat" value={metric.bodyFatPct != null ? `${metric.bodyFatPct}` : '—'} unit="%" />
           <MiniStat label="Muscle" value={metric.muscleMassKg != null ? `${metric.muscleMassKg}` : '—'} unit="kg" />
-        </div>
+        </DashboardMetricsGrid>
         {metric.notes && (
           <p className="mt-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-xs text-slate-300">
             <span className="mr-1 font-semibold text-slate-400">Notes:</span>
@@ -2815,7 +2818,7 @@ function BodyMetricsTab({
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
                   Body measurements
                 </p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                <DashboardMetricsGrid cols={6}>
                   <MeasureTile label="Chest" value={currentMetrics.chestCm} unit="cm" />
                   <MeasureTile label="Waist" value={currentMetrics.waistCm} unit="cm" />
                   <MeasureTile label="Hips" value={currentMetrics.hipsCm} unit="cm" />
@@ -2826,7 +2829,7 @@ function BodyMetricsTab({
                   <MeasureTile label="Forearms" value={currentMetrics.forearmsCm} unit="cm" />
                   <MeasureTile label="Calves" value={currentMetrics.calvesCm} unit="cm" />
                   <MeasureTile label="Height" value={currentMetrics.heightCm} unit="cm" />
-                </div>
+                </DashboardMetricsGrid>
               </div>
 
               {currentMetrics.notes && (

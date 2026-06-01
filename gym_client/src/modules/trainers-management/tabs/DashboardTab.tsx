@@ -1,5 +1,6 @@
 import { Activity, CircleDollarSign, UserCheck, Users } from 'lucide-react'
 import { MetricCard } from '../../../components/dashboard/MetricCard'
+import { DashboardMetricsGrid } from '../../../components/layout/DashboardMetricsGrid'
 
 export function TrainersDashboardTab({
   totalTrainers,
@@ -13,7 +14,7 @@ export function TrainersDashboardTab({
   sessionsConducted: number
 }) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <DashboardMetricsGrid cols={4}>
       <MetricCard
         title="Total Trainers"
         value={totalTrainers}
@@ -38,6 +39,6 @@ export function TrainersDashboardTab({
         gradient="from-violet-500 to-fuchsia-500"
         icon={<Activity className="size-5" />}
       />
-    </div>
+    </DashboardMetricsGrid>
   )
 }

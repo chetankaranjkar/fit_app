@@ -136,6 +136,40 @@ export function emptyHealthProfile(userId: number): HealthProfile {
   }
 }
 
+/** Maps API profile to stepper form state (shared by load and post-save sync). */
+export function healthProfileToForm(profile: HealthProfile): UpsertHealthProfilePayload {
+  return {
+    healthOverview: profile.healthOverview ?? '',
+    parqChestPainDuringExercise: profile.parqChestPainDuringExercise,
+    parqDoctorAdvisedAgainstExercise: profile.parqDoctorAdvisedAgainstExercise,
+    parqShortnessOfBreath: profile.parqShortnessOfBreath,
+    parqDizzinessOrFainting: profile.parqDizzinessOrFainting,
+    parqRecentSurgery: profile.parqRecentSurgery,
+    smokingStatus: profile.smokingStatus ?? 'Never',
+    alcoholFrequency: profile.alcoholFrequency ?? 'None',
+    stressLevel: profile.stressLevel ?? 'Moderate',
+    sleepHours: profile.sleepHours ?? 7,
+    doctorName: profile.doctorName ?? '',
+    doctorClinic: profile.doctorClinic ?? '',
+    doctorContactNumber: profile.doctorContactNumber ?? '',
+    markCompleted: true,
+    medicalConditions: profile.medicalConditions.map(({ conditionCode, customConditionName, notes }) => ({
+      conditionCode,
+      customConditionName,
+      notes,
+    })),
+    medications: profile.medications.length
+      ? profile.medications.map(({ medicationName, dosage, reason }) => ({ medicationName, dosage, reason }))
+      : [],
+    injuries: profile.injuries.length
+      ? profile.injuries.map(({ bodyPart, injuryType, status, notes }) => ({ bodyPart, injuryType, status, notes }))
+      : [],
+    emergencyContacts: profile.emergencyContacts.length
+      ? profile.emergencyContacts.map(({ name, relationship, mobile }) => ({ name, relationship, mobile }))
+      : [{ name: '', relationship: '', mobile: '' }],
+  }
+}
+
 export function computePreviewRisk(form: UpsertHealthProfilePayload): HealthRiskLevel {
   const parqYes = [
     form.parqChestPainDuringExercise,

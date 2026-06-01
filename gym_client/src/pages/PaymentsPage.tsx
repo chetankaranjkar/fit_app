@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
+import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -506,7 +507,7 @@ export function PaymentsPage() {
         )}
 
         {enterpriseDash && (
-          <div className="mb-4 grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
+          <DashboardMetricsGrid cols={4} className="mb-4">
             <MetricCard
               title="Outstanding dues"
               value={formatInrWhole(enterpriseDash.outstandingDues)}
@@ -535,10 +536,10 @@ export function PaymentsPage() {
               icon={paymentIcons.avg}
               caption="Audit preserved"
             />
-          </div>
+          </DashboardMetricsGrid>
         )}
 
-        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
+        <DashboardMetricsGrid cols={3}>
           <MetricCard
             title="Transactions"
             value={paymentStats.total}
@@ -560,7 +561,7 @@ export function PaymentsPage() {
             icon={paymentIcons.avg}
             caption="Per payment"
           />
-        </div>
+        </DashboardMetricsGrid>
 
         <DashboardTablePanel
           title="Payment log"

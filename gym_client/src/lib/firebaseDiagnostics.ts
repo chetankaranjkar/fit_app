@@ -5,6 +5,7 @@ export const FIREBASE_AUTHORIZED_HOSTS = [
   '127.0.0.1',
   'tigerfitness.tech',
   'www.tigerfitness.tech',
+  'uat.tigerfitness.tech',
 ] as const
 
 const LOG_PREFIX = '[Firebase OTP]'

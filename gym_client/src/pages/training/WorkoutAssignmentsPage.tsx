@@ -8,6 +8,7 @@ import {
   DashboardSubpageShell,
   DashboardTablePanel,
 } from '../../components/layout/DashboardSubpageShell'
+import { DashboardMetricsGrid } from '../../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../../components/dashboard/MetricCard'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -281,12 +282,12 @@ export function WorkoutAssignmentsPage() {
         showExport={false}
         primaryAction={{ label: '+ Assign plan', onClick: openAssignModal }}
       >
-        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetricsGrid cols={4}>
           <MetricCard title="Assignments" value={stats.total} gradient="from-blue-500 to-indigo-500" icon={<span className="text-lg">A</span>} caption="All-time records" />
           <MetricCard title="Active" value={stats.active} gradient="from-emerald-500 to-teal-500" icon={<span className="text-lg">C</span>} caption="Current plans" />
           <MetricCard title="History" value={stats.history} gradient="from-violet-500 to-fuchsia-500" icon={<span className="text-lg">H</span>} caption="Inactive records" />
           <MetricCard title="Members" value={stats.members} gradient="from-amber-500 to-orange-500" icon={<span className="text-lg">M</span>} caption="Covered members" />
-        </div>
+        </DashboardMetricsGrid>
 
         <DashboardTablePanel
           title="Workout Plan Assignment History"

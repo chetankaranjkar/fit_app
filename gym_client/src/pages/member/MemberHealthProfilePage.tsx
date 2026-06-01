@@ -21,7 +21,10 @@ export function MemberHealthProfilePage() {
       }
     },
     enabled: userId > 0,
+    placeholderData: (previous) => previous,
   })
+
+  const showInitialSkeleton = isLoading && profile === undefined
 
   return (
     <DashboardLayout userName={user?.fullName?.trim() || user?.username?.trim() || 'Member'}>
@@ -31,7 +34,7 @@ export function MemberHealthProfilePage() {
         subtitle="Complete your premium health assessment for safer, smarter training."
         showExport={false}
       >
-        {isLoading ? (
+        {showInitialSkeleton ? (
           <div className="glass-card h-64 animate-pulse rounded-3xl" />
         ) : (
           <HealthProfileStepper userId={userId} initial={profile} mode="member" />

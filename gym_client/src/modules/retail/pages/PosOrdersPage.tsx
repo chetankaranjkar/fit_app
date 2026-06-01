@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../../../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../../../components/layout/DashboardSubpageShell'
+import { DashboardMetricsGrid } from '../../../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../../../components/dashboard/MetricCard'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
@@ -49,12 +50,12 @@ export function PosOrdersPage() {
   return (
     <DashboardLayout userName={userName}>
       <DashboardSubpageShell eyebrow="Retail" titleGradient="POS Orders" subtitle="Sales history and order details." showExport={false}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <MetricCard title="Today Sales" value={dashboard ? formatInr(dashboard.todaySales) : '—'} gradient="from-emerald-400 to-teal-500" caption={`${dashboard?.todayOrders ?? 0} orders`} />
-          <MetricCard title="Month Sales" value={dashboard ? formatInr(dashboard.monthSales) : '—'} gradient="from-blue-500 to-indigo-500" caption={`${dashboard?.monthOrders ?? 0} orders`} />
-          <MetricCard title="Low Stock" value={dashboard?.lowStockCount ?? 0} gradient="from-amber-400 to-orange-500" caption="Need reorder" />
-          <MetricCard title="Expiring Soon" value={dashboard?.expiringSoonCount ?? 0} gradient="from-rose-400 to-pink-500" caption="Within 30 days" />
-        </div>
+        <DashboardMetricsGrid cols={4}>
+          <MetricCard title="Today Sales" value={dashboard ? formatInr(dashboard.todaySales) : '—'} gradient="from-emerald-400 to-teal-500" icon={<span className="text-lg">₹</span>} caption={`${dashboard?.todayOrders ?? 0} orders`} />
+          <MetricCard title="Month Sales" value={dashboard ? formatInr(dashboard.monthSales) : '—'} gradient="from-blue-500 to-indigo-500" icon={<span className="text-lg">M</span>} caption={`${dashboard?.monthOrders ?? 0} orders`} />
+          <MetricCard title="Low Stock" value={dashboard?.lowStockCount ?? 0} gradient="from-amber-400 to-orange-500" icon={<span className="text-lg">!</span>} caption="Need reorder" />
+          <MetricCard title="Expiring Soon" value={dashboard?.expiringSoonCount ?? 0} gradient="from-rose-400 to-pink-500" icon={<span className="text-lg">⏱</span>} caption="Within 30 days" />
+        </DashboardMetricsGrid>
 
         <div className="flex flex-wrap items-center gap-3">
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200" />

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
+import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -227,7 +228,7 @@ export function UserMembershipsPage() {
         subtitle="Assign plans to members and track start dates, end dates, and status."
         primaryAction={{ label: '+ Add membership', onClick: openAdd }}
       >
-        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <DashboardMetricsGrid cols={4}>
           <MetricCard
             title="Total"
             value={membershipStats.total}
@@ -256,7 +257,7 @@ export function UserMembershipsPage() {
             icon={membershipMetricIcons.expired}
             caption="Past end date"
           />
-        </div>
+        </DashboardMetricsGrid>
 
         <DashboardTablePanel
           title="Membership list"

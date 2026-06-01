@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
+import { DashboardMetricsGrid } from '../../../components/layout/DashboardMetricsGrid'
 import { ModulePageShell } from '../components/ModulePageShell'
 import { FilterBar } from '../components/FilterBar'
 import { EmptyState } from '../components/EmptyState'
@@ -382,14 +383,14 @@ function KpiStrip({ data }: { data: Equipment[] }) {
   ]
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <DashboardMetricsGrid cols={6}>
       {cards.map((c) => (
         <div
           key={c.label}
-          className="glass-card dashboard-card group min-w-0 overflow-hidden rounded-2xl p-4 transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.02]"
+          className="glass-card dashboard-card group h-full min-w-0 overflow-hidden rounded-2xl p-4 transition-all duration-300 sm:hover:-translate-y-0.5 sm:hover:scale-[1.01]"
         >
-          <div className="flex items-start justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <div className="flex items-start justify-between gap-2">
+            <p className="line-clamp-2 min-w-0 flex-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               {c.label}
             </p>
             <span
@@ -400,7 +401,7 @@ function KpiStrip({ data }: { data: Equipment[] }) {
           </div>
           <p
             className={[
-              'mt-2 truncate text-2xl font-bold',
+              'mt-2 break-words text-xl font-bold leading-tight sm:text-2xl',
               c.tone === 'danger'
                 ? 'text-rose-300'
                 : c.tone === 'warn'
@@ -413,11 +414,11 @@ function KpiStrip({ data }: { data: Equipment[] }) {
           >
             {c.value}
           </p>
-          {c.hint && <p className="mt-0.5 truncate text-[11px] text-slate-500">{c.hint}</p>}
+          {c.hint && <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{c.hint}</p>}
           <div className={`mt-3 h-1 w-10 rounded-full bg-gradient-to-r ${c.gradient}`} />
         </div>
       ))}
-    </div>
+    </DashboardMetricsGrid>
   )
 }
 

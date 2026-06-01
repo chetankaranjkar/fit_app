@@ -6,6 +6,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { MetricCard } from '../components/dashboard/MetricCard'
+import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
@@ -928,7 +929,7 @@ export function UsersPage() {
         </div>
 
         {/* KPI metrics — same MetricCard pattern as dashboard */}
-        <div ref={cardsRowRef} className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <DashboardMetricsGrid cols={6} innerRef={cardsRowRef}>
           <MetricCard
             className="metric-card"
             title="Total members"
@@ -977,7 +978,7 @@ export function UsersPage() {
             icon={metricIcons.moon}
             caption="Preferred time"
           />
-        </div>
+        </DashboardMetricsGrid>
 
         {/* Members table — glass card like dashboard widgets */}
         <section

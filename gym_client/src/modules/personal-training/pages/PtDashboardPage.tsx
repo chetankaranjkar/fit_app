@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../../../components/layout/DashboardSubpageShell'
 import { MetricCard } from '../../../components/dashboard/MetricCard'
+import { DashboardMetricsGrid } from '../../../components/layout/DashboardMetricsGrid'
 import { ptDashboardService } from '../../../services/personalTraining.service'
 import { formatInr } from '../../../lib/formatInr'
 
@@ -30,12 +31,12 @@ export function PtDashboardPage() {
         {isLoading ? (
           <p className="text-sm text-slate-400">Loading…</p>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard label="Total revenue" value={formatInr(summary?.totalRevenue ?? 0)} />
-            <MetricCard label="Collected" value={formatInr(summary?.totalPaid ?? 0)} />
-            <MetricCard label="Pending" value={formatInr(summary?.totalPending ?? 0)} />
-            <MetricCard label="Packages sold" value={String(summary?.packagesSold ?? 0)} />
-          </div>
+          <DashboardMetricsGrid cols={4}>
+            <MetricCard title="Total revenue" value={formatInr(summary?.totalRevenue ?? 0)} icon={<span />} />
+            <MetricCard title="Collected" value={formatInr(summary?.totalPaid ?? 0)} icon={<span />} />
+            <MetricCard title="Pending" value={formatInr(summary?.totalPending ?? 0)} icon={<span />} />
+            <MetricCard title="Packages sold" value={String(summary?.packagesSold ?? 0)} icon={<span />} />
+          </DashboardMetricsGrid>
         )}
       </DashboardSubpageShell>
     </DashboardLayout>

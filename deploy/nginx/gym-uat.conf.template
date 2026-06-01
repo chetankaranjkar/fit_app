@@ -1,0 +1,117 @@
+# Host Nginx — UAT (uat.tigerfitness.tech). Upstream names are unique so prod + UAT can coexist.
+
+limit_req_zone $binary_remote_addr zone=gym_uat_api_limit:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=gym_uat_login_limit:10m rate=5r/m;
+
+upstream gym_uat_frontend {
+    server 127.0.0.1:${FRONTEND_HOST_PORT};
+    keepalive 8;
+}
+
+upstream gym_uat_api {
+    server 127.0.0.1:${API_HOST_PORT};
+    keepalive 16;
+}
+
+upstream gym_uat_exercise_api {
+    server 127.0.0.1:${EXERCISE_API_HOST_PORT};
+    keepalive 8;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ${DOMAIN};
+
+    ssl_certificate     ${SSL_CERT_PATH}/fullchain.pem;
+    ssl_certificate_key ${SSL_CERT_PATH}/privkey.pem;
+    include /etc/nginx/snippets/ssl-params.conf;
+
+    client_max_body_size 50M;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(self), microphone=(), geolocation=()" always;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 5;
+    gzip_min_length 256;
+    gzip_types
+        text/plain text/css text/javascript application/javascript
+        application/json application/xml image/svg+xml;
+
+    location / {
+        proxy_pass http://gym_uat_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ {
+        limit_req zone=gym_uat_api_limit burst=40 nodelay;
+        proxy_pass http://gym_uat_api/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    location /uploads/ {
+        proxy_pass http://gym_uat_api/uploads/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+
+    location /exercise-api/ {
+        rewrite ^/exercise-api/(.*)$ /$1 break;
+        proxy_pass http://gym_uat_exercise_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 180s;
+    }
+
+    location ~ ^/api/Auth/(login|refresh) {
+        limit_req zone=gym_uat_login_limit burst=10 nodelay;
+        proxy_pass http://gym_uat_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /swagger {
+        return 404;
+    }
+}

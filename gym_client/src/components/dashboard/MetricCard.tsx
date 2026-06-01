@@ -42,8 +42,8 @@ export function MetricCard({
   return (
     <div
       className={[
-        'group glass-card relative overflow-hidden rounded-xl p-3 sm:p-4 transition-all duration-300 hover:-translate-y-0.5',
-        'hover:border-white/20 hover:shadow-[0_6px_20px_-6px_rgba(96,165,250,0.3)]',
+        'group glass-card relative h-full min-w-0 overflow-hidden rounded-xl p-3 sm:p-4 transition-all duration-300',
+        'sm:hover:-translate-y-0.5 hover:border-white/20 sm:hover:shadow-[0_6px_20px_-6px_rgba(96,165,250,0.3)]',
         className || '',
       ].join(' ')}
     >
@@ -53,14 +53,16 @@ export function MetricCard({
         className={`pointer-events-none absolute -right-6 -top-6 size-20 rounded-full opacity-20 blur-xl transition-opacity group-hover:opacity-30 ${blobClass}`}
       />
 
-      <div className="relative flex items-center justify-between gap-2">
+      <div className="relative flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+          <p className="line-clamp-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
             {title}
           </p>
-          <p className="mt-0.5 text-xl font-bold leading-none text-white">{value}</p>
+          <p className="mt-0.5 break-words text-base font-bold leading-tight text-white sm:text-xl">
+            {value}
+          </p>
           {caption && (
-            <p className="mt-1 truncate text-[10px] text-slate-600">{caption}</p>
+            <p className="mt-1 line-clamp-2 text-[10px] text-slate-600">{caption}</p>
           )}
           {delta && (
             <div

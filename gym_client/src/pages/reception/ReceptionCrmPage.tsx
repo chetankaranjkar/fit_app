@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardMetricsGrid } from '../../components/layout/DashboardMetricsGrid'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import { LeadSourceCombobox } from '../../components/reception/LeadSourceCombobox'
@@ -175,7 +176,7 @@ export function ReceptionCrmPage() {
                 Inquiry → follow-up → trial → membership. Dark glass workspace with a live pipeline.
               </p>
               {canCrm && (
-                <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <DashboardMetricsGrid cols={5} className="mt-8">
                   {[
                     { label: "Today's leads", value: dashboardQ.data?.todaysLeads ?? '—', neon: 'text-cyan-300' },
                     { label: "Today's admissions", value: dashboardQ.data?.todaysAdmissions ?? '—', neon: 'text-emerald-300' },
@@ -187,13 +188,13 @@ export function ReceptionCrmPage() {
                       key={s.label}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-lg backdrop-blur-xl"
+                      className="h-full min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-lg backdrop-blur-xl"
                     >
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{s.label}</p>
-                      <p className={`mt-2 text-2xl font-bold tabular-nums ${s.neon}`}>{s.value}</p>
+                      <p className="line-clamp-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">{s.label}</p>
+                      <p className={`mt-2 break-words text-xl font-bold tabular-nums leading-tight sm:text-2xl ${s.neon}`}>{s.value}</p>
                     </motion.div>
                   ))}
-                </div>
+                </DashboardMetricsGrid>
               )}
 
               {canCrm && (

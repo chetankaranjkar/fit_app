@@ -27,7 +27,10 @@ export function UserHealthProfilePage() {
       }
     },
     enabled: Number.isInteger(userId) && userId > 0,
+    placeholderData: (previous) => previous,
   })
+
+  const showInitialSkeleton = isLoading && profile === undefined
 
   if (!Number.isInteger(userId) || userId <= 0) {
     return (
@@ -53,7 +56,7 @@ export function UserHealthProfilePage() {
         subtitle="Modern medical screening & exercise readiness for safe coaching."
         showExport={false}
       >
-        {isLoading ? (
+        {showInitialSkeleton ? (
           <div className="glass-card h-64 animate-pulse rounded-3xl" />
         ) : (
           <HealthProfileStepper userId={userId} initial={profile} mode="staff" />

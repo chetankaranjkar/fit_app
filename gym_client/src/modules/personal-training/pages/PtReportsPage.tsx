@@ -3,6 +3,7 @@ import { DashboardLayout } from '../../../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../../../components/layout/DashboardSubpageShell'
 import { Button } from '../../../components/ui/Button'
 import { MetricCard } from '../../../components/dashboard/MetricCard'
+import { DashboardMetricsGrid } from '../../../components/layout/DashboardMetricsGrid'
 import { ptReportsService } from '../../../services/personalTraining.service'
 import { formatInr } from '../../../lib/formatInr'
 
@@ -42,12 +43,12 @@ export function PtReportsPage() {
         titleGradient="Reports"
         primaryAction={{ label: 'Export CSV', onClick: downloadCsv }}
       >
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label="Revenue" value={formatInr(revenue?.totalRevenue ?? 0)} />
-          <MetricCard label="Paid" value={formatInr(revenue?.totalPaid ?? 0)} />
-          <MetricCard label="Utilization %" value={`${util?.utilizationPercent ?? 0}%`} />
-          <MetricCard label="No-shows" value={String(util?.sessionsNoShow ?? 0)} />
-        </div>
+        <DashboardMetricsGrid cols={4}>
+          <MetricCard title="Revenue" value={formatInr(revenue?.totalRevenue ?? 0)} icon={<span />} />
+          <MetricCard title="Paid" value={formatInr(revenue?.totalPaid ?? 0)} icon={<span />} />
+          <MetricCard title="Utilization %" value={`${util?.utilizationPercent ?? 0}%`} icon={<span />} />
+          <MetricCard title="No-shows" value={String(util?.sessionsNoShow ?? 0)} icon={<span />} />
+        </DashboardMetricsGrid>
         <Button variant="secondary" onClick={() => window.print()}>Print report</Button>
       </DashboardSubpageShell>
     </DashboardLayout>

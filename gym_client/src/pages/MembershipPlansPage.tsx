@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
+import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -176,7 +177,7 @@ export function MembershipPlansPage() {
         subtitle="Define billing tiers with duration and price for member subscriptions."
         primaryAction={{ label: '+ Add plan', onClick: openAdd }}
       >
-        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
+        <DashboardMetricsGrid cols={3}>
           <MetricCard
             title="Plans defined"
             value={planStats.total}
@@ -198,7 +199,7 @@ export function MembershipPlansPage() {
             icon={planMetricIcons.calendar}
             caption="Mean plan length"
           />
-        </div>
+        </DashboardMetricsGrid>
 
         <DashboardTablePanel
           title="Plan list"

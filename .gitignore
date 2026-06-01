@@ -60,6 +60,7 @@ firebase-service-account.json
 !.env.example
 !deploy/.env.testing.example
 !deploy/.env.production.example
+!deploy/.env.uat.example
 exercise_management_api/.env
 deploy/.env
 deploy/backups/

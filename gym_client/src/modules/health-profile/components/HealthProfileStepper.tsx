@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { type FormEvent, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Button } from '../../../components/ui/Button'
@@ -12,6 +12,7 @@ import {
   computePreviewRisk,
   emptyHealthProfile,
   HEALTH_STEPS,
+  healthProfileToForm,
   INJURY_STATUSES,
   INJURY_TYPES,
   MEDICAL_CONDITION_OPTIONS,
@@ -100,41 +101,15 @@ interface Props {
   onSaved?: (profile: HealthProfile) => void
 }
 
+const LAST_STEP = HEALTH_STEPS.length - 1
+
 export function HealthProfileStepper({ userId, initial, mode = 'staff', onSaved }: Props) {
   const queryClient = useQueryClient()
   const [step, setStep] = useState(0)
+  const [saveSuccess, setSaveSuccess] = useState(false)
   const base = initial ?? emptyHealthProfile(userId)
 
-  const [form, setForm] = useState<UpsertHealthProfilePayload>({
-    healthOverview: base.healthOverview ?? '',
-    parqChestPainDuringExercise: base.parqChestPainDuringExercise,
-    parqDoctorAdvisedAgainstExercise: base.parqDoctorAdvisedAgainstExercise,
-    parqShortnessOfBreath: base.parqShortnessOfBreath,
-    parqDizzinessOrFainting: base.parqDizzinessOrFainting,
-    parqRecentSurgery: base.parqRecentSurgery,
-    smokingStatus: base.smokingStatus ?? 'Never',
-    alcoholFrequency: base.alcoholFrequency ?? 'None',
-    stressLevel: base.stressLevel ?? 'Moderate',
-    sleepHours: base.sleepHours ?? 7,
-    doctorName: base.doctorName ?? '',
-    doctorClinic: base.doctorClinic ?? '',
-    doctorContactNumber: base.doctorContactNumber ?? '',
-    markCompleted: true,
-    medicalConditions: base.medicalConditions.map(({ conditionCode, customConditionName, notes }) => ({
-      conditionCode,
-      customConditionName,
-      notes,
-    })),
-    medications: base.medications.length
-      ? base.medications.map(({ medicationName, dosage, reason }) => ({ medicationName, dosage, reason }))
-      : [],
-    injuries: base.injuries.length
-      ? base.injuries.map(({ bodyPart, injuryType, status, notes }) => ({ bodyPart, injuryType, status, notes }))
-      : [],
-    emergencyContacts: base.emergencyContacts.length
-      ? base.emergencyContacts.map(({ name, relationship, mobile }) => ({ name, relationship, mobile }))
-      : [{ name: '', relationship: '', mobile: '' }],
-  })
+  const [form, setForm] = useState<UpsertHealthProfilePayload>(() => healthProfileToForm(base))
 
   const selectedCodes = useMemo(
     () => new Set(form.medicalConditions.map((c) => c.conditionCode)),
@@ -160,8 +135,11 @@ export function HealthProfileStepper({ userId, initial, mode = 'staff', onSaved 
     },
     onSuccess: (data) => {
       toast.success('Health profile saved')
-      queryClient.invalidateQueries({ queryKey: ['health-profile', userId] })
-      queryClient.invalidateQueries({ queryKey: ['health-profile-summary', userId] })
+      queryClient.setQueryData(['health-profile', userId], data)
+      void queryClient.invalidateQueries({ queryKey: ['health-profile-summary', userId] })
+      setForm(healthProfileToForm(data))
+      setSaveSuccess(true)
+      setStep(LAST_STEP)
       onSaved?.(data)
     },
     onError: (err) => toast.error(getApiErrorMessage(err)),
@@ -185,8 +163,24 @@ export function HealthProfileStepper({ userId, initial, mode = 'staff', onSaved 
 
   const otherCondition = form.medicalConditions.find((c) => c.conditionCode === 'Other')
 
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    if (step === LAST_STEP && !saveMutation.isPending) {
+      setSaveSuccess(false)
+      saveMutation.mutate()
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-3xl">
+    <form className="mx-auto max-w-3xl" onSubmit={handleSubmit} noValidate>
+      {saveSuccess && (
+        <div
+          className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100"
+          role="status"
+        >
+          Health profile saved. You can keep editing{mode === 'staff' ? ' or go back to the member profile when finished' : ''}.
+        </div>
+      )}
       {/* Stepper header */}
       <div className="mb-8 overflow-x-auto pb-2">
         <div className="flex min-w-max gap-2">
@@ -626,17 +620,17 @@ export function HealthProfileStepper({ userId, initial, mode = 'staff', onSaved 
           Back
         </Button>
         <div className="flex gap-2">
-          {step < HEALTH_STEPS.length - 1 ? (
+          {step < LAST_STEP ? (
             <Button type="button" onClick={() => setStep((s) => s + 1)}>
               Continue
             </Button>
           ) : (
-            <Button type="button" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+            <Button type="submit" disabled={saveMutation.isPending}>
               {saveMutation.isPending ? 'Saving…' : 'Save Health Profile'}
             </Button>
           )}
         </div>
       </div>
-    </div>
+    </form>
   )
 }

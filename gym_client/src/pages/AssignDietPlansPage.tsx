@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getSafeDashboardReturnPath, parseMemberIdsQuery } from '../lib/safeReturnPath'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
+import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
@@ -342,7 +343,7 @@ export function AssignDietPlansPage() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <DashboardMetricsGrid cols={4}>
           <KpiCard
             label="Total assigns"
             value={stats.total}
@@ -387,7 +388,7 @@ export function AssignDietPlansPage() {
               </svg>
             }
           />
-        </div>
+        </DashboardMetricsGrid>
 
         {/* Controls */}
         <div className="glass-card flex flex-col gap-3 rounded-2xl border border-white/10 p-3 sm:flex-row sm:items-center">
@@ -617,7 +618,7 @@ function KpiCard({
   gradient: string
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.55)] p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/20">
+    <div className="group relative h-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.55)] p-4 transition-all duration-300 sm:hover:-translate-y-0.5 sm:hover:border-white/20">
       <div
         aria-hidden
         className={`pointer-events-none absolute -right-6 -top-6 size-24 rounded-full bg-gradient-to-br ${gradient} opacity-20 blur-2xl transition-opacity group-hover:opacity-30`}

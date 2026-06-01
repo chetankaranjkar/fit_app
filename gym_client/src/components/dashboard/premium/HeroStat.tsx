@@ -26,8 +26,8 @@ export function HeroStat({
   return (
     <article
       className={[
-        'relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4',
-        'backdrop-blur-xl transition-all duration-200 hover:border-white/15',
+        'relative h-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4',
+        'backdrop-blur-xl transition-all duration-200 sm:hover:border-white/15',
       ].join(' ')}
     >
       <span
@@ -35,9 +35,9 @@ export function HeroStat({
         className={`pointer-events-none absolute -right-6 -top-6 size-24 rounded-full bg-gradient-to-br blur-2xl ${ring[role]}`}
       />
       <div className="relative flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-white">
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</p>
+          <p className="mt-1 break-words text-xl font-bold tabular-nums leading-tight text-white sm:text-2xl">
             {numericValue != null && format ? (
               <AnimatedStat value={numericValue} format={format} />
             ) : (

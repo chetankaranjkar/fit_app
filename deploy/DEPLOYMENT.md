@@ -4,6 +4,8 @@ Production deployment for this repository using **Docker Compose**, **host Nginx
 
 > **No domain yet?** Use **[DEPLOYMENT-TESTING.md](./DEPLOYMENT-TESTING.md)** — access the app at `http://YOUR_VPS_IP` with no DNS or SSL.
 
+> **UAT environment?** Use **[DEPLOYMENT-UAT.md](./DEPLOYMENT-UAT.md)** — `https://uat.tigerfitness.tech` on the same VPS with separate ports and SSL.
+
 ---
 
 ## What you are deploying

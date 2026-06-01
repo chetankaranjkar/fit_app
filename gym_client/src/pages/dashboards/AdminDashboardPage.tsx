@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { HeroStat } from '../../components/dashboard/premium/HeroStat'
+import { DashboardMetricsGrid } from '../../components/layout/DashboardMetricsGrid'
 import { QuickAction } from '../../components/dashboard/premium/QuickAction'
 import { TrendAreaChart } from '../../components/dashboard/premium/TrendAreaChart'
 import { getDashboardUser } from '../../lib/dashboardUser'
@@ -48,7 +49,7 @@ export function AdminDashboardPage() {
           <p className="mt-2 max-w-xl text-sm text-slate-400">
             Revenue, memberships, and operations at a glance — only what matters today.
           </p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <DashboardMetricsGrid cols={5} className="mt-6">
             <HeroStat
               role="admin"
               label="Today's revenue"
@@ -63,7 +64,7 @@ export function AdminDashboardPage() {
               label="Attendance today"
               numericValue={isLoading ? 0 : data?.attendanceToday ?? 0}
             />
-          </div>
+          </DashboardMetricsGrid>
         </header>
 
         {canBillingDash ? (
@@ -82,7 +83,7 @@ export function AdminDashboardPage() {
                 Collect payment
               </Link>
             </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <DashboardMetricsGrid cols={6} className="mt-6">
               <HeroStat role="admin" label="Pending invoices" numericValue={billingDash?.pendingPaymentsCount ?? 0} />
               <HeroStat
                 role="admin"
@@ -99,7 +100,7 @@ export function AdminDashboardPage() {
               />
               <HeroStat role="admin" label="Due soon" numericValue={billingDash?.upcomingDueCount ?? 0} />
               <HeroStat role="admin" label="Partial pay" numericValue={billingDash?.partialMembersCount ?? 0} />
-            </div>
+            </DashboardMetricsGrid>
           </section>
         ) : null}
 

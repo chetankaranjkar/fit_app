@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
+import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
@@ -474,24 +475,24 @@ function StatsStrip({ trainer: t }: { trainer: Trainer }) {
   ]
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <DashboardMetricsGrid cols={6}>
       {items.map((i) => (
         <div
           key={i.label}
-          className="glass-card relative overflow-hidden rounded-2xl p-4"
+          className="glass-card relative h-full min-w-0 overflow-hidden rounded-2xl p-4"
         >
           <div
             aria-hidden
             className={`pointer-events-none absolute -right-6 -top-6 size-20 rounded-full bg-gradient-to-br ${i.accent} opacity-20 blur-2xl`}
           />
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          <p className="line-clamp-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             {i.label}
           </p>
-          <p className="mt-1.5 text-xl font-bold text-white">{i.value}</p>
-          {i.sub && <p className="mt-0.5 truncate text-[11px] text-slate-500">{i.sub}</p>}
+          <p className="mt-1.5 break-words text-lg font-bold leading-tight text-white sm:text-xl">{i.value}</p>
+          {i.sub && <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{i.sub}</p>}
         </div>
       ))}
-    </div>
+    </DashboardMetricsGrid>
   )
 }
 

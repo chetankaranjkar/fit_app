@@ -6,6 +6,7 @@ import {
   DashboardSubpageShell,
   DashboardTablePanel,
 } from '../../components/layout/DashboardSubpageShell'
+import { DashboardMetricsGrid } from '../../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../../components/dashboard/MetricCard'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -339,7 +340,7 @@ export function ProgramsPage() {
         showExport={false}
         primaryAction={{ label: '+ New program', onClick: handleOpenCreate }}
       >
-        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetricsGrid cols={4}>
           <MetricCard
             title="Total programs"
             value={stats.total}
@@ -368,7 +369,7 @@ export function ProgramsPage() {
             icon={<span className="text-lg">C</span>}
             caption="From logged sessions"
           />
-        </div>
+        </DashboardMetricsGrid>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           {filtered.slice(0, 4).map((plan) => (

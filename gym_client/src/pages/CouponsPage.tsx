@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
+import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -239,7 +240,7 @@ export function CouponsPage() {
         showExport={false}
       >
         {/* Analytics Cards */}
-        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <DashboardMetricsGrid cols={6}>
           <MetricCard
             title="Active"
             value={analytics?.activeCoupons ?? 0}
@@ -286,7 +287,7 @@ export function CouponsPage() {
             icon={icons.discount}
             caption="Invoices with coupon / paid billing"
           />
-        </div>
+        </DashboardMetricsGrid>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">

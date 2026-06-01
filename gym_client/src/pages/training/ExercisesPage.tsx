@@ -5,6 +5,7 @@ import {
   DashboardSubpageShell,
   DashboardTablePanel,
 } from '../../components/layout/DashboardSubpageShell'
+import { DashboardMetricsGrid } from '../../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../../components/dashboard/MetricCard'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -316,7 +317,7 @@ export function ExercisesPage() {
         showExport={false}
         primaryAction={{ label: '+ Add exercise', onClick: handleOpenCreate }}
       >
-        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetricsGrid cols={4}>
           <MetricCard
             title="Exercises"
             value={stats.total}
@@ -345,7 +346,7 @@ export function ExercisesPage() {
             icon={<span className="text-lg">S</span>}
             caption="Instruction depth"
           />
-        </div>
+        </DashboardMetricsGrid>
 
         <DashboardTablePanel
           title="Exercise Library"

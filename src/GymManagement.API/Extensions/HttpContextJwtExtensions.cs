@@ -6,8 +6,13 @@ namespace GymManagement.API.Extensions;
 /// <summary>Typed access to JWT context attached by <see cref="JwtUserContextMiddleware"/>.</summary>
 public static class HttpContextJwtExtensions
 {
-    public static int? GetJwtAuthUserId(this HttpContext httpContext) =>
-        httpContext.Items.TryGetValue(JwtUserContextMiddleware.AuthUserIdKey, out var v) && v is int id ? id : null;
+    public static int? GetJwtAuthUserId(this HttpContext httpContext)
+    {
+        if (httpContext.Items.TryGetValue(JwtUserContextMiddleware.AuthUserIdKey, out var v) && v is int id)
+            return id;
+
+        return httpContext.User.GetAuthUserId();
+    }
 
     public static int? GetJwtProfileUserId(this HttpContext httpContext) =>
         httpContext.Items.TryGetValue(JwtUserContextMiddleware.ProfileUserIdKey, out var v) && v is int id ? id : null;

@@ -1,5 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using GymManagement.API.Extensions;
 using GymManagement.Core.Services;
 
 namespace GymManagement.API.Middleware;
@@ -22,10 +22,9 @@ public sealed class JwtUserContextMiddleware
     {
         if (context.User.Identity?.IsAuthenticated == true)
         {
-            var sub = context.User.FindFirstValue(JwtRegisteredClaimNames.Sub)
-                ?? context.User.FindFirstValue(ClaimTypes.Name);
-            if (int.TryParse(sub, out var authUserId))
-                context.Items[AuthUserIdKey] = authUserId;
+            var authUserId = context.User.GetAuthUserId();
+            if (authUserId != null)
+                context.Items[AuthUserIdKey] = authUserId.Value;
 
             var userIdClaim = context.User.FindFirstValue(JwtClaimTypes.UserId);
             if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out var profileUserId))

@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
@@ -35,7 +35,21 @@ function formatDate(iso: string) {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString()
 }
 
-const statusOptions: MembershipStatus[] = ['Active', 'Expired', 'Paused']
+const statusOptions: MembershipStatus[] = [
+  'Active',
+  'ActivePendingPayment',
+  'PartialPayment',
+  'Paused',
+  'Expired',
+]
+
+const statusLabel: Record<MembershipStatus, string> = {
+  Active: 'Active',
+  ActivePendingPayment: 'Active (Pending Payment)',
+  PartialPayment: 'Partial Payment',
+  Paused: 'Paused',
+  Expired: 'Expired',
+}
 
 /** Add days to a date string (YYYY-MM-DD), return YYYY-MM-DD */
 function addDays(dateStr: string, days: number): string {
@@ -83,6 +97,7 @@ const membershipMetricIcons = {
 
 export function UserMembershipsPage() {
   const { userName } = getDashboardUser()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<UserMembership | null>(null)
@@ -90,11 +105,13 @@ export function UserMembershipsPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('')
+  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
   const [listSearch, setListSearch] = useState('')
   const [debouncedListSearch, setDebouncedListSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | MembershipStatus>('all')
   const [page, setPage] = useState(1)
   const pageSize = 50
+  const memberDropdownRef = useRef<HTMLDivElement>(null)
 
   const { data: membershipsPage, isLoading, isFetching } = useQuery({
     queryKey: ['user-memberships-paged', page, pageSize, debouncedListSearch, statusFilter],
@@ -131,6 +148,17 @@ export function UserMembershipsPage() {
     const timer = window.setTimeout(() => setDebouncedMemberSearch(memberSearch.trim()), 250)
     return () => window.clearTimeout(timer)
   }, [memberSearch])
+
+  useEffect(() => {
+    if (!memberDropdownOpen) return
+    const onDocClick = (event: MouseEvent) => {
+      if (!memberDropdownRef.current?.contains(event.target as Node)) {
+        setMemberDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [memberDropdownOpen])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedListSearch(listSearch.trim()), 250)
@@ -201,6 +229,7 @@ export function UserMembershipsPage() {
     setFormError(null)
     setMemberSearch('')
     setDebouncedMemberSearch('')
+    setMemberDropdownOpen(false)
     setModalOpen(true)
   }
 
@@ -222,6 +251,7 @@ export function UserMembershipsPage() {
     setEditing(null)
     setForm(defaultCreate)
     setFormError(null)
+    setMemberDropdownOpen(false)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -257,6 +287,8 @@ export function UserMembershipsPage() {
     if (!window.confirm('Delete this membership record?')) return
     deleteMutation.mutate(m.id)
   }
+
+  const selectedMember = users.find((u) => u.id === form.userId)
 
   return (
     <DashboardLayout userName={userName}>
@@ -318,7 +350,7 @@ export function UserMembershipsPage() {
             >
               <option value="all" className="bg-slate-900">All status</option>
               {statusOptions.map((s) => (
-                <option key={s} value={s} className="bg-slate-900">{s}</option>
+                <option key={s} value={s} className="bg-slate-900">{statusLabel[s]}</option>
               ))}
             </select>
           </div>
@@ -358,17 +390,80 @@ export function UserMembershipsPage() {
                       <td className="px-6 py-3 text-slate-300">{formatDate(m.startDate)}</td>
                       <td className="px-6 py-3 text-slate-300">{formatDate(m.endDate)}</td>
                       <td className="px-6 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            m.status === 'Active'
-                              ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
-                              : m.status === 'Paused'
-                                ? 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'
-                                : 'bg-white/5 text-slate-400 ring-1 ring-white/10'
-                          }`}
-                        >
-                          {m.status}
-                        </span>
+                        {(() => {
+                          const baseClass =
+                            'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 transition'
+                          if (m.status === 'PartialPayment') {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(
+                                    `/dashboard/payments/collect?membershipId=${m.id}&userId=${m.userId}`,
+                                  )
+                                }
+                                className={`${baseClass} bg-orange-500/15 text-orange-300 ring-orange-500/30 hover:bg-orange-500/25 hover:text-orange-100 hover:ring-orange-400/40`}
+                                title="Collect remaining amount"
+                              >
+                                {statusLabel[m.status]}
+                              </button>
+                            )
+                          }
+                          if (m.status === 'ActivePendingPayment') {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(
+                                    `/dashboard/payments/collect?membershipId=${m.id}&userId=${m.userId}`,
+                                  )
+                                }
+                                className={`${baseClass} bg-sky-500/15 text-sky-300 ring-sky-500/30 hover:bg-sky-500/25 hover:text-sky-100 hover:ring-sky-400/40`}
+                                title="Open payment collection"
+                              >
+                                {statusLabel[m.status]}
+                              </button>
+                            )
+                          }
+                          if (m.status === 'Paused') {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => openEdit(m)}
+                                className={`${baseClass} bg-amber-500/15 text-amber-300 ring-amber-500/30 hover:bg-amber-500/25 hover:text-amber-100 hover:ring-amber-400/40`}
+                                title="Edit membership status or dates"
+                              >
+                                {statusLabel[m.status]}
+                              </button>
+                            )
+                          }
+                          if (m.status === 'Expired') {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(
+                                    `/dashboard/payments/collect?membershipId=${m.id}&userId=${m.userId}`,
+                                  )
+                                }
+                                className={`${baseClass} bg-white/5 text-slate-300 ring-white/15 hover:bg-white/10 hover:text-white hover:ring-white/30`}
+                                title="Collect renewal payment"
+                              >
+                                {statusLabel[m.status]}
+                              </button>
+                            )
+                          }
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/dashboard/users/${m.userId}`)}
+                              className={`${baseClass} bg-emerald-500/15 text-emerald-300 ring-emerald-500/30 hover:bg-emerald-500/25 hover:text-emerald-100 hover:ring-emerald-400/40`}
+                              title="Open member profile"
+                            >
+                              {statusLabel[m.status]}
+                            </button>
+                          )
+                        })()}
                       </td>
                       <td className="px-6 py-3">
                         <span className="flex flex-wrap gap-2">
@@ -436,32 +531,64 @@ export function UserMembershipsPage() {
           )}
           {!editing && (
             <>
-              <div>
+              <div ref={memberDropdownRef} className="relative">
                 <label className={labelClass}>Member</label>
-                <Input
-                  label=""
-                  value={memberSearch}
-                  onChange={(e) => setMemberSearch(e.target.value)}
-                  placeholder="Search member name, email, phone..."
-                />
-                {usersFetching ? (
-                  <p className="mt-1 text-xs text-slate-500">Searching members…</p>
-                ) : null}
-                <select
-                  value={form.userId}
-                  onChange={(e) => setForm((f) => ({ ...f, userId: Number(e.target.value) }))}
-                  className={selectClass}
-                  required
+                <button
+                  type="button"
+                  onClick={() => setMemberDropdownOpen((v) => !v)}
+                  className={`${selectClass} flex items-center justify-between`}
+                  aria-haspopup="listbox"
+                  aria-label="Select member"
                 >
-                  <option value={0} className="bg-slate-900">
-                    Select member
-                  </option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id} className="bg-slate-900">
-                      {u.firstName} {u.lastName} ({u.email})
-                    </option>
-                  ))}
-                </select>
+                  <span className="truncate text-left">
+                    {selectedMember
+                      ? `${selectedMember.firstName} ${selectedMember.lastName} (${selectedMember.email})`
+                      : form.userId > 0
+                        ? `User #${form.userId}`
+                        : 'Select member'}
+                  </span>
+                  <span className="ml-2 text-slate-400">▾</span>
+                </button>
+                {memberDropdownOpen ? (
+                  <div
+                    className="absolute z-50 mt-1 w-full rounded-xl border border-white/12 bg-slate-950/95 p-2 shadow-2xl shadow-blue-950/40 backdrop-blur-xl"
+                    role="listbox"
+                    aria-label="Member options"
+                  >
+                    <Input
+                      label="Search member"
+                      value={memberSearch}
+                      onChange={(e) => setMemberSearch(e.target.value)}
+                      placeholder="Search member name, email, phone..."
+                    />
+                    {usersFetching ? (
+                      <p className="mt-2 px-2 text-xs text-slate-500">Searching members…</p>
+                    ) : users.length === 0 ? (
+                      <p className="mt-2 px-2 text-xs text-slate-500">No members found.</p>
+                    ) : (
+                      <div className="mt-2 max-h-56 overflow-auto">
+                        {users.map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            role="option"
+                            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                              form.userId === u.id
+                                ? 'bg-blue-500/20 text-blue-100'
+                                : 'text-slate-200 hover:bg-white/10'
+                            }`}
+                            onClick={() => {
+                              setForm((f) => ({ ...f, userId: u.id }))
+                              setMemberDropdownOpen(false)
+                            }}
+                          >
+                            {u.firstName} {u.lastName} ({u.email})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
               <div>
                 <label className={labelClass}>Plan</label>
@@ -475,6 +602,7 @@ export function UserMembershipsPage() {
                     setForm((f) => ({ ...f, planId, endDate: end }))
                   }}
                   className={selectClass}
+                  aria-label="Select plan"
                   required
                 >
                   <option value={0} className="bg-slate-900">
@@ -530,10 +658,11 @@ export function UserMembershipsPage() {
                 setForm((f) => ({ ...f, status: e.target.value as MembershipStatus }))
               }
               className={selectClass}
+              aria-label="Select membership status"
             >
               {statusOptions.map((s) => (
                 <option key={s} value={s} className="bg-slate-900">
-                  {s}
+                  {statusLabel[s]}
                 </option>
               ))}
             </select>

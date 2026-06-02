@@ -1,18 +1,16 @@
 # UAT stack — runs beside production on the same VPS (different host ports + volumes).
 #
-#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.uat.yml \
-#     --env-file deploy/.env.uat up -d
-#
-# Public URL: https://uat.tigerfitness.tech (host Nginx — see deploy/scripts/setup-nginx-uat.sh)
+# Public URL: https://uat.tigerfitness.tech
 
 name: gym-uat
 
 services:
   sqlserver:
     container_name: gym-uat-sqlserver
-    # Replace base compose ports (else both 1434:1433 and 127.0.0.1:1434:1433 bind → "address already in use").
+
+    # Expose SQL Server publicly on port 1434
     ports: !override
-      - "127.0.0.1:${SQLSERVER_PUBLISH_PORT:-1434}:1433"
+      - "${SQLSERVER_PUBLISH_PORT:-1434}:1433"
 
   redis:
     container_name: gym-uat-redis
@@ -37,5 +35,6 @@ services:
 volumes:
   sqlserver_data:
     name: gym_uat_sqlserver_data
+
   api_uploads:
     name: gym_uat_api_uploads

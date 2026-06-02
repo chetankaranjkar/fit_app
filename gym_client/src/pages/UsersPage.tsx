@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DataPageSection, DataPageShell } from '../components/layout/DataPageShell'
 import {
@@ -294,6 +294,7 @@ export function UsersPage() {
   const { start: startMembersTour } = useWalkthrough('members')
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { userName } = getDashboardUser()
   const queryClient = useQueryClient()
   const [isAdding, setIsAdding] = useState(false)
@@ -329,6 +330,10 @@ export function UsersPage() {
     media.addListener(update)
     return () => media.removeListener(update)
   }, [])
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get('q') ?? '')
+  }, [searchParams])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearchQuery(searchQuery.trim()), 250)

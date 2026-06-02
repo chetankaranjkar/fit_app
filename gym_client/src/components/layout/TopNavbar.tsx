@@ -7,6 +7,7 @@ import { dashboardService } from '../../services/dashboard.service'
 import { meService } from '../../services/me.service'
 import type { MeNotification } from '../../services/me.service'
 import type { DashboardAlert } from '../../services/dashboard.service'
+import { GlobalSearch } from './GlobalSearch'
 
 interface TopNavbarProps {
   userName: string
@@ -169,21 +170,12 @@ export function TopNavbar({
       {/* Title (mobile only — keeps desktop airy) */}
       <h1 className="truncate text-base font-semibold text-white lg:hidden">{title}</h1>
 
-      {/* Search */}
-      <div className="ml-2 hidden max-w-sm flex-1 md:flex">
-        <div className="group relative w-full">
-          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400 group-focus-within:text-blue-300">
-            <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
-            </svg>
-          </span>
-          <input
-            type="search"
-            placeholder="Search members, trainers, plans…"
-            className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 transition focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
-          />
+      {/* Global search (staff) */}
+      {dashboardRole !== 'member' ? (
+        <div className="ml-2 hidden min-w-0 max-w-sm flex-1 md:block">
+          <GlobalSearch />
         </div>
-      </div>
+      ) : null}
 
       <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
         {expiryLabel && (

@@ -10,7 +10,8 @@ name: gym-uat
 services:
   sqlserver:
     container_name: gym-uat-sqlserver
-    ports:
+    # Replace base compose ports (else both 1434:1433 and 127.0.0.1:1434:1433 bind → "address already in use").
+    ports: !override
       - "127.0.0.1:${SQLSERVER_PUBLISH_PORT:-1434}:1433"
 
   redis:
@@ -20,17 +21,17 @@ services:
     container_name: gym-uat-api
     environment:
       ASPNETCORE_ENVIRONMENT: Staging
-    ports:
+    ports: !override
       - "127.0.0.1:${API_HOST_PORT:-5105}:8080"
 
   exercise-api:
     container_name: gym-uat-exercise-api
-    ports:
+    ports: !override
       - "127.0.0.1:${EXERCISE_API_HOST_PORT:-4301}:4300"
 
   frontend:
     container_name: gym-uat-frontend
-    ports:
+    ports: !override
       - "127.0.0.1:${FRONTEND_HOST_PORT:-8081}:80"
 
 volumes:

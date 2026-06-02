@@ -698,7 +698,7 @@ namespace GymManagement.Infrastructure.Services
                 if (string.IsNullOrEmpty(current))
                     throw new ArgumentException("Current password is required.");
                 if (!PasswordHasher.Verify(current, authUser.PasswordHash))
-                    throw new UnauthorizedAccessException("Current password is incorrect.");
+                    throw new ArgumentException("Current password is incorrect.");
             }
 
             authUser.PasswordHash = PasswordHasher.Hash(newPassword);

@@ -165,10 +165,6 @@ namespace GymManagement.API.Controllers
                 await _authService.ChangePasswordAsync(authUserId.Value, dto);
                 return Ok(new { message = "Password updated successfully." });
             }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
             catch (ArgumentException ex)
             {
                 return BadRequest(new { message = ex.Message });

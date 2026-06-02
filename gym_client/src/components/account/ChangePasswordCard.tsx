@@ -5,9 +5,10 @@ import { authService } from '../../services/auth.service'
 import { getApiErrorMessage } from '../../lib/apiErrors'
 
 export function ChangePasswordCard() {
-  const { data: account, isLoading: accountLoading } = useQuery({
+  const { data: account, isLoading: accountLoading, isError: accountError } = useQuery({
     queryKey: ['auth-account'],
     queryFn: () => authService.getAccount(),
+    retry: false,
   })
 
   const requiresCurrent = account?.requiresCurrentPassword ?? true
@@ -52,12 +53,17 @@ export function ChangePasswordCard() {
         <p className="text-sm text-slate-400">Loading account…</p>
       ) : (
         <>
-          {email ? (
+          {accountError ? (
+            <p className="mb-4 text-sm text-slate-400">
+              Could not load account details. You can still update your password below.
+            </p>
+          ) : null}
+          {!accountError && email ? (
             <p className="mb-4 text-sm text-slate-400">
               Login email: <span className="text-white">{email}</span>
             </p>
           ) : null}
-          {!requiresCurrent ? (
+          {!accountError && !requiresCurrent ? (
             <p className="mb-4 text-sm text-amber-200/90">
               You sign in with phone OTP. Set a password here to also sign in with email and password.
             </p>

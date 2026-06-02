@@ -51,12 +51,17 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
 
   Future<void> _save() async {
     if (_saving || _uploadingPhoto) return;
+    final phone = _phone.text.trim();
+    if (phone.isNotEmpty && !RegExp(r'^\d{10}$').hasMatch(phone)) {
+      _showError('Update failed', 'Phone number must be exactly 10 digits.');
+      return;
+    }
     setState(() => _saving = true);
     try {
       await MeService.instance.updateProfile(
         firstName: _first.text.trim(),
         lastName: _last.text.trim(),
-        phone: _phone.text.trim().isEmpty ? '' : _phone.text.trim(),
+        phone: phone.isEmpty ? '' : phone,
         profilePictureUrl: (_photoUrl ?? '').trim().isEmpty ? '' : _photoUrl!.trim(),
       );
       if (!mounted) return;
@@ -160,7 +165,13 @@ class _ProfileEditSheetState extends ConsumerState<ProfileEditSheet> {
               const SizedBox(height: AppSpacing.lg),
               _LabeledField(label: 'First name', controller: _first),
               _LabeledField(label: 'Last name', controller: _last),
-              _LabeledField(label: 'Phone', controller: _phone, keyboardType: TextInputType.phone),
+              _LabeledField(
+                label: 'Phone',
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                maxLength: 10,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
               const SizedBox(height: AppSpacing.xl),
               Row(
                 children: [
@@ -343,11 +354,15 @@ class _LabeledField extends StatelessWidget {
     required this.label,
     required this.controller,
     this.keyboardType,
+    this.maxLength,
+    this.inputFormatters,
   });
 
   final String label;
   final TextEditingController controller;
   final TextInputType? keyboardType;
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -361,6 +376,8 @@ class _LabeledField extends StatelessWidget {
           CupertinoTextField(
             controller: controller,
             keyboardType: keyboardType,
+            maxLength: maxLength,
+            inputFormatters: inputFormatters,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
             decoration: BoxDecoration(
               color: AppColors.resolveSurfaceAlt(context),

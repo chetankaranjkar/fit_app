@@ -5,6 +5,7 @@ using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
+using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
 using GymManagement.Infrastructure.Security;
@@ -184,18 +185,19 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<UserDto> CreateUserAsync(CreateUserDto createUserDto)
         {
-            if (!string.IsNullOrWhiteSpace(createUserDto.Phone))
+            var normalizedPhone = PhoneNumberValidator.NormalizeOptionalPhone(createUserDto.Phone);
+            if (!string.IsNullOrWhiteSpace(normalizedPhone))
             {
-                var phoneExists = await _unitOfWork.Users.ExistsAsync(u => u.Phone == createUserDto.Phone);
+                var phoneExists = await _unitOfWork.Users.ExistsAsync(u => u.Phone == normalizedPhone);
                 if (phoneExists)
-                    throw new ConflictException($"A user with phone number '{createUserDto.Phone}' already exists.");
+                    throw new ConflictException($"A user with phone number '{normalizedPhone}' already exists.");
             }
 
             var user = new User
             {
                 FirstName = createUserDto.FirstName,
                 LastName = createUserDto.LastName,
-                Phone = createUserDto.Phone,
+                Phone = normalizedPhone,
                 DateOfBirth = createUserDto.DateOfBirth,
                 Gender = createUserDto.Gender,
                 Address = createUserDto.Address,
@@ -339,10 +341,12 @@ namespace GymManagement.Infrastructure.Services
                 user.LastName = updateUserDto.LastName;
             if (updateUserDto.Phone != null)
             {
-                var phoneTaken = await _unitOfWork.Users.ExistsAsync(u => u.Phone == updateUserDto.Phone && u.Id != id);
+                var normalizedPhone = PhoneNumberValidator.NormalizeOptionalPhone(updateUserDto.Phone);
+                var phoneTaken = normalizedPhone != null
+                    && await _unitOfWork.Users.ExistsAsync(u => u.Phone == normalizedPhone && u.Id != id);
                 if (phoneTaken)
-                    throw new ConflictException($"A user with phone number '{updateUserDto.Phone}' already exists.");
-                user.Phone = updateUserDto.Phone;
+                    throw new ConflictException($"A user with phone number '{normalizedPhone}' already exists.");
+                user.Phone = normalizedPhone;
             }
             if (updateUserDto.DateOfBirth.HasValue)
                 user.DateOfBirth = updateUserDto.DateOfBirth.Value;

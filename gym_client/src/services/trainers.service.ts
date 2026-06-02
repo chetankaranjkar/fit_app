@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import type { ApiPagedResponse } from '../types/apiPaged'
 import type {
   Trainer,
   TrainerStats,
@@ -19,6 +20,23 @@ import type {
 export const trainersService = {
   /* Core CRUD */
   getStats: () => api.get<TrainerStats>('/Trainers/stats'),
+  getPaged: (params: {
+    page: number
+    pageSize: number
+    search?: string
+    isActive?: boolean
+    sortBy?: string
+    sortDir?: 'asc' | 'desc'
+  }) => {
+    const query = new URLSearchParams()
+    query.set('page', String(params.page))
+    query.set('pageSize', String(params.pageSize))
+    if (params.search?.trim()) query.set('search', params.search.trim())
+    if (params.isActive != null) query.set('isActive', String(params.isActive))
+    if (params.sortBy) query.set('sortBy', params.sortBy)
+    if (params.sortDir) query.set('sortDir', params.sortDir)
+    return api.get<ApiPagedResponse<Trainer>>(`/Trainers/paged?${query.toString()}`)
+  },
   getAll: () => api.get<Trainer[]>('/Trainers'),
   getById: (id: number) => api.get<Trainer>(`/Trainers/${id}`),
   create: (data: CreateTrainerDto) => api.post<Trainer>('/Trainers', data),

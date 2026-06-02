@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
@@ -29,6 +30,22 @@ namespace GymManagement.API.Controllers
         {
             var stats = await _trainerService.GetTrainerStatsAsync();
             return Ok(stats);
+        }
+
+        [HttpGet("paged")]
+        public async Task<ActionResult<ApiPagedResponse<TrainerDto>>> GetPagedTrainers(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 25,
+            [FromQuery] string? search = null,
+            [FromQuery] bool? isActive = null,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] string? sortDir = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 200);
+            var result = await _trainerService.GetPagedAsync(
+                safePage, safePageSize, search, isActive, sortBy, sortDir);
+            return Ok(ApiPagedResponse<TrainerDto>.From(result));
         }
 
         [HttpGet]

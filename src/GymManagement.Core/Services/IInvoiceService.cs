@@ -1,9 +1,18 @@
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 
 namespace GymManagement.Core.Services
 {
     public interface IInvoiceService
     {
+        Task<PagedResultDto<InvoiceDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            string? status = null,
+            string? sortBy = null,
+            string? sortDir = null);
+
         Task<IEnumerable<InvoiceDto>> GetAllAsync();
         Task<IEnumerable<InvoiceDto>> GetByMembershipIdAsync(int membershipId);
         Task<IEnumerable<InvoiceDto>> GetByUserIdAsync(int userId);

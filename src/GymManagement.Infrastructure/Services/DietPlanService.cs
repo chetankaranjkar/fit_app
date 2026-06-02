@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
@@ -22,6 +23,69 @@ namespace GymManagement.Infrastructure.Services
         {
             var plans = await _unitOfWork.DietPlans.GetAllAsync();
             return plans.Select(MapPlanToDto);
+        }
+
+        public async Task<PagedResultDto<DietPlanDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            string? goalType = null,
+            bool? isActive = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 100);
+            var trimmedSearch = search?.Trim();
+            var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
+
+            IQueryable<DietPlan> query = _context.DietPlans.AsNoTracking().Where(p => !p.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(likeSearch))
+            {
+                query = query.Where(p =>
+                    EF.Functions.Like(p.PlanName, likeSearch)
+                    || (p.Description != null && EF.Functions.Like(p.Description, likeSearch)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(goalType) && !goalType.Equals("all", StringComparison.OrdinalIgnoreCase))
+                query = query.Where(p => p.GoalType == goalType);
+
+            if (isActive.HasValue)
+                query = query.Where(p => p.IsActive == isActive.Value);
+
+            var totalCount = await query.CountAsync();
+            var pagePlans = await query
+                .OrderByDescending(p => p.Id)
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToListAsync();
+
+            return new PagedResultDto<DietPlanDto>
+            {
+                Items = pagePlans.Select(MapPlanToDto).ToList(),
+                TotalCount = totalCount,
+                Page = safePage,
+                PageSize = safePageSize,
+            };
+        }
+
+        public async Task<DietPlanStatsDto> GetStatsAsync()
+        {
+            var plansQuery = _context.DietPlans.AsNoTracking().Where(p => !p.IsDeleted);
+            var totalCount = await plansQuery.CountAsync();
+            var activeCount = await plansQuery.CountAsync(p => p.IsActive);
+            var averageCalories = totalCount == 0
+                ? 0
+                : (int)Math.Round(await plansQuery.AverageAsync(p => (double)p.Calories));
+            var mealCount = await _context.DietMeals.AsNoTracking()
+                .CountAsync(m => !m.DietPlan.IsDeleted);
+
+            return new DietPlanStatsDto
+            {
+                TotalCount = totalCount,
+                ActiveCount = activeCount,
+                MealCount = mealCount,
+                AverageCalories = averageCalories,
+            };
         }
 
         public async Task<DietPlanDto?> GetByIdAsync(int id)

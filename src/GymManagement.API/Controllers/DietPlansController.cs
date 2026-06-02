@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Services;
 
 namespace GymManagement.API.Controllers
@@ -25,6 +26,26 @@ namespace GymManagement.API.Controllers
         {
             var list = await _service.GetAllAsync();
             return Ok(list);
+        }
+
+        [HttpGet("paged")]
+        public async Task<ActionResult<PagedResultDto<DietPlanDto>>> GetPaged(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 12,
+            [FromQuery] string? search = null,
+            [FromQuery] string? goalType = null,
+            [FromQuery] bool? isActive = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 100);
+            var result = await _service.GetPagedAsync(safePage, safePageSize, search, goalType, isActive);
+            return Ok(result);
+        }
+
+        [HttpGet("stats")]
+        public async Task<ActionResult<DietPlanStatsDto>> GetStats()
+        {
+            return Ok(await _service.GetStatsAsync());
         }
 
         [HttpGet("{id}")]

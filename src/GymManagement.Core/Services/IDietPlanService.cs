@@ -1,10 +1,18 @@
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 
 namespace GymManagement.Core.Services
 {
     public interface IDietPlanService
     {
         Task<IEnumerable<DietPlanDto>> GetAllAsync();
+        Task<PagedResultDto<DietPlanDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            string? goalType = null,
+            bool? isActive = null);
+        Task<DietPlanStatsDto> GetStatsAsync();
         Task<DietPlanDto?> GetByIdAsync(int id);
         Task<DietPlanDto> CreateAsync(CreateDietPlanDto dto);
         Task<DietPlanDto?> UpdateAsync(int id, UpdateDietPlanDto dto);

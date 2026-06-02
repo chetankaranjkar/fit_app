@@ -9,11 +9,29 @@ import type {
   UpdateDietMealDto,
   CreateDietMealItemDto,
   UpdateDietMealItemDto,
+  PagedDietPlansResponse,
+  DietPlanStats,
 } from '../types/dietPlan'
 
 export const dietPlansService = {
   // Plans
   getAll: () => api.get<DietPlanDto[]>('/DietPlans'),
+  getPaged: (params: {
+    page: number
+    pageSize: number
+    search?: string
+    goalType?: string
+    isActive?: boolean
+  }) => {
+    const query = new URLSearchParams()
+    query.set('page', String(params.page))
+    query.set('pageSize', String(params.pageSize))
+    if (params.search?.trim()) query.set('search', params.search.trim())
+    if (params.goalType && params.goalType !== 'all') query.set('goalType', params.goalType)
+    if (params.isActive != null) query.set('isActive', String(params.isActive))
+    return api.get<PagedDietPlansResponse>(`/DietPlans/paged?${query.toString()}`)
+  },
+  getStats: () => api.get<DietPlanStats>('/DietPlans/stats'),
   getById: (id: number) => api.get<DietPlanDto>(`/DietPlans/${id}`),
   create: (data: CreateDietPlanDto) => api.post<DietPlanDto>('/DietPlans', data),
   update: (id: number, data: UpdateDietPlanDto) =>

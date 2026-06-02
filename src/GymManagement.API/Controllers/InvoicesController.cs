@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 
@@ -19,6 +20,22 @@ namespace GymManagement.API.Controllers
         public InvoicesController(IInvoiceService service)
         {
             _service = service;
+        }
+
+        [HttpGet("paged")]
+        public async Task<ActionResult<ApiPagedResponse<InvoiceDto>>> GetPaged(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 25,
+            [FromQuery] string? search = null,
+            [FromQuery] string? status = null,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] string? sortDir = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 200);
+            var result = await _service.GetPagedAsync(
+                safePage, safePageSize, search, status, sortBy, sortDir);
+            return Ok(ApiPagedResponse<InvoiceDto>.From(result));
         }
 
         [HttpGet]

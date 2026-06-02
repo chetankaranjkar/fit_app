@@ -1,19 +1,73 @@
 using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
 
 namespace GymManagement.Infrastructure.Services
 {
     public class AttendanceLogService : IAttendanceLogService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ApplicationDbContext _context;
 
-        public AttendanceLogService(IUnitOfWork unitOfWork)
+        public AttendanceLogService(IUnitOfWork unitOfWork, ApplicationDbContext context)
         {
             _unitOfWork = unitOfWork;
+            _context = context;
+        }
+
+        public async Task<PagedResultDto<AttendanceLogDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            DateTime? fromDate = null,
+            DateTime? toDate = null,
+            string? sortBy = null,
+            string? sortDir = null)
+        {
+            var (safePage, safePageSize) = PagedQueryHelper.Normalize(page, pageSize);
+            var trimmedSearch = search?.Trim();
+            var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
+
+            // EXPLAIN ANALYZE: filter on AttendanceDate (indexed) then join Users for name search.
+            IQueryable<AttendanceLog> query = _context.AttendanceLogs.AsNoTracking();
+
+            if (fromDate.HasValue)
+                query = query.Where(a => a.AttendanceDate >= fromDate.Value.Date);
+            if (toDate.HasValue)
+                query = query.Where(a => a.AttendanceDate <= toDate.Value.Date);
+
+            if (!string.IsNullOrWhiteSpace(likeSearch))
+            {
+                query = query.Where(a =>
+                    a.UserId.HasValue
+                    && _context.Users.Any(u =>
+                        u.Id == a.UserId
+                        && (EF.Functions.Like(u.FirstName, likeSearch)
+                            || EF.Functions.Like(u.LastName, likeSearch)
+                            || EF.Functions.Like(u.Phone ?? string.Empty, likeSearch))));
+            }
+
+            var isAsc = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
+            query = (sortBy ?? "checkin").Trim().ToLowerInvariant() switch
+            {
+                "date" => isAsc
+                    ? query.OrderBy(a => a.AttendanceDate).ThenBy(a => a.Id)
+                    : query.OrderByDescending(a => a.AttendanceDate).ThenByDescending(a => a.Id),
+                _ => isAsc
+                    ? query.OrderBy(a => a.CheckInTime)
+                    : query.OrderByDescending(a => a.CheckInTime),
+            };
+
+            var totalCount = await query.CountAsync();
+            var pageLogs = await query.Skip((safePage - 1) * safePageSize).Take(safePageSize).ToListAsync();
+            var items = (await MapAttendanceLogsToDtoAsync(pageLogs)).ToList();
+
+            return PagedQueryHelper.ToResult(items, totalCount, safePage, safePageSize);
         }
 
         public async Task<IEnumerable<AttendanceLogDto>> GetAllAttendanceLogsAsync()

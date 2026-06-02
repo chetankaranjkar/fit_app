@@ -75,6 +75,7 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<MembershipPaymentTransaction> MembershipPaymentTransactions { get; set; }
         public DbSet<WaiveOffRequest> WaiveOffRequests { get; set; }
         public DbSet<FinancialAuditLog> FinancialAuditLogs { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<InvoiceItem> InvoiceItems { get; set; }
         public DbSet<AppRole> AppRoles { get; set; }
@@ -165,7 +166,9 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.QrCode).HasMaxLength(500);
                 entity.Property(e => e.MembershipStatus).HasMaxLength(50);
                 entity.Property(e => e.Phone).HasMaxLength(100);
-                entity.HasIndex(e => e.Phone).IsUnique().HasFilter("[Phone] IS NOT NULL");
+                entity.HasIndex(e => e.Phone).IsUnique().HasFilter("[Phone] IS NOT NULL AND [IsDeleted] = 0");
+                entity.HasIndex(e => e.IsActive).HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => e.RegistrationDate);
                 entity.HasOne(e => e.Organization)
                     .WithMany(o => o.Users)
                     .HasForeignKey(e => e.OrganizationId)
@@ -194,6 +197,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.ToTable("Members");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.UserId).IsUnique();
+                entity.HasIndex(e => e.IsActive).HasFilter("[IsDeleted] = 0");
                 entity.Property(e => e.FitnessGoal).HasMaxLength(100);
                 entity.Property(e => e.MedicalConditions).HasMaxLength(2000);
                 entity.Property(e => e.EmergencyContact).HasMaxLength(150);
@@ -351,7 +355,8 @@ namespace GymManagement.Infrastructure.Data
                 entity.ToTable("Trainer");
                 entity.HasIndex(e => e.UserId).IsUnique();
                 entity.Property(e => e.EmployeeCode).HasMaxLength(50);
-                entity.HasIndex(e => e.EmployeeCode).IsUnique().HasFilter("[EmployeeCode] IS NOT NULL");
+                entity.HasIndex(e => e.EmployeeCode).IsUnique().HasFilter("[EmployeeCode] IS NOT NULL AND [IsDeleted] = 0");
+                entity.HasIndex(e => e.Specialization).HasFilter("[IsDeleted] = 0");
                 entity.Property(e => e.Specialization).HasMaxLength(200);
                 entity.Property(e => e.CertificationDetails);
                 entity.Property(e => e.Salary).HasPrecision(18, 2);
@@ -715,7 +720,21 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany()
                     .HasForeignKey(e => e.LoggedByUserId)
                     .OnDelete(DeleteBehavior.NoAction);
-                entity.HasIndex(e => new { e.UserId, e.AttendanceDate });
+                entity.HasIndex(e => e.AttendanceDate);
+                entity.HasIndex(e => new { e.UserId, e.AttendanceDate })
+                    .IsUnique()
+                    .HasFilter("[UserId] IS NOT NULL AND [IsDeleted] = 0");
+            });
+
+            modelBuilder.Entity<AuditLog>(entity =>
+            {
+                entity.ToTable("AuditLogs");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Action).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Entity).IsRequired().HasMaxLength(100);
+                entity.HasIndex(e => e.CreatedAt);
+                entity.HasIndex(e => new { e.Entity, e.CreatedAt });
+                entity.HasIndex(e => e.UserId);
             });
 
             // Configure UserBodyImage
@@ -772,6 +791,9 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany(p => p.UserMemberships)
                     .HasForeignKey(e => e.PlanId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.EndDate);
+                entity.HasIndex(e => e.Status);
                 entity.ToTable("user_memberships");
             });
 
@@ -790,6 +812,8 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany(m => m.Payments)
                     .HasForeignKey(e => e.MembershipId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => e.MembershipId);
+                entity.HasIndex(e => e.PaymentDate);
                 entity.HasOne(e => e.Organization)
                     .WithMany(o => o.Payments)
                     .HasForeignKey(e => e.OrganizationId)

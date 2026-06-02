@@ -1,9 +1,19 @@
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 
 namespace GymManagement.Core.Services
 {
     public interface IAttendanceLogService
     {
+        Task<PagedResultDto<AttendanceLogDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            DateTime? fromDate = null,
+            DateTime? toDate = null,
+            string? sortBy = null,
+            string? sortDir = null);
+
         Task<IEnumerable<AttendanceLogDto>> GetAllAttendanceLogsAsync();
         Task<IEnumerable<AttendanceLogDto>> GetAttendanceLogsByUserIdAsync(int userId);
         Task<IEnumerable<AttendanceLogDto>> GetAttendanceLogsByLoggedByUserIdAsync(int loggedByUserId);

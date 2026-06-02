@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { ListPagination } from '../components/ui/ListPagination'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
@@ -25,37 +26,31 @@ export function TrainersPage() {
   const { userName } = getDashboardUser()
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  const { data: trainers = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ['trainers'],
-    queryFn: async () => {
-      const { data } = await trainersService.getAll()
-      return Array.isArray(data) ? data : []
-    },
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch])
+
+  const { data: trainersPage, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ['trainers-paged', page, pageSize, debouncedSearch],
+    queryFn: async () => (await trainersService.getPaged({ page, pageSize, search: debouncedSearch || undefined })).data,
   })
+
+  const trainers = trainersPage?.data ?? []
+  const totalTrainers = trainersPage?.totalRecords ?? 0
 
   const { data: stats } = useQuery({
     queryKey: ['trainer-stats'],
     queryFn: async () => (await trainersService.getStats()).data,
   })
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return trainers
-    return trainers.filter((t: Trainer) => {
-      const hay = [
-        trainerFullName(t),
-        t.email,
-        t.phone,
-        t.specialization,
-        t.employeeCode,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return hay.includes(q)
-    })
-  }, [trainers, search])
 
   return (
     <DashboardLayout userName={userName}>
@@ -105,7 +100,7 @@ export function TrainersPage() {
                 Retry
               </Button>
             </div>
-          ) : filtered.length === 0 ? (
+          ) : trainers.length === 0 ? (
             <p className="px-6 py-8 text-sm text-slate-400">
               No trainers yet. Click &quot;+ Add trainer&quot; and select an existing user (create the user under Users first if needed).
             </p>
@@ -124,7 +119,7 @@ export function TrainersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((t) => (
+                  {trainers.map((t) => (
                     <tr key={t.id} className="border-b border-white/5 hover:bg-white/[0.03]">
                       <td className="px-6 py-3 font-medium text-white">{trainerFullName(t)}</td>
                       <td className="px-6 py-3 text-slate-300">{t.email || '—'}</td>
@@ -160,6 +155,21 @@ export function TrainersPage() {
               </table>
             </div>
           )}
+          {!isLoading && !isError && totalTrainers > 0 ? (
+            <div className="px-6 pb-4">
+              <ListPagination
+                page={page}
+                pageSize={pageSize}
+                totalCount={totalTrainers}
+                isFetching={isFetching}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size)
+                  setPage(1)
+                }}
+              />
+            </div>
+          ) : null}
         </DashboardTablePanel>
       </DashboardSubpageShell>
 

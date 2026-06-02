@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ListPagination } from '../../components/ui/ListPagination'
+import { useClientPagination } from '../../hooks/useClientPagination'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
@@ -123,6 +125,8 @@ export function ProgramsPage() {
   const [editing, setEditing] = useState<WorkoutPlan | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(defaultForm)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12)
 
   const { data: programs = [], isLoading } = useQuery({
     queryKey: ['programs'],
@@ -133,10 +137,10 @@ export function ProgramsPage() {
   })
 
   const { data: exercises = [] } = useQuery({
-    queryKey: ['exercises'],
+    queryKey: ['exercises-picker'],
     queryFn: async () => {
-      const { data } = await exercisesService.getAll()
-      return Array.isArray(data) ? data : []
+      const { data } = await exercisesService.getPaged({ page: 1, pageSize: 150 })
+      return data.items ?? []
     },
   })
 
@@ -193,6 +197,16 @@ export function ProgramsPage() {
       return matchesQuery && matchesGoal && matchesVisibility
     })
   }, [searchQuery, goalFilter, visibilityFilter, programs])
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchQuery, goalFilter, visibilityFilter])
+
+  const { pageItems: pagedPrograms, totalCount: filteredTotal } = useClientPagination(
+    filtered,
+    page,
+    pageSize,
+  )
 
   const stats = useMemo(() => {
     const active = programs.filter((p) => p.isActive && (p.status ?? 'Active') === 'Active').length
@@ -464,7 +478,7 @@ export function ProgramsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((plan) => (
+                  {pagedPrograms.map((plan) => (
                     <tr
                       key={plan.id}
                       className="border-b border-white/5 transition-colors hover:bg-white/[0.03]"
@@ -530,6 +544,20 @@ export function ProgramsPage() {
               </table>
             </div>
           )}
+          {!isLoading && filtered.length > 0 ? (
+            <div className="px-6 pb-4">
+              <ListPagination
+                page={page}
+                pageSize={pageSize}
+                totalCount={filteredTotal}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size)
+                  setPage(1)
+                }}
+              />
+            </div>
+          ) : null}
         </DashboardTablePanel>
       </DashboardSubpageShell>
 

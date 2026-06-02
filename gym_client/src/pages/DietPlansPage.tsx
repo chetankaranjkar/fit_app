@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
@@ -6,6 +6,7 @@ import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
+import { ListPagination } from '../components/ui/ListPagination'
 import { dietPlansService } from '../services/dietPlans.service'
 import type {
   DietPlanDto,
@@ -108,7 +109,10 @@ export function DietPlansPage() {
   const [planForm, setPlanForm] = useState<CreateDietPlanDto>(defaultPlanForm)
   const [planFormError, setPlanFormError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [goalFilter, setGoalFilter] = useState<string>('all')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12)
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(() => {
     const id = planIdFromUrl ? parseInt(planIdFromUrl, 10) : NaN
     return Number.isFinite(id) ? id : null
@@ -118,6 +122,15 @@ export function DietPlansPage() {
     const id = planIdFromUrl ? parseInt(planIdFromUrl, 10) : NaN
     if (Number.isFinite(id)) setSelectedPlanId(id)
   }, [planIdFromUrl])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, goalFilter])
 
   const [mealModalOpen, setMealModalOpen] = useState(false)
   const [mealForm, setMealForm] = useState({ mealName: '', mealOrder: 0 })
@@ -132,13 +145,32 @@ export function DietPlansPage() {
     fatsGrams: undefined as number | undefined,
   })
 
-  const { data: plans = [], isLoading } = useQuery({
-    queryKey: ['diet-plans'],
+  const { data: plansPage, isLoading, isFetching } = useQuery({
+    queryKey: ['diet-plans-paged', page, pageSize, debouncedSearch, goalFilter],
     queryFn: async () => {
-      const { data } = await dietPlansService.getAll()
-      return Array.isArray(data) ? data : []
+      const { data } = await dietPlansService.getPaged({
+        page,
+        pageSize,
+        search: debouncedSearch || undefined,
+        goalType: goalFilter,
+      })
+      return data
     },
   })
+
+  const { data: dietStats } = useQuery({
+    queryKey: ['diet-plan-stats'],
+    queryFn: async () => (await dietPlansService.getStats()).data,
+  })
+
+  const plans = plansPage?.items ?? []
+  const totalPlans = plansPage?.totalCount ?? 0
+
+  const invalidateDietPlans = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['diet-plans-paged'] })
+    void queryClient.invalidateQueries({ queryKey: ['diet-plan-stats'] })
+    void queryClient.invalidateQueries({ queryKey: ['diet-plans'] })
+  }, [queryClient])
 
   const { data: selectedPlan, isLoading: loadingPlan } = useQuery({
     queryKey: ['diet-plan', selectedPlanId],
@@ -152,11 +184,11 @@ export function DietPlansPage() {
 
   const createPlanMutation = useMutation({
     mutationFn: (dto: CreateDietPlanDto) => dietPlansService.create(dto),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['diet-plans'] })
+    onSuccess: (res) => {
+      invalidateDietPlans()
       setPlanModalOpen(false)
       setPlanForm(defaultPlanForm)
-      setSelectedPlanId(data.id)
+      setSelectedPlanId(res.data.id)
     },
     onError: (err: Error) => setPlanFormError(err.message || 'Failed to create plan'),
   })
@@ -165,7 +197,7 @@ export function DietPlansPage() {
     mutationFn: ({ id, dto }: { id: number; dto: UpdateDietPlanDto }) =>
       dietPlansService.update(id, dto),
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: ['diet-plans'] })
+      invalidateDietPlans()
       queryClient.invalidateQueries({ queryKey: ['diet-plan', id] })
       setPlanModalOpen(false)
       setEditingPlan(null)
@@ -176,8 +208,8 @@ export function DietPlansPage() {
 
   const deletePlanMutation = useMutation({
     mutationFn: (id: number) => dietPlansService.delete(id),
-    onSuccess: (id) => {
-      queryClient.invalidateQueries({ queryKey: ['diet-plans'] })
+    onSuccess: (_, id) => {
+      invalidateDietPlans()
       if (selectedPlanId === id) setSelectedPlanId(null)
     },
   })
@@ -186,7 +218,7 @@ export function DietPlansPage() {
     mutationFn: (dto: CreateDietMealDto) => dietPlansService.createMeal(dto),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['diet-plan', variables.dietPlanId] })
-      queryClient.invalidateQueries({ queryKey: ['diet-plans'] })
+      invalidateDietPlans()
       setMealModalOpen(false)
       setMealForm({ mealName: '', mealOrder: 0 })
     },
@@ -358,25 +390,12 @@ export function DietPlansPage() {
   }
 
   const dietListStats = useMemo(() => {
-    const total = plans.length
-    const active = plans.filter((p) => p.isActive).length
-    const mealCount = plans.reduce((s, p) => s + (p.dietMeals?.length ?? 0), 0)
-    const avgCal =
-      total > 0 ? Math.round(plans.reduce((s, p) => s + p.calories, 0) / total) : 0
+    const total = dietStats?.totalCount ?? totalPlans
+    const active = dietStats?.activeCount ?? 0
+    const mealCount = dietStats?.mealCount ?? 0
+    const avgCal = dietStats?.averageCalories ?? 0
     return { total, active, mealCount, avgCal }
-  }, [plans])
-
-  const filteredPlans = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    return plans.filter((p) => {
-      if (goalFilter !== 'all' && p.goalType !== goalFilter) return false
-      if (!q) return true
-      return (
-        p.planName.toLowerCase().includes(q) ||
-        (p.description ?? '').toLowerCase().includes(q)
-      )
-    })
-  }, [plans, searchQuery, goalFilter])
+  }, [dietStats, totalPlans])
 
   return (
     <DashboardLayout userName={userName}>
@@ -499,11 +518,11 @@ export function DietPlansPage() {
               <div key={i} className="h-56 animate-pulse rounded-2xl border border-white/5 bg-white/[0.03]" />
             ))}
           </div>
-        ) : filteredPlans.length === 0 ? (
+        ) : plans.length === 0 ? (
           <EmptyPlans onAdd={openAddPlan} hasQuery={!!searchQuery || goalFilter !== 'all'} />
         ) : (
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {filteredPlans.map((plan) => (
+            {plans.map((plan) => (
               <PlanCard
                 key={plan.id}
                 plan={plan}
@@ -515,6 +534,21 @@ export function DietPlansPage() {
             ))}
           </div>
         )}
+
+        {!isLoading && totalPlans > 0 ? (
+          <ListPagination
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalPlans}
+            isFetching={isFetching}
+            pageSizeOptions={[6, 12, 24]}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size)
+              setPage(1)
+            }}
+          />
+        ) : null}
 
         {/* Plan Detail — Meals & Items */}
         {selectedPlanId != null && (

@@ -36,7 +36,6 @@ import {
   RevenueOverviewCard,
 } from '../components/OverviewPanels'
 import type { KpiType } from '../types'
-import { usersService } from '../../../services/users.service'
 import { reportsService } from '../../../services/reports.service'
 import { membershipPaymentsService } from '../../../services/membershipPayments.service'
 import { dashboardService } from '../../../services/dashboard.service'
@@ -59,16 +58,15 @@ export function OwnerAnalyticsPage() {
       const now = new Date()
       const fromDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
       const toDate = now.toISOString().slice(0, 10)
-      const [usersRes, reportRes, billingRes, alertsRes] = await Promise.allSettled([
-        usersService.getAll(),
+      const [summaryRes, reportRes, billingRes, alertsRes] = await Promise.allSettled([
+        dashboardService.getSummary(),
         reportsService.getSummary(fromDate, toDate),
         membershipPaymentsService.dashboard(),
         dashboardService.getNotifications(),
       ])
-      const users =
-        usersRes.status === 'fulfilled' && Array.isArray(usersRes.value.data) ? usersRes.value.data : []
-      const activeMembers = users.filter((u) => u.isActive !== false).length
-      const totalMembers = users.length
+      const summary = summaryRes.status === 'fulfilled' ? summaryRes.value.data : null
+      const activeMembers = summary?.activeMembers ?? KPI_SNAPSHOT.members.active
+      const totalMembers = summary?.totalMembers ?? KPI_SNAPSHOT.members.total
 
       const report = reportRes.status === 'fulfilled' ? reportRes.value.data : null
       const revenueTrend = report?.revenueTrend ?? []

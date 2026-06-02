@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
@@ -9,6 +9,7 @@ import { ExerciseCard } from './components/ExerciseCard'
 import { ExerciseDetailDrawer } from './components/ExerciseDetailDrawer'
 import { ExerciseForm } from './components/ExerciseForm'
 import { FilterBar } from './components/FilterBar'
+import { ListPagination } from '../../components/ui/ListPagination'
 import { useExerciseMutations, useExercisesQuery } from './hooks'
 import type { Exercise, ExerciseFilters } from './types'
 
@@ -41,10 +42,15 @@ export function ExerciseManagementPage() {
   const [editing, setEditing] = useState<Exercise | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Exercise | null>(null)
 
-  const { data, isLoading } = useExercisesQuery({ page, pageSize, filters })
+  const { data, isLoading, isFetching } = useExercisesQuery({ page, pageSize, filters })
   const mutations = useExerciseMutations()
   const items = data?.items ?? []
   const pagination = data?.pagination
+  const totalCount = pagination?.totalCount ?? 0
+
+  useEffect(() => {
+    setPage(1)
+  }, [filters.search, filters.category, filters.difficulty, filters.equipment])
 
   const kpis = useMemo(() => {
     const total = pagination?.totalCount ?? 0
@@ -167,27 +173,19 @@ export function ExerciseManagementPage() {
             )}
           </AnimatePresence>
 
-          <div className="mt-4 flex items-center justify-between">
-            <div className="text-xs text-slate-400">
-              Page {pagination?.page ?? 1} of {pagination?.totalPages ?? 1}
-            </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value))
-                  setPage(1)
-                }}
-                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200"
-              >
-                <option value={8}>8 / page</option>
-                <option value={12}>12 / page</option>
-                <option value={24}>24 / page</option>
-              </select>
-              <Button variant="soft" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</Button>
-              <Button variant="soft" size="sm" disabled={Boolean(pagination && page >= pagination.totalPages)} onClick={() => setPage((p) => p + 1)}>Next</Button>
-            </div>
-          </div>
+          <ListPagination
+            className="mt-4"
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            isFetching={isFetching}
+            pageSizeOptions={[8, 12, 24, 48]}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size)
+              setPage(1)
+            }}
+          />
         </div>
       </DashboardSubpageShell>
 

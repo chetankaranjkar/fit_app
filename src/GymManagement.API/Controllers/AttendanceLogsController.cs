@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 
@@ -18,6 +19,24 @@ namespace GymManagement.API.Controllers
         public AttendanceLogsController(IAttendanceLogService attendanceLogService)
         {
             _attendanceLogService = attendanceLogService;
+        }
+
+        [HttpGet("paged")]
+        [HasPermission(PermissionCodes.VIEW_ATTENDANCE)]
+        public async Task<ActionResult<ApiPagedResponse<AttendanceLogDto>>> GetPaged(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 25,
+            [FromQuery] string? search = null,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] string? sortDir = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 200);
+            var result = await _attendanceLogService.GetPagedAsync(
+                safePage, safePageSize, search, fromDate, toDate, sortBy, sortDir);
+            return Ok(ApiPagedResponse<AttendanceLogDto>.From(result));
         }
 
         [HttpGet]

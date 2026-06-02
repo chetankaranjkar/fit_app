@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ListPagination } from '../components/ui/ListPagination'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceStrict } from 'date-fns'
 import {
@@ -109,20 +110,63 @@ export function AttendancePage() {
   const [selectedCheckout, setSelectedCheckout] = useState<AttendanceLogDto | null>(null)
   const [selectedMember, setSelectedMember] = useState<User | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
 
-  const { data: attendanceLogs = [], isLoading } = useQuery({
-    queryKey: ['attendance', startDate, endDate],
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, startDate, endDate, statusFilter])
+
+  const { data: attendancePage, isLoading, isFetching } = useQuery({
+    queryKey: ['attendance-paged', page, pageSize, startDate, endDate, debouncedSearch],
+    queryFn: async () =>
+      (
+        await attendanceService.getPaged({
+          page,
+          pageSize,
+          search: debouncedSearch || undefined,
+          fromDate: startDate,
+          toDate: endDate,
+          sortBy: 'checkin',
+          sortDir: 'desc',
+        })
+      ).data,
+  })
+
+  const { data: statsLogs = [] } = useQuery({
+    queryKey: ['attendance-stats', startDate, endDate],
     queryFn: async () => {
-      const { data } = await attendanceService.getByDateRange(startDate, endDate)
-      return Array.isArray(data) ? data : []
+      const { data } = await attendanceService.getPaged({
+        page: 1,
+        pageSize: 500,
+        fromDate: startDate,
+        toDate: endDate,
+        sortBy: 'checkin',
+        sortDir: 'desc',
+      })
+      return data.data ?? []
     },
   })
 
+  const attendanceLogs = attendancePage?.data ?? []
+  const totalLogs = attendancePage?.totalRecords ?? 0
+
   const { data: users = [] } = useQuery({
-    queryKey: ['users'],
+    queryKey: ['users-attendance-picker'],
     queryFn: async () => {
-      const { data } = await usersService.getAll()
-      return Array.isArray(data) ? (data as User[]) : []
+      const { data } = await usersService.getPaged({
+        page: 1,
+        pageSize: 200,
+        membersOnly: true,
+        isActive: true,
+      })
+      return data.items ?? []
     },
   })
 
@@ -145,6 +189,8 @@ export function AttendancePage() {
   })
 
   const invalidateAttendance = () => {
+    void queryClient.invalidateQueries({ queryKey: ['attendance-paged'] })
+    void queryClient.invalidateQueries({ queryKey: ['attendance-stats'] })
     void queryClient.invalidateQueries({ queryKey: ['attendance'] })
     void queryClient.invalidateQueries({ queryKey: ['attendance-anomalies'] })
   }
@@ -185,35 +231,26 @@ export function AttendancePage() {
   })
 
   const filteredLogs = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
     const lateUserIds = new Set(
       anomalies.filter((item) => item.type === 'late').map((item) => item.userId),
     )
     return attendanceLogs.filter((log) => {
-      const matchesQuery =
-        q.length === 0 ||
-        log.userName.toLowerCase().includes(q) ||
-        (log.notes ?? '').toLowerCase().includes(q) ||
-        (log.checkInMethod ?? '').toLowerCase().includes(q)
-
-      const matchesStatus =
-        statusFilter === 'all' ||
-        (statusFilter === 'checked-in' && log.isCheckedIn) ||
-        (statusFilter === 'checked-out' && !log.isCheckedIn) ||
-        (statusFilter === 'late' && lateUserIds.has(log.userId))
-
-      return matchesQuery && matchesStatus
+      if (statusFilter === 'all') return true
+      if (statusFilter === 'checked-in') return log.isCheckedIn
+      if (statusFilter === 'checked-out') return !log.isCheckedIn
+      if (statusFilter === 'late') return lateUserIds.has(log.userId)
+      return true
     })
-  }, [anomalies, attendanceLogs, searchQuery, statusFilter])
+  }, [anomalies, attendanceLogs, statusFilter])
 
   const stats = useMemo(() => {
-    const checkedIn = attendanceLogs.filter((log) => log.isCheckedIn).length
-    const completed = attendanceLogs.length - checkedIn
-    const uniqueMembers = new Set(attendanceLogs.map((log) => log.userId)).size
+    const checkedIn = statsLogs.filter((log) => log.isCheckedIn).length
+    const completed = statsLogs.length - checkedIn
+    const uniqueMembers = new Set(statsLogs.map((log) => log.userId)).size
     const lateCount = anomalies.filter((item) => item.type === 'late').length
     const absentCount = anomalies.filter((item) => item.type === 'no_show').length
-    return { total: attendanceLogs.length, checkedIn, completed, uniqueMembers, lateCount, absentCount }
-  }, [anomalies, attendanceLogs])
+    return { total: totalLogs || statsLogs.length, checkedIn, completed, uniqueMembers, lateCount, absentCount }
+  }, [anomalies, statsLogs, totalLogs])
 
   const anomalyDayLabel = useMemo(
     () =>
@@ -521,6 +558,21 @@ export function AttendancePage() {
                 </table>
               </div>
             )}
+            {!isLoading && totalLogs > 0 ? (
+              <ListPagination
+                className="border-t border-white/10 px-4 py-3"
+                page={page}
+                pageSize={pageSize}
+                totalCount={totalLogs}
+                isFetching={isFetching}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size)
+                  setPage(1)
+                }}
+              />
+            ) : null}
           </DashboardTablePanel>
 
           <aside className="min-w-0 space-y-3">

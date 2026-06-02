@@ -57,7 +57,21 @@ export interface DietPlanDto {
   fatsGrams?: number | null
   description?: string | null
   isActive: boolean
-  dietMeals: DietMealDto[]
+  dietMeals?: DietMealDto[]
+}
+
+export interface PagedDietPlansResponse {
+  items: DietPlanDto[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+export interface DietPlanStats {
+  totalCount: number
+  activeCount: number
+  mealCount: number
+  averageCalories: number
 }
 
 export interface CreateDietPlanDto {

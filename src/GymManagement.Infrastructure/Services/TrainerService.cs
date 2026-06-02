@@ -1,18 +1,83 @@
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace GymManagement.Infrastructure.Services
 {
     public class TrainerService : ITrainerService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ApplicationDbContext _context;
 
-        public TrainerService(IUnitOfWork unitOfWork)
+        public TrainerService(IUnitOfWork unitOfWork, ApplicationDbContext context)
         {
             _unitOfWork = unitOfWork;
+            _context = context;
+        }
+
+        public async Task<PagedResultDto<TrainerDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            bool? isActive = null,
+            string? sortBy = null,
+            string? sortDir = null)
+        {
+            var (safePage, safePageSize) = PagedQueryHelper.Normalize(page, pageSize);
+            var trimmedSearch = search?.Trim();
+            var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
+
+            IQueryable<Trainer> query = _context.Trainers.AsNoTracking();
+
+            if (isActive.HasValue)
+                query = query.Where(t => t.IsActive == isActive.Value);
+
+            if (!string.IsNullOrWhiteSpace(likeSearch))
+            {
+                query = query.Where(t =>
+                    (t.Specialization != null && EF.Functions.Like(t.Specialization, likeSearch))
+                    || (t.EmployeeCode != null && EF.Functions.Like(t.EmployeeCode, likeSearch))
+                    || _context.Users.Any(u =>
+                        u.Id == t.UserId
+                        && (EF.Functions.Like(u.FirstName, likeSearch)
+                            || EF.Functions.Like(u.LastName, likeSearch)
+                            || (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch))))
+                    || _context.AuthUsers.Any(a =>
+                        a.UserId == t.UserId && EF.Functions.Like(a.Email, likeSearch)));
+            }
+
+            var isAsc = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
+            query = (sortBy ?? "name").Trim().ToLowerInvariant() switch
+            {
+                "specialization" => isAsc
+                    ? query.OrderBy(t => t.Specialization)
+                    : query.OrderByDescending(t => t.Specialization),
+                _ => isAsc ? query.OrderBy(t => t.Id) : query.OrderByDescending(t => t.Id),
+            };
+
+            var totalCount = await query.CountAsync();
+            var trainers = await query.Skip((safePage - 1) * safePageSize).Take(safePageSize).ToListAsync();
+            var userIds = trainers.Select(t => t.UserId).Distinct().ToList();
+            var users = await _context.Users.AsNoTracking()
+                .Where(u => userIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id);
+            var authByUserId = await _context.AuthUsers.AsNoTracking()
+                .Where(a => a.UserId.HasValue && userIds.Contains(a.UserId.Value))
+                .ToDictionaryAsync(a => a.UserId!.Value, a => a.Email);
+
+            var items = trainers
+                .Select(t => MapToDto(
+                    t,
+                    users.GetValueOrDefault(t.UserId),
+                    authByUserId.GetValueOrDefault(t.UserId)))
+                .ToList();
+
+            return PagedQueryHelper.ToResult(items, totalCount, safePage, safePageSize);
         }
 
         public async Task<TrainerStatsDto> GetTrainerStatsAsync()

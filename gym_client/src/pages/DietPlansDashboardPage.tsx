@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { dietPlansService } from '../services/dietPlans.service'
+import type { DietPlanStats } from '../types/dietPlan'
 import { userDietPlansService } from '../services/userDietPlans.service'
 import type {
   DietPlanDto,
@@ -80,13 +81,17 @@ export function DietPlansDashboardPage() {
   const [itemForm, setItemForm] = useState(defaultItemForm)
   const [itemFormError, setItemFormError] = useState<string | null>(null)
 
-  const { data: plans = [] } = useQuery({
-    queryKey: ['diet-plans'],
-    queryFn: async () => {
-      const { data } = await dietPlansService.getAll()
-      return Array.isArray(data) ? data : []
-    },
+  const { data: planStats } = useQuery({
+    queryKey: ['diet-plan-stats'],
+    queryFn: async () => (await dietPlansService.getStats()).data as DietPlanStats,
   })
+
+  const { data: plansPage } = useQuery({
+    queryKey: ['diet-plans-paged', 1, 50],
+    queryFn: async () =>
+      (await dietPlansService.getPaged({ page: 1, pageSize: 50 })).data,
+  })
+  const plans = plansPage?.items ?? []
 
   const { data: assignments = [] } = useQuery({
     queryKey: ['user-diet-plans'],
@@ -97,26 +102,27 @@ export function DietPlansDashboardPage() {
   })
 
   const stats = useMemo(() => {
-    const total = plans.length
-    const active = plans.filter((p) => p.isActive).length
-    const mealCount = plans.reduce((s, p) => s + (p.dietMeals?.length ?? 0), 0)
+    const total = planStats?.totalCount ?? plans.length
+    const active = planStats?.activeCount ?? plans.filter((p) => p.isActive).length
+    const mealCount = planStats?.mealCount ?? 0
     const itemCount = plans.reduce(
       (s, p) =>
         s +
         (p.dietMeals ?? []).reduce((m, meal) => m + (meal.dietMealItems?.length ?? 0), 0),
       0
     )
-    const avgCal =
-      total > 0 ? Math.round(plans.reduce((s, p) => s + p.calories, 0) / total) : 0
+    const avgCal = planStats?.averageCalories ?? 0
     const assignedActive = assignments.filter((a) => a.isActive).length
     return { total, active, mealCount, itemCount, avgCal, assignedActive }
-  }, [plans, assignments])
+  }, [planStats, plans, assignments])
 
   const createMealMutation = useMutation({
     mutationFn: (dto: { dietPlanId: number; mealName: string; mealOrder: number }) =>
       dietPlansService.createMeal(dto),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['diet-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['diet-plans-paged'] })
+      queryClient.invalidateQueries({ queryKey: ['diet-plan-stats'] })
       queryClient.invalidateQueries({ queryKey: ['diet-plan', variables.dietPlanId] })
       setMealModalOpen(false)
       setMealForm(defaultMealForm)
@@ -161,6 +167,8 @@ export function DietPlansDashboardPage() {
     mutationFn: (dto: CreateDietMealItemDto) => dietPlansService.createMealItem(dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['diet-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['diet-plans-paged'] })
+      queryClient.invalidateQueries({ queryKey: ['diet-plan-stats'] })
       queryClient.invalidateQueries({ queryKey: ['diet-plan', itemForm.dietPlanId] })
       refetchPlanForItem()
       setItemForm((f) => ({

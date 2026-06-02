@@ -20,6 +20,12 @@ namespace GymManagement.API.Controllers
             _dashboardService = dashboardService;
         }
 
+        [HttpGet("summary")]
+        public async Task<ActionResult<DashboardSummaryDto>> GetSummary(CancellationToken cancellationToken)
+        {
+            return Ok(await _dashboardService.GetSummaryAsync(cancellationToken));
+        }
+
         [HttpGet("statistics")]
         public async Task<ActionResult<DashboardStatisticsDto>> GetStatistics()
         {

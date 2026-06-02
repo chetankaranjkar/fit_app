@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { ListPagination } from '../components/ui/ListPagination'
+import { useClientPagination } from '../hooks/useClientPagination'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
@@ -72,6 +74,8 @@ export function CouponsPage() {
   const [form, setForm] = useState<CreateCouponDto>(defaultForm)
   const [formError, setFormError] = useState<string | null>(null)
   const [usageModal, setUsageModal] = useState<number | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   // Queries
   const { data: coupons = [], isLoading } = useQuery({
@@ -84,6 +88,12 @@ export function CouponsPage() {
       return data
     },
   })
+
+  useEffect(() => {
+    setPage(1)
+  }, [search, statusFilter])
+
+  const { pageItems: pagedCoupons, totalCount } = useClientPagination(coupons, page, pageSize)
 
   const { data: analytics } = useQuery<CouponAnalytics>({
     queryKey: ['coupon-analytics'],
@@ -331,7 +341,7 @@ export function CouponsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {coupons.map((c) => (
+                  {pagedCoupons.map((c) => (
                     <tr key={c.id} className="border-b border-white/5 transition-colors hover:bg-white/[0.03]">
                       <td className="px-5 py-3 font-mono font-semibold text-blue-300">{c.couponCode}</td>
                       <td className="max-w-[160px] truncate px-5 py-3 text-slate-200">{c.couponName}</td>
@@ -371,6 +381,20 @@ export function CouponsPage() {
               </table>
             </div>
           )}
+          {!isLoading && coupons.length > 0 ? (
+            <div className="px-6 pb-4">
+              <ListPagination
+                page={page}
+                pageSize={pageSize}
+                totalCount={totalCount}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size)
+                  setPage(1)
+                }}
+              />
+            </div>
+          ) : null}
         </DashboardTablePanel>
       </DashboardSubpageShell>
 

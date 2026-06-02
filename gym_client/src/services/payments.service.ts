@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import type { ApiPagedResponse } from '../types/apiPaged'
 import type {
   Payment,
   CreatePaymentDto,
@@ -6,6 +7,25 @@ import type {
 } from '../types/payment'
 
 export const paymentsService = {
+  getPaged: (params: {
+    page: number
+    pageSize: number
+    search?: string
+    fromDate?: string
+    toDate?: string
+    sortBy?: string
+    sortDir?: 'asc' | 'desc'
+  }) => {
+    const query = new URLSearchParams()
+    query.set('page', String(params.page))
+    query.set('pageSize', String(params.pageSize))
+    if (params.search?.trim()) query.set('search', params.search.trim())
+    if (params.fromDate) query.set('fromDate', params.fromDate)
+    if (params.toDate) query.set('toDate', params.toDate)
+    if (params.sortBy) query.set('sortBy', params.sortBy)
+    if (params.sortDir) query.set('sortDir', params.sortDir)
+    return api.get<ApiPagedResponse<Payment>>(`/Payments/paged?${query.toString()}`)
+  },
   getAll: () => api.get<Payment[]>('/Payments'),
   getByMembershipId: (membershipId: number) =>
     api.get<Payment[]>(`/Payments/by-membership/${membershipId}`),

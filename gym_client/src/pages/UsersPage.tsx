@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { ListPagination } from '../components/ui/ListPagination'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import toast from 'react-hot-toast'
@@ -153,6 +155,7 @@ function PaymentDueCell({
 
 function UserRow({
   user,
+  rowStyle,
   onView,
   onEdit,
   onDelete,
@@ -161,6 +164,7 @@ function UserRow({
   onCollectPayment,
 }: {
   user: User
+  rowStyle?: React.CSSProperties
   onView: (u: User) => void
   onEdit: (u: User) => void
   onDelete: (id: number, name: string) => void
@@ -172,7 +176,7 @@ function UserRow({
   const age = getAge(user.dateOfBirth)
   const initials = name !== '—' ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '—'
   return (
-    <tr className="group transition-colors duration-150 hover:bg-white/[0.03]">
+    <tr style={rowStyle} className="group transition-colors duration-150 hover:bg-white/[0.03]">
       {/* Member (avatar + name + email) */}
       <td className="px-5 py-3.5">
         <div className="flex items-center gap-3">
@@ -426,7 +430,8 @@ export function UsersPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [page, setPage] = useState(1)
-  const pageSize = 50
+  const [pageSize, setPageSize] = useState(50)
+  const tableScrollRef = useRef<HTMLDivElement>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [importLog, setImportLog] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
@@ -477,8 +482,12 @@ export function UsersPage() {
   const users = usersPage?.items ?? []
   const totalMembers = usersPage?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalMembers / pageSize))
-  const canGoPrev = page > 1
-  const canGoNext = page < totalPages
+  const rowVirtualizer = useVirtualizer({
+    count: users.length,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: () => 56,
+    overscan: 10,
+  })
 
   const userStats = useMemo(() => {
     const total = totalMembers
@@ -1514,77 +1523,73 @@ export function UsersPage() {
 
               {isDesktopLayout ? (
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/5 bg-white/[0.025] text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      <th className="px-5 py-3.5">Member</th>
-                      <th className="hidden px-5 py-3.5 lg:table-cell">Phone</th>
-                      <th className="px-5 py-3.5">Status</th>
-                      <th className="px-5 py-3.5">Payment due</th>
-                      <th className="hidden px-5 py-3.5 lg:table-cell">Pref. Time</th>
-                      <th className="hidden px-5 py-3.5 xl:table-cell">Type</th>
-                      <th className="px-5 py-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.04]">
-                    {users.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-14 text-center">
-                          <div className="flex flex-col items-center gap-3">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5">
-                              <svg className="h-6 w-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
-                              </svg>
-                            </div>
-                            <p className="text-sm text-slate-400">
-                              {totalMembers === 0 ? 'No members yet.' : 'No members match your filter.'}
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      users.map((u) => (
-                        <UserRow
-                          key={u.id}
-                          user={u}
-                          onView={handleViewUser}
-                          onEdit={handleEdit}
-                          onDelete={handleDelete}
-                          onDeactivate={handleDeactivate}
-                          onActivate={handleActivate}
-                          onCollectPayment={handleCollectPayment}
-                        />
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                {users.length === 0 ? (
+                  <div className="px-6 py-14 text-center">
+                    <p className="text-sm text-slate-400">
+                      {totalMembers === 0 ? 'No members yet.' : 'No members match your filter.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div ref={tableScrollRef} className="max-h-[min(560px,70vh)] overflow-auto">
+                    <table className="w-full table-fixed">
+                      <thead className="sticky top-0 z-10 bg-[rgba(15,12,30,0.98)]">
+                        <tr className="border-b border-white/5 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                          <th className="px-5 py-3.5">Member</th>
+                          <th className="hidden px-5 py-3.5 lg:table-cell">Phone</th>
+                          <th className="px-5 py-3.5">Status</th>
+                          <th className="px-5 py-3.5">Payment due</th>
+                          <th className="hidden px-5 py-3.5 lg:table-cell">Pref. Time</th>
+                          <th className="hidden px-5 py-3.5 xl:table-cell">Type</th>
+                          <th className="px-5 py-3.5 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody
+                        className="relative block w-full"
+                        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                      >
+                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                          const u = users[virtualRow.index]
+                          return (
+                            <UserRow
+                              key={u.id}
+                              user={u}
+                              rowStyle={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: `${virtualRow.size}px`,
+                                transform: `translateY(${virtualRow.start}px)`,
+                              }}
+                              onView={handleViewUser}
+                              onEdit={handleEdit}
+                              onDelete={handleDelete}
+                              onDeactivate={handleDeactivate}
+                              onActivate={handleActivate}
+                              onCollectPayment={handleCollectPayment}
+                            />
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
               ) : null}
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-4 py-3 sm:px-6">
-                <p className="text-xs text-slate-500">
-                  Page {page} of {totalPages} · Showing {users.length} of {totalMembers} members
-                  {isFetching ? ' · Refreshing…' : ''}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={!canGoPrev}
-                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={!canGoNext}
-                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+              <ListPagination
+                className="border-t border-white/[0.06] px-4 py-3 sm:px-6"
+                page={page}
+                pageSize={pageSize}
+                totalCount={totalMembers}
+                isFetching={isFetching}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size)
+                  setPage(1)
+                }}
+              />
             </>
           )}
         </section>

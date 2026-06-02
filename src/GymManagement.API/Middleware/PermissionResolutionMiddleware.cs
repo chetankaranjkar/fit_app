@@ -1,6 +1,7 @@
 using System.Linq;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Services;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace GymManagement.API.Middleware;
 
@@ -14,8 +15,13 @@ public sealed class PermissionResolutionMiddleware
     public const string EffectivePermissionCodesKey = "EffectivePermissionCodes";
 
     private readonly RequestDelegate _next;
+    private readonly IMemoryCache _cache;
 
-    public PermissionResolutionMiddleware(RequestDelegate next) => _next = next;
+    public PermissionResolutionMiddleware(RequestDelegate next, IMemoryCache cache)
+    {
+        _next = next;
+        _cache = cache;
+    }
 
     public async Task InvokeAsync(HttpContext context, IRbacService rbac)
     {
@@ -31,7 +37,15 @@ public sealed class PermissionResolutionMiddleware
             var profileUserId = ResolveProfileUserId(context);
             IReadOnlyList<PermissionDto> fromDb = Array.Empty<PermissionDto>();
             if (profileUserId.HasValue)
-                fromDb = await rbac.GetUserPermissionsAsync(profileUserId.Value);
+            {
+                var cacheKey = $"rbac:permissions:{profileUserId.Value}";
+                if (!_cache.TryGetValue(cacheKey, out IReadOnlyList<PermissionDto>? cachedPermissions))
+                {
+                    cachedPermissions = await rbac.GetUserPermissionsAsync(profileUserId.Value);
+                    _cache.Set(cacheKey, cachedPermissions, TimeSpan.FromMinutes(5));
+                }
+                fromDb = cachedPermissions ?? Array.Empty<PermissionDto>();
+            }
 
             var mergedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var code in fromClaims)

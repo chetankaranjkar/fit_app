@@ -27,7 +27,21 @@ export type DashboardStatistics = {
   }[]
 }
 
+export type DashboardSummary = {
+  totalMembers: number
+  activeMembers: number
+  expiredMemberships: number
+  todayAttendance: number
+  pendingPayments: number
+  monthlyRevenue: number
+  todayRevenue: number
+  trainerCount: number
+  newMembersToday: number
+  expiringMembershipsNext14Days: number
+}
+
 export const dashboardService = {
+  getSummary: () => api.get<DashboardSummary>('/Dashboard/summary'),
   getNotifications: () => api.get<DashboardNotifications>('/Dashboard/notifications'),
   getStatistics: () => api.get<DashboardStatistics>('/Dashboard/statistics'),
 }

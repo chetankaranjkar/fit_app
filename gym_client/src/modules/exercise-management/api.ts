@@ -51,32 +51,35 @@ export async function fetchExercises(params: {
     })
     return data.data
   } catch {
-    // Fallback to existing ASP.NET exercises endpoint so premium UI works
-    // even when the Node premium API is not running locally.
-    const { data } = await coreApi.get<LegacyExercise[]>('/Exercises')
-    const list = (Array.isArray(data) ? data : []).map(mapLegacyExercise)
-    const q = params.search?.trim().toLowerCase() ?? ''
-    const filtered = list.filter((item) => {
-      const matchesSearch =
-        !q ||
-        item.name.toLowerCase().includes(q) ||
-        (item.muscleGroupPrimary ?? '').toLowerCase().includes(q)
-      const matchesCategory = !params.category || item.category === params.category
-      const matchesDifficulty = !params.difficulty || item.difficulty === params.difficulty
-      const matchesEquipment =
-        !params.equipment ||
-        (item.equipment ?? '').toLowerCase().includes(params.equipment.toLowerCase())
-      return matchesSearch && matchesCategory && matchesDifficulty && matchesEquipment
-    })
-    const start = (params.page - 1) * params.pageSize
-    const pageItems = filtered.slice(start, start + params.pageSize)
+    // Fallback to ASP.NET paged endpoint (server-side) when the Node premium API is unavailable.
+    const query = new URLSearchParams()
+    query.set('page', String(params.page))
+    query.set('pageSize', String(params.pageSize))
+    if (params.search?.trim()) query.set('search', params.search.trim())
+    if (params.difficulty) query.set('difficulty', params.difficulty)
+    if (params.category) {
+      const bodyPartId = Number(params.category)
+      if (Number.isFinite(bodyPartId) && bodyPartId > 0) query.set('bodyPartId', String(bodyPartId))
+    }
+    const { data } = await coreApi.get<{
+      items: LegacyExercise[]
+      totalCount: number
+      page: number
+      pageSize: number
+    }>(`/Exercises/paged?${query.toString()}`)
+    const list = (Array.isArray(data?.items) ? data.items : []).map(mapLegacyExercise)
+    const equipmentFilter = params.equipment?.trim().toLowerCase()
+    const filtered = equipmentFilter
+      ? list.filter((item) => (item.equipment ?? '').toLowerCase().includes(equipmentFilter))
+      : list
+    const totalCount = equipmentFilter ? filtered.length : (data?.totalCount ?? filtered.length)
     return {
-      items: pageItems,
+      items: filtered,
       pagination: {
-        page: params.page,
-        pageSize: params.pageSize,
-        totalCount: filtered.length,
-        totalPages: Math.max(1, Math.ceil(filtered.length / params.pageSize)),
+        page: data?.page ?? params.page,
+        pageSize: data?.pageSize ?? params.pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / (data?.pageSize ?? params.pageSize))),
       },
     }
   }

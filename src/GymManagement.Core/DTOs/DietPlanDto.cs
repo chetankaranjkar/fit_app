@@ -118,4 +118,12 @@ namespace GymManagement.Core.DTOs
         public bool IsActive { get; set; } = true;
         public string? Notes { get; set; }
     }
+
+    public class DietPlanStatsDto
+    {
+        public int TotalCount { get; set; }
+        public int ActiveCount { get; set; }
+        public int MealCount { get; set; }
+        public int AverageCalories { get; set; }
+    }
 }

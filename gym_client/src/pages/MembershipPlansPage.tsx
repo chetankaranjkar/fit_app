@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react'
+import { ListPagination } from '../components/ui/ListPagination'
+import { useClientPagination } from '../hooks/useClientPagination'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
@@ -59,6 +61,8 @@ export function MembershipPlansPage() {
   const [editing, setEditing] = useState<MembershipPlan | null>(null)
   const [form, setForm] = useState<CreateMembershipPlanDto>(defaultCreate)
   const [formError, setFormError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ['membership-plans'],
@@ -110,6 +114,8 @@ export function MembershipPlansPage() {
       avgDays: Math.round((sumDays / total) * 10) / 10,
     }
   }, [plans])
+
+  const { pageItems: pagedPlans, totalCount } = useClientPagination(plans, page, pageSize)
 
   const openAdd = () => {
     setEditing(null)
@@ -222,7 +228,7 @@ export function MembershipPlansPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {plans.map((plan) => (
+                  {pagedPlans.map((plan) => (
                     <tr key={plan.id} className="border-b border-white/5 transition-colors hover:bg-white/[0.03]">
                       <td className="px-6 py-3 font-medium text-white">{plan.planName}</td>
                       <td className="px-6 py-3 text-slate-300">{plan.durationDays}</td>
@@ -254,6 +260,20 @@ export function MembershipPlansPage() {
               </table>
             </div>
           )}
+          {!isLoading && plans.length > 0 ? (
+            <div className="px-6 pb-4">
+              <ListPagination
+                page={page}
+                pageSize={pageSize}
+                totalCount={totalCount}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size)
+                  setPage(1)
+                }}
+              />
+            </div>
+          ) : null}
         </DashboardTablePanel>
       </DashboardSubpageShell>
 

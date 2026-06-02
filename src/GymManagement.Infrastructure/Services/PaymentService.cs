@@ -1,4 +1,5 @@
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
@@ -23,6 +24,56 @@ namespace GymManagement.Infrastructure.Services
             _unitOfWork = unitOfWork;
             _context = context;
             _invoiceService = invoiceService;
+        }
+
+        public async Task<PagedResultDto<PaymentDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            DateTime? fromDate = null,
+            DateTime? toDate = null,
+            string? sortBy = null,
+            string? sortDir = null)
+        {
+            var (safePage, safePageSize) = PagedQueryHelper.Normalize(page, pageSize);
+            var trimmedSearch = search?.Trim();
+            var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
+
+            IQueryable<Payment> query = _context.Payments.AsNoTracking();
+
+            if (fromDate.HasValue)
+                query = query.Where(p => p.PaymentDate >= fromDate.Value.Date);
+            if (toDate.HasValue)
+                query = query.Where(p => p.PaymentDate <= toDate.Value.Date.AddDays(1));
+
+            if (!string.IsNullOrWhiteSpace(likeSearch))
+            {
+                query = query.Where(p =>
+                    (p.ReceiptNo != null && EF.Functions.Like(p.ReceiptNo, likeSearch))
+                    || _context.UserMemberships.Any(m =>
+                        m.Id == p.MembershipId
+                        && _context.Users.Any(u =>
+                            m.UserId == u.Id
+                            && (EF.Functions.Like(u.FirstName, likeSearch)
+                                || EF.Functions.Like(u.LastName, likeSearch)))));
+            }
+
+            var isAsc = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
+            query = (sortBy ?? "date").Trim().ToLowerInvariant() switch
+            {
+                "amount" => isAsc ? query.OrderBy(p => p.Amount) : query.OrderByDescending(p => p.Amount),
+                _ => isAsc ? query.OrderBy(p => p.PaymentDate) : query.OrderByDescending(p => p.PaymentDate),
+            };
+
+            var totalCount = await query.CountAsync();
+            var pagePayments = await query.Skip((safePage - 1) * safePageSize).Take(safePageSize).ToListAsync();
+            var ids = pagePayments.Select(p => p.Id).ToList();
+            var map = await _invoiceService.GetInvoiceIdsByPaymentIdsAsync(ids);
+            var items = pagePayments
+                .Select(p => MapToDto(p, map.TryGetValue(p.Id, out var invId) ? invId : null))
+                .ToList();
+
+            return PagedQueryHelper.ToResult(items, totalCount, safePage, safePageSize);
         }
 
         public async Task<IEnumerable<PaymentDto>> GetAllAsync()

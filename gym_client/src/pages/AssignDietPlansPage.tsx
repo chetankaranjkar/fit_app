@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ListPagination } from '../components/ui/ListPagination'
+import { useClientPagination } from '../hooks/useClientPagination'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -97,20 +99,27 @@ export function AssignDietPlansPage() {
   const [bulkSubmitting, setBulkSubmitting] = useState(false)
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [search, setSearch] = useState('')
+  const [listPage, setListPage] = useState(1)
+  const listPageSize = 12
 
   const { data: users = [] } = useQuery({
-    queryKey: ['users'],
+    queryKey: ['users-for-diet-assign', 1, 200],
     queryFn: async () => {
-      const { data } = await usersService.getAll()
-      return Array.isArray(data) ? data : []
+      const { data } = await usersService.getPaged({
+        page: 1,
+        pageSize: 200,
+        membersOnly: true,
+        isActive: true,
+      })
+      return data.items ?? []
     },
   })
 
   const { data: plans = [] } = useQuery({
-    queryKey: ['diet-plans'],
+    queryKey: ['diet-plans-picker', 1, 100],
     queryFn: async () => {
-      const { data } = await dietPlansService.getAll()
-      return Array.isArray(data) ? data : []
+      const { data } = await dietPlansService.getPaged({ page: 1, pageSize: 100, isActive: true })
+      return data.items ?? []
     },
   })
 
@@ -298,6 +307,16 @@ export function AssignDietPlansPage() {
     })
   }, [assignments, statusFilter, search])
 
+  useEffect(() => {
+    setListPage(1)
+  }, [search, statusFilter])
+
+  const { pageItems: pagedAssignments, totalCount: filteredTotal } = useClientPagination(
+    filtered,
+    listPage,
+    listPageSize,
+  )
+
   return (
     <DashboardLayout userName={dashboardUserName}>
       <div className="min-w-0 space-y-6">
@@ -440,11 +459,19 @@ export function AssignDietPlansPage() {
         ) : filtered.length === 0 ? (
           <EmptyAssign onAdd={openFreshAssignModal} hasQuery={!!search || statusFilter !== 'all'} />
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((a) => (
-              <AssignmentCard key={a.id} a={a} onRemove={() => handleUnassign(a)} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {pagedAssignments.map((a) => (
+                <AssignmentCard key={a.id} a={a} onRemove={() => handleUnassign(a)} />
+              ))}
+            </div>
+            <ListPagination
+              page={listPage}
+              pageSize={listPageSize}
+              totalCount={filteredTotal}
+              onPageChange={setListPage}
+            />
+          </>
         )}
       </div>
 

@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import type { ApiPagedResponse } from '../types/apiPaged'
 import type { AttendanceAnomalyDto, AttendanceLogDto } from '../types/attendance'
 import type { AttendanceScanResponseDto } from '../types/qr'
 
@@ -36,6 +37,27 @@ export type GymQrWorkoutLogResponse = {
 }
 
 export const attendanceService = {
+  getPaged: (params: {
+    page: number
+    pageSize: number
+    search?: string
+    fromDate?: string
+    toDate?: string
+    sortBy?: string
+    sortDir?: 'asc' | 'desc'
+  }) => {
+    const query = new URLSearchParams()
+    query.set('page', String(params.page))
+    query.set('pageSize', String(params.pageSize))
+    if (params.search?.trim()) query.set('search', params.search.trim())
+    if (params.fromDate) query.set('fromDate', params.fromDate)
+    if (params.toDate) query.set('toDate', params.toDate)
+    if (params.sortBy) query.set('sortBy', params.sortBy)
+    if (params.sortDir) query.set('sortDir', params.sortDir)
+    return api.get<ApiPagedResponse<AttendanceLogDto>>(
+      `/AttendanceLogs/paged?${query.toString()}`,
+    )
+  },
   getByDateRange: (startDate: string, endDate: string) =>
     api.get<AttendanceLogDto[]>('/AttendanceLogs/daterange', {
       params: { startDate, endDate },

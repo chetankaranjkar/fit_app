@@ -1,4 +1,6 @@
 import { useState, useRef, useLayoutEffect, useEffect } from 'react'
+import { ListPagination } from '../../components/ui/ListPagination'
+import { useClientPagination } from '../../hooks/useClientPagination'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
@@ -289,6 +291,8 @@ export function BodyPartsPage() {
 
   const [viewMusclesFor, setViewMusclesFor] = useState<BodyPart | null>(null)
   const [muscleDetail, setMuscleDetail] = useState<{ muscle: BodyPartMuscle; parentName: string } | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const { data: bodyParts = [], isLoading, error } = useQuery({
     queryKey: ['bodyParts'],
@@ -297,6 +301,8 @@ export function BodyPartsPage() {
       return Array.isArray(data) ? data : []
     },
   })
+
+  const { pageItems: pagedBodyParts, totalCount } = useClientPagination(bodyParts, page, pageSize)
 
   const updateMutation = useMutation({
     mutationFn: ({ id, dto }: { id: number; dto: UpdateBodyPartDto }) =>
@@ -627,7 +633,7 @@ export function BodyPartsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {bodyParts.map((bp) => (
+                  {pagedBodyParts.map((bp) => (
                     <BodyPartRow
                       key={bp.id}
                       bp={bp}
@@ -643,6 +649,19 @@ export function BodyPartsPage() {
               {bodyParts.length === 0 && (
                 <p className="py-6 text-center text-slate-500">No body parts yet. Add one above.</p>
               )}
+              {bodyParts.length > 0 ? (
+                <ListPagination
+                  className="mt-4"
+                  page={page}
+                  pageSize={pageSize}
+                  totalCount={totalCount}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size)
+                    setPage(1)
+                  }}
+                />
+              ) : null}
             </div>
           )}
         </div>

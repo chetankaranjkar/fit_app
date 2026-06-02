@@ -1,5 +1,6 @@
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
+using GymManagement.Core.Interfaces.Caching;
 using GymManagement.Core.Options;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
@@ -15,63 +16,126 @@ namespace GymManagement.Infrastructure.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _context;
         private readonly IOptions<NotificationWebhookOptions> _notificationOptions;
+        private readonly IAppCache _cache;
 
         public DashboardService(
             IUnitOfWork unitOfWork,
             ApplicationDbContext context,
-            IOptions<NotificationWebhookOptions> notificationOptions)
+            IOptions<NotificationWebhookOptions> notificationOptions,
+            IAppCache cache)
         {
             _unitOfWork = unitOfWork;
             _context = context;
             _notificationOptions = notificationOptions;
+            _cache = cache;
+        }
+
+        public async Task<DashboardSummaryDto> GetSummaryAsync(CancellationToken cancellationToken = default)
+        {
+            const string cacheKey = "dashboard:summary:v1";
+            var cached = await _cache.GetAsync<DashboardSummaryDto>(cacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+
+            var today = DateTime.UtcNow.Date;
+            var monthStart = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var expiryWindowEnd = today.AddDays(14);
+
+            // EXPLAIN ANALYZE (recommended): member counts use User + UserUserTypes + UserTypes with IsDeleted/IsActive filters.
+            var membersQuery = _context.Users.AsNoTracking().Where(u =>
+                _context.UserUserTypes.Any(uut =>
+                    uut.UserId == u.Id
+                    && _context.UserTypes.Any(ut => ut.Id == uut.UserTypeId && ut.Name == "Member")));
+
+            var totalMembers = await membersQuery.CountAsync(cancellationToken);
+            var activeMembers = await membersQuery.CountAsync(u => u.IsActive, cancellationToken);
+            var newMembersToday = await membersQuery.CountAsync(
+                u => u.RegistrationDate.Date >= today,
+                cancellationToken);
+
+            var expiredMemberships = await _context.UserMemberships.AsNoTracking()
+                .CountAsync(
+                    m => m.Status == MembershipStatus.Expired || m.EndDate.Date < today,
+                    cancellationToken);
+
+            var expiringSoon = await _context.UserMemberships.AsNoTracking()
+                .CountAsync(
+                    m => m.Status == MembershipStatus.Active
+                         && m.EndDate.Date >= today
+                         && m.EndDate.Date <= expiryWindowEnd,
+                    cancellationToken);
+
+            var todayAttendance = await _context.AttendanceLogs.AsNoTracking()
+                .CountAsync(a => a.AttendanceDate == today, cancellationToken);
+
+            var now = DateTime.UtcNow;
+            var pendingPayments = await _context.Invoices.AsNoTracking()
+                .CountAsync(
+                    i => i.Status == EntityInvoiceStatus.Overdue
+                         || ((i.Status == EntityInvoiceStatus.Draft || i.Status == EntityInvoiceStatus.Sent)
+                             && i.DueDate < now),
+                    cancellationToken);
+
+            var monthlyRevenue = await _context.Payments.AsNoTracking()
+                .Where(p => p.PaymentDate >= monthStart && p.PaymentDate < monthStart.AddMonths(1))
+                .SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
+
+            var todayEnd = today.AddDays(1);
+            var todayRevenue = await _context.Payments.AsNoTracking()
+                .Where(p => p.PaymentDate >= today && p.PaymentDate < todayEnd)
+                .SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
+
+            var trainerCount = await _context.Trainers.AsNoTracking().CountAsync(cancellationToken);
+
+            var summary = new DashboardSummaryDto
+            {
+                TotalMembers = totalMembers,
+                ActiveMembers = activeMembers,
+                ExpiredMemberships = expiredMemberships,
+                TodayAttendance = todayAttendance,
+                PendingPayments = pendingPayments,
+                MonthlyRevenue = monthlyRevenue,
+                TodayRevenue = todayRevenue,
+                TrainerCount = trainerCount,
+                NewMembersToday = newMembersToday,
+                ExpiringMembershipsNext14Days = expiringSoon,
+            };
+
+            await _cache.SetAsync(cacheKey, summary, TimeSpan.FromMinutes(2), cancellationToken);
+            return summary;
         }
 
         public async Task<DashboardStatisticsDto> GetStatisticsAsync()
         {
-            // Get total users count
-            var totalUsers = await _unitOfWork.Users.CountAsync();
+            var totalUsers = await _context.Users.AsNoTracking().CountAsync();
+            var totalTrainers = await _context.Trainers.AsNoTracking().CountAsync();
 
-            // Get total trainers count
-            var totalTrainers = await _unitOfWork.Trainers.CountAsync();
-
-            // Get all trainers with their user count (users linked through schedules)
-            var trainers = await _unitOfWork.Trainers.GetAllAsync();
-            var trainerUserIds = trainers.Select(i => i.UserId).Distinct().ToList();
-            var trainerUsers = trainerUserIds.Count > 0
-                ? await _unitOfWork.Users.FindAsync(u => trainerUserIds.Contains(u.Id))
-                : new List<Domain.Entities.User>();
-            var trainerUserDict = trainerUsers.ToDictionary(u => u.Id);
-            var authByUserId = (await _unitOfWork.AuthUsers.GetAllAsync())
-                .Where(a => a.UserId.HasValue && trainerUserIds.Contains(a.UserId.Value))
-                .ToDictionary(a => a.UserId!.Value);
-            var schedules = await _unitOfWork.UserSchedules.GetAllAsync();
-
-            var trainersWithUserCount = new List<TrainerUserCountDto>();
-
-            foreach (var trainer in trainers)
-            {
-                var instUser = trainerUserDict.GetValueOrDefault(trainer.UserId);
-                var trainerEmail = authByUserId.GetValueOrDefault(trainer.UserId)?.Email ?? "";
-                var userIds = schedules
-                    .Where(s => s.TrainerId.HasValue && s.TrainerId.Value == trainer.Id)
+            // Aggregate client counts per trainer in SQL (avoids loading all schedules).
+            var trainersWithUserCount = await (
+                from t in _context.Trainers.AsNoTracking()
+                join u in _context.Users.AsNoTracking() on t.UserId equals u.Id
+                join au in _context.AuthUsers.AsNoTracking() on u.Id equals au.UserId into authJoin
+                from au in authJoin.DefaultIfEmpty()
+                let clientCount = _context.UserSchedules
+                    .Where(s => s.TrainerId == t.Id)
                     .Select(s => s.UserId)
                     .Distinct()
-                    .Count();
-
-                trainersWithUserCount.Add(new TrainerUserCountDto
+                    .Count()
+                orderby clientCount descending
+                select new TrainerUserCountDto
                 {
-                    TrainerId = trainer.Id,
-                    TrainerName = instUser != null ? $"{instUser.FirstName} {instUser.LastName}" : "",
-                    TrainerEmail = trainerEmail,
-                    UserCount = userIds
-                });
-            }
+                    TrainerId = t.Id,
+                    TrainerName = (u.FirstName + " " + u.LastName).Trim(),
+                    TrainerEmail = au != null ? au.Email : string.Empty,
+                    UserCount = clientCount,
+                }
+            ).ToListAsync();
 
             return new DashboardStatisticsDto
             {
                 TotalUsers = totalUsers,
                 TotalTrainers = totalTrainers,
-                TrainersWithUserCount = trainersWithUserCount.OrderByDescending(i => i.UserCount).ToList()
+                TrainersWithUserCount = trainersWithUserCount,
             };
         }
 

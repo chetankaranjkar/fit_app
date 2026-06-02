@@ -29,3 +29,10 @@ export interface UpdateUserMembershipDto {
   endDate?: string | null
   status?: MembershipStatus | null
 }
+
+export interface PagedUserMembershipsResponse {
+  items: UserMembership[]
+  totalCount: number
+  page: number
+  pageSize: number
+}

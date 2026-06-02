@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
 using GymManagement.Infrastructure.Security;
 
 namespace GymManagement.Infrastructure.Services
@@ -16,19 +18,22 @@ namespace GymManagement.Infrastructure.Services
         private readonly IUserInstructorService _userInstructorService;
         private readonly IUserProvisioningService _provisioning;
         private readonly IRbacService _rbacService;
+        private readonly ApplicationDbContext _db;
 
         public UserService(
             IUnitOfWork unitOfWork,
             IMembershipPaymentService membershipPaymentService,
             IUserInstructorService userInstructorService,
             IUserProvisioningService provisioning,
-            IRbacService rbacService)
+            IRbacService rbacService,
+            ApplicationDbContext db)
         {
             _unitOfWork = unitOfWork;
             _membershipPaymentService = membershipPaymentService;
             _userInstructorService = userInstructorService;
             _provisioning = provisioning;
             _rbacService = rbacService;
+            _db = db;
         }
 
         public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
@@ -37,13 +42,10 @@ namespace GymManagement.Infrastructure.Services
             var userIds = users.Select(u => u.Id).ToHashSet();
             var allAuth = (await _unitOfWork.AuthUsers.GetAllAsync()).ToList();
             var trainersByUserId = (await _unitOfWork.Trainers.GetAllAsync()).ToDictionary(t => t.UserId, t => t);
-            var authByUserId = new Dictionary<int, AuthUser>();
-            foreach (var u in users)
-            {
-                var auth = allAuth.FirstOrDefault(a => a.UserId == u.Id);
-                if (auth != null)
-                    authByUserId[u.Id] = auth;
-            }
+            var authByUserId = allAuth
+                .Where(a => a.UserId.HasValue)
+                .GroupBy(a => a.UserId!.Value)
+                .ToDictionary(g => g.Key, g => g.First());
             var trainerUserIds = trainersByUserId.Keys.ToHashSet();
             var userTypesByUserId = await GetUserTypesByUserIdsAsync(userIds);
             var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(userIds);
@@ -56,6 +58,87 @@ namespace GymManagement.Infrastructure.Services
                 EnrichWithTrainerAssignment(dto, trainerAssignmentByUserId.GetValueOrDefault(u.Id));
                 return dto;
             });
+        }
+
+        public async Task<PagedResultDto<UserDto>> GetUsersPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            bool membersOnly = false,
+            bool? isActive = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 200);
+            var trimmedSearch = search?.Trim();
+            var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
+
+            IQueryable<User> query = _db.Users.AsNoTracking().Where(u => !u.IsDeleted);
+
+            if (isActive.HasValue)
+                query = query.Where(u => u.IsActive == isActive.Value);
+
+            if (!string.IsNullOrWhiteSpace(likeSearch))
+            {
+                query = query.Where(u =>
+                    EF.Functions.Like(u.FirstName, likeSearch) ||
+                    EF.Functions.Like(u.LastName, likeSearch) ||
+                    (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch)) ||
+                    _db.AuthUsers.Any(a => a.UserId == u.Id && EF.Functions.Like(a.Email, likeSearch)));
+            }
+
+            if (membersOnly)
+            {
+                query = query.Where(u =>
+                    _db.UserUserTypes.Any(uut =>
+                        uut.UserId == u.Id
+                        && _db.UserTypes.Any(ut => ut.Id == uut.UserTypeId && ut.Name == "Member")));
+            }
+
+            var totalCount = await query.CountAsync();
+            var pageUsers = await query
+                .OrderByDescending(u => u.RegistrationDate)
+                .ThenByDescending(u => u.Id)
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToListAsync();
+
+            var userIds = pageUsers.Select(u => u.Id).ToHashSet();
+            var pageAuth = await _db.AuthUsers.AsNoTracking()
+                .Where(a => a.UserId.HasValue && userIds.Contains(a.UserId.Value))
+                .ToListAsync();
+            var authByUserId = pageAuth
+                .Where(a => a.UserId.HasValue)
+                .GroupBy(a => a.UserId!.Value)
+                .ToDictionary(g => g.Key, g => g.First());
+            var trainerUserIds = (await _db.Trainers.AsNoTracking()
+                .Where(t => userIds.Contains(t.UserId))
+                .Select(t => t.UserId)
+                .ToListAsync()).ToHashSet();
+            var userTypesByUserId = await GetUserTypesByUserIdsAsync(userIds);
+            var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(userIds);
+            var billingByUserId = await GetBillingSummariesByUserIdsAsync(userIds);
+            var trainerAssignmentByUserId = await GetActiveTrainerAssignmentByUserIdsAsync(userIds);
+
+            var items = pageUsers.Select(u =>
+            {
+                var dto = MapToDto(
+                    u,
+                    authByUserId.GetValueOrDefault(u.Id),
+                    trainerUserIds.Contains(u.Id),
+                    userTypesByUserId.GetValueOrDefault(u.Id),
+                    appRoleNamesByUserId.GetValueOrDefault(u.Id));
+                EnrichWithBillingSummary(dto, billingByUserId.GetValueOrDefault(u.Id));
+                EnrichWithTrainerAssignment(dto, trainerAssignmentByUserId.GetValueOrDefault(u.Id));
+                return dto;
+            }).ToList();
+
+            return new PagedResultDto<UserDto>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = safePage,
+                PageSize = safePageSize,
+            };
         }
 
         public async Task<UserDto?> GetUserByIdAsync(int id)

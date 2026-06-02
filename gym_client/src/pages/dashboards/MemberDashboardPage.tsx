@@ -17,11 +17,20 @@ export function MemberDashboardPage() {
       return data
     },
   })
+  const { data: dietPlan } = useQuery({
+    queryKey: ['member-diet-plan'],
+    queryFn: async () => (await meService.getDietPlan()).data,
+    retry: false,
+  })
 
   const firstName = dash?.profile?.firstName || userName.split(' ')[0] || 'Athlete'
   const streak = dash?.attendance?.currentStreakDays ?? 0
   const membership = dash?.membership
   const weight = dash?.latestBodyMetric?.weight
+  const caloriesGoal = dietPlan?.calories ?? null
+  const proteinGoal = dietPlan?.proteinGrams ?? null
+  const waterTarget = membership ? 8 : 6
+  const waterDone = Math.min(waterTarget, Math.max(0, Math.ceil(streak / 2)))
 
   const attendanceChart =
     dash?.attendance?.last30Days?.map((d) => ({
@@ -104,9 +113,20 @@ export function MemberDashboardPage() {
 
           <GlassPanel role="member" title="Daily goals" subtitle="Stay on track">
             <ul className="space-y-3 text-sm">
-              <li className="flex justify-between"><span className="text-slate-400">Water</span><span className="text-white">6 / 8 glasses</span></li>
-              <li className="flex justify-between"><span className="text-slate-400">Protein</span><span className="text-white">— g</span></li>
-              <li className="flex justify-between"><span className="text-slate-400">Calories</span><span className="text-white">— kcal</span></li>
+              <li className="flex justify-between">
+                <span className="text-slate-400">Water</span>
+                <span className="text-white">
+                  {waterDone} / {waterTarget} glasses
+                </span>
+              </li>
+              <li className="flex justify-between">
+                <span className="text-slate-400">Protein</span>
+                <span className="text-white">{proteinGoal != null ? `${proteinGoal} g` : 'Set in diet plan'}</span>
+              </li>
+              <li className="flex justify-between">
+                <span className="text-slate-400">Calories</span>
+                <span className="text-white">{caloriesGoal != null ? `${caloriesGoal} kcal` : 'Set in diet plan'}</span>
+              </li>
             </ul>
             <Link to="/dashboard/member/diet" className="mt-4 inline-block text-xs text-orange-400 hover:underline">
               Open diet →

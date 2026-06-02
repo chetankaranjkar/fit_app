@@ -110,9 +110,15 @@ export function TrainerDashboardPage() {
           <GlassPanel role="trainer" title="Reminders" subtitle="Upcoming & alerts">
             <ul className="space-y-2 text-sm text-slate-300">
               <li className="rounded-lg border border-orange-500/20 bg-orange-500/10 px-3 py-2">
-                Review client progress before evening sessions
+                {data?.pendingCheckIns
+                  ? `${data.pendingCheckIns} scheduled members are still pending check-in today`
+                  : 'All scheduled members are checked in for now'}
               </li>
-              <li className="rounded-lg border border-white/10 px-3 py-2">Upload workout plans for new assignments</li>
+              <li className="rounded-lg border border-white/10 px-3 py-2">
+                {data?.todaySessions?.length
+                  ? `${data.todaySessions.length} sessions lined up today — review plans before start`
+                  : 'No sessions today — update workout assignments for tomorrow'}
+              </li>
             </ul>
           </GlassPanel>
         </div>

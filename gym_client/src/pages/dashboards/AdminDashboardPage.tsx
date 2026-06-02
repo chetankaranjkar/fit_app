@@ -36,6 +36,12 @@ export function AdminDashboardPage() {
       label: new Date(p.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
       value: p.count,
     })) ?? []
+  const attendanceValues = data?.report?.attendanceTrend?.map((p) => p.count) ?? []
+  const peakAttendance = attendanceValues.length ? Math.max(...attendanceValues) : 0
+  const avgAttendance = attendanceValues.length
+    ? Math.round(attendanceValues.reduce((sum, value) => sum + value, 0) / attendanceValues.length)
+    : 0
+  const latestAttendance = attendanceValues.length ? attendanceValues[attendanceValues.length - 1] : 0
 
   return (
     <DashboardLayout userName={userName}>
@@ -135,22 +141,26 @@ export function AdminDashboardPage() {
               <p className="py-8 text-center text-sm text-slate-500">No attendance trend yet.</p>
             )}
           </GlassPanel>
-          <GlassPanel role="admin" title="Peak hours" subtitle="Heatmap preview">
-            <div className="grid grid-cols-7 gap-1">
-              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                <div key={`${d}-${i}`} className="space-y-1">
-                  <span className="block text-center text-[10px] text-slate-500">{d}</span>
-                  {[0.3, 0.5, 0.8, 0.6, 0.9, 0.4, 0.7].map((o, j) => (
-                    <div
-                      key={j}
-                      className="h-6 rounded-md bg-gradient-to-t from-blue-600/40 to-violet-400/60"
-                      style={{ opacity: o * (0.6 + ((i + j) % 3) * 0.15) }}
-                    />
-                  ))}
+          <GlassPanel role="admin" title="Peak hours" subtitle="Live attendance signal">
+            {attendanceValues.length ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Peak day check-ins</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">{peakAttendance}</p>
                 </div>
-              ))}
-            </div>
-            <p className="mt-3 text-[11px] text-slate-500">Based on recent attendance patterns</p>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">30-day average</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">{avgAttendance}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Latest day</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">{latestAttendance}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-slate-500">No attendance data yet.</p>
+            )}
+            <p className="mt-3 text-[11px] text-slate-500">Computed from the live attendance trend</p>
           </GlassPanel>
         </section>
 

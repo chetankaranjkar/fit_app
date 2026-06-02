@@ -68,7 +68,6 @@ export function TrainersPage() {
         minWidth: 220,
         width: 250,
         sortable: true,
-        filterable: true,
         accessorFn: (t) => trainerFullName(t),
         cell: ({ row }) => (
           <span className="font-medium text-white">{trainerFullName(row)}</span>
@@ -80,7 +79,6 @@ export function TrainersPage() {
         minWidth: 180,
         width: 200,
         sortable: true,
-        filterable: true,
         hideBelow: 'md',
         accessorFn: (t) => t.email ?? '',
         cell: ({ value }) => <span className="text-slate-300">{String(value) || '—'}</span>,

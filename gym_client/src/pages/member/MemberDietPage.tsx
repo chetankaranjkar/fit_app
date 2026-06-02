@@ -23,6 +23,7 @@ import {
   Wheat,
 } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { AnimatedStat } from '../../components/dashboard/premium/AnimatedStat'
 import { getDashboardUser } from '../../lib/dashboardUser'
@@ -303,7 +304,7 @@ export function MemberDietPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto w-full max-w-5xl pb-12">
+      <DashboardPageContent className="max-w-5xl">
         <Link
           to="/dashboard"
           className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-orange-300"
@@ -455,7 +456,7 @@ export function MemberDietPage() {
         ) : (
           <EmptyState />
         )}
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

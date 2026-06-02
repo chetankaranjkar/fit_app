@@ -531,7 +531,6 @@ export function PaymentsPage() {
         minWidth: 200,
         width: 220,
         sortable: true,
-        filterable: true,
         accessorFn: (p) => membershipLabel(p.membershipId),
       },
       {

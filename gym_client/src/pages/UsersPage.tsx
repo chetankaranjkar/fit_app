@@ -652,7 +652,6 @@ export function UsersPage() {
         minWidth: 250,
         width: 280,
         sortable: true,
-        filterable: true,
         accessorFn: (u) => `${u.firstName} ${u.lastName}`.trim(),
         cell: ({ row }) => {
           const name = `${row.firstName} ${row.lastName}`.trim() || '—'
@@ -685,7 +684,6 @@ export function UsersPage() {
         minWidth: 140,
         width: 140,
         hideBelow: 'lg',
-        filterable: true,
         accessorFn: (u) => u.phone ?? '',
       },
       {

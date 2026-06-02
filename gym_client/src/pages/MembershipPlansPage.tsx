@@ -189,7 +189,6 @@ export function MembershipPlansPage() {
         minWidth: 180,
         width: 220,
         sortable: true,
-        filterable: true,
         accessorFn: (p) => p.planName,
         cell: ({ row }) => <span className="font-medium text-white">{row.planName}</span>,
       },

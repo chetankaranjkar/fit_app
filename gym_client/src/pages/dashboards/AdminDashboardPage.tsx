@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { HeroStat } from '../../components/dashboard/premium/HeroStat'
 import { DashboardMetricsGrid } from '../../components/layout/DashboardMetricsGrid'
@@ -45,7 +46,7 @@ export function AdminDashboardPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto max-w-[1600px] space-y-8 pb-12">
+      <DashboardPageContent className="max-w-[1600px]">
         <header className="dashboard-hero relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-blue-600/15 via-violet-600/10 to-transparent p-6 sm:p-8">
           <div className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full bg-violet-500/20 blur-3xl" />
           <p className="text-sm text-slate-400">{greeting}</p>
@@ -263,7 +264,7 @@ export function AdminDashboardPage() {
             />
           </div>
         </section>
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

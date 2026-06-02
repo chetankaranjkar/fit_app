@@ -6,6 +6,7 @@ import { MemberBottomNav } from './MemberBottomNav'
 import { useDashboardRoleOrCurrent } from '../../features/auth/DashboardRoleContext'
 import { useDashboardSession } from '../../features/auth/DashboardSessionContext'
 import { TopNavbar } from './TopNavbar'
+import { isDataGridViewportRoute } from '../../lib/dashboardScrollMode'
 
 const SIDEBAR_COLLAPSED_KEY = 'gym-sidebar-collapsed'
 
@@ -32,6 +33,7 @@ export function DashboardLayout({
   const { pathname } = useLocation()
   const { openSessionWarning } = useDashboardSession()
   const dashboardRole = useDashboardRoleOrCurrent()
+  const lockViewport = isDataGridViewportRoute(pathname)
 
   const orbClasses =
     dashboardRole === 'trainer'
@@ -64,7 +66,7 @@ export function DashboardLayout({
   }
 
   return (
-    <div className="relative flex h-screen max-h-dvh w-full max-w-full overflow-hidden text-slate-100">
+    <div className="relative flex h-dvh max-h-dvh w-full max-w-[100vw] overflow-hidden text-slate-100">
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className={`absolute -top-32 left-10 size-72 rounded-full blur-3xl animate-float-slow ${orbClasses[0]}`} />
         <div
@@ -99,7 +101,7 @@ export function DashboardLayout({
       )}
 
       <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-hidden">
-        <header className="shrink-0">
+        <header className="z-30 shrink-0">
           <TopNavbar
             userName={userName || 'User'}
             userAvatarUrl={userAvatarUrl}
@@ -110,11 +112,18 @@ export function DashboardLayout({
 
         <main
           className={[
-            'dashboard-scroll-area min-h-0 min-w-0 w-full max-w-full flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-5 lg:px-8',
+            'dashboard-scroll-area min-h-0 min-w-0 w-full max-w-full flex-1 px-4 py-4 sm:px-6 sm:py-5 lg:px-8',
+            lockViewport ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden',
             dashboardRole === 'member' ? 'pb-20 lg:pb-5' : '',
           ].join(' ')}
         >
-          <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
+          <div
+            className={
+              lockViewport
+                ? 'flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden'
+                : 'min-h-min w-full min-w-0 max-w-full'
+            }
+          >
             {children}
           </div>
         </main>

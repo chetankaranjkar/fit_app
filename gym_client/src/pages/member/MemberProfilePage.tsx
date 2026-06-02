@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChangePasswordCard } from '../../components/account/ChangePasswordCard'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { getDashboardUser } from '../../lib/dashboardUser'
 import { authService } from '../../services/auth.service'
@@ -27,7 +28,7 @@ export function MemberProfilePage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <section className="mx-auto max-w-lg space-y-6 pb-12">
+      <DashboardPageContent className="max-w-lg">
         <header>
           <h1 className="text-2xl font-bold text-white">Account</h1>
           <p className="mt-1 text-sm text-slate-400">Profile and sign-in settings</p>
@@ -72,7 +73,7 @@ export function MemberProfilePage() {
         <Link to="/dashboard" className="text-sm text-orange-400 hover:underline">
           ← Back to home
         </Link>
-      </section>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

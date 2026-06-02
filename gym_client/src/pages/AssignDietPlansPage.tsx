@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getSafeDashboardReturnPath, parseMemberIdsQuery } from '../lib/safeReturnPath'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../components/layout/DataPageShell'
 import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -319,7 +320,7 @@ export function AssignDietPlansPage() {
 
   return (
     <DashboardLayout userName={dashboardUserName}>
-      <div className="min-w-0 space-y-6">
+      <DashboardPageContent>
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
@@ -473,7 +474,7 @@ export function AssignDietPlansPage() {
             />
           </>
         )}
-      </div>
+      </DashboardPageContent>
 
       {/* Assign modal */}
       <Modal

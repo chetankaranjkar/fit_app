@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { HeroStat } from '../../components/dashboard/premium/HeroStat'
 import { TrendAreaChart } from '../../components/dashboard/premium/TrendAreaChart'
@@ -40,7 +41,7 @@ export function MemberDashboardPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto max-w-[1200px] space-y-8 pb-16">
+      <DashboardPageContent className="max-w-[1200px] pb-16">
         <header className="relative overflow-hidden rounded-3xl border border-orange-500/25 bg-gradient-to-br from-neutral-950 via-orange-950/40 to-neutral-950 p-6 sm:p-8">
           <div className="pointer-events-none absolute -right-16 top-0 size-48 rounded-full bg-orange-500/25 blur-3xl" />
           <p className="text-sm text-orange-200/70">Your fitness journey</p>
@@ -166,7 +167,7 @@ export function MemberDashboardPage() {
             </article>
           </div>
         </GlassPanel>
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

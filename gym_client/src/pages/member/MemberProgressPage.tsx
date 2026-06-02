@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { TrendAreaChart } from '../../components/dashboard/premium/TrendAreaChart'
 import { getDashboardUser } from '../../lib/dashboardUser'
@@ -24,7 +25,7 @@ export function MemberProgressPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto max-w-3xl space-y-6 pb-12">
+      <DashboardPageContent className="max-w-3xl">
         <header>
           <h1 className="text-2xl font-bold text-white">Progress</h1>
           <p className="text-sm text-slate-400">Weight, attendance, and monthly momentum.</p>
@@ -44,7 +45,7 @@ export function MemberProgressPage() {
         <Link to="/dashboard" className="text-sm text-orange-400 hover:underline">
           ← Back to home
         </Link>
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

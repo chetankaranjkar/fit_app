@@ -40,7 +40,7 @@ export function ModulePageShell({
 
   return (
     <DashboardLayout userName={userName}>
-      <div ref={ref} className="flex h-full min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden">
+      <div ref={ref} className="min-w-0 w-full max-w-full">
         <DashboardSubpageShell
           eyebrow={eyebrow}
           titleBefore={titleBefore}

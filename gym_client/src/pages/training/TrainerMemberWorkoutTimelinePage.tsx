@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { getDashboardUser } from '../../lib/dashboardUser'
 import { workoutTrackingService } from '../../services/workoutTracking.service'
@@ -21,7 +22,7 @@ export function TrainerMemberWorkoutTimelinePage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto max-w-[1100px] space-y-6 pb-12">
+      <DashboardPageContent className="max-w-[1100px]">
         <header>
           <Link to="/dashboard" className="text-sm text-orange-400 hover:underline">
             ← Trainer dashboard
@@ -60,7 +61,7 @@ export function TrainerMemberWorkoutTimelinePage() {
             ) : null}
           </ul>
         </GlassPanel>
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

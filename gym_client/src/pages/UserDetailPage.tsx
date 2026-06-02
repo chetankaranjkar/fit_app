@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../components/layout/DataPageShell'
 import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -1035,7 +1036,7 @@ export function UserDetailPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="min-w-0 max-w-full space-y-6">
+      <DashboardPageContent className="max-w-[1800px]">
         {/* Back link */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
@@ -1152,7 +1153,7 @@ export function UserDetailPage() {
             previousMetrics={metricsList.length > 1 ? metricsList[1] : null}
           />
         )}
-      </div>
+      </DashboardPageContent>
 
       {/* Edit-only modals */}
       {!viewMode && (

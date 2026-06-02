@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { DashboardMetricsGrid } from '../../components/layout/DashboardMetricsGrid'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
@@ -165,7 +166,7 @@ export function ReceptionCrmPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto max-w-[1800px] space-y-8 pb-16 pt-2">
+      <DashboardPageContent className="max-w-[1800px] pt-2">
           <header className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-slate-900/90 via-blue-950/40 to-violet-950/30 p-6 sm:p-10">
             <div className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-cyan-500/15 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-16 left-10 size-56 rounded-full bg-fuchsia-500/10 blur-3xl" />
@@ -319,14 +320,14 @@ export function ReceptionCrmPage() {
               </div>
               {kanbanQ.isFetching && <span className="text-xs text-slate-500">Syncing…</span>}
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory">
+            <div className="flex min-w-0 gap-4 overflow-x-auto pb-4 snap-x snap-mandatory [-webkit-overflow-scrolling:touch]">
               {(kanbanQ.data?.columns ?? [])
                 .filter((c) => STATUS_ORDER.includes(c.status))
                 .sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status))
                 .map((col) => (
                   <div
                     key={col.status}
-                    className="snap-start shrink-0 w-[min(100vw-2rem,300px)] rounded-3xl border border-white/10 bg-white/[0.03] p-3 backdrop-blur-xl"
+                    className="w-[min(100%,280px)] shrink-0 snap-start rounded-3xl border border-white/10 bg-white/[0.03] p-3 backdrop-blur-xl sm:w-[300px]"
                   >
                     <div className="mb-3 flex items-center justify-between px-1">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -368,7 +369,7 @@ export function ReceptionCrmPage() {
                 ))}
             </div>
           </section>
-        </div>
+      </DashboardPageContent>
 
       {selectedId != null && (
         <LeadDetailModal

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../components/layout/DataPageShell'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
@@ -272,7 +273,7 @@ export function DietPlansDashboardPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="min-w-0 space-y-8">
+      <DashboardPageContent>
         {/* HERO */}
         <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[rgba(15,12,30,0.7)] p-8 sm:p-10">
           <div
@@ -374,7 +375,7 @@ export function DietPlansDashboardPage() {
             ))}
           </div>
         </section>
-      </div>
+      </DashboardPageContent>
 
       {/* Quick-Add Meal */}
       <Modal

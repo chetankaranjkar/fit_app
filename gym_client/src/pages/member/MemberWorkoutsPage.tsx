@@ -23,6 +23,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { AnimatedStat } from '../../components/dashboard/premium/AnimatedStat'
 import { getDashboardUser } from '../../lib/dashboardUser'
@@ -731,7 +732,7 @@ export function MemberWorkoutsPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto w-full max-w-5xl pb-16">
+      <DashboardPageContent className="max-w-5xl pb-16">
         <Link
           to="/dashboard"
           className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-orange-300"
@@ -767,7 +768,7 @@ export function MemberWorkoutsPage() {
             ))}
           </div>
         )}
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

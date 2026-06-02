@@ -5,6 +5,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { getDashboardUser } from '../../lib/dashboardUser'
 import { meService } from '../../services/me.service'
@@ -63,7 +64,7 @@ export function MemberPortalPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto max-w-3xl space-y-6 pb-20 lg:pb-8">
+      <DashboardPageContent className="max-w-3xl pb-20 lg:pb-8">
         <header className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-widest text-orange-400/80">
             Member portal
@@ -197,7 +198,7 @@ export function MemberPortalPage() {
         <Link to="/dashboard" className="inline-block text-sm text-orange-400 hover:underline">
           ← Back to home
         </Link>
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

@@ -297,7 +297,6 @@ export function AttendancePage() {
         minWidth: 220,
         width: 240,
         sortable: true,
-        filterable: true,
         accessorFn: (log) => log.userName,
         cell: ({ row }) => (
           <div className="flex items-center gap-2">

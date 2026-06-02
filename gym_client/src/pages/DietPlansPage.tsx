@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../components/layout/DataPageShell'
 import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -399,7 +400,7 @@ export function DietPlansPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="min-w-0 space-y-6">
+      <DashboardPageContent>
         {/* Page Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -632,7 +633,7 @@ export function DietPlansPage() {
             </div>
           </section>
         )}
-      </div>
+      </DashboardPageContent>
 
       {/* Add/Edit Plan modal */}
       <Modal

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../components/layout/DataPageShell'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { Input } from '../components/ui/Input'
@@ -228,7 +229,7 @@ export function CollectMembershipPaymentPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
+      <DashboardPageContent className="max-w-4xl px-4 py-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Billing</p>
           <h1 className="mt-1 text-2xl font-bold text-white">Collect membership payment</h1>
@@ -529,7 +530,7 @@ export function CollectMembershipPaymentPage() {
               : undefined
           }
         />
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

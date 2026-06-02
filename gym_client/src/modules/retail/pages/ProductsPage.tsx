@@ -94,7 +94,6 @@ export function ProductsPage() {
         minWidth: 200,
         width: 240,
         sortable: true,
-        filterable: true,
         accessorFn: (p) => p.name,
         cell: ({ row }) => (
           <div className="min-w-0">

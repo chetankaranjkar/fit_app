@@ -83,7 +83,6 @@ export function ExpensesPage() {
         minWidth: 220,
         width: 260,
         sortable: true,
-        filterable: true,
         accessorFn: (e) => e.description,
         cell: ({ row }) => (
           <div className="min-w-0">

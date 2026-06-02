@@ -69,7 +69,6 @@ export function PtSessionsPage() {
         minWidth: 160,
         width: 180,
         sortable: true,
-        filterable: true,
         accessorFn: (s) => s.memberName,
       },
       {

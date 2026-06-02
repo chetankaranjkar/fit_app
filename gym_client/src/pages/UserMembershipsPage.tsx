@@ -329,7 +329,6 @@ export function UserMembershipsPage() {
         minWidth: 180,
         width: 200,
         sortable: true,
-        filterable: true,
         accessorFn: (m) => m.userName ?? `User #${m.userId}`,
         cell: ({ row }) =>
           row.userName ? (
@@ -349,7 +348,6 @@ export function UserMembershipsPage() {
         minWidth: 140,
         width: 160,
         sortable: true,
-        filterable: true,
         accessorFn: (m) => m.planName ?? `Plan #${m.planId}`,
       },
       {

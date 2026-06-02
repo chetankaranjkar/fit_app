@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { HeroStat } from '../../components/dashboard/premium/HeroStat'
 import { QuickAction } from '../../components/dashboard/premium/QuickAction'
@@ -65,8 +66,7 @@ export function TrainerDashboardPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto max-w-[1400px] space-y-8 pb-12"
-      >
+      <DashboardPageContent className="max-w-[1400px]">
         <header className="relative overflow-hidden rounded-3xl border border-orange-500/20 bg-gradient-to-br from-orange-600/20 via-red-600/10 to-transparent p-6 sm:p-8">
           <p className="text-sm text-orange-200/80">Coach workspace</p>
           <h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">Hey {userName.split(' ')[0]} — let&apos;s train</h1>
@@ -199,7 +199,7 @@ export function TrainerDashboardPage() {
             <QuickAction role="trainer" to="/dashboard/users" label="Message client" icon={<span>💬</span>} />
           </div>
         </section>
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

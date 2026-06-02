@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { HeroStat } from '../../components/dashboard/premium/HeroStat'
 import { getDashboardUser } from '../../lib/dashboardUser'
@@ -19,7 +20,7 @@ export function WorkoutAdminMonitoringPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="mx-auto max-w-[1200px] space-y-6 pb-12">
+      <DashboardPageContent className="max-w-[1200px]">
         <header>
           <Link to="/dashboard" className="text-sm text-orange-400 hover:underline">
             ← Dashboard
@@ -51,7 +52,7 @@ export function WorkoutAdminMonitoringPage() {
             <SessionList items={data?.recentCompleted} empty="No completions yet today." />
           </GlassPanel>
         </div>
-      </div>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

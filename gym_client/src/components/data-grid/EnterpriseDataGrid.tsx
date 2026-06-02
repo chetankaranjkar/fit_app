@@ -51,6 +51,7 @@ export function EnterpriseDataGrid<T>({
   virtualize = false,
   estimateRowHeight = ROW_HEIGHT,
   stickyFirstColumn = true,
+  enableColumnFilters = false,
   className = '',
   footer,
 }: {
@@ -63,6 +64,8 @@ export function EnterpriseDataGrid<T>({
   virtualize?: boolean
   estimateRowHeight?: number
   stickyFirstColumn?: boolean
+  /** Inline header filters — off by default when the page uses DataToolbar search/filters */
+  enableColumnFilters?: boolean
   className?: string
   footer?: ReactNode
 }) {
@@ -93,7 +96,7 @@ export function EnterpriseDataGrid<T>({
 
   const rows = table.getRowModel().rows
   const headerGroups = table.getHeaderGroups()
-  const filterable = columns.some((c) => c.filterable)
+  const filterable = enableColumnFilters && columns.some((c) => c.filterable)
 
   const virtualizer = useVirtualizer({
     count: rows.length,

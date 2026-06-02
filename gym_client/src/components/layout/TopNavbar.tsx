@@ -149,7 +149,7 @@ export function TopNavbar({
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-white/5 bg-[rgba(11,11,26,0.55)] px-4 backdrop-blur-xl sm:px-6"
+      className="sticky top-0 z-30 flex h-16 min-w-0 items-center gap-2 border-b border-white/5 bg-[rgba(11,11,26,0.55)] px-3 backdrop-blur-xl sm:gap-3 sm:px-6"
       role="banner"
     >
       {/* Mobile hamburger */}
@@ -185,7 +185,7 @@ export function TopNavbar({
         </div>
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
         {expiryLabel && (
           <button
             type="button"
@@ -250,7 +250,7 @@ export function TopNavbar({
               </div>
               <div className="max-h-80 overflow-y-auto p-2">
                 {dashboardRole === 'member' ? (
-                  memberNotificationsLoading ? (
+                  meNotificationsLoading ? (
                     <p className="px-3 py-6 text-center text-sm text-slate-400">Loading…</p>
                   ) : memberNotifications.length === 0 ? (
                     <p className="px-3 py-8 text-center text-sm text-slate-500">

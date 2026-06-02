@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
+import { DashboardPageContent } from '../components/layout/DataPageShell'
 import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -209,7 +210,7 @@ export function TrainerDetailPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div className="min-w-0 max-w-[100%] space-y-6">
+      <DashboardPageContent className="max-w-[1600px]">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <button
@@ -282,7 +283,7 @@ export function TrainerDetailPage() {
             />
           )}
         </div>
-      </div>
+      </DashboardPageContent>
 
       <EditTrainerModal
         open={editOpen}

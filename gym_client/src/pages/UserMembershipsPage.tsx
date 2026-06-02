@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
@@ -88,22 +88,58 @@ export function UserMembershipsPage() {
   const [editing, setEditing] = useState<UserMembership | null>(null)
   const [form, setForm] = useState<CreateUserMembershipDto>(defaultCreate)
   const [formError, setFormError] = useState<string | null>(null)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('')
+  const [listSearch, setListSearch] = useState('')
+  const [debouncedListSearch, setDebouncedListSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | MembershipStatus>('all')
+  const [page, setPage] = useState(1)
+  const pageSize = 50
 
-  const { data: memberships = [], isLoading } = useQuery({
-    queryKey: ['user-memberships'],
+  const { data: membershipsPage, isLoading, isFetching } = useQuery({
+    queryKey: ['user-memberships-paged', page, pageSize, debouncedListSearch, statusFilter],
     queryFn: async () => {
-      const { data } = await userMembershipsService.getAll()
-      return Array.isArray(data) ? data : []
+      const { data } = await userMembershipsService.getPaged({
+        page,
+        pageSize,
+        search: debouncedListSearch || undefined,
+        status: statusFilter,
+      })
+      return data
+    },
+  })
+  const memberships = membershipsPage?.items ?? []
+  const totalMemberships = membershipsPage?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalMemberships / pageSize))
+
+  const { data: users = [], isFetching: usersFetching } = useQuery({
+    queryKey: ['users-paged-membership-modal', debouncedMemberSearch],
+    enabled: modalOpen && !editing,
+    queryFn: async () => {
+      const { data } = await usersService.getPaged({
+        page: 1,
+        pageSize: 100,
+        membersOnly: true,
+        isActive: true,
+        search: debouncedMemberSearch || undefined,
+      })
+      return Array.isArray(data?.items) ? data.items : []
     },
   })
 
-  const { data: users = [] } = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const { data } = await usersService.getAll()
-      return Array.isArray(data) ? data : []
-    },
-  })
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedMemberSearch(memberSearch.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [memberSearch])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedListSearch(listSearch.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [listSearch])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedListSearch, statusFilter])
 
   const { data: plans = [] } = useQuery({
     queryKey: ['membership-plans'],
@@ -163,6 +199,8 @@ export function UserMembershipsPage() {
       endDate: new Date().toISOString().slice(0, 10),
     })
     setFormError(null)
+    setMemberSearch('')
+    setDebouncedMemberSearch('')
     setModalOpen(true)
   }
 
@@ -263,6 +301,27 @@ export function UserMembershipsPage() {
           title="Membership list"
           description="Each row links to the member profile when a name is available."
         >
+          <div className="flex flex-col gap-2 border-b border-white/10 px-6 py-3 sm:flex-row sm:items-center">
+            <div className="flex-1">
+              <Input
+                label=""
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                placeholder="Search member or plan..."
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | MembershipStatus)}
+              className={selectClass}
+              aria-label="Filter memberships by status"
+            >
+              <option value="all" className="bg-slate-900">All status</option>
+              {statusOptions.map((s) => (
+                <option key={s} value={s} className="bg-slate-900">{s}</option>
+              ))}
+            </select>
+          </div>
           {isLoading ? (
             <p className="px-6 py-8 text-sm text-slate-400">Loading…</p>
           ) : memberships.length === 0 ? (
@@ -335,6 +394,32 @@ export function UserMembershipsPage() {
               </table>
             </div>
           )}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-6 py-3">
+            <p className="text-xs text-slate-500">
+              Page {page} of {totalPages} · Showing {memberships.length} of {totalMemberships}
+              {isFetching ? ' · Refreshing…' : ''}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </DashboardTablePanel>
       </DashboardSubpageShell>
 
@@ -353,6 +438,15 @@ export function UserMembershipsPage() {
             <>
               <div>
                 <label className={labelClass}>Member</label>
+                <Input
+                  label=""
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                  placeholder="Search member name, email, phone..."
+                />
+                {usersFetching ? (
+                  <p className="mt-1 text-xs text-slate-500">Searching members…</p>
+                ) : null}
                 <select
                   value={form.userId}
                   onChange={(e) => setForm((f) => ({ ...f, userId: Number(e.target.value) }))}

@@ -58,6 +58,13 @@ export interface User {
   openMembershipId?: number | null
 }
 
+export interface PagedUsersResponse {
+  items: User[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
 export interface CreateUserDto {
   firstName: string
   lastName: string

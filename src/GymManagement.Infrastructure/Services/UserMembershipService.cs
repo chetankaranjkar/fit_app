@@ -1,7 +1,10 @@
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace GymManagement.Infrastructure.Services
 {
@@ -9,11 +12,16 @@ namespace GymManagement.Infrastructure.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMembershipPaymentService _membershipPaymentService;
+        private readonly ApplicationDbContext _db;
 
-        public UserMembershipService(IUnitOfWork unitOfWork, IMembershipPaymentService membershipPaymentService)
+        public UserMembershipService(
+            IUnitOfWork unitOfWork,
+            IMembershipPaymentService membershipPaymentService,
+            ApplicationDbContext db)
         {
             _unitOfWork = unitOfWork;
             _membershipPaymentService = membershipPaymentService;
+            _db = db;
         }
 
         public async Task<IEnumerable<UserMembershipDto>> GetAllAsync()
@@ -26,6 +34,53 @@ namespace GymManagement.Infrastructure.Services
         {
             var list = await _unitOfWork.UserMemberships.FindAsync(m => m.UserId == userId);
             return await MapToDtosAsync(list);
+        }
+
+        public async Task<PagedResultDto<UserMembershipDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            MembershipStatus? status = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 200);
+            var trimmedSearch = search?.Trim();
+            var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
+
+            IQueryable<UserMembership> query = _db.UserMemberships
+                .AsNoTracking()
+                .Where(m => !m.IsDeleted);
+
+            if (status.HasValue)
+                query = query.Where(m => m.Status == status.Value);
+
+            if (!string.IsNullOrWhiteSpace(likeSearch))
+            {
+                query = query.Where(m =>
+                    _db.Users.Any(u =>
+                        u.Id == m.UserId
+                        && (EF.Functions.Like(u.FirstName, likeSearch)
+                            || EF.Functions.Like(u.LastName, likeSearch)
+                            || (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch))))
+                    || _db.MembershipPlans.Any(p => p.Id == m.PlanId && EF.Functions.Like(p.PlanName, likeSearch)));
+            }
+
+            var totalCount = await query.CountAsync();
+            var pageItems = await query
+                .OrderByDescending(m => m.StartDate)
+                .ThenByDescending(m => m.Id)
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToListAsync();
+
+            var dtos = await MapToDtosAsync(pageItems);
+            return new PagedResultDto<UserMembershipDto>
+            {
+                Items = dtos,
+                TotalCount = totalCount,
+                Page = safePage,
+                PageSize = safePageSize,
+            };
         }
 
         public async Task<UserMembershipDto?> GetByIdAsync(int id)

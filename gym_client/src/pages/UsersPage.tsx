@@ -422,46 +422,72 @@ export function UsersPage() {
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const pageSize = 50
   const [importOpen, setImportOpen] = useState(false)
   const [importLog, setImportLog] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true
+  )
 
-  const { data: users = [], isLoading, error } = useQuery({
-    queryKey: ['users'],
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const media = window.matchMedia('(min-width: 768px)')
+    const update = (event: MediaQueryListEvent | MediaQueryList) => {
+      setIsDesktopLayout(event.matches)
+    }
+    update(media)
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update)
+      return () => media.removeEventListener('change', update)
+    }
+    media.addListener(update)
+    return () => media.removeListener(update)
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearchQuery(searchQuery.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearchQuery, statusFilter])
+
+  const { data: usersPage, isLoading, error, isFetching } = useQuery({
+    queryKey: ['users-paged', page, pageSize, debouncedSearchQuery, statusFilter],
     queryFn: async () => {
-      const { data } = await usersService.getAll()
-      return Array.isArray(data) ? data : []
+      const isActive =
+        statusFilter === 'all' ? undefined : statusFilter === 'active'
+      const { data } = await usersService.getPaged({
+        page,
+        pageSize,
+        search: debouncedSearchQuery || undefined,
+        membersOnly: true,
+        isActive,
+      })
+      return data
     },
   })
 
-  const membersOnly = useMemo(() => users.filter((u) => u.userTypes?.some((t) => t.name === 'Member')), [users])
-  const userStats = useMemo(() => {
-    const total = membersOnly.length
-    const active = membersOnly.filter((u) => u.isActive).length
-    const inactive = membersOnly.filter((u) => !u.isActive).length
-    const morning = membersOnly.filter((u) => u.preferredGymTime === 'Morning').length
-    const afternoon = membersOnly.filter((u) => u.preferredGymTime === 'Afternoon').length
-    const evening = membersOnly.filter((u) => u.preferredGymTime === 'Evening').length
-    const night = membersOnly.filter((u) => u.preferredGymTime === 'Night').length
-    return { total, active, inactive, morning, afternoon, evening, night }
-  }, [membersOnly])
+  const users = usersPage?.items ?? []
+  const totalMembers = usersPage?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalMembers / pageSize))
+  const canGoPrev = page > 1
+  const canGoNext = page < totalPages
 
-  const filteredUsers = useMemo(() => {
-    let list = membersOnly
-    const q = searchQuery.trim().toLowerCase()
-    if (q) {
-      list = list.filter(
-        (u) =>
-          `${(u.firstName ?? '').toLowerCase()} ${(u.lastName ?? '').toLowerCase()}`.includes(q) ||
-          (u.email ?? '').toLowerCase().includes(q) ||
-          (u.phone ?? '').toLowerCase().includes(q) ||
-          (u.username ?? '').toLowerCase().includes(q)
-      )
-    }
-    if (statusFilter === 'active') list = list.filter((u) => u.isActive)
-    if (statusFilter === 'inactive') list = list.filter((u) => !u.isActive)
-    return list
-  }, [membersOnly, searchQuery, statusFilter])
+  const userStats = useMemo(() => {
+    const total = totalMembers
+    const active = users.filter((u) => u.isActive).length
+    const inactive = users.filter((u) => !u.isActive).length
+    const morning = users.filter((u) => u.preferredGymTime === 'Morning').length
+    const afternoon = users.filter((u) => u.preferredGymTime === 'Afternoon').length
+    const evening = users.filter((u) => u.preferredGymTime === 'Evening').length
+    const night = users.filter((u) => u.preferredGymTime === 'Night').length
+    return { total, active, inactive, morning, afternoon, evening, night }
+  }, [totalMembers, users])
 
   const { data: membershipPlans = [] } = useQuery({
     queryKey: ['membershipPlans'],
@@ -738,7 +764,7 @@ export function UsersPage() {
       'preferredGymTime',
       'registrationDate',
     ]
-    const lines = filteredUsers.map((u) => [
+    const lines = users.map((u) => [
       String(u.id),
       u.firstName,
       u.lastName,
@@ -991,7 +1017,7 @@ export function UsersPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-white sm:text-base">Member List</h2>
                 <span className="rounded-full bg-white/5 px-2.5 py-0.5 text-xs font-medium text-slate-400">
-                  {filteredUsers.length} {filteredUsers.length === 1 ? 'member' : 'members'}
+                  {totalMembers} {totalMembers === 1 ? 'member' : 'members'}
                 </span>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1431,9 +1457,10 @@ export function UsersPage() {
             </div>
           ) : (
             <>
-              {/* ── Mobile card grid (hidden ≥ md) ── */}
-              <div className="md:hidden">
-                {filteredUsers.length === 0 ? (
+              {/* Render only one layout branch to avoid double-rendering thousands of members. */}
+              {!isDesktopLayout ? (
+              <div>
+                {users.length === 0 ? (
                   <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
                       <svg className="h-7 w-7 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1441,9 +1468,9 @@ export function UsersPage() {
                       </svg>
                     </div>
                     <p className="text-sm text-slate-400">
-                      {users.length === 0 ? 'No members yet.' : 'No members match your filter.'}
+                      {totalMembers === 0 ? 'No members yet.' : 'No members match your filter.'}
                     </p>
-                    {users.length === 0 && (
+                    {totalMembers === 0 && (
                       <button
                         type="button"
                         onClick={handleStartAdd}
@@ -1455,7 +1482,7 @@ export function UsersPage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
-                    {filteredUsers.map((u) => (
+                    {users.map((u) => (
                       <UserCard
                         key={u.id}
                         user={u}
@@ -1470,9 +1497,10 @@ export function UsersPage() {
                   </div>
                 )}
               </div>
+              ) : null}
 
-              {/* ── Desktop table (visible ≥ md) ── */}
-              <div className="hidden overflow-x-auto md:block">
+              {isDesktopLayout ? (
+              <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-white/5 bg-white/[0.025] text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
@@ -1486,7 +1514,7 @@ export function UsersPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[0.04]">
-                    {filteredUsers.length === 0 ? (
+                    {users.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-6 py-14 text-center">
                           <div className="flex flex-col items-center gap-3">
@@ -1496,13 +1524,13 @@ export function UsersPage() {
                               </svg>
                             </div>
                             <p className="text-sm text-slate-400">
-                              {users.length === 0 ? 'No members yet.' : 'No members match your filter.'}
+                              {totalMembers === 0 ? 'No members yet.' : 'No members match your filter.'}
                             </p>
                           </div>
                         </td>
                       </tr>
                     ) : (
-                      filteredUsers.map((u) => (
+                      users.map((u) => (
                         <UserRow
                           key={u.id}
                           user={u}
@@ -1517,6 +1545,32 @@ export function UsersPage() {
                     )}
                   </tbody>
                 </table>
+              </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-4 py-3 sm:px-6">
+                <p className="text-xs text-slate-500">
+                  Page {page} of {totalPages} · Showing {users.length} of {totalMembers} members
+                  {isFetching ? ' · Refreshing…' : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={!canGoPrev}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={!canGoNext}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </>
           )}

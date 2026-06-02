@@ -6,6 +6,7 @@ using GymManagement.API.Attributes;
 using GymManagement.API.Services;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
 
@@ -36,6 +37,26 @@ namespace GymManagement.API.Controllers
         {
             var users = await _userService.GetAllUsersAsync();
             return Ok(users);
+        }
+
+        [HttpGet("paged")]
+        [HasPermission(PermissionCodes.UsersAccess)]
+        public async Task<ActionResult<PagedResultDto<UserDto>>> GetPagedUsers(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            [FromQuery] string? search = null,
+            [FromQuery] bool membersOnly = false,
+            [FromQuery] bool? isActive = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 200);
+            var result = await _userService.GetUsersPagedAsync(
+                safePage,
+                safePageSize,
+                search,
+                membersOnly,
+                isActive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

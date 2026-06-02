@@ -17,6 +17,14 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import { displayAadhaar, validateAadhaarNumber } from '../lib/aadhaar'
+import {
+  digitsOnlyPhoneInput,
+  validateOptionalPhoneNumber,
+  validatePhoneNumber,
+} from '../lib/phone'
+import { useMobileNumberAvailability } from '../hooks/useMobileNumberAvailability'
+import { MobileNumberAvailabilityHint } from '../components/users/MobileNumberAvailabilityHint'
 import { trainersService } from '../services/trainers.service'
 import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
 import { fileUploadService } from '../services/fileUpload.service'
@@ -380,6 +388,7 @@ function HeroHeader({
                 {t.employeeCode ? `#${t.employeeCode} · ` : ''}
                 {t.email}
                 {t.phone ? ` · ${t.phone}` : ''}
+                {displayAadhaar(t) !== '—' ? ` · Aadhaar ${displayAadhaar(t)}` : ''}
               </p>
             </div>
           </div>
@@ -1173,6 +1182,7 @@ interface PersonalDetailsForm {
   firstName: string
   lastName: string
   phone: string
+  aadhaarNumber: string
   gender: string
   dateOfBirth: string
   address: string
@@ -1183,11 +1193,12 @@ interface PersonalDetailsForm {
   isActive: boolean
 }
 
-function buildPersonalForm(trainer: Trainer, user?: { firstName?: string; lastName?: string; phone?: string | null; gender?: string; dateOfBirth?: string; address?: string | null; emergencyContact?: string | null; emergencyPhone?: string | null; preferredGymTime?: string | null; profilePictureUrl?: string | null; isActive?: boolean }): PersonalDetailsForm {
+function buildPersonalForm(trainer: Trainer, user?: { firstName?: string; lastName?: string; phone?: string | null; aadhaarNumber?: string | null; gender?: string; dateOfBirth?: string; address?: string | null; emergencyContact?: string | null; emergencyPhone?: string | null; preferredGymTime?: string | null; profilePictureUrl?: string | null; isActive?: boolean }): PersonalDetailsForm {
   return {
     firstName: user?.firstName ?? trainer.firstName ?? '',
     lastName: user?.lastName ?? trainer.lastName ?? '',
     phone: user?.phone ?? trainer.phone ?? '',
+    aadhaarNumber: user?.aadhaarNumber ?? '',
     gender: user?.gender ?? trainer.gender ?? '',
     dateOfBirth: (user?.dateOfBirth ?? trainer.dateOfBirth ?? '').slice(0, 10),
     address: user?.address ?? '',
@@ -1240,6 +1251,10 @@ function EditTrainerModal({
   )
   const [trainerForm, setTrainerForm] = useState<UpdateTrainerDto>(() => buildTrainerForm(trainer))
   const [error, setError] = useState<string | null>(null)
+  const mobileAvailability = useMobileNumberAvailability(personalForm.phone, {
+    enabled: open,
+    excludeUserId: trainer.userId,
+  })
 
   const { data: user, isLoading: userLoading } = useQuery({
     queryKey: ['user', trainer.userId],
@@ -1296,15 +1311,33 @@ function EditTrainerModal({
     'w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20'
 
   const savePersonal = () => {
+    let phoneDigits: string
+    let emergencyPhoneDigits: string | null
+    let aadhaarDigits: string | undefined
+    try {
+      if (!mobileAvailability.isAvailable && mobileAvailability.status !== 'idle') {
+        throw new Error(
+          mobileAvailability.error ?? 'This mobile number is already registered with another user.',
+        )
+      }
+      phoneDigits = validatePhoneNumber(personalForm.phone, true)
+      emergencyPhoneDigits = validateOptionalPhoneNumber(personalForm.emergencyPhone) ?? null
+      const rawAadhaar = personalForm.aadhaarNumber.trim()
+      if (rawAadhaar) aadhaarDigits = validateAadhaarNumber(rawAadhaar)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid phone number.')
+      return
+    }
     const payload: UpdateUserDto = {
       firstName: personalForm.firstName.trim(),
       lastName: personalForm.lastName.trim(),
-      phone: personalForm.phone.trim() || null,
+      phone: phoneDigits,
+      ...(aadhaarDigits !== undefined ? { aadhaarNumber: aadhaarDigits } : {}),
       gender: personalForm.gender.trim() || null,
       dateOfBirth: personalForm.dateOfBirth || null,
       address: personalForm.address.trim() || null,
       emergencyContact: personalForm.emergencyContact.trim() || null,
-      emergencyPhone: personalForm.emergencyPhone.trim() || null,
+      emergencyPhone: emergencyPhoneDigits,
       preferredGymTime: personalForm.preferredGymTime.trim() || null,
       profilePictureUrl: personalForm.profilePictureUrl.trim() || null,
       isActive: personalForm.isActive,
@@ -1392,11 +1425,35 @@ function EditTrainerModal({
                   onChange={(e) => setPersonalForm((f) => ({ ...f, lastName: e.target.value }))}
                   required
                 />
-                <Input
-                  label="Phone"
-                  value={personalForm.phone}
-                  onChange={(e) => setPersonalForm((f) => ({ ...f, phone: e.target.value }))}
-                />
+                <div>
+                  <Input
+                    label="Phone"
+                    type="tel"
+                    value={personalForm.phone}
+                    onChange={(e) =>
+                      setPersonalForm((f) => ({ ...f, phone: digitsOnlyPhoneInput(e.target.value) }))
+                    }
+                    maxLength={10}
+                    required
+                    error={mobileAvailability.error ?? undefined}
+                  />
+                  <MobileNumberAvailabilityHint
+                    status={mobileAvailability.status}
+                    message={mobileAvailability.message}
+                  />
+                </div>
+                <div>
+                  <Input
+                    label="Aadhaar Number"
+                    value={personalForm.aadhaarNumber}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 12)
+                      setPersonalForm((f) => ({ ...f, aadhaarNumber: value }))
+                    }}
+                    placeholder="Optional"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">12 digit Aadhaar Number</p>
+                </div>
                 <div>
                   <Input label="Email" value={trainer.email} readOnly disabled />
                   <p className="mt-1 text-[11px] text-slate-500">
@@ -1459,10 +1516,15 @@ function EditTrainerModal({
                 />
                 <Input
                   label="Emergency phone"
+                  type="tel"
                   value={personalForm.emergencyPhone}
                   onChange={(e) =>
-                    setPersonalForm((f) => ({ ...f, emergencyPhone: e.target.value }))
+                    setPersonalForm((f) => ({
+                      ...f,
+                      emergencyPhone: digitsOnlyPhoneInput(e.target.value),
+                    }))
                   }
+                  maxLength={10}
                 />
                 <div>
                   <label className={labelCls}>Preferred gym time</label>

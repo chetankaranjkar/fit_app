@@ -16,6 +16,7 @@ import {
 import { trainersService } from '../services/trainers.service'
 import { trainerFullName } from '../types/trainer'
 import type { Trainer } from '../types/trainer'
+import { displayAadhaar } from '../lib/aadhaar'
 
 function getDashboardUser() {
   try {
@@ -87,6 +88,17 @@ export function TrainersPage() {
         hideBelow: 'md',
         accessorFn: (t) => t.email ?? '',
         cell: ({ value }) => <span className="text-slate-300">{String(value) || '—'}</span>,
+      },
+      {
+        id: 'aadhaar',
+        header: 'Aadhaar',
+        minWidth: 150,
+        width: 160,
+        hideBelow: 'md',
+        accessorFn: (t) => t.aadhaarNumber ?? t.aadhaarNumberMasked ?? '',
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-slate-300">{displayAadhaar(row)}</span>
+        ),
       },
       {
         id: 'code',
@@ -184,7 +196,7 @@ export function TrainersPage() {
             <DataToolbar
               searchValue={search}
               onSearchChange={setSearch}
-              searchPlaceholder="Search name, email, specialization…"
+              searchPlaceholder="Search name, email, phone, Aadhaar…"
               searchAriaLabel="Search trainers"
             />
           }

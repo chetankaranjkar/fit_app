@@ -9,6 +9,7 @@ using GymManagement.Core.DTOs;
 using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
+using GymManagement.Core.Validation;
 
 namespace GymManagement.API.Controllers
 {
@@ -18,17 +19,31 @@ namespace GymManagement.API.Controllers
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly IMobileNumberAvailabilityService _mobileAvailability;
         private readonly IRbacService _rbacService;
         private readonly WebRootImageStorage _imageStorage;
 
         public UsersController(
             IUserService userService,
+            IMobileNumberAvailabilityService mobileAvailability,
             IRbacService rbacService,
             WebRootImageStorage imageStorage)
         {
             _userService = userService;
+            _mobileAvailability = mobileAvailability;
             _rbacService = rbacService;
             _imageStorage = imageStorage;
+        }
+
+        /// <summary>Real-time check: is this Indian mobile available globally (Option A — includes soft-deleted users).</summary>
+        [HttpGet("check-mobile")]
+        [HasPermission(PermissionCodes.UsersAccess)]
+        public async Task<ActionResult<MobileNumberAvailabilityDto>> CheckMobileAvailability(
+            [FromQuery] string? mobile,
+            [FromQuery] int? excludeUserId = null)
+        {
+            var result = await _mobileAvailability.CheckAsync(mobile, excludeUserId);
+            return Ok(result);
         }
 
         [HttpGet]
@@ -93,6 +108,10 @@ namespace GymManagement.API.Controllers
             {
                 return Conflict(new { message = ex.Message });
             }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
             catch (DbUpdateException ex) when (IsDuplicatePhoneException(ex))
             {
                 return Conflict(new { message = "A user with this phone number already exists." });
@@ -136,7 +155,7 @@ namespace GymManagement.API.Controllers
             }
             catch (DbUpdateException ex) when (IsDuplicatePhoneException(ex))
             {
-                return Conflict(new { message = "A user with this phone number already exists." });
+                return Conflict(new { message = PhoneNumberValidator.DuplicatePhoneMessage });
             }
         }
 
@@ -145,8 +164,14 @@ namespace GymManagement.API.Controllers
             var inner = ex.InnerException;
             while (inner != null)
             {
-                if (inner is SqlException sqlEx && sqlEx.Message.Contains("IX_Users_Phone", StringComparison.OrdinalIgnoreCase))
-                    return true;
+                if (inner is SqlException sqlEx)
+                {
+                    var msg = sqlEx.Message;
+                    if (msg.Contains("UQ_Users_MobileNumber", StringComparison.OrdinalIgnoreCase)
+                        || msg.Contains("IX_Users_MobileNumber", StringComparison.OrdinalIgnoreCase)
+                        || msg.Contains("IX_Users_Phone", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
                 inner = inner.InnerException;
             }
             return false;

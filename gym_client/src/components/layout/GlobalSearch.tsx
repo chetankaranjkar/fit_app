@@ -8,6 +8,7 @@ import { trainerFullName } from '../../types/trainer'
 import type { User } from '../../types/user'
 import type { Trainer } from '../../types/trainer'
 import type { MembershipPlan } from '../../types/membershipPlan'
+import { displayAadhaar } from '../../lib/aadhaar'
 
 const MIN_CHARS = 2
 const DEBOUNCE_MS = 300
@@ -17,6 +18,10 @@ function memberLabel(u: User) {
 }
 
 function memberSubtitle(u: User) {
+  const aadhaar = displayAadhaar(u)
+  if (aadhaar !== '—') {
+    return [u.email, u.phone, aadhaar].filter(Boolean).join(' · ')
+  }
   return u.email || u.phone || undefined
 }
 
@@ -193,8 +198,8 @@ export function GlobalSearch({ className = '' }: { className?: string }) {
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
-        placeholder="Search members, trainers, plans…"
-        aria-label="Search members, trainers, and plans"
+        placeholder="Search members, trainers, plans, Aadhaar…"
+        aria-label="Search members, trainers, plans, and Aadhaar"
         autoComplete="off"
         className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 transition focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
       />

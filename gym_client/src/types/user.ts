@@ -24,6 +24,8 @@ export interface User {
   lastName: string
   email: string
   phone?: string | null
+  aadhaarNumber?: string | null
+  aadhaarNumberMasked?: string | null
   dateOfBirth: string
   gender: string
   registrationDate: string
@@ -70,6 +72,7 @@ export interface CreateUserDto {
   lastName: string
   email: string
   phone?: string | null
+  aadhaarNumber?: string | null
   dateOfBirth: string
   gender: string
   address?: string | null
@@ -102,6 +105,7 @@ export interface UpdateUserDto {
   firstName?: string | null
   lastName?: string | null
   phone?: string | null
+  aadhaarNumber?: string | null
   dateOfBirth?: string | null
   gender?: string | null
   address?: string | null

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
 using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
@@ -26,15 +27,18 @@ namespace GymManagement.API.Controllers
     {
         private readonly ApplicationDbContext _db;
         private readonly IMembershipPaymentService _membershipPaymentService;
+        private readonly IMobileNumberAvailabilityService _mobileAvailability;
         private readonly WebRootImageStorage _imageStorage;
 
         public MeController(
             ApplicationDbContext db,
             IMembershipPaymentService membershipPaymentService,
+            IMobileNumberAvailabilityService mobileAvailability,
             WebRootImageStorage imageStorage)
         {
             _db = db;
             _membershipPaymentService = membershipPaymentService;
+            _mobileAvailability = mobileAvailability;
             _imageStorage = imageStorage;
         }
 
@@ -112,11 +116,17 @@ namespace GymManagement.API.Controllers
             {
                 try
                 {
-                    user.Phone = PhoneNumberValidator.NormalizeOptionalPhone(dto.Phone);
+                    var normalized = PhoneNumberValidator.NormalizeRequiredPhone(dto.Phone);
+                    await _mobileAvailability.EnsureAvailableOrThrowAsync(normalized, userId.Value, cancellationToken);
+                    user.Phone = normalized;
                 }
                 catch (ArgumentException ex)
                 {
                     return BadRequest(new { message = ex.Message });
+                }
+                catch (ConflictException ex)
+                {
+                    return Conflict(new { message = ex.Message });
                 }
             }
             if (dto.ProfilePictureUrl != null)

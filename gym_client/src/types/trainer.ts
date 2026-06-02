@@ -88,6 +88,8 @@ export interface Trainer {
   lastName: string
   email: string
   phone?: string | null
+  aadhaarNumber?: string | null
+  aadhaarNumberMasked?: string | null
   gender?: TrainerGender | null
   dateOfBirth?: string | null
   /* Profile */

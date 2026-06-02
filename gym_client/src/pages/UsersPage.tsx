@@ -33,6 +33,22 @@ import {
   rowsToMemberImports,
 } from '../lib/membersCsv'
 import type { Trainer } from '../types/trainer'
+import {
+  displayAadhaar,
+  formatAadhaarForExport,
+  normalizeAadhaarInput,
+  stripAadhaarFormatting,
+  validateAadhaarNumber,
+} from '../lib/aadhaar'
+import {
+  digitsOnlyPhoneInput,
+  getPhoneValidationError,
+  PHONE_MESSAGES,
+  validateOptionalPhoneNumber,
+  validatePhoneNumber,
+} from '../lib/phone'
+import { useMobileNumberAvailability } from '../hooks/useMobileNumberAvailability'
+import { MobileNumberAvailabilityHint } from '../components/users/MobileNumberAvailabilityHint'
 
 function getDashboardUser() {
   try {
@@ -269,6 +285,7 @@ const defaultCreateForm: CreateUserDto = {
   lastName: '',
   email: '',
   phone: '',
+  aadhaarNumber: '',
   dateOfBirth: '',
   gender: '',
   address: '',
@@ -288,8 +305,6 @@ const defaultCreateForm: CreateUserDto = {
   userTypeIds: [],
 }
 
-const TEN_DIGIT_PHONE_REGEX = /^\d{10}$/
-
 export function UsersPage() {
   const { start: startMembersTour } = useWalkthrough('members')
   const navigate = useNavigate()
@@ -299,9 +314,12 @@ export function UsersPage() {
   const queryClient = useQueryClient()
   const [isAdding, setIsAdding] = useState(false)
   const [form, setForm] = useState<CreateUserDto>(defaultCreateForm)
+  const mobileAvailability = useMobileNumberAvailability(form.phone ?? '', { enabled: isAdding })
   const [formError, setFormError] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
   const [phoneError, setPhoneError] = useState<string | null>(null)
+  const [emergencyPhoneError, setEmergencyPhoneError] = useState<string | null>(null)
+  const [aadhaarError, setAadhaarError] = useState<string | null>(null)
   const [usernameError, setUsernameError] = useState<string | null>(null)
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -446,6 +464,8 @@ export function UsersPage() {
       setFormError(null)
       setEmailError(null)
       setPhoneError(null)
+      setEmergencyPhoneError(null)
+      setAadhaarError(null)
       setUsernameError(null)
       const p = created?.pendingPaymentCollection
       if (p?.membershipId && p.membershipPaymentId) {
@@ -529,21 +549,32 @@ export function UsersPage() {
     setEmailError(exists ? 'This email is already registered.' : null)
   }
 
-  const isValidPhone = (value: string) => TEN_DIGIT_PHONE_REGEX.test(value.trim())
-  const normalizePhone = (value: string) => value.trim()
+  const handleAadhaarBlur = () => {
+    const raw = form.aadhaarNumber?.trim() ?? ''
+    if (!raw) {
+      setAadhaarError(null)
+      return
+    }
+    if (!isValidAadhaarInput(raw)) {
+      setAadhaarError('Aadhaar number must be exactly 12 digits.')
+      return
+    }
+    const digits = stripAadhaarFormatting(raw)
+    const exists = users.some((u) => stripAadhaarFormatting(u.aadhaarNumber ?? '') === digits)
+    setAadhaarError(exists ? 'This Aadhaar number is already registered.' : null)
+  }
+
   const handlePhoneBlur = () => {
-    const phone = form.phone?.trim()
-    if (!phone) {
-      setPhoneError(null)
+    setPhoneError(mobileAvailability.error)
+  }
+
+  const handleEmergencyPhoneBlur = () => {
+    const raw = form.emergencyPhone?.trim() ?? ''
+    if (!raw) {
+      setEmergencyPhoneError(null)
       return
     }
-    if (!isValidPhone(phone)) {
-      setPhoneError('Phone number must be exactly 10 digits.')
-      return
-    }
-    const phoneDigits = normalizePhone(phone)
-    const exists = users.some((u) => normalizePhone((u.phone ?? '').trim()) === phoneDigits)
-    setPhoneError(exists ? 'This phone number is already registered.' : null)
+    setEmergencyPhoneError(getPhoneValidationError(raw, true))
   }
 
   const handleUsernameBlur = () => {
@@ -565,31 +596,52 @@ export function UsersPage() {
       setFormError('First name, last name and email are required.')
       return
     }
-    if (emailError || usernameError || phoneError) {
+    if (emailError || usernameError || phoneError || emergencyPhoneError || aadhaarError) {
       setFormError('Please fix the errors above before saving.')
       return
     }
     const email = form.email?.trim().toLowerCase()
     const username = form.username?.trim()
-    const phone = form.phone?.trim()
+    let phoneDigits: string
+    let emergencyPhoneDigits: string | undefined
+    try {
+      phoneDigits = validatePhoneNumber(form.phone, true)
+      emergencyPhoneDigits = validateOptionalPhoneNumber(form.emergencyPhone)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : PHONE_MESSAGES.length
+      if (form.emergencyPhone?.trim()) setEmergencyPhoneError(msg)
+      else setPhoneError(msg)
+      setFormError(msg)
+      return
+    }
     if (users.some((u) => (u.email ?? '').toLowerCase() === email)) {
       setEmailError('This email is already registered.')
       setFormError('This email is already registered.')
       return
     }
-    if (phone && !isValidPhone(phone)) {
-      setPhoneError('Phone number must be exactly 10 digits.')
-      setFormError('Phone number must be exactly 10 digits.')
-      return
-    }
-    if (phone && users.some((u) => normalizePhone((u.phone ?? '').trim()) === normalizePhone(phone))) {
-      setPhoneError('This phone number is already registered.')
-      setFormError('This phone number is already registered.')
+    if (!mobileAvailability.isAvailable) {
+      const msg = mobileAvailability.error ?? PHONE_MESSAGES.duplicate
+      setPhoneError(msg)
+      setFormError(msg)
       return
     }
     if (username && users.some((u) => (u.username ?? '').toLowerCase() === username.toLowerCase())) {
       setUsernameError('This username is already in use.')
       setFormError('This username is already in use.')
+      return
+    }
+    let aadhaarDigits: string | undefined
+    try {
+      aadhaarDigits = validateAadhaarNumber(form.aadhaarNumber)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Invalid Aadhaar number.'
+      setAadhaarError(msg)
+      setFormError(msg)
+      return
+    }
+    if (aadhaarDigits && users.some((u) => stripAadhaarFormatting(u.aadhaarNumber ?? '') === aadhaarDigits)) {
+      setAadhaarError('This Aadhaar number is already registered.')
+      setFormError('This Aadhaar number is already registered.')
       return
     }
     // This page only adds members: force role = Member (1) and userTypeIds = Member only
@@ -599,12 +651,13 @@ export function UsersPage() {
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       email: form.email.trim(),
-      phone: form.phone?.trim() || undefined,
+      phone: phoneDigits,
+      aadhaarNumber: aadhaarDigits,
       dateOfBirth: form.dateOfBirth || new Date().toISOString().slice(0, 10),
       gender: form.gender?.trim() || '',
       address: form.address?.trim() || undefined,
       emergencyContact: form.emergencyContact?.trim() || undefined,
-      emergencyPhone: form.emergencyPhone?.trim() || undefined,
+      emergencyPhone: emergencyPhoneDigits,
       preferredGymTime: form.preferredGymTime?.trim() || undefined,
       username: form.username?.trim() || undefined,
       password: form.password || undefined,
@@ -690,6 +743,17 @@ export function UsersPage() {
         width: 140,
         hideBelow: 'lg',
         accessorFn: (u) => u.phone ?? '',
+      },
+      {
+        id: 'aadhaar',
+        header: 'Aadhaar',
+        minWidth: 150,
+        width: 160,
+        hideBelow: 'md',
+        accessorFn: (u) => u.aadhaarNumber ?? u.aadhaarNumberMasked ?? '',
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-slate-300">{displayAadhaar(row)}</span>
+        ),
       },
       {
         id: 'status',
@@ -780,6 +844,7 @@ export function UsersPage() {
       'lastName',
       'email',
       'phone',
+      'aadhaar',
       'isActive',
       'preferredGymTime',
       'registrationDate',
@@ -790,6 +855,7 @@ export function UsersPage() {
       u.lastName,
       u.email,
       u.phone ?? '',
+      formatAadhaarForExport(u),
       u.isActive ? 'true' : 'false',
       u.preferredGymTime ?? '',
       u.registrationDate?.slice(0, 10) ?? '',
@@ -826,17 +892,32 @@ export function UsersPage() {
       const grid = parseCsvLines(text)
       const { rows: parsed, errors } = rowsToMemberImports(grid)
       const log = [...errors]
+      const seenPhones = new Set<string>()
       let ok = 0
       for (const r of parsed) {
         if (users.some((u) => (u.email ?? '').toLowerCase() === r.email)) {
           log.push(`Skipped (exists): ${r.email}`)
           continue
         }
+        if (!r.phone) {
+          log.push(`${r.email}: phone is required.`)
+          continue
+        }
+        if (seenPhones.has(r.phone)) {
+          log.push(`Row duplicate phone: ${r.phone} (${r.email})`)
+          continue
+        }
+        if (users.some((u) => u.phone === r.phone)) {
+          log.push(`Duplicate phone number: ${r.phone} (${r.email})`)
+          continue
+        }
+        seenPhones.add(r.phone)
         const payload: CreateUserDto = {
           firstName: r.firstName,
           lastName: r.lastName,
           email: r.email,
           phone: r.phone,
+          aadhaarNumber: r.aadhaarNumber,
           dateOfBirth: r.dateOfBirth,
           gender: r.gender,
           address: undefined,
@@ -1046,7 +1127,7 @@ export function UsersPage() {
               <DataToolbar
                 searchValue={searchQuery}
                 onSearchChange={setSearchQuery}
-                searchPlaceholder="Search name, email, phone…"
+                searchPlaceholder="Search name, email, phone, Aadhaar…"
                 searchAriaLabel="Search members"
                 filters={
                   <DataFilterSelect
@@ -1173,19 +1254,43 @@ export function UsersPage() {
                     error={emailError ?? undefined}
                     className="!rounded-lg !px-3 !py-2 text-sm"
                   />
-                  <Input
-                    label="Phone"
-                    value={form.phone ?? ''}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, '').slice(0, 10)
-                      setForm((f) => ({ ...f, phone: value }))
-                      if (phoneError) setPhoneError(null)
-                    }}
-                    onBlur={handlePhoneBlur}
-                    placeholder="Optional"
-                    error={phoneError ?? undefined}
-                    className="!rounded-lg !px-3 !py-2 text-sm"
-                  />
+                  <div>
+                    <Input
+                      label="Phone"
+                      type="tel"
+                      value={form.phone ?? ''}
+                      onChange={(e) => {
+                        setForm((f) => ({ ...f, phone: digitsOnlyPhoneInput(e.target.value) }))
+                        if (phoneError) setPhoneError(null)
+                      }}
+                      onBlur={handlePhoneBlur}
+                      placeholder="9876543210"
+                      required
+                      maxLength={10}
+                      error={phoneError ?? mobileAvailability.error ?? undefined}
+                      className="!rounded-lg !px-3 !py-2 text-sm"
+                    />
+                    <MobileNumberAvailabilityHint
+                      status={mobileAvailability.status}
+                      message={mobileAvailability.message}
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      label="Aadhaar Number"
+                      value={form.aadhaarNumber ?? ''}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 12)
+                        setForm((f) => ({ ...f, aadhaarNumber: value }))
+                        if (aadhaarError) setAadhaarError(null)
+                      }}
+                      onBlur={handleAadhaarBlur}
+                      placeholder="Optional"
+                      error={aadhaarError ?? undefined}
+                      className="!rounded-lg !px-3 !py-2 text-sm"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">12 digit Aadhaar Number</p>
+                  </div>
                   <Input
                     label="Date of birth"
                     type="date"
@@ -1303,8 +1408,15 @@ export function UsersPage() {
                   />
                   <Input
                     label="Emergency phone"
+                    type="tel"
                     value={form.emergencyPhone ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, emergencyPhone: e.target.value }))}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, emergencyPhone: digitsOnlyPhoneInput(e.target.value) }))
+                      if (emergencyPhoneError) setEmergencyPhoneError(null)
+                    }}
+                    onBlur={handleEmergencyPhoneBlur}
+                    maxLength={10}
+                    error={emergencyPhoneError ?? undefined}
                     placeholder="Optional"
                     className="!rounded-lg !px-3 !py-2 text-sm"
                   />

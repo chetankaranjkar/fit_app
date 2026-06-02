@@ -9,6 +9,10 @@ import { usersService } from '../../services/users.service'
 import { userTypesService } from '../../services/userTypes.service'
 import type { CreateUserDto } from '../../types/user'
 import type { CreateTrainerDto, TrainerGender, UpdateTrainerDto } from '../../types/trainer'
+import { validateAadhaarNumber } from '../../lib/aadhaar'
+import { digitsOnlyPhoneInput, validatePhoneNumber } from '../../lib/phone'
+import { useMobileNumberAvailability } from '../../hooks/useMobileNumberAvailability'
+import { MobileNumberAvailabilityHint } from '../users/MobileNumberAvailabilityHint'
 import {
   AVAILABILITY_STATUSES,
   COMMON_CERTIFICATIONS,
@@ -67,6 +71,7 @@ const EMPTY: FormState = {
   newLastName: '',
   newEmail: '',
   newPhone: '',
+  newAadhaarNumber: '',
   newPassword: '',
   newDateOfBirth: '',
   newGender: '',
@@ -142,6 +147,10 @@ export function AddTrainerModal({ open, onClose }: Props) {
   const [step, setStep] = useState<WizardStep>(0)
   const [form, setForm] = useState<FormState>(EMPTY)
   const [error, setError] = useState<string | null>(null)
+  const mobileAvailability = useMobileNumberAvailability(
+    mode === 'new' ? form.newPhone : '',
+    { enabled: open && mode === 'new' },
+  )
 
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
@@ -188,11 +197,25 @@ export function AddTrainerModal({ open, onClose }: Props) {
       }
 
       const hireDate = form.joiningDate || new Date().toISOString().slice(0, 10)
+      let aadhaarDigits: string | undefined
+      let phoneDigits: string
+      try {
+        if (!mobileAvailability.isAvailable) {
+          throw new Error(
+            mobileAvailability.error ?? 'This mobile number is already registered with another user.',
+          )
+        }
+        phoneDigits = validatePhoneNumber(form.newPhone, true)
+        aadhaarDigits = validateAadhaarNumber(form.newAadhaarNumber)
+      } catch (err) {
+        throw new Error(err instanceof Error ? err.message : 'Invalid user details.')
+      }
       const userPayload: CreateUserDto = {
         firstName: form.newFirstName.trim(),
         lastName: form.newLastName.trim(),
         email: form.newEmail.trim(),
-        phone: form.newPhone.trim() || null,
+        phone: phoneDigits,
+        aadhaarNumber: aadhaarDigits,
         dateOfBirth: form.newDateOfBirth || '1990-01-01',
         gender: form.newGender || form.gender || 'Prefer not to say',
         isActive: true,
@@ -387,11 +410,33 @@ export function AddTrainerModal({ open, onClose }: Props) {
                     onChange={(e) => update('newEmail', e.target.value)}
                     required
                   />
-                  <Input
-                    label="Phone"
-                    value={form.newPhone}
-                    onChange={(e) => update('newPhone', e.target.value)}
-                  />
+                  <div>
+                    <Input
+                      label="Phone"
+                      type="tel"
+                      value={form.newPhone}
+                      onChange={(e) => update('newPhone', digitsOnlyPhoneInput(e.target.value))}
+                      maxLength={10}
+                      required
+                      error={mobileAvailability.error ?? undefined}
+                    />
+                    <MobileNumberAvailabilityHint
+                      status={mobileAvailability.status}
+                      message={mobileAvailability.message}
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      label="Aadhaar Number"
+                      value={form.newAadhaarNumber}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 12)
+                        update('newAadhaarNumber', value)
+                      }}
+                      placeholder="Optional"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">12 digit Aadhaar Number</p>
+                  </div>
                   <Input
                     label="Password (optional)"
                     type="password"

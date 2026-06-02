@@ -23,6 +23,7 @@ using GymManagement.Infrastructure.Services;
 using GymManagement.Infrastructure.Configuration;
 using GymManagement.API.Hosting;
 using GymManagement.API.Middleware;
+using GymManagement.API.Services;
 using StackExchange.Redis;
 using HealthChecks.Redis;
 using GymManagement.API.Swagger;
@@ -222,6 +223,8 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Register Services
 builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
+builder.Services.AddScoped<ICurrentUserAccessContext, HttpCurrentUserAccessContext>();
+builder.Services.AddScoped<IMobileNumberAvailabilityService, MobileNumberAvailabilityService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<IExerciseService, ExerciseService>();

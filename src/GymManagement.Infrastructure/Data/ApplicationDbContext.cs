@@ -165,8 +165,20 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.LastName).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.QrCode).HasMaxLength(500);
                 entity.Property(e => e.MembershipStatus).HasMaxLength(50);
-                entity.Property(e => e.Phone).HasMaxLength(100);
-                entity.HasIndex(e => e.Phone).IsUnique().HasFilter("[Phone] IS NOT NULL AND [IsDeleted] = 0");
+                entity.Property(e => e.Phone).HasMaxLength(10);
+                entity.Property(e => e.EmergencyPhone).HasMaxLength(10);
+                entity.Property(e => e.AadhaarNumber).HasMaxLength(12);
+                entity.HasIndex(e => e.Phone)
+                    .IsUnique()
+                    .HasDatabaseName("UQ_Users_MobileNumber")
+                    .HasFilter("[Phone] IS NOT NULL");
+                entity.HasIndex(e => e.Phone)
+                    .HasDatabaseName("IX_Users_MobileNumber")
+                    .HasFilter("[Phone] IS NOT NULL");
+                entity.HasIndex(e => e.AadhaarNumber)
+                    .IsUnique()
+                    .HasDatabaseName("IX_Users_AadhaarNumber")
+                    .HasFilter("[AadhaarNumber] IS NOT NULL AND [IsDeleted] = 0");
                 entity.HasIndex(e => e.IsActive).HasFilter("[IsDeleted] = 0");
                 entity.HasIndex(e => e.RegistrationDate);
                 entity.HasOne(e => e.Organization)
@@ -201,7 +213,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.FitnessGoal).HasMaxLength(100);
                 entity.Property(e => e.MedicalConditions).HasMaxLength(2000);
                 entity.Property(e => e.EmergencyContact).HasMaxLength(150);
-                entity.Property(e => e.EmergencyPhone).HasMaxLength(20);
+                entity.Property(e => e.EmergencyPhone).HasMaxLength(10);
                 entity.Property(e => e.PreferredGymTime).HasMaxLength(20);
                 entity.Property(e => e.Gender).HasMaxLength(20);
                 entity.Property(e => e.HeightCm).HasPrecision(10, 2);

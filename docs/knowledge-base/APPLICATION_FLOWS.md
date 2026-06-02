@@ -123,6 +123,10 @@ sequenceDiagram
 **Frontend:** `UsersPage.tsx` → `usersService.create`  
 **Backend:** `CreateUserDto.TrainerId` → `UserInstructors` (coach), not trainer role.
 
+**Aadhaar (optional):** `Users.AadhaarNumber` — 12 digits, unique when set. Validated in `AadhaarNumberValidator`. API returns `aadhaarNumber` only for Admin / Super Admin; others get `aadhaarNumberMasked` (`XXXX XXXX 1234`). Search: name, email, phone, or full 12-digit Aadhaar on members and trainers lists + global search. Audit log actions `Aadhaar Created` / `Aadhaar Updated`.
+
+**Phone (required on create):** Indian mobile `^[6-9][0-9]{9}$` on `Users.Phone` (API `phone`). Normalized from `+91` / spaces / hyphens. Unique index `IX_Users_MobileNumber`. Emergency phone uses the same rules when provided. See [PHONE_VALIDATION_AUDIT.md](./PHONE_VALIDATION_AUDIT.md).
+
 ---
 
 ## 6. Flow: Create / link trainer

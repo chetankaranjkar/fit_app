@@ -1,5 +1,6 @@
 import { api } from '../lib/api'
 import type { User, CreateUserDto, PagedUsersResponse, UpdateUserDto } from '../types/user'
+import type { MobileNumberAvailability } from '../types/mobileAvailability'
 import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
 
 export const usersService = {
@@ -20,6 +21,12 @@ export const usersService = {
     return api.get<PagedUsersResponse>(`/Users/paged?${query.toString()}`)
   },
   getById: (id: number) => api.get<User>(`/Users/${id}`),
+  checkMobileAvailability: (mobile: string, excludeUserId?: number) => {
+    const query = new URLSearchParams()
+    query.set('mobile', mobile.trim())
+    if (excludeUserId != null && excludeUserId > 0) query.set('excludeUserId', String(excludeUserId))
+    return api.get<MobileNumberAvailability>(`/Users/check-mobile?${query.toString()}`)
+  },
   create: (data: CreateUserDto) => api.post<User>('/Users', data),
   update: (id: number, data: UpdateUserDto) => api.put<User>(`/Users/${id}`, data),
   delete: (id: number) => api.delete(`/Users/${id}`),

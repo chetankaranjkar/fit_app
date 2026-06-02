@@ -5,6 +5,7 @@ using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
+using GymManagement.Core.Security;
 using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
@@ -20,6 +21,8 @@ namespace GymManagement.Infrastructure.Services
         private readonly IUserProvisioningService _provisioning;
         private readonly IRbacService _rbacService;
         private readonly ApplicationDbContext _db;
+        private readonly ICurrentUserAccessContext _accessContext;
+        private readonly IMobileNumberAvailabilityService _mobileAvailability;
 
         public UserService(
             IUnitOfWork unitOfWork,
@@ -27,7 +30,9 @@ namespace GymManagement.Infrastructure.Services
             IUserInstructorService userInstructorService,
             IUserProvisioningService provisioning,
             IRbacService rbacService,
-            ApplicationDbContext db)
+            ApplicationDbContext db,
+            ICurrentUserAccessContext accessContext,
+            IMobileNumberAvailabilityService mobileAvailability)
         {
             _unitOfWork = unitOfWork;
             _membershipPaymentService = membershipPaymentService;
@@ -35,6 +40,8 @@ namespace GymManagement.Infrastructure.Services
             _provisioning = provisioning;
             _rbacService = rbacService;
             _db = db;
+            _accessContext = accessContext;
+            _mobileAvailability = mobileAvailability;
         }
 
         public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
@@ -70,22 +77,12 @@ namespace GymManagement.Infrastructure.Services
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
-            var trimmedSearch = search?.Trim();
-            var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
-
             IQueryable<User> query = _db.Users.AsNoTracking().Where(u => !u.IsDeleted);
 
             if (isActive.HasValue)
                 query = query.Where(u => u.IsActive == isActive.Value);
 
-            if (!string.IsNullOrWhiteSpace(likeSearch))
-            {
-                query = query.Where(u =>
-                    EF.Functions.Like(u.FirstName, likeSearch) ||
-                    EF.Functions.Like(u.LastName, likeSearch) ||
-                    (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch)) ||
-                    _db.AuthUsers.Any(a => a.UserId == u.Id && EF.Functions.Like(a.Email, likeSearch)));
-            }
+            query = ApplyUserSearchFilter(query, search);
 
             if (membersOnly)
             {
@@ -185,24 +182,24 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<UserDto> CreateUserAsync(CreateUserDto createUserDto)
         {
-            var normalizedPhone = PhoneNumberValidator.NormalizeOptionalPhone(createUserDto.Phone);
-            if (!string.IsNullOrWhiteSpace(normalizedPhone))
-            {
-                var phoneExists = await _unitOfWork.Users.ExistsAsync(u => u.Phone == normalizedPhone);
-                if (phoneExists)
-                    throw new ConflictException($"A user with phone number '{normalizedPhone}' already exists.");
-            }
+            var normalizedPhone = PhoneNumberValidator.NormalizeRequiredPhone(createUserDto.Phone);
+            await _mobileAvailability.EnsureAvailableOrThrowAsync(normalizedPhone);
+
+            var normalizedAadhaar = AadhaarNumberValidator.TryNormalizeOptionalAadhaar(createUserDto.AadhaarNumber);
+            if (normalizedAadhaar != null)
+                await EnsureAadhaarNotDuplicateAsync(normalizedAadhaar);
 
             var user = new User
             {
                 FirstName = createUserDto.FirstName,
                 LastName = createUserDto.LastName,
                 Phone = normalizedPhone,
+                AadhaarNumber = normalizedAadhaar,
                 DateOfBirth = createUserDto.DateOfBirth,
                 Gender = createUserDto.Gender,
                 Address = createUserDto.Address,
                 EmergencyContact = createUserDto.EmergencyContact,
-                EmergencyPhone = createUserDto.EmergencyPhone,
+                EmergencyPhone = PhoneNumberValidator.NormalizeOptionalPhone(createUserDto.EmergencyPhone),
                 ProfilePictureUrl = createUserDto.ProfilePictureUrl,
                 PreferredGymTime = createUserDto.PreferredGymTime,
                 IsActive = createUserDto.IsActive,
@@ -211,6 +208,9 @@ namespace GymManagement.Infrastructure.Services
 
             await _unitOfWork.Users.AddAsync(user);
             await _unitOfWork.SaveChangesAsync();
+
+            if (normalizedAadhaar != null)
+                await LogAadhaarAuditAsync(user.Id, "Aadhaar Created", null, normalizedAadhaar);
 
             var accountRole = createUserDto.Role ?? Role.User;
 
@@ -341,12 +341,25 @@ namespace GymManagement.Infrastructure.Services
                 user.LastName = updateUserDto.LastName;
             if (updateUserDto.Phone != null)
             {
-                var normalizedPhone = PhoneNumberValidator.NormalizeOptionalPhone(updateUserDto.Phone);
-                var phoneTaken = normalizedPhone != null
-                    && await _unitOfWork.Users.ExistsAsync(u => u.Phone == normalizedPhone && u.Id != id);
-                if (phoneTaken)
-                    throw new ConflictException($"A user with phone number '{normalizedPhone}' already exists.");
+                var normalizedPhone = PhoneNumberValidator.NormalizeRequiredPhone(updateUserDto.Phone);
+                await _mobileAvailability.EnsureAvailableOrThrowAsync(normalizedPhone, id);
                 user.Phone = normalizedPhone;
+            }
+            if (updateUserDto.AadhaarNumber != null)
+            {
+                var previousAadhaar = user.AadhaarNumber;
+                var normalizedAadhaar = AadhaarNumberValidator.TryNormalizeOptionalAadhaar(updateUserDto.AadhaarNumber);
+                if (!string.Equals(previousAadhaar, normalizedAadhaar, StringComparison.Ordinal))
+                {
+                    if (normalizedAadhaar != null)
+                        await EnsureAadhaarNotDuplicateAsync(normalizedAadhaar, id);
+                    user.AadhaarNumber = normalizedAadhaar;
+                    await LogAadhaarAuditAsync(
+                        id,
+                        string.IsNullOrWhiteSpace(previousAadhaar) ? "Aadhaar Created" : "Aadhaar Updated",
+                        previousAadhaar,
+                        normalizedAadhaar);
+                }
             }
             if (updateUserDto.DateOfBirth.HasValue)
                 user.DateOfBirth = updateUserDto.DateOfBirth.Value;
@@ -357,7 +370,7 @@ namespace GymManagement.Infrastructure.Services
             if (updateUserDto.EmergencyContact != null)
                 user.EmergencyContact = updateUserDto.EmergencyContact;
             if (updateUserDto.EmergencyPhone != null)
-                user.EmergencyPhone = updateUserDto.EmergencyPhone;
+                user.EmergencyPhone = PhoneNumberValidator.NormalizeOptionalPhone(updateUserDto.EmergencyPhone);
             if (updateUserDto.ProfilePictureUrl != null)
                 user.ProfilePictureUrl = updateUserDto.ProfilePictureUrl;
             if (updateUserDto.PreferredGymTime != null)
@@ -550,11 +563,11 @@ namespace GymManagement.Infrastructure.Services
                 .ToDictionary(g => g.Key, g => g.Select(ur => appRoles[ur.RoleId].Name).ToList());
         }
 
-        private static UserDto MapToDto(User user, AuthUser? authUser = null, bool isInstructorProfile = false, List<UserTypeDto>? userTypes = null, List<string>? appRoleNamesFromUserRoles = null)
+        private UserDto MapToDto(User user, AuthUser? authUser = null, bool isInstructorProfile = false, List<UserTypeDto>? userTypes = null, List<string>? appRoleNamesFromUserRoles = null)
         {
             var role = AuthUserRoleHelper.ResolveRoleForUserDto(authUser, isInstructorProfile, userTypes, appRoleNamesFromUserRoles);
             var username = authUser?.Email;
-            return new UserDto
+            var dto = new UserDto
             {
                 Id = user.Id,
                 FirstName = user.FirstName,
@@ -574,6 +587,71 @@ namespace GymManagement.Infrastructure.Services
                 Username = username,
                 UserTypes = userTypes ?? new List<UserTypeDto>()
             };
+            EnrichAadhaarFields(dto, user.AadhaarNumber);
+            return dto;
+        }
+
+        private void EnrichAadhaarFields(UserDto dto, string? aadhaarDigits)
+        {
+            if (string.IsNullOrWhiteSpace(aadhaarDigits))
+                return;
+
+            dto.AadhaarNumberMasked = AadhaarDisplayHelper.Mask(aadhaarDigits);
+            if (_accessContext.CanViewFullAadhaar)
+                dto.AadhaarNumber = aadhaarDigits;
+        }
+
+        private async Task EnsureAadhaarNotDuplicateAsync(string aadhaar, int? excludeUserId = null)
+        {
+            var taken = await _db.Users.AnyAsync(u =>
+                !u.IsDeleted
+                && u.AadhaarNumber == aadhaar
+                && (!excludeUserId.HasValue || u.Id != excludeUserId.Value));
+            if (taken)
+                throw new ConflictException("Aadhaar number is already registered to another user.");
+        }
+
+        private async Task LogAadhaarAuditAsync(int subjectUserId, string action, string? oldValue, string? newValue)
+        {
+            await _db.AuditLogs.AddAsync(new AuditLog
+            {
+                UserId = _accessContext.ActorProfileUserId ?? subjectUserId,
+                Action = action,
+                Entity = $"User:{subjectUserId}",
+                OldValue = oldValue,
+                NewValue = newValue,
+                CreatedAt = DateTime.UtcNow,
+            });
+            await _db.SaveChangesAsync();
+        }
+
+        private IQueryable<User> ApplyUserSearchFilter(IQueryable<User> query, string? search)
+        {
+            var trimmedSearch = search?.Trim();
+            if (string.IsNullOrWhiteSpace(trimmedSearch))
+                return query;
+
+            var digitSearch = AadhaarNumberValidator.StripFormatting(trimmedSearch);
+            var isDigitOnlySearch = digitSearch.Length > 0
+                && digitSearch.Length == trimmedSearch.Count(char.IsDigit);
+
+            if (isDigitOnlySearch && digitSearch.Length == 12)
+            {
+                return query.Where(u =>
+                    u.AadhaarNumber == digitSearch
+                    || EF.Functions.Like(u.FirstName, $"%{trimmedSearch}%")
+                    || EF.Functions.Like(u.LastName, $"%{trimmedSearch}%")
+                    || (u.Phone != null && u.Phone.Contains(digitSearch))
+                    || _db.AuthUsers.Any(a => a.UserId == u.Id && a.Email.Contains(trimmedSearch)));
+            }
+
+            var likeSearch = $"%{trimmedSearch}%";
+            return query.Where(u =>
+                EF.Functions.Like(u.FirstName, likeSearch)
+                || EF.Functions.Like(u.LastName, likeSearch)
+                || (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch))
+                || (isDigitOnlySearch && u.AadhaarNumber != null && u.AadhaarNumber.Contains(digitSearch))
+                || _db.AuthUsers.Any(a => a.UserId == u.Id && EF.Functions.Like(a.Email, likeSearch)));
         }
 
         private sealed class UserBillingListSummary

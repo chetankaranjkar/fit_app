@@ -41,6 +41,15 @@ import { MemberSupplementsPanel } from '../modules/supplement-tracking/component
 import { MemberPaymentHistoryTab } from '../components/users/MemberPaymentHistoryTab'
 import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
 import { formatInr } from '../lib/formatInr'
+import { displayAadhaar, validateAadhaarNumber } from '../lib/aadhaar'
+import {
+  digitsOnlyPhoneInput,
+  getPhoneValidationError,
+  validateOptionalPhoneNumber,
+  validatePhoneNumber,
+} from '../lib/phone'
+import { useMobileNumberAvailability } from '../hooks/useMobileNumberAvailability'
+import { MobileNumberAvailabilityHint } from '../components/users/MobileNumberAvailabilityHint'
 import type { User, UpdateUserDto } from '../types/user'
 import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
 import type {
@@ -230,6 +239,14 @@ export function UserDetailPage() {
     trainerId?: number
   } | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [aadhaarError, setAadhaarError] = useState<string | null>(null)
+  const [phoneError, setPhoneError] = useState<string | null>(null)
+  const [emergencyPhoneError, setEmergencyPhoneError] = useState<string | null>(null)
+  const [profilePhoneDraft, setProfilePhoneDraft] = useState('')
+  const mobileAvailability = useMobileNumberAvailability(profilePhoneDraft, {
+    enabled: editProfileOpen,
+    excludeUserId: id,
+  })
   const [loginPassword, setLoginPassword] = useState('')
   const [loginPasswordConfirm, setLoginPasswordConfirm] = useState('')
   const [loginEmail, setLoginEmail] = useState('')
@@ -870,6 +887,7 @@ export function UserDetailPage() {
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone ?? '',
+      aadhaarNumber: user.aadhaarNumber ?? '',
       dateOfBirth: user.dateOfBirth?.slice(0, 10) ?? '',
       gender: user.gender ?? '',
       address: user.address ?? '',
@@ -884,9 +902,13 @@ export function UserDetailPage() {
       userTypeIds: userTypeIdsFromUser(user),
     })
     setProfileError(null)
+    setAadhaarError(null)
+    setPhoneError(null)
+    setEmergencyPhoneError(null)
     setLoginPassword('')
     setLoginPasswordConfirm('')
     setLoginEmail(user.email?.trim() ?? user.username?.trim() ?? '')
+    setProfilePhoneDraft(user.phone ?? '')
     setEditProfileOpen(true)
   }
 
@@ -894,6 +916,9 @@ export function UserDetailPage() {
     setLoginPassword('')
     setLoginPasswordConfirm('')
     setLoginEmail('')
+    setAadhaarError(null)
+    setPhoneError(null)
+    setEmergencyPhoneError(null)
     setEditProfileOpen(false)
     setProfileForm({})
     setEditProfileBaseline(null)
@@ -935,15 +960,41 @@ export function UserDetailPage() {
       baseline?.trainerId && baseline.trainerId > 0 ? baseline.trainerId : undefined
     const trainerUnchanged = baseline != null && formTrainerId === baseTrainerId
 
+    if (!mobileAvailability.isAvailable && mobileAvailability.status !== 'idle') {
+      const msg = mobileAvailability.error ?? 'This mobile number is already registered with another user.'
+      setPhoneError(msg)
+      setProfileError(msg)
+      return
+    }
+
+    let phoneDigits: string
+    let emergencyPhoneDigits: string | null = null
+    let aadhaarDigits: string | undefined
+    try {
+      phoneDigits = validatePhoneNumber(profileForm.phone, true)
+      emergencyPhoneDigits = validateOptionalPhoneNumber(profileForm.emergencyPhone) ?? null
+      const rawAadhaar = profileForm.aadhaarNumber?.trim() ?? ''
+      if (rawAadhaar) aadhaarDigits = validateAadhaarNumber(rawAadhaar)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Invalid value.'
+      if (msg.includes('Aadhaar')) setAadhaarError(msg)
+      else if (profileForm.emergencyPhone?.trim() && getPhoneValidationError(profileForm.emergencyPhone))
+        setEmergencyPhoneError(msg)
+      else setPhoneError(msg)
+      setProfileError(msg)
+      return
+    }
+
     const payload: UpdateUserDto = {
       firstName: profileForm.firstName?.trim(),
       lastName: profileForm.lastName?.trim(),
-      phone: profileForm.phone?.trim() || null,
+      phone: phoneDigits,
+      ...(aadhaarDigits !== undefined ? { aadhaarNumber: aadhaarDigits } : {}),
       dateOfBirth: profileForm.dateOfBirth || null,
       gender: profileForm.gender?.trim() || null,
       address: profileForm.address?.trim() || null,
       emergencyContact: profileForm.emergencyContact?.trim() || null,
-      emergencyPhone: profileForm.emergencyPhone?.trim() || null,
+      emergencyPhone: emergencyPhoneDigits,
       preferredGymTime: profileForm.preferredGymTime?.trim() || null,
       profilePictureUrl:
         profileForm.profilePictureUrl != null && profileForm.profilePictureUrl.trim() !== ''
@@ -1342,11 +1393,41 @@ export function UserDetailPage() {
                     }}
                   />
                 )}
-                <Input
-                  label="Phone"
-                  value={profileForm.phone ?? ''}
-                  onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))}
-                />
+                <div>
+                  <Input
+                    label="Phone"
+                    type="tel"
+                    value={profileForm.phone ?? ''}
+                    onChange={(e) => {
+                      const value = digitsOnlyPhoneInput(e.target.value)
+                      setProfileForm((f) => ({ ...f, phone: value }))
+                      setProfilePhoneDraft(value)
+                      if (phoneError) setPhoneError(null)
+                    }}
+                    onBlur={() => setPhoneError(mobileAvailability.error)}
+                    maxLength={10}
+                    required
+                    error={phoneError ?? mobileAvailability.error ?? undefined}
+                  />
+                  <MobileNumberAvailabilityHint
+                    status={mobileAvailability.status}
+                    message={mobileAvailability.message}
+                  />
+                </div>
+                <div>
+                  <Input
+                    label="Aadhaar Number"
+                    value={profileForm.aadhaarNumber ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 12)
+                      setProfileForm((f) => ({ ...f, aadhaarNumber: value }))
+                      if (aadhaarError) setAadhaarError(null)
+                    }}
+                    placeholder="Optional"
+                    error={aadhaarError ?? undefined}
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">12 digit Aadhaar Number</p>
+                </div>
                 <Input
                   label="Date of birth"
                   type="date"
@@ -1399,10 +1480,22 @@ export function UserDetailPage() {
                 />
                 <Input
                   label="Emergency phone"
+                  type="tel"
                   value={profileForm.emergencyPhone ?? ''}
-                  onChange={(e) =>
-                    setProfileForm((f) => ({ ...f, emergencyPhone: e.target.value }))
+                  onChange={(e) => {
+                    setProfileForm((f) => ({
+                      ...f,
+                      emergencyPhone: digitsOnlyPhoneInput(e.target.value),
+                    }))
+                    if (emergencyPhoneError) setEmergencyPhoneError(null)
+                  }}
+                  onBlur={() =>
+                    setEmergencyPhoneError(
+                      getPhoneValidationError(profileForm.emergencyPhone, false),
+                    )
                   }
+                  maxLength={10}
+                  error={emergencyPhoneError ?? undefined}
                 />
                 <div className="flex items-center gap-2 sm:col-span-2">
                   <input
@@ -2240,6 +2333,7 @@ function DetailsTab({
           accent="from-rose-400 to-pink-500"
         >
           <InfoRow label="Phone" value={user.phone ?? '—'} />
+          <InfoRow label="Aadhaar" value={displayAadhaar(user)} />
           <InfoRow label="Address" value={user.address ?? '—'} />
           <InfoRow label="Emergency name" value={user.emergencyContact ?? '—'} />
           <InfoRow label="Emergency phone" value={user.emergencyPhone ?? '—'} />

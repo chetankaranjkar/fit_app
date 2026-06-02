@@ -1,3 +1,6 @@
+import { normalizeAadhaarInput } from './aadhaar'
+import { getPhoneValidationError, normalizePhoneNumber } from './phone'
+
 /** Parse simple CSV (comma-separated, supports quoted fields). */
 export function parseCsvLines(text: string): string[][] {
   const rows: string[][] = []
@@ -60,7 +63,8 @@ export type ParsedMemberRow = {
   firstName: string
   lastName: string
   email: string
-  phone?: string
+  phone: string
+  aadhaarNumber?: string
   dateOfBirth: string
   gender: string
   isActive: boolean
@@ -95,6 +99,8 @@ export function rowsToMemberImports(rows: string[][]): {
   for (const r of req) {
     if (!idx.has(r)) errors.push(`Missing required column: ${r}`)
   }
+  const phoneKey = idx.has('phone') ? 'phone' : idx.has('mobilenumber') ? 'mobilenumber' : idx.has('mobile') ? 'mobile' : null
+  if (!phoneKey) errors.push('Missing phone column (phone, mobile, or mobileNumber).')
   if (errors.length) return { rows: [], errors }
 
   const dobKey = idx.has('dateofbirth')
@@ -110,6 +116,7 @@ export function rowsToMemberImports(rows: string[][]): {
   if (errors.length) return { rows: [], errors }
 
   const out: ParsedMemberRow[] = []
+  const phonesInFile = new Map<string, number>()
 
   for (let li = 1; li < rows.length; li++) {
     const line = rows[li]
@@ -141,7 +148,34 @@ export function rowsToMemberImports(rows: string[][]): {
     const activeCell = idx.has('isactive') ? get('isactive') : ''
     const isActive = activeCell === '' ? true : parseBool(activeCell)
 
-    const phoneRaw = idx.has('phone') ? get('phone').trim() : ''
+    const phoneRaw = phoneKey ? get(phoneKey).trim() : ''
+    if (!phoneRaw) {
+      errors.push(`Row ${lineNo}: phone is required.`)
+      continue
+    }
+    const phoneErr = getPhoneValidationError(phoneRaw, true)
+    if (phoneErr) {
+      errors.push(`Row ${lineNo}: ${phoneErr}`)
+      continue
+    }
+    const phone = normalizePhoneNumber(phoneRaw)!
+    const priorRow = phonesInFile.get(phone)
+    if (priorRow != null) {
+      errors.push(`Row ${lineNo}: duplicate phone number (also on row ${priorRow}).`)
+      continue
+    }
+    phonesInFile.set(phone, lineNo)
+
+    const aadhaarRaw = idx.has('aadhaarnumber') ? get('aadhaarnumber').trim() : ''
+    let aadhaarNumber: string | undefined
+    if (aadhaarRaw) {
+      try {
+        aadhaarNumber = normalizeAadhaarInput(aadhaarRaw)
+      } catch {
+        errors.push(`Row ${lineNo}: Aadhaar must be exactly 12 digits.`)
+        continue
+      }
+    }
     const username = idx.has('username') ? get('username').trim() : ''
     const password = idx.has('password') ? get('password') : ''
 
@@ -149,7 +183,8 @@ export function rowsToMemberImports(rows: string[][]): {
       firstName,
       lastName,
       email,
-      phone: phoneRaw || undefined,
+      phone,
+      aadhaarNumber,
       dateOfBirth,
       gender,
       isActive,
@@ -161,8 +196,8 @@ export function rowsToMemberImports(rows: string[][]): {
   return { rows: out, errors }
 }
 
-export const MEMBERS_CSV_TEMPLATE = `firstName,lastName,email,phone,dateOfBirth,gender,isActive
-Jane,Doe,jane.doe@example.com,+15551234567,1990-05-15,Female,true`
+export const MEMBERS_CSV_TEMPLATE = `firstName,lastName,email,phone,aadhaarNumber,dateOfBirth,gender,isActive
+Jane,Doe,jane.doe@example.com,9876543210,123412341234,1990-05-15,Female,true`
 
 export function downloadMembersCsv(filename: string, headers: string[], lines: string[][]) {
   const esc = (v: string) => {

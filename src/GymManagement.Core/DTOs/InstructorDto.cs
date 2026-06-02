@@ -23,6 +23,8 @@ namespace GymManagement.Core.DTOs
         public string LastName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string? Phone { get; set; }
+        public string? AadhaarNumber { get; set; }
+        public string? AadhaarNumberMasked { get; set; }
         public string? EmployeeCode { get; set; }
         public string? Specialization { get; set; }
         public string? CertificationDetails { get; set; }

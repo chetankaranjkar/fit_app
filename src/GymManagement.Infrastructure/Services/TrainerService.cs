@@ -1,8 +1,10 @@
 using GymManagement.Core.DTOs;
 using GymManagement.Core.DTOs.Common;
+using GymManagement.Core.Security;
+using GymManagement.Core.Services;
+using GymManagement.Core.Validation;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
-using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -13,11 +15,16 @@ namespace GymManagement.Infrastructure.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _context;
+        private readonly ICurrentUserAccessContext _accessContext;
 
-        public TrainerService(IUnitOfWork unitOfWork, ApplicationDbContext context)
+        public TrainerService(
+            IUnitOfWork unitOfWork,
+            ApplicationDbContext context,
+            ICurrentUserAccessContext accessContext)
         {
             _unitOfWork = unitOfWork;
             _context = context;
+            _accessContext = accessContext;
         }
 
         public async Task<PagedResultDto<TrainerDto>> GetPagedAsync(
@@ -37,8 +44,12 @@ namespace GymManagement.Infrastructure.Services
             if (isActive.HasValue)
                 query = query.Where(t => t.IsActive == isActive.Value);
 
-            if (!string.IsNullOrWhiteSpace(likeSearch))
+            if (!string.IsNullOrWhiteSpace(trimmedSearch))
             {
+                var digitSearch = AadhaarNumberValidator.StripFormatting(trimmedSearch);
+                var isDigitOnlySearch = digitSearch.Length > 0
+                    && digitSearch.Length == trimmedSearch.Count(char.IsDigit);
+
                 query = query.Where(t =>
                     (t.Specialization != null && EF.Functions.Like(t.Specialization, likeSearch))
                     || (t.EmployeeCode != null && EF.Functions.Like(t.EmployeeCode, likeSearch))
@@ -46,7 +57,9 @@ namespace GymManagement.Infrastructure.Services
                         u.Id == t.UserId
                         && (EF.Functions.Like(u.FirstName, likeSearch)
                             || EF.Functions.Like(u.LastName, likeSearch)
-                            || (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch))))
+                            || (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch))
+                            || (isDigitOnlySearch && digitSearch.Length == 12 && u.AadhaarNumber == digitSearch)
+                            || (isDigitOnlySearch && u.AadhaarNumber != null && u.AadhaarNumber.Contains(digitSearch))))
                     || _context.AuthUsers.Any(a =>
                         a.UserId == t.UserId && EF.Functions.Like(a.Email, likeSearch)));
             }
@@ -205,9 +218,9 @@ namespace GymManagement.Infrastructure.Services
             return true;
         }
 
-        private static TrainerDto MapToDto(Trainer trainer, User? user, string? emailFromAuth = null)
+        private TrainerDto MapToDto(Trainer trainer, User? user, string? emailFromAuth = null)
         {
-            return new TrainerDto
+            var dto = new TrainerDto
             {
                 Id = trainer.Id,
                 UserId = trainer.UserId,
@@ -234,6 +247,15 @@ namespace GymManagement.Infrastructure.Services
                 TerminationReason = trainer.TerminationReason,
                 IsActive = trainer.IsActive
             };
+
+            if (!string.IsNullOrWhiteSpace(user?.AadhaarNumber))
+            {
+                dto.AadhaarNumberMasked = AadhaarDisplayHelper.Mask(user.AadhaarNumber);
+                if (_accessContext.CanViewFullAadhaar)
+                    dto.AadhaarNumber = user.AadhaarNumber;
+            }
+
+            return dto;
         }
     }
 }

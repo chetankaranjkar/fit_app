@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ListPagination } from '../components/ui/ListPagination'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceStrict } from 'date-fns'
 import {
@@ -7,7 +6,6 @@ import {
   CalendarRange,
   ClipboardList,
   Clock,
-  Loader2,
   LogIn,
   LogOut,
   Search,
@@ -20,6 +18,13 @@ import {
   DashboardSubpageShell,
   DashboardTablePanel,
 } from '../components/layout/DashboardSubpageShell'
+import { DataPageSection } from '../components/layout/DataPageShell'
+import {
+  EnterpriseDataGrid,
+  RowActionsMenu,
+  StatusBadge,
+  type DataGridColumnDef,
+} from '../components/data-grid'
 import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
@@ -283,6 +288,145 @@ export function AttendancePage() {
     setSelectedCheckout(log)
   }
 
+  const attendanceColumns = useMemo<DataGridColumnDef<AttendanceLogDto>[]>(
+    () => [
+      {
+        id: 'member',
+        header: 'Member',
+        sticky: true,
+        minWidth: 220,
+        width: 240,
+        sortable: true,
+        filterable: true,
+        accessorFn: (log) => log.userName,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <div
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-[10px] font-bold text-white ring-1 ring-white/10"
+              aria-hidden
+            >
+              {memberInitials(row.userName)}
+            </div>
+            <div className="min-w-0">
+              <button
+                type="button"
+                className="truncate text-left text-sm font-medium text-white hover:text-sky-200 hover:underline"
+                onClick={() =>
+                  selectMemberForHistory(row.userId, row.userName, users, setSelectedMember)
+                }
+              >
+                {row.userName}
+              </button>
+              <p className="truncate text-[10px] text-slate-500">{row.notes?.trim() || 'No note'}</p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: 'date',
+        header: 'Date',
+        minWidth: 110,
+        width: 120,
+        sortable: true,
+        accessorFn: (log) => log.attendanceDate,
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap text-slate-300">
+            {new Date(row.attendanceDate).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        id: 'checkIn',
+        header: 'Check in',
+        minWidth: 150,
+        width: 160,
+        hideBelow: 'md',
+        accessorFn: (log) => log.checkInTime ?? '',
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap font-mono text-[11px] text-slate-300">
+            {formatDateTime(row.checkInTime)}
+          </span>
+        ),
+      },
+      {
+        id: 'checkOut',
+        header: 'Check out',
+        minWidth: 150,
+        width: 160,
+        hideBelow: 'lg',
+        accessorFn: (log) => log.checkOutTime ?? '',
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap font-mono text-[11px] text-slate-300">
+            {formatDateTime(row.checkOutTime)}
+          </span>
+        ),
+      },
+      {
+        id: 'duration',
+        header: 'Duration',
+        minWidth: 100,
+        width: 110,
+        accessorFn: (log) => safeDuration(log),
+      },
+      {
+        id: 'method',
+        header: 'Method',
+        minWidth: 100,
+        width: 120,
+        hideBelow: 'xl',
+        accessorFn: (log) => log.checkInMethod || log.checkOutMethod || '',
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        minWidth: 120,
+        width: 130,
+        sortable: true,
+        accessorFn: (log) => (log.isCheckedIn ? 'Checked in' : 'Completed'),
+        cell: ({ row }) => (
+          <StatusBadge variant={row.isCheckedIn ? 'success' : 'neutral'} dot>
+            {row.isCheckedIn ? 'Checked in' : 'Completed'}
+          </StatusBadge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: '',
+        width: 72,
+        minWidth: 72,
+        align: 'right',
+        cell: ({ row }) =>
+          row.isCheckedIn ? (
+            <RowActionsMenu
+              row={row}
+              actions={[
+                { id: 'checkout', label: 'Check out', onClick: openCheckout },
+                {
+                  id: 'history',
+                  label: 'View history',
+                  onClick: (log) =>
+                    selectMemberForHistory(log.userId, log.userName, users, setSelectedMember),
+                },
+              ]}
+            />
+          ) : (
+            <RowActionsMenu
+              row={row}
+              actions={[
+                {
+                  id: 'history',
+                  label: 'View history',
+                  onClick: (log) =>
+                    selectMemberForHistory(log.userId, log.userName, users, setSelectedMember),
+                },
+              ]}
+            />
+          ),
+      },
+    ],
+    [users],
+  )
+
   const filterToolbar = (
     <div className="flex w-full min-w-0 flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -371,6 +515,7 @@ export function AttendancePage() {
         showExport={false}
         primaryAction={{ label: '+ Check in member', onClick: openCheckIn }}
       >
+        <DataPageSection>
         <DashboardMetricsGrid cols={4}>
           <MetricCard
             title="Visit logs"
@@ -403,7 +548,7 @@ export function AttendancePage() {
         </DashboardMetricsGrid>
 
         <section
-          className="glass-card relative overflow-hidden rounded-2xl border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.07] via-transparent to-rose-500/[0.06]"
+          className="glass-card relative shrink-0 overflow-hidden rounded-2xl border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.07] via-transparent to-rose-500/[0.06]"
           aria-label="Exception summary for selected day"
         >
           <div className="pointer-events-none absolute -right-16 -top-16 size-40 rounded-full bg-amber-500/10 blur-3xl" />
@@ -444,138 +589,46 @@ export function AttendancePage() {
             </div>
           </div>
         </section>
+        </DataPageSection>
 
-        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] xl:items-start">
-          <DashboardTablePanel
-            title="Attendance log"
-            description="Sortable front-desk record for the selected range. Check out ends an active session."
-            toolbar={filterToolbar}
-          >
-            {isLoading ? (
-              <div className="flex items-center justify-center gap-2 px-6 py-16 text-sm text-slate-400">
-                <Loader2 className="size-5 animate-spin text-sky-400" aria-hidden />
-                Loading attendance…
-              </div>
-            ) : filteredLogs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-                <div className="flex size-12 items-center justify-center rounded-2xl bg-white/5 text-slate-500 ring-1 ring-white/10">
-                  <ClipboardList className="size-6 opacity-80" />
-                </div>
-                <p className="text-sm font-medium text-slate-300">No rows match your filters</p>
-                <p className="max-w-sm text-xs text-slate-500">
-                  Widen the date range, clear search, or switch status to see more visits.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[960px] text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-white/10 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      <th className="px-6 py-3">Member</th>
-                      <th className="px-6 py-3">Date</th>
-                      <th className="px-6 py-3">Check in</th>
-                      <th className="px-6 py-3">Check out</th>
-                      <th className="px-6 py-3">Duration</th>
-                      <th className="px-6 py-3">Method</th>
-                      <th className="px-6 py-3">Status</th>
-                      <th className="px-6 py-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredLogs.map((log) => (
-                      <tr
-                        key={log.id}
-                        className="border-b border-white/5 transition-colors hover:bg-white/[0.04]"
-                      >
-                        <td className="px-6 py-4 align-top">
-                          <div className="flex items-start gap-3">
-                            <div
-                              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-xs font-bold tracking-tight text-white ring-2 ring-white/10"
-                              aria-hidden
-                            >
-                              {memberInitials(log.userName)}
-                            </div>
-                            <div className="min-w-0">
-                              <button
-                                type="button"
-                                className="text-left font-medium text-white underline-offset-4 hover:text-sky-200 hover:underline"
-                                onClick={() =>
-                                  selectMemberForHistory(log.userId, log.userName, users, setSelectedMember)
-                                }
-                              >
-                                {log.userName}
-                              </button>
-                              <p className="mt-1 line-clamp-2 text-xs text-slate-500">
-                                {log.notes?.trim() || 'No note'}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-slate-300">
-                          {new Date(log.attendanceDate).toLocaleDateString()}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 font-mono text-[13px] text-slate-300">
-                          {formatDateTime(log.checkInTime)}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 font-mono text-[13px] text-slate-300">
-                          {formatDateTime(log.checkOutTime)}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 tabular-nums text-slate-300">
-                          {safeDuration(log)}
-                        </td>
-                        <td className="px-6 py-4 text-slate-300">
-                          {log.checkInMethod || log.checkOutMethod || '—'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                              log.isCheckedIn
-                                ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/35'
-                                : 'bg-white/[0.06] text-slate-300 ring-1 ring-white/10'
-                            }`}
-                          >
-                            <span
-                              className={`size-1.5 rounded-full ${
-                                log.isCheckedIn ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]' : 'bg-slate-500'
-                              }`}
-                              aria-hidden
-                            />
-                            {log.isCheckedIn ? 'Checked in' : 'Completed'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          {log.isCheckedIn ? (
-                            <Button variant="soft" size="sm" onClick={() => openCheckout(log)}>
-                              Check out
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-slate-600">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {!isLoading && totalLogs > 0 ? (
-              <ListPagination
-                className="border-t border-white/10 px-4 py-3"
-                page={page}
-                pageSize={pageSize}
-                totalCount={totalLogs}
-                isFetching={isFetching}
-                pageSizeOptions={[25, 50, 100]}
-                onPageChange={setPage}
-                onPageSizeChange={(size) => {
-                  setPageSize(size)
-                  setPage(1)
-                }}
+        <div className="grid min-h-0 min-w-0 flex-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] xl:overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-col">
+            <DashboardTablePanel
+              title="Attendance log"
+              description="Only this grid scrolls. Check out ends an active session."
+              toolbar={filterToolbar}
+            >
+              <EnterpriseDataGrid
+                data={filteredLogs}
+                columns={attendanceColumns}
+                getRowId={(log) => log.id}
+                loading={isLoading}
+                emptyMessage={
+                  attendanceLogs.length === 0
+                    ? 'No attendance in this date range.'
+                    : 'No rows match your filters. Widen the range or clear status filter.'
+                }
+                pagination={
+                  totalLogs > 0
+                    ? {
+                        page,
+                        pageSize,
+                        totalCount: totalLogs,
+                        isFetching,
+                        pageSizeOptions: [25, 50, 100],
+                        onPageChange: setPage,
+                        onPageSizeChange: (size) => {
+                          setPageSize(size)
+                          setPage(1)
+                        },
+                      }
+                    : undefined
+                }
               />
-            ) : null}
-          </DashboardTablePanel>
+            </DashboardTablePanel>
+          </div>
 
-          <aside className="min-w-0 space-y-3">
+          <aside className="min-h-0 min-w-0 space-y-3 xl:overflow-y-auto">
             <section className="glass-card dashboard-card sticky top-4 min-w-0 rounded-2xl">
               <div className="border-b border-white/5 px-5 py-4">
                 <h2 className="text-base font-semibold text-white">Daily exceptions</h2>

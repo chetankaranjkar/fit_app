@@ -1,8 +1,16 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { ListPagination } from '../components/ui/ListPagination'
+import { DataPageSection, DataPageShell } from '../components/layout/DataPageShell'
+import {
+  DataFilterSelect,
+  DataToolbar,
+  EnterpriseDataGrid,
+  RowActionsMenu,
+  StatusBadge,
+  type DataGridColumnDef,
+} from '../components/data-grid'
+import { formatInr } from '../lib/formatInr'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import toast from 'react-hot-toast'
@@ -24,7 +32,6 @@ import {
   parseCsvLines,
   rowsToMemberImports,
 } from '../lib/membersCsv'
-import { formatInr } from '../lib/formatInr'
 import type { Trainer } from '../types/trainer'
 
 function getDashboardUser() {
@@ -93,185 +100,55 @@ function PaymentDueCell({
   const hasBalance = pending > 0.02
   const overdue = hasBalance && user.isPaymentOverdue
 
-  // Paid / no balance: show last payment or next due date instead of "—"
   if (!hasBalance) {
     if (status === 'paid' && paidLabel) {
       return (
-        <div className="flex flex-col items-start gap-0.5">
-          <span className="inline-flex rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-200 ring-1 ring-emerald-500/20">
-            Paid
-          </span>
-          <span className="text-xs text-slate-300">{paidLabel}</span>
+        <div className="flex max-w-full flex-col gap-0.5">
+          <StatusBadge variant="success">Paid</StatusBadge>
+          <span className="truncate text-[10px] text-slate-400">{paidLabel}</span>
         </div>
       )
     }
     if (dueLabel) {
       return (
-        <div className="flex flex-col items-start gap-0.5">
-          <span className="text-[11px] text-slate-500">Next due</span>
-          <span className="text-xs font-medium text-slate-300">{dueLabel}</span>
+        <div className="flex max-w-full flex-col gap-0.5">
+          <span className="text-[10px] text-slate-500">Next due</span>
+          <span className="truncate text-[10px] font-medium text-slate-300">{dueLabel}</span>
         </div>
       )
     }
     if (paidLabel) {
-      return <span className="text-xs text-slate-400">{paidLabel}</span>
+      return <span className="text-[10px] text-slate-400">{paidLabel}</span>
     }
     return <span className="text-slate-600">—</span>
   }
 
+  const badgeVariant = overdue ? 'danger' : status === 'partial' ? 'warning' : 'warning'
+  const badgeLabel = overdue ? 'Overdue' : status === 'partial' ? 'Partial due' : 'Payment due'
+
   return (
-    <div className="flex flex-col items-start gap-1.5">
-      <span
-        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-          overdue
-            ? 'bg-rose-500/15 text-rose-200 ring-1 ring-rose-500/30'
-            : status === 'pending'
-              ? 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/25'
-              : 'bg-orange-500/15 text-orange-200 ring-1 ring-orange-500/25'
-        }`}
-      >
-        {overdue ? 'Payment expired' : status === 'partial' ? 'Partial due' : 'Payment due'}
+    <div className="flex max-w-full flex-col gap-0.5">
+      <StatusBadge variant={badgeVariant}>{badgeLabel}</StatusBadge>
+      <span className="truncate text-[10px] font-medium tabular-nums text-amber-100/90">
+        {formatInr(pending)}
       </span>
-      <span className={`text-xs font-medium ${dueLabel && pending <= 0.02 ? 'text-slate-200' : 'tabular-nums text-amber-100/90'}`}>
-        {pending > 0.02 ? formatInr(pending) : dueLabel ?? formatInr(pending)}
-      </span>
-      {dueLabel && pending > 0.02 && (
-        <span className={`text-[10px] ${overdue ? 'text-rose-300/80' : 'text-slate-500'}`}>
+      {dueLabel ? (
+        <span className={`truncate text-[10px] ${overdue ? 'text-rose-300/80' : 'text-slate-500'}`}>
           Due {dueLabel}
         </span>
-      )}
-      {onCollect && user.openMembershipId && (
+      ) : null}
+      {onCollect && user.openMembershipId ? (
         <button
           type="button"
           onClick={() => onCollect(user)}
-          className="rounded-lg bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200 transition hover:bg-blue-500/25"
+          className="mt-0.5 w-fit rounded-md bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-blue-200 hover:bg-blue-500/25"
         >
           Collect
         </button>
-      )}
+      ) : null}
     </div>
   )
 }
-
-function UserRow({
-  user,
-  rowStyle,
-  onView,
-  onEdit,
-  onDelete,
-  onDeactivate,
-  onActivate,
-  onCollectPayment,
-}: {
-  user: User
-  rowStyle?: React.CSSProperties
-  onView: (u: User) => void
-  onEdit: (u: User) => void
-  onDelete: (id: number, name: string) => void
-  onDeactivate: (u: User) => void
-  onActivate: (u: User) => void
-  onCollectPayment?: (u: User) => void
-}) {
-  const name = `${user.firstName} ${user.lastName}`.trim() || '—'
-  const age = getAge(user.dateOfBirth)
-  const initials = name !== '—' ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '—'
-  return (
-    <tr style={rowStyle} className="group transition-colors duration-150 hover:bg-white/[0.03]">
-      {/* Member (avatar + name + email) */}
-      <td className="px-5 py-3.5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-500/40 to-purple-600/40 text-xs font-bold text-white ring-1 ring-white/10">
-            {user.profilePictureUrl
-              ? <img src={user.profilePictureUrl} alt="" className="h-full w-full object-cover" />
-              : initials}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white">{name}</p>
-            <p className="truncate text-[11px] text-slate-500">
-              {user.email
-                ? <a href={`mailto:${user.email}`} className="text-blue-400/70 hover:text-blue-300 transition-colors">{user.email}</a>
-                : '—'}
-              {age != null && <span className="ml-1 text-slate-600">· {age}y</span>}
-            </p>
-          </div>
-        </div>
-      </td>
-      {/* Phone (hidden < lg) */}
-      <td className="hidden px-5 py-3.5 text-sm text-slate-400 lg:table-cell">
-        {user.phone ?? <span className="text-slate-600">—</span>}
-      </td>
-      {/* Status */}
-      <td className="px-5 py-3.5">
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-          user.isActive
-            ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20'
-            : 'bg-slate-500/10 text-slate-400 ring-1 ring-white/8'
-        }`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${user.isActive ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-          {user.isActive ? 'Active' : 'Inactive'}
-        </span>
-      </td>
-      {/* Payment due / expired */}
-      <td className="px-5 py-3.5">
-        <PaymentDueCell user={user} onCollect={onCollectPayment} />
-      </td>
-      {/* Pref Time (hidden < lg) */}
-      <td className="hidden px-5 py-3.5 text-sm text-slate-400 lg:table-cell">
-        {user.preferredGymTime ?? <span className="text-slate-600">—</span>}
-      </td>
-      {/* Type (hidden < xl) */}
-      <td className="hidden px-5 py-3.5 text-sm text-slate-400 xl:table-cell">
-        {user.userTypes && user.userTypes.length > 0
-          ? user.userTypes.map((t) => t.name).join(', ')
-          : <span className="text-slate-600">—</span>}
-      </td>
-      {/* Actions */}
-      <td className="px-5 py-3.5 text-right">
-        <div className="inline-flex items-center justify-end gap-1">
-          <button
-            type="button"
-            onClick={() => onView(user)}
-            className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:bg-white/8 hover:text-white"
-          >
-            View
-          </button>
-          <button
-            type="button"
-            onClick={() => onEdit(user)}
-            className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-blue-300 transition hover:bg-blue-500/10"
-          >
-            Edit
-          </button>
-          {user.isActive ? (
-            <button
-              type="button"
-              onClick={() => onDeactivate(user)}
-              className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/10"
-            >
-              Deactivate
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onActivate(user)}
-              className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/10"
-            >
-              Activate
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => onDelete(user.id, name)}
-            className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-rose-400 transition hover:bg-rose-500/10"
-          >
-            Del
-          </button>
-        </div>
-      </td>
-    </tr>
-  )
-}
-
 
 function UserCard({
   user,
@@ -431,7 +308,6 @@ export function UsersPage() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
-  const tableScrollRef = useRef<HTMLDivElement>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [importLog, setImportLog] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
@@ -481,13 +357,6 @@ export function UsersPage() {
 
   const users = usersPage?.items ?? []
   const totalMembers = usersPage?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalMembers / pageSize))
-  const rowVirtualizer = useVirtualizer({
-    count: users.length,
-    getScrollElement: () => tableScrollRef.current,
-    estimateSize: () => 56,
-    overscan: 10,
-  })
 
   const userStats = useMemo(() => {
     const total = totalMembers
@@ -774,6 +643,133 @@ export function UsersPage() {
     updateMutation.mutate({ id: user.id, payload: { isActive: true } })
   }
 
+  const memberColumns = useMemo<DataGridColumnDef<User>[]>(
+    () => [
+      {
+        id: 'member',
+        header: 'Member',
+        sticky: true,
+        minWidth: 250,
+        width: 280,
+        sortable: true,
+        filterable: true,
+        accessorFn: (u) => `${u.firstName} ${u.lastName}`.trim(),
+        cell: ({ row }) => {
+          const name = `${row.firstName} ${row.lastName}`.trim() || '—'
+          const age = getAge(row.dateOfBirth)
+          const initials =
+            name !== '—' ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '—'
+          return (
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-blue-500/40 to-purple-600/40 text-[10px] font-bold text-white ring-1 ring-white/10">
+                {row.profilePictureUrl ? (
+                  <img src={row.profilePictureUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{name}</p>
+                <p className="truncate text-[10px] text-slate-500">
+                  {row.email || '—'}
+                  {age != null ? ` · ${age}y` : ''}
+                </p>
+              </div>
+            </div>
+          )
+        },
+      },
+      {
+        id: 'phone',
+        header: 'Phone',
+        minWidth: 140,
+        width: 140,
+        hideBelow: 'lg',
+        filterable: true,
+        accessorFn: (u) => u.phone ?? '',
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        minWidth: 120,
+        width: 120,
+        sortable: true,
+        accessorFn: (u) => (u.isActive ? 'Active' : 'Inactive'),
+        cell: ({ row }) => (
+          <StatusBadge variant={row.isActive ? 'success' : 'neutral'} dot>
+            {row.isActive ? 'Active' : 'Inactive'}
+          </StatusBadge>
+        ),
+      },
+      {
+        id: 'payment',
+        header: 'Payment due',
+        minWidth: 150,
+        width: 160,
+        cell: ({ row }) => <PaymentDueCell user={row} onCollect={handleCollectPayment} />,
+      },
+      {
+        id: 'prefTime',
+        header: 'Pref. time',
+        minWidth: 110,
+        width: 120,
+        hideBelow: 'lg',
+        accessorFn: (u) => u.preferredGymTime ?? '',
+      },
+      {
+        id: 'type',
+        header: 'Type',
+        minWidth: 120,
+        width: 140,
+        hideBelow: 'xl',
+        accessorFn: (u) => u.userTypes?.map((t) => t.name).join(', ') ?? '',
+      },
+      {
+        id: 'actions',
+        header: '',
+        width: 72,
+        minWidth: 72,
+        align: 'right',
+        cell: ({ row }) => (
+          <RowActionsMenu
+            row={row}
+            actions={[
+              { id: 'view', label: 'View', onClick: handleViewUser },
+              { id: 'edit', label: 'Edit', onClick: handleEdit },
+              {
+                id: 'collect',
+                label: 'Collect payment',
+                onClick: handleCollectPayment,
+                hidden: (u) => !u.openMembershipId,
+              },
+              row.isActive
+                ? {
+                    id: 'deactivate',
+                    label: 'Deactivate',
+                    variant: 'warning',
+                    onClick: handleDeactivate,
+                  }
+                : {
+                    id: 'activate',
+                    label: 'Activate',
+                    variant: 'success',
+                    onClick: handleActivate,
+                  },
+              {
+                id: 'delete',
+                label: 'Delete',
+                variant: 'danger',
+                onClick: (u) =>
+                  handleDelete(u.id, `${u.firstName} ${u.lastName}`.trim() || 'User'),
+              },
+            ]}
+          />
+        ),
+      },
+    ],
+    [handleActivate, handleCollectPayment, handleDeactivate, handleDelete, handleEdit, handleViewUser],
+  )
+
   const handleExportFiltered = () => {
     const headers = [
       'id',
@@ -921,7 +917,8 @@ export function UsersPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <div ref={contentRef} className="min-w-0 max-w-[100%] space-y-6">
+      <DataPageShell>
+      <div ref={contentRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-hidden">
         {/* Match DashboardPage header: eyebrow, gradient title, actions */}
         <div
           className="users-dashboard-header"
@@ -975,6 +972,7 @@ export function UsersPage() {
           </div>
         </div>
 
+        <DataPageSection>
         {/* KPI metrics — same MetricCard pattern as dashboard */}
         <DashboardMetricsGrid cols={6} innerRef={cardsRowRef}>
           <MetricCard
@@ -1026,14 +1024,15 @@ export function UsersPage() {
             caption="Preferred time"
           />
         </DashboardMetricsGrid>
+        </DataPageSection>
 
         {/* Members table — glass card like dashboard widgets */}
         <section
           ref={tableSectionRef}
           data-walkthrough="members-table"
-          className="glass-card dashboard-card min-w-0 rounded-2xl"
+          className="glass-card dashboard-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl"
         >
-          <div className="border-b border-white/[0.06] px-4 py-4 sm:px-6 sm:py-5">
+          <div className="shrink-0 border-b border-white/[0.06] px-4 py-4 sm:px-6 sm:py-5">
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-white sm:text-base">Member List</h2>
@@ -1041,35 +1040,24 @@ export function UsersPage() {
                   {totalMembers} {totalMembers === 1 ? 'member' : 'members'}
                 </span>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                {/* Search */}
-                <div className="relative flex-1">
-                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
-                    </svg>
-                  </span>
-                  <input
-                    type="search"
-                    placeholder="Search name, email, phone…"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 transition-colors focus:border-blue-400/50 focus:bg-white/[0.07] focus:outline-none focus:ring-1 focus:ring-blue-400/20"
-                    aria-label="Search users"
+              <DataToolbar
+                searchValue={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Search name, email, phone…"
+                searchAriaLabel="Search members"
+                filters={
+                  <DataFilterSelect
+                    value={statusFilter}
+                    onChange={(v) => setStatusFilter(v as 'all' | 'active' | 'inactive')}
+                    ariaLabel="Filter by status"
+                    options={[
+                      { value: 'all', label: 'All status' },
+                      { value: 'active', label: 'Active' },
+                      { value: 'inactive', label: 'Inactive' },
+                    ]}
                   />
-                </div>
-                {/* Status filter */}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors focus:border-blue-400/50 focus:bg-white/[0.07] focus:outline-none sm:w-36"
-                  aria-label="Filter by status"
-                >
-                  <option value="all" className="bg-slate-900">All Status</option>
-                  <option value="active" className="bg-slate-900">Active</option>
-                  <option value="inactive" className="bg-slate-900">Inactive</option>
-                </select>
-              </div>
+                }
+              />
             </div>
           </div>
 
@@ -1481,7 +1469,7 @@ export function UsersPage() {
             <>
               {/* Render only one layout branch to avoid double-rendering thousands of members. */}
               {!isDesktopLayout ? (
-              <div>
+              <div className="min-h-0 flex-1 overflow-auto p-4">
                 {users.length === 0 ? (
                   <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
@@ -1522,78 +1510,34 @@ export function UsersPage() {
               ) : null}
 
               {isDesktopLayout ? (
-              <div className="overflow-x-auto">
-                {users.length === 0 ? (
-                  <div className="px-6 py-14 text-center">
-                    <p className="text-sm text-slate-400">
-                      {totalMembers === 0 ? 'No members yet.' : 'No members match your filter.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div ref={tableScrollRef} className="max-h-[min(560px,70vh)] overflow-auto">
-                    <table className="w-full table-fixed">
-                      <thead className="sticky top-0 z-10 bg-[rgba(15,12,30,0.98)]">
-                        <tr className="border-b border-white/5 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                          <th className="px-5 py-3.5">Member</th>
-                          <th className="hidden px-5 py-3.5 lg:table-cell">Phone</th>
-                          <th className="px-5 py-3.5">Status</th>
-                          <th className="px-5 py-3.5">Payment due</th>
-                          <th className="hidden px-5 py-3.5 lg:table-cell">Pref. Time</th>
-                          <th className="hidden px-5 py-3.5 xl:table-cell">Type</th>
-                          <th className="px-5 py-3.5 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody
-                        className="relative block w-full"
-                        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
-                      >
-                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                          const u = users[virtualRow.index]
-                          return (
-                            <UserRow
-                              key={u.id}
-                              user={u}
-                              rowStyle={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                width: '100%',
-                                height: `${virtualRow.size}px`,
-                                transform: `translateY(${virtualRow.start}px)`,
-                              }}
-                              onView={handleViewUser}
-                              onEdit={handleEdit}
-                              onDelete={handleDelete}
-                              onDeactivate={handleDeactivate}
-                              onActivate={handleActivate}
-                              onCollectPayment={handleCollectPayment}
-                            />
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                <EnterpriseDataGrid
+                  data={users}
+                  columns={memberColumns}
+                  getRowId={(u) => u.id}
+                  loading={isLoading}
+                  virtualize={users.length > 40}
+                  emptyMessage={
+                    totalMembers === 0 ? 'No members yet.' : 'No members match your filter.'
+                  }
+                  pagination={{
+                    page,
+                    pageSize,
+                    totalCount: totalMembers,
+                    isFetching,
+                    pageSizeOptions: [25, 50, 100],
+                    onPageChange: setPage,
+                    onPageSizeChange: (size) => {
+                      setPageSize(size)
+                      setPage(1)
+                    },
+                  }}
+                />
               ) : null}
-
-              <ListPagination
-                className="border-t border-white/[0.06] px-4 py-3 sm:px-6"
-                page={page}
-                pageSize={pageSize}
-                totalCount={totalMembers}
-                isFetching={isFetching}
-                pageSizeOptions={[25, 50, 100]}
-                onPageChange={setPage}
-                onPageSizeChange={(size) => {
-                  setPageSize(size)
-                  setPage(1)
-                }}
-              />
             </>
           )}
         </section>
       </div>
+      </DataPageShell>
     </DashboardLayout>
   )
 }

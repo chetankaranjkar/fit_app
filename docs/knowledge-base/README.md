@@ -15,6 +15,7 @@ Central folder for **product flows**, **identity/RBAC architecture**, **reuse ru
 | 3 | [USER_ROLE_ARCHITECTURE.md](./USER_ROLE_ARCHITECTURE.md) | Enterprise roles/profiles design, P1 implementation status, provisioning |
 | 4 | [SOURCE_CODE_MAP.md](./SOURCE_CODE_MAP.md) | Where key services, pages, and components live in the repo |
 | 5 | [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) | Recent P1 changes (Members/Staff, trainer edit, photo reuse) |
+| 6 | [UI_DATA_GRID_AUDIT.md](./UI_DATA_GRID_AUDIT.md) | Enterprise data grid, fixed dashboard layout, migrated list pages |
 
 ---
 
@@ -28,6 +29,8 @@ Central folder for **product flows**, **identity/RBAC architecture**, **reuse ru
 | [../PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md) | Scheduled product work |
 | [../FIREBASE_OTP_PRODUCTION.md](../FIREBASE_OTP_PRODUCTION.md) | Firebase OTP production setup (customer billing) |
 | [../RELEASE_PROCESS.md](../RELEASE_PROCESS.md) | UAT → main release and deploy workflow |
+| [../PERFORMANCE_IMPLEMENTATION.md](../PERFORMANCE_IMPLEMENTATION.md) | Performance work shipped (paging, dashboard summary, caching) |
+| [../PERFORMANCE_AUDIT_REPORT.md](../PERFORMANCE_AUDIT_REPORT.md) | Performance audit findings |
 | [../../deploy/DEPLOYMENT-UAT.md](../../deploy/DEPLOYMENT-UAT.md) | UAT Docker / Nginx / SSL on VPS |
 | [../sql/](../sql/) | SQL scripts (workout builder, exercises) |
 

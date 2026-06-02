@@ -56,6 +56,22 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Dashboard shell: page does not scroll — only inner panels (e.g. data grids) */
+html.dashboard-app,
+body.dashboard-app {
+  overflow: hidden;
+  height: 100%;
+  max-height: 100dvh;
+}
+
+.dashboard-scroll-area {
+  -webkit-overflow-scrolling: touch;
+}
+
+.data-grid-scroll {
+  scrollbar-gutter: stable;
+}
+
 /* Display headings utility class */
 .font-display {
   font-family: var(--font-display);

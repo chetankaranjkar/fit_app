@@ -1,8 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../../../components/layout/DashboardSubpageShell'
+import { DataPageSection } from '../../../components/layout/DataPageShell'
+import {
+  DataToolbar,
+  EnterpriseDataGrid,
+  StatusBadge,
+  type DataGridColumnDef,
+} from '../../../components/data-grid'
 import { ptSessionsService } from '../../../services/personalTraining.service'
+import type { PTSession } from '../../../types/personalTraining'
 
 function getDashboardUser() {
   try {
@@ -17,54 +25,139 @@ export function PtSessionsPage() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['pt-sessions', from, to, page],
+  useEffect(() => {
+    setPage(1)
+  }, [from, to])
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['pt-sessions', from, to, page, pageSize],
     queryFn: async () =>
-      (await ptSessionsService.search({
-        page,
-        pageSize: 20,
-        fromUtc: from ? new Date(from).toISOString() : undefined,
-        toUtc: to ? new Date(to).toISOString() : undefined,
-      })).data,
+      (
+        await ptSessionsService.search({
+          page,
+          pageSize,
+          fromUtc: from ? new Date(from).toISOString() : undefined,
+          toUtc: to ? new Date(to).toISOString() : undefined,
+        })
+      ).data,
   })
 
   const items = data?.items ?? []
+  const total = data?.totalCount ?? items.length
+
+  const columns = useMemo<DataGridColumnDef<PTSession>[]>(
+    () => [
+      {
+        id: 'when',
+        header: 'When',
+        sticky: true,
+        minWidth: 180,
+        width: 200,
+        sortable: true,
+        accessorFn: (s) => s.scheduledStartUtc,
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap text-white">
+            {new Date(row.scheduledStartUtc).toLocaleString()}
+          </span>
+        ),
+      },
+      {
+        id: 'member',
+        header: 'Member',
+        minWidth: 160,
+        width: 180,
+        sortable: true,
+        filterable: true,
+        accessorFn: (s) => s.memberName,
+      },
+      {
+        id: 'trainer',
+        header: 'Trainer',
+        minWidth: 160,
+        width: 180,
+        hideBelow: 'md',
+        accessorFn: (s) => s.trainerName,
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        minWidth: 120,
+        width: 130,
+        sortable: true,
+        accessorFn: (s) => s.status,
+        cell: ({ value }) => (
+          <StatusBadge variant="info">{String(value)}</StatusBadge>
+        ),
+      },
+      {
+        id: 'remaining',
+        header: 'Remaining',
+        minWidth: 100,
+        width: 110,
+        align: 'right',
+        accessorFn: (s) => s.remainingSessions,
+        cell: ({ value }) => <span className="tabular-nums">{String(value)}</span>,
+      },
+    ],
+    [],
+  )
 
   return (
     <DashboardLayout userName={getDashboardUser()}>
-      <DashboardSubpageShell eyebrow="Personal Training" titleGradient="Session calendar" subtitle="Booked and completed PT sessions.">
-        <div className="flex flex-wrap gap-3">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" />
-        </div>
-        <DashboardTablePanel title="Sessions">
-          {isLoading ? (
-            <p className="px-6 py-8 text-sm text-slate-400">Loading…</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-slate-400">
-                  <th className="px-6 py-3 text-left">When</th>
-                  <th className="px-6 py-3 text-left">Member</th>
-                  <th className="px-6 py-3 text-left">Trainer</th>
-                  <th className="px-6 py-3 text-left">Status</th>
-                  <th className="px-6 py-3 text-left">Remaining</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((s) => (
-                  <tr key={s.id} className="border-b border-white/5">
-                    <td className="px-6 py-3 text-white">{new Date(s.scheduledStartUtc).toLocaleString()}</td>
-                    <td className="px-6 py-3">{s.memberName}</td>
-                    <td className="px-6 py-3">{s.trainerName}</td>
-                    <td className="px-6 py-3">{s.status}</td>
-                    <td className="px-6 py-3">{s.remainingSessions}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      <DashboardSubpageShell
+        eyebrow="Personal Training"
+        titleGradient="Session calendar"
+        subtitle="Booked and completed PT sessions."
+        showExport={false}
+      >
+        <DataPageSection>
+          <DataToolbar
+            filters={
+              <>
+                <input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  aria-label="From date"
+                />
+                <input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  aria-label="To date"
+                />
+              </>
+            }
+          />
+        </DataPageSection>
+
+        <DashboardTablePanel title="Sessions" description="Filter by date range; only the grid scrolls.">
+          <EnterpriseDataGrid
+            data={items}
+            columns={columns}
+            getRowId={(s) => s.id}
+            loading={isLoading}
+            emptyMessage="No PT sessions in this range."
+            pagination={
+              total > 0
+                ? {
+                    page,
+                    pageSize,
+                    totalCount: total,
+                    isFetching,
+                    onPageChange: setPage,
+                    onPageSizeChange: (size) => {
+                      setPageSize(size)
+                      setPage(1)
+                    },
+                  }
+                : undefined
+            }
+          />
         </DashboardTablePanel>
       </DashboardSubpageShell>
     </DashboardLayout>

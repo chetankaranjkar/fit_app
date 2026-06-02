@@ -3,6 +3,15 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
+import { DataPageSection } from '../components/layout/DataPageShell'
+import { MembershipStatusBadge } from '../components/billing/MembershipStatusBadge'
+import {
+  DataFilterSelect,
+  DataToolbar,
+  EnterpriseDataGrid,
+  RowActionsMenu,
+  type DataGridColumnDef,
+} from '../components/data-grid'
 import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
@@ -110,7 +119,7 @@ export function UserMembershipsPage() {
   const [debouncedListSearch, setDebouncedListSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | MembershipStatus>('all')
   const [page, setPage] = useState(1)
-  const pageSize = 50
+  const [pageSize, setPageSize] = useState(50)
   const memberDropdownRef = useRef<HTMLDivElement>(null)
 
   const { data: membershipsPage, isLoading, isFetching } = useQuery({
@@ -127,7 +136,6 @@ export function UserMembershipsPage() {
   })
   const memberships = membershipsPage?.items ?? []
   const totalMemberships = membershipsPage?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalMemberships / pageSize))
 
   const { data: users = [], isFetching: usersFetching } = useQuery({
     queryKey: ['users-paged-membership-modal', debouncedMemberSearch],
@@ -288,6 +296,115 @@ export function UserMembershipsPage() {
     deleteMutation.mutate(m.id)
   }
 
+  const membershipStatusAction = (m: UserMembership) => {
+    if (m.status === 'PartialPayment' || m.status === 'ActivePendingPayment' || m.status === 'Expired') {
+      return () =>
+        navigate(`/dashboard/payments/collect?membershipId=${m.id}&userId=${m.userId}`)
+    }
+    if (m.status === 'Paused') return () => openEdit(m)
+    return () => navigate(`/dashboard/users/${m.userId}`)
+  }
+
+  const membershipStatusTitle = (status: MembershipStatus) => {
+    switch (status) {
+      case 'PartialPayment':
+        return 'Collect remaining amount'
+      case 'ActivePendingPayment':
+        return 'Open payment collection'
+      case 'Paused':
+        return 'Edit membership'
+      case 'Expired':
+        return 'Collect renewal payment'
+      default:
+        return 'Open member profile'
+    }
+  }
+
+  const membershipColumns = useMemo<DataGridColumnDef<UserMembership>[]>(
+    () => [
+      {
+        id: 'member',
+        header: 'Member',
+        sticky: true,
+        minWidth: 180,
+        width: 200,
+        sortable: true,
+        filterable: true,
+        accessorFn: (m) => m.userName ?? `User #${m.userId}`,
+        cell: ({ row }) =>
+          row.userName ? (
+            <Link
+              to={`/dashboard/users/${row.userId}`}
+              className="truncate font-medium text-blue-300 hover:text-blue-200"
+            >
+              {row.userName}
+            </Link>
+          ) : (
+            <span className="text-slate-300">User #{row.userId}</span>
+          ),
+      },
+      {
+        id: 'plan',
+        header: 'Plan',
+        minWidth: 140,
+        width: 160,
+        sortable: true,
+        filterable: true,
+        accessorFn: (m) => m.planName ?? `Plan #${m.planId}`,
+      },
+      {
+        id: 'start',
+        header: 'Start',
+        minWidth: 110,
+        width: 120,
+        sortable: true,
+        accessorFn: (m) => m.startDate,
+        cell: ({ row }) => formatDate(row.startDate),
+      },
+      {
+        id: 'end',
+        header: 'End',
+        minWidth: 110,
+        width: 120,
+        hideBelow: 'md',
+        accessorFn: (m) => m.endDate,
+        cell: ({ row }) => formatDate(row.endDate),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        minWidth: 150,
+        width: 160,
+        sortable: true,
+        accessorFn: (m) => m.status,
+        cell: ({ row }) => (
+          <MembershipStatusBadge
+            status={row.status}
+            onClick={membershipStatusAction(row)}
+            title={membershipStatusTitle(row.status)}
+          />
+        ),
+      },
+      {
+        id: 'actions',
+        header: '',
+        width: 72,
+        minWidth: 72,
+        align: 'right',
+        cell: ({ row }) => (
+          <RowActionsMenu
+            row={row}
+            actions={[
+              { id: 'edit', label: 'Edit', onClick: openEdit },
+              { id: 'delete', label: 'Delete', variant: 'danger', onClick: handleDelete },
+            ]}
+          />
+        ),
+      },
+    ],
+    [navigate, openEdit, handleDelete],
+  )
+
   const selectedMember = users.find((u) => u.id === form.userId)
 
   return (
@@ -298,6 +415,7 @@ export function UserMembershipsPage() {
         subtitle="Assign plans to members and track start dates, end dates, and status."
         primaryAction={{ label: '+ Add membership', onClick: openAdd }}
       >
+        <DataPageSection>
         <DashboardMetricsGrid cols={4}>
           <MetricCard
             title="Total"
@@ -328,193 +446,54 @@ export function UserMembershipsPage() {
             caption="Past end date"
           />
         </DashboardMetricsGrid>
+        </DataPageSection>
 
         <DashboardTablePanel
           title="Membership list"
-          description="Each row links to the member profile when a name is available."
+          description="Click status badges for payment or profile actions."
+          toolbar={
+            <DataToolbar
+              searchValue={listSearch}
+              onSearchChange={setListSearch}
+              searchPlaceholder="Search member or plan…"
+              searchAriaLabel="Search memberships"
+              filters={
+                <DataFilterSelect
+                  value={statusFilter}
+                  onChange={(v) => setStatusFilter(v as 'all' | MembershipStatus)}
+                  ariaLabel="Filter by status"
+                  options={[
+                    { value: 'all', label: 'All status' },
+                    ...statusOptions.map((s) => ({ value: s, label: statusLabel[s] })),
+                  ]}
+                />
+              }
+            />
+          }
         >
-          <div className="flex flex-col gap-2 border-b border-white/10 px-6 py-3 sm:flex-row sm:items-center">
-            <div className="flex-1">
-              <Input
-                label=""
-                value={listSearch}
-                onChange={(e) => setListSearch(e.target.value)}
-                placeholder="Search member or plan..."
-              />
-            </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | MembershipStatus)}
-              className={selectClass}
-              aria-label="Filter memberships by status"
-            >
-              <option value="all" className="bg-slate-900">All status</option>
-              {statusOptions.map((s) => (
-                <option key={s} value={s} className="bg-slate-900">{statusLabel[s]}</option>
-              ))}
-            </select>
-          </div>
-          {isLoading ? (
-            <p className="px-6 py-8 text-sm text-slate-400">Loading…</p>
-          ) : memberships.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-slate-400">No memberships yet. Add one to get started.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[600px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    <th className="px-6 py-3 font-medium">Member</th>
-                    <th className="px-6 py-3 font-medium">Plan</th>
-                    <th className="px-6 py-3 font-medium">Start</th>
-                    <th className="px-6 py-3 font-medium">End</th>
-                    <th className="px-6 py-3 font-medium">Status</th>
-                    <th className="px-6 py-3 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {memberships.map((m) => (
-                    <tr key={m.id} className="border-b border-white/5 transition-colors hover:bg-white/[0.03]">
-                      <td className="px-6 py-3">
-                        {m.userName ? (
-                          <Link
-                            to={`/dashboard/users/${m.userId}`}
-                            className="font-medium text-blue-300 transition hover:text-blue-200"
-                          >
-                            {m.userName}
-                          </Link>
-                        ) : (
-                          <span className="text-slate-300">User #{m.userId}</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-3 text-slate-300">{m.planName ?? `Plan #${m.planId}`}</td>
-                      <td className="px-6 py-3 text-slate-300">{formatDate(m.startDate)}</td>
-                      <td className="px-6 py-3 text-slate-300">{formatDate(m.endDate)}</td>
-                      <td className="px-6 py-3">
-                        {(() => {
-                          const baseClass =
-                            'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 transition'
-                          if (m.status === 'PartialPayment') {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  navigate(
-                                    `/dashboard/payments/collect?membershipId=${m.id}&userId=${m.userId}`,
-                                  )
-                                }
-                                className={`${baseClass} bg-orange-500/15 text-orange-300 ring-orange-500/30 hover:bg-orange-500/25 hover:text-orange-100 hover:ring-orange-400/40`}
-                                title="Collect remaining amount"
-                              >
-                                {statusLabel[m.status]}
-                              </button>
-                            )
-                          }
-                          if (m.status === 'ActivePendingPayment') {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  navigate(
-                                    `/dashboard/payments/collect?membershipId=${m.id}&userId=${m.userId}`,
-                                  )
-                                }
-                                className={`${baseClass} bg-sky-500/15 text-sky-300 ring-sky-500/30 hover:bg-sky-500/25 hover:text-sky-100 hover:ring-sky-400/40`}
-                                title="Open payment collection"
-                              >
-                                {statusLabel[m.status]}
-                              </button>
-                            )
-                          }
-                          if (m.status === 'Paused') {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => openEdit(m)}
-                                className={`${baseClass} bg-amber-500/15 text-amber-300 ring-amber-500/30 hover:bg-amber-500/25 hover:text-amber-100 hover:ring-amber-400/40`}
-                                title="Edit membership status or dates"
-                              >
-                                {statusLabel[m.status]}
-                              </button>
-                            )
-                          }
-                          if (m.status === 'Expired') {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  navigate(
-                                    `/dashboard/payments/collect?membershipId=${m.id}&userId=${m.userId}`,
-                                  )
-                                }
-                                className={`${baseClass} bg-white/5 text-slate-300 ring-white/15 hover:bg-white/10 hover:text-white hover:ring-white/30`}
-                                title="Collect renewal payment"
-                              >
-                                {statusLabel[m.status]}
-                              </button>
-                            )
-                          }
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/dashboard/users/${m.userId}`)}
-                              className={`${baseClass} bg-emerald-500/15 text-emerald-300 ring-emerald-500/30 hover:bg-emerald-500/25 hover:text-emerald-100 hover:ring-emerald-400/40`}
-                              title="Open member profile"
-                            >
-                              {statusLabel[m.status]}
-                            </button>
-                          )
-                        })()}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(m)}
-                            className="text-sm text-blue-300 transition hover:text-blue-200 hover:underline"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(m)}
-                            className="text-sm text-rose-300 transition hover:text-rose-200 hover:underline"
-                          >
-                            Delete
-                          </button>
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-6 py-3">
-            <p className="text-xs text-slate-500">
-              Page {page} of {totalPages} · Showing {memberships.length} of {totalMemberships}
-              {isFetching ? ' · Refreshing…' : ''}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Prev
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          <EnterpriseDataGrid
+            data={memberships}
+            columns={membershipColumns}
+            getRowId={(m) => m.id}
+            loading={isLoading}
+            emptyMessage="No memberships yet. Add one to get started."
+            pagination={
+              totalMemberships > 0
+                ? {
+                    page,
+                    pageSize,
+                    totalCount: totalMemberships,
+                    isFetching,
+                    pageSizeOptions: [25, 50, 100],
+                    onPageChange: setPage,
+                    onPageSizeChange: (size) => {
+                      setPageSize(size)
+                      setPage(1)
+                    },
+                  }
+                : undefined
+            }
+          />
         </DashboardTablePanel>
       </DashboardSubpageShell>
 

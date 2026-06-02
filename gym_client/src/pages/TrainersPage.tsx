@@ -1,11 +1,18 @@
-import { useEffect, useState } from 'react'
-import { ListPagination } from '../components/ui/ListPagination'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
-import { Button } from '../components/ui/Button'
+import { DataPageSection } from '../components/layout/DataPageShell'
 import { AddTrainerModal } from '../components/trainers/AddTrainerModal'
+import { Button } from '../components/ui/Button'
+import {
+  DataToolbar,
+  EnterpriseDataGrid,
+  RowActionsMenu,
+  StatusBadge,
+  type DataGridColumnDef,
+} from '../components/data-grid'
 import { trainersService } from '../services/trainers.service'
 import { trainerFullName } from '../types/trainer'
 import type { Trainer } from '../types/trainer'
@@ -52,6 +59,99 @@ export function TrainersPage() {
     queryFn: async () => (await trainersService.getStats()).data,
   })
 
+  const columns = useMemo<DataGridColumnDef<Trainer>[]>(
+    () => [
+      {
+        id: 'name',
+        header: 'Name',
+        sticky: true,
+        minWidth: 220,
+        width: 250,
+        sortable: true,
+        filterable: true,
+        accessorFn: (t) => trainerFullName(t),
+        cell: ({ row }) => (
+          <span className="font-medium text-white">{trainerFullName(row)}</span>
+        ),
+      },
+      {
+        id: 'email',
+        header: 'Email',
+        minWidth: 180,
+        width: 200,
+        sortable: true,
+        filterable: true,
+        hideBelow: 'md',
+        accessorFn: (t) => t.email ?? '',
+        cell: ({ value }) => <span className="text-slate-300">{String(value) || '—'}</span>,
+      },
+      {
+        id: 'code',
+        header: 'Code',
+        minWidth: 100,
+        width: 120,
+        hideBelow: 'lg',
+        accessorFn: (t) => t.employeeCode ?? '',
+      },
+      {
+        id: 'specialization',
+        header: 'Specialization',
+        minWidth: 140,
+        width: 160,
+        hideBelow: 'lg',
+        accessorFn: (t) => t.specialization ?? '',
+      },
+      {
+        id: 'clients',
+        header: 'Clients',
+        minWidth: 100,
+        width: 110,
+        sortable: true,
+        align: 'right',
+        accessorFn: (t) => t.totalClients,
+        cell: ({ row }) => (
+          <span className="tabular-nums text-slate-300">
+            {row.totalClients}
+            {row.maxClients ? ` / ${row.maxClients}` : ''}
+          </span>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        minWidth: 100,
+        width: 120,
+        sortable: true,
+        accessorFn: (t) => (t.isActive ? 'Active' : 'Inactive'),
+        cell: ({ row }) => (
+          <StatusBadge variant={row.isActive ? 'success' : 'neutral'} dot>
+            {row.isActive ? 'Active' : 'Inactive'}
+          </StatusBadge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: '',
+        width: 72,
+        minWidth: 72,
+        align: 'right',
+        cell: ({ row }) => (
+          <RowActionsMenu
+            row={row}
+            actions={[
+              {
+                id: 'view',
+                label: 'View profile',
+                onClick: (t) => navigate(`/dashboard/trainers/${t.id}`),
+              },
+            ]}
+          />
+        ),
+      },
+    ],
+    [navigate],
+  )
+
   return (
     <DashboardLayout userName={userName}>
       <DashboardSubpageShell
@@ -61,119 +161,87 @@ export function TrainersPage() {
         primaryAction={{ label: '+ Add trainer', onClick: () => setAddOpen(true) }}
         showExport={false}
       >
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <div className="glass-card rounded-2xl border border-white/10 px-4 py-3">
-            <p className="text-xs uppercase tracking-wider text-slate-500">Total trainers</p>
-            <p className="mt-1 text-2xl font-semibold text-white">{stats?.totalTrainers ?? trainers.length}</p>
+        <DataPageSection>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard label="Total trainers" value={stats?.totalTrainers ?? trainers.length} />
+            <StatCard
+              label="Active"
+              value={stats?.activeTrainers ?? trainers.filter((t) => t.isActive).length}
+              accent="text-emerald-300"
+            />
+            <StatCard label="On leave" value={stats?.onLeave ?? 0} accent="text-amber-300" />
+            <StatCard label="Clients assigned" value={stats?.totalClientsAssigned ?? 0} />
           </div>
-          <div className="glass-card rounded-2xl border border-white/10 px-4 py-3">
-            <p className="text-xs uppercase tracking-wider text-slate-500">Active</p>
-            <p className="mt-1 text-2xl font-semibold text-emerald-300">
-              {stats?.activeTrainers ?? trainers.filter((t) => t.isActive).length}
-            </p>
-          </div>
-          <div className="glass-card rounded-2xl border border-white/10 px-4 py-3">
-            <p className="text-xs uppercase tracking-wider text-slate-500">On leave</p>
-            <p className="mt-1 text-2xl font-semibold text-amber-300">{stats?.onLeave ?? 0}</p>
-          </div>
-          <div className="glass-card rounded-2xl border border-white/10 px-4 py-3">
-            <p className="text-xs uppercase tracking-wider text-slate-500">Clients assigned</p>
-            <p className="mt-1 text-2xl font-semibold text-white">{stats?.totalClientsAssigned ?? 0}</p>
-          </div>
-        </div>
+        </DataPageSection>
 
-        <input
-          type="search"
-          placeholder="Search name, email, specialization…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100"
-        />
-
-        <DashboardTablePanel title="Trainer directory">
-          {isLoading ? (
-            <p className="px-6 py-8 text-sm text-slate-400">Loading trainers…</p>
-          ) : isError ? (
-            <div className="px-6 py-8">
+        <DashboardTablePanel
+          title="Trainer directory"
+          description="Search, sort, and open trainer profiles."
+          toolbar={
+            <DataToolbar
+              searchValue={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search name, email, specialization…"
+              searchAriaLabel="Search trainers"
+            />
+          }
+        >
+          {isError ? (
+            <div className="shrink-0 px-6 py-8">
               <p className="text-sm text-rose-300">Could not load trainers. Is the API running?</p>
               <Button variant="soft" size="sm" className="mt-3" onClick={() => refetch()}>
                 Retry
               </Button>
             </div>
-          ) : trainers.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-slate-400">
-              No trainers yet. Click &quot;+ Add trainer&quot; and select an existing user (create the user under Users first if needed).
-            </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
-                    <th className="px-6 py-3">Name</th>
-                    <th className="px-6 py-3">Email</th>
-                    <th className="px-6 py-3">Code</th>
-                    <th className="px-6 py-3">Specialization</th>
-                    <th className="px-6 py-3">Clients</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {trainers.map((t) => (
-                    <tr key={t.id} className="border-b border-white/5 hover:bg-white/[0.03]">
-                      <td className="px-6 py-3 font-medium text-white">{trainerFullName(t)}</td>
-                      <td className="px-6 py-3 text-slate-300">{t.email || '—'}</td>
-                      <td className="px-6 py-3 text-slate-300">{t.employeeCode ?? '—'}</td>
-                      <td className="px-6 py-3 text-slate-300">{t.specialization ?? '—'}</td>
-                      <td className="px-6 py-3 text-slate-300">
-                        {t.totalClients}
-                        {t.maxClients ? ` / ${t.maxClients}` : ''}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span
-                          className={
-                            t.isActive
-                              ? 'text-emerald-300'
-                              : 'text-slate-500'
-                          }
-                        >
-                          {t.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3 text-right">
-                        <Button
-                          variant="soft"
-                          size="sm"
-                          onClick={() => navigate(`/dashboard/trainers/${t.id}`)}
-                        >
-                          View
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <EnterpriseDataGrid
+              data={trainers}
+              columns={columns}
+              getRowId={(t) => t.id}
+              loading={isLoading}
+              emptyMessage={
+                totalTrainers === 0
+                  ? 'No trainers yet. Click "+ Add trainer" to create one.'
+                  : 'No trainers match your search.'
+              }
+              pagination={
+                totalTrainers > 0
+                  ? {
+                      page,
+                      pageSize,
+                      totalCount: totalTrainers,
+                      isFetching,
+                      onPageChange: setPage,
+                      onPageSizeChange: (size) => {
+                        setPageSize(size)
+                        setPage(1)
+                      },
+                    }
+                  : undefined
+              }
+            />
           )}
-          {!isLoading && !isError && totalTrainers > 0 ? (
-            <div className="px-6 pb-4">
-              <ListPagination
-                page={page}
-                pageSize={pageSize}
-                totalCount={totalTrainers}
-                isFetching={isFetching}
-                onPageChange={setPage}
-                onPageSizeChange={(size) => {
-                  setPageSize(size)
-                  setPage(1)
-                }}
-              />
-            </div>
-          ) : null}
         </DashboardTablePanel>
       </DashboardSubpageShell>
 
       <AddTrainerModal open={addOpen} onClose={() => setAddOpen(false)} />
     </DashboardLayout>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  accent = 'text-white',
+}: {
+  label: string
+  value: number
+  accent?: string
+}) {
+  return (
+    <div className="glass-card rounded-2xl border border-white/10 px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold tabular-nums ${accent}`}>{value}</p>
+    </div>
   )
 }

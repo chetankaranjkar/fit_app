@@ -1,16 +1,11 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import LocomotiveScroll from 'locomotive-scroll'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { RoleSidebar } from './RoleSidebar'
 import { SidebarNav } from './SidebarNav'
 import { MemberBottomNav } from './MemberBottomNav'
 import { useDashboardRoleOrCurrent } from '../../features/auth/DashboardRoleContext'
 import { useDashboardSession } from '../../features/auth/DashboardSessionContext'
 import { TopNavbar } from './TopNavbar'
-import { setupScrollTrigger, cleanupScrollTrigger } from '../../lib/animations/gsapSetup'
-import { setLocomotiveScrollInstance } from '../../lib/scrollInstance'
 
 const SIDEBAR_COLLAPSED_KEY = 'gym-sidebar-collapsed'
 
@@ -34,8 +29,6 @@ export function DashboardLayout({
 }) {
   const [collapsed, setCollapsed] = useState(getInitialCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const scrollWrapperRef = useRef<HTMLDivElement>(null)
-  const scrollInstanceRef = useRef<LocomotiveScroll | null>(null)
   const { pathname } = useLocation()
   const { openSessionWarning } = useDashboardSession()
   const dashboardRole = useDashboardRoleOrCurrent()
@@ -48,78 +41,15 @@ export function DashboardLayout({
         : ['bg-blue-500/20', 'bg-purple-500/15', 'bg-cyan-400/10']
 
   useEffect(() => {
-    const wrapper = scrollWrapperRef.current
-    if (!wrapper) return
-    const content = wrapper.firstElementChild as HTMLElement | null
-    if (!content) return
-
-    const desktopMq = window.matchMedia('(min-width: 1024px)')
-
-    const enableNativeScroll = () => {
-      wrapper.style.overflowY = 'auto'
-      wrapper.style.overflowX = 'hidden'
-      wrapper.style.webkitOverflowScrolling = 'touch'
-    }
-
-    const disableNativeScroll = () => {
-      wrapper.style.overflowY = ''
-      wrapper.style.overflowX = ''
-      wrapper.style.webkitOverflowScrolling = ''
-    }
-
-    const initSmoothScroll = () => {
-      if (!desktopMq.matches) {
-        enableNativeScroll()
-        return undefined
-      }
-
-      disableNativeScroll()
-      gsap.registerPlugin(ScrollTrigger)
-
-      const locomotiveScroll = new LocomotiveScroll({
-        lenisOptions: {
-          wrapper,
-          content,
-          smoothWheel: true,
-          lerp: 0.1,
-        },
-      })
-      scrollInstanceRef.current = locomotiveScroll
-      setLocomotiveScrollInstance(locomotiveScroll)
-      setupScrollTrigger(locomotiveScroll, wrapper)
-
-      const refreshId = window.setTimeout(() => {
-        ScrollTrigger.refresh()
-      }, 200)
-
-      return () => {
-        window.clearTimeout(refreshId)
-        cleanupScrollTrigger()
-        locomotiveScroll.destroy()
-        setLocomotiveScrollInstance(null)
-        scrollInstanceRef.current = null
-        enableNativeScroll()
-      }
-    }
-
-    let teardown = initSmoothScroll()
-
-    const onBreakpointChange = () => {
-      teardown?.()
-      teardown = initSmoothScroll()
-    }
-
-    desktopMq.addEventListener('change', onBreakpointChange)
-
+    document.documentElement.classList.add('dashboard-app')
+    document.body.classList.add('dashboard-app')
     return () => {
-      desktopMq.removeEventListener('change', onBreakpointChange)
-      teardown?.()
-      enableNativeScroll()
+      document.documentElement.classList.remove('dashboard-app')
+      document.body.classList.remove('dashboard-app')
     }
-  }, [collapsed])
+  }, [])
 
   useEffect(() => {
-    scrollInstanceRef.current?.scrollTo(0, { duration: 0, immediate: true })
     setMobileOpen(false)
   }, [pathname])
 
@@ -168,23 +98,26 @@ export function DashboardLayout({
         />
       )}
 
-      <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col">
-        <TopNavbar
-          userName={userName || 'User'}
-          userAvatarUrl={userAvatarUrl}
-          onToggleSidebar={() => setMobileOpen((o) => !o)}
-          onSessionIndicatorClick={openSessionWarning}
-        />
+      <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-hidden">
+        <header className="shrink-0">
+          <TopNavbar
+            userName={userName || 'User'}
+            userAvatarUrl={userAvatarUrl}
+            onToggleSidebar={() => setMobileOpen((o) => !o)}
+            onSessionIndicatorClick={openSessionWarning}
+          />
+        </header>
 
-        <div
-          ref={scrollWrapperRef}
+        <main
           className={[
-            'dashboard-scroll-area min-h-0 min-w-0 w-full max-w-full flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 lg:overflow-hidden lg:px-8',
-            dashboardRole === 'member' ? 'pb-24 lg:pb-6' : '',
+            'dashboard-scroll-area min-h-0 min-w-0 w-full max-w-full flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-5 lg:px-8',
+            dashboardRole === 'member' ? 'pb-20 lg:pb-5' : '',
           ].join(' ')}
         >
-          <div className="min-h-full">{children}</div>
-        </div>
+          <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
+            {children}
+          </div>
+        </main>
       </div>
       {dashboardRole === 'member' ? <MemberBottomNav /> : null}
     </div>

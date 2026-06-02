@@ -1,5 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { DashboardTablePanel } from '../../../components/layout/DashboardSubpageShell'
+import {
+  EnterpriseDataGrid,
+  StatusBadge,
+  type DataGridColumnDef,
+} from '../../../components/data-grid'
 import { ModulePageShell } from '../components/ModulePageShell'
 import { EmptyState } from '../components/EmptyState'
 import { useExpenses } from '../hooks/useGymOperations'
@@ -22,7 +28,7 @@ const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
 
 export function ExpensesPage() {
   const { data = [], isLoading } = useExpenses()
-  const tableRef = useRef<HTMLTableSectionElement>(null)
+  const tableRef = useRef<HTMLDivElement>(null)
 
   const [formCategory, setFormCategory] = useState<ExpenseCategory>('Utilities')
   const [formVendor, setFormVendor] = useState('')
@@ -59,7 +65,7 @@ export function ExpensesPage() {
     [data],
   )
 
-  useStaggerAnimation(tableRef, 'tr[data-row]', [sorted.length, isLoading])
+  useStaggerAnimation(tableRef, 'tbody tr', [sorted.length, isLoading])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,6 +73,66 @@ export function ExpensesPage() {
     setFormAmount('')
     setFormDescription('')
   }
+
+  const expenseColumns = useMemo<DataGridColumnDef<Expense>[]>(
+    () => [
+      {
+        id: 'description',
+        header: 'Description',
+        sticky: true,
+        minWidth: 220,
+        width: 260,
+        sortable: true,
+        filterable: true,
+        accessorFn: (e) => e.description,
+        cell: ({ row }) => (
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-white">{row.description}</p>
+            <p className="truncate text-[10px] text-slate-500">
+              {row.vendor ? `${row.vendor} · ` : ''}
+              {formatDate(row.incurredAt)}
+            </p>
+          </div>
+        ),
+      },
+      {
+        id: 'category',
+        header: 'Category',
+        minWidth: 120,
+        width: 140,
+        sortable: true,
+        accessorFn: (e) => e.category,
+        cell: ({ row }) => (
+          <StatusBadge variant="info">{row.category}</StatusBadge>
+        ),
+      },
+      {
+        id: 'amount',
+        header: 'Amount',
+        minWidth: 110,
+        width: 120,
+        sortable: true,
+        align: 'right',
+        accessorFn: (e) => e.amount,
+        cell: ({ row }) => (
+          <span className="font-semibold tabular-nums text-white">{formatINR(row.amount)}</span>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        minWidth: 100,
+        width: 110,
+        accessorFn: (e) => e.status,
+        cell: ({ row }) => (
+          <StatusBadge variant={row.status === 'PAID' ? 'success' : 'warning'}>
+            {row.status === 'PAID' ? 'Paid' : 'Pending'}
+          </StatusBadge>
+        ),
+      },
+    ],
+    [],
+  )
 
   return (
     <ModulePageShell
@@ -104,8 +170,8 @@ export function ExpensesPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <section className="glass-card dashboard-card lg:col-span-1 min-w-0 rounded-2xl p-5">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-3">
+          <section className="glass-card dashboard-card lg:col-span-1 min-w-0 shrink-0 rounded-2xl p-5 lg:max-h-full lg:overflow-auto">
             <h2 className="text-base font-semibold text-white">Add expense</h2>
             <p className="mb-4 text-xs text-slate-400">Quick entry form (mock only).</p>
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -175,76 +241,26 @@ export function ExpensesPage() {
             </form>
           </section>
 
-          <section className="glass-card dashboard-card lg:col-span-2 min-w-0 rounded-2xl">
-            <div className="border-b border-white/5 px-6 py-5">
-              <h2 className="text-base font-semibold text-white">Recent expenses</h2>
-              <p className="text-xs text-slate-400">Sorted newest first.</p>
-            </div>
-            {sorted.length === 0 && !isLoading ? (
-              <EmptyState title="No expenses yet" description="Add your first expense to see it appear here." />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-slate-500">
-                      <th className="px-6 py-3 font-semibold">Description</th>
-                      <th className="px-6 py-3 font-semibold">Category</th>
-                      <th className="px-6 py-3 font-semibold">Amount</th>
-                      <th className="px-6 py-3 font-semibold">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody ref={tableRef} className="divide-y divide-white/5">
-                    {sorted.map((ex) => (
-                      <ExpenseRow key={ex.id} expense={ex} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+          <div className="flex min-h-0 min-w-0 flex-col lg:col-span-2">
+            <DashboardTablePanel title="Recent expenses" description="Sorted newest first.">
+              {sorted.length === 0 && !isLoading ? (
+                <EmptyState title="No expenses yet" description="Add your first expense to see it appear here." />
+              ) : (
+                <div ref={tableRef}>
+                  <EnterpriseDataGrid
+                    data={sorted}
+                    columns={expenseColumns}
+                    getRowId={(e) => e.id}
+                    loading={isLoading}
+                    emptyMessage="No expenses yet."
+                  />
+                </div>
+              )}
+            </DashboardTablePanel>
+          </div>
         </div>
       </div>
     </ModulePageShell>
-  )
-}
-
-function ExpenseRow({ expense }: { expense: Expense }) {
-  const gradient = CATEGORY_COLORS[expense.category]
-  return (
-    <tr data-row className="transition hover:bg-white/[0.03]">
-      <td className="px-6 py-4">
-        <div className="flex flex-col">
-          <span className="text-sm font-medium text-white">{expense.description}</span>
-          <span className="text-[11px] text-slate-500">
-            {expense.vendor ? `${expense.vendor} · ` : ''}
-            {formatDate(expense.incurredAt)}
-          </span>
-        </div>
-      </td>
-      <td className="px-6 py-4">
-        <span className="inline-flex items-center gap-2">
-          <span
-            className={`size-2 rounded-full bg-gradient-to-r ${gradient}`}
-          />
-          <span className="text-xs text-slate-300">{expense.category}</span>
-        </span>
-      </td>
-      <td className="px-6 py-4 text-sm font-semibold text-white">
-        {formatINR(expense.amount)}
-      </td>
-      <td className="px-6 py-4">
-        <span
-          className={[
-            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
-            expense.status === 'PAID'
-              ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300'
-              : 'border-amber-400/25 bg-amber-500/10 text-amber-300',
-          ].join(' ')}
-        >
-          {expense.status === 'PAID' ? 'Paid' : 'Pending'}
-        </span>
-      </td>
-    </tr>
   )
 }
 

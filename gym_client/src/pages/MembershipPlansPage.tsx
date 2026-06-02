@@ -1,10 +1,15 @@
 import { useState, useMemo } from 'react'
-import { ListPagination } from '../components/ui/ListPagination'
 import { useClientPagination } from '../hooks/useClientPagination'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
+import { DataPageSection } from '../components/layout/DataPageShell'
+import {
+  EnterpriseDataGrid,
+  RowActionsMenu,
+  type DataGridColumnDef,
+} from '../components/data-grid'
 import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { Button } from '../components/ui/Button'
@@ -175,6 +180,70 @@ export function MembershipPlansPage() {
     deleteMutation.mutate(plan.id)
   }
 
+  const planColumns = useMemo<DataGridColumnDef<MembershipPlan>[]>(
+    () => [
+      {
+        id: 'name',
+        header: 'Name',
+        sticky: true,
+        minWidth: 180,
+        width: 220,
+        sortable: true,
+        filterable: true,
+        accessorFn: (p) => p.planName,
+        cell: ({ row }) => <span className="font-medium text-white">{row.planName}</span>,
+      },
+      {
+        id: 'duration',
+        header: 'Duration',
+        minWidth: 100,
+        width: 110,
+        sortable: true,
+        align: 'right',
+        accessorFn: (p) => p.durationDays,
+        cell: ({ row }) => <span className="tabular-nums">{row.durationDays} d</span>,
+      },
+      {
+        id: 'price',
+        header: 'Price',
+        minWidth: 110,
+        width: 120,
+        sortable: true,
+        align: 'right',
+        accessorFn: (p) => p.price,
+        cell: ({ row }) => formatInr(row.price),
+      },
+      {
+        id: 'description',
+        header: 'Description',
+        minWidth: 160,
+        width: 200,
+        hideBelow: 'md',
+        accessorFn: (p) => p.description ?? '',
+        cell: ({ value }) => (
+          <span className="block truncate text-slate-300">{String(value) || '—'}</span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: '',
+        width: 72,
+        minWidth: 72,
+        align: 'right',
+        cell: ({ row }) => (
+          <RowActionsMenu
+            row={row}
+            actions={[
+              { id: 'edit', label: 'Edit', onClick: openEdit },
+              { id: 'delete', label: 'Delete', variant: 'danger', onClick: handleDelete },
+            ]}
+          />
+        ),
+      },
+    ],
+    [handleDelete, openEdit],
+  )
+
   return (
     <DashboardLayout userName={userName}>
       <DashboardSubpageShell
@@ -183,6 +252,7 @@ export function MembershipPlansPage() {
         subtitle="Define billing tiers with duration and price for member subscriptions."
         primaryAction={{ label: '+ Add plan', onClick: openAdd }}
       >
+        <DataPageSection>
         <DashboardMetricsGrid cols={3}>
           <MetricCard
             title="Plans defined"
@@ -206,74 +276,33 @@ export function MembershipPlansPage() {
             caption="Mean plan length"
           />
         </DashboardMetricsGrid>
+        </DataPageSection>
 
         <DashboardTablePanel
           title="Plan list"
           description="Edit or remove plans. Members reference these when assigned a subscription."
         >
-          {isLoading ? (
-            <p className="px-6 py-8 text-sm text-slate-400">Loading…</p>
-          ) : plans.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-slate-400">No plans yet. Add one to get started.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[500px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    <th className="px-6 py-3 font-medium">Name</th>
-                    <th className="px-6 py-3 font-medium">Duration (days)</th>
-                    <th className="px-6 py-3 font-medium">Price</th>
-                    <th className="px-6 py-3 font-medium">Description</th>
-                    <th className="px-6 py-3 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagedPlans.map((plan) => (
-                    <tr key={plan.id} className="border-b border-white/5 transition-colors hover:bg-white/[0.03]">
-                      <td className="px-6 py-3 font-medium text-white">{plan.planName}</td>
-                      <td className="px-6 py-3 text-slate-300">{plan.durationDays}</td>
-                      <td className="px-6 py-3 text-slate-300">{formatInr(plan.price)}</td>
-                      <td className="px-6 py-3 max-w-[200px] truncate text-slate-300">
-                        {plan.description ?? '—'}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(plan)}
-                            className="text-sm text-blue-300 transition hover:text-blue-200 hover:underline"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(plan)}
-                            className="text-sm text-rose-300 transition hover:text-rose-200 hover:underline"
-                          >
-                            Delete
-                          </button>
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {!isLoading && plans.length > 0 ? (
-            <div className="px-6 pb-4">
-              <ListPagination
-                page={page}
-                pageSize={pageSize}
-                totalCount={totalCount}
-                onPageChange={setPage}
-                onPageSizeChange={(size) => {
-                  setPageSize(size)
-                  setPage(1)
-                }}
-              />
-            </div>
-          ) : null}
+          <EnterpriseDataGrid
+            data={pagedPlans}
+            columns={planColumns}
+            getRowId={(p) => p.id}
+            loading={isLoading}
+            emptyMessage="No plans yet. Add one to get started."
+            pagination={
+              totalCount > 0
+                ? {
+                    page,
+                    pageSize,
+                    totalCount,
+                    onPageChange: setPage,
+                    onPageSizeChange: (size) => {
+                      setPageSize(size)
+                      setPage(1)
+                    },
+                  }
+                : undefined
+            }
+          />
         </DashboardTablePanel>
       </DashboardSubpageShell>
 

@@ -13,6 +13,7 @@ This repo is a **.NET 9 API + React (Vite) client + SQL Server** gym management 
 | [docs/knowledge-base/SOURCE_CODE_MAP.md](docs/knowledge-base/SOURCE_CODE_MAP.md) | Key file paths |
 | [docs/CodeWorkflow.md](docs/CodeWorkflow.md) | HTTP, JWT, permissions middleware |
 | [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) | UAT → main branch and deploy workflow |
+| [docs/PERFORMANCE_IMPLEMENTATION.md](docs/PERFORMANCE_IMPLEMENTATION.md) | Performance optimizations shipped (paging, summary API, client changes) |
 
 Cursor also loads `.cursor/rules/gym-application-context.mdc` automatically.
 

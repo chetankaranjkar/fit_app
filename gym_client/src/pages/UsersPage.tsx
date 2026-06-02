@@ -407,6 +407,8 @@ const defaultCreateForm: CreateUserDto = {
   userTypeIds: [],
 }
 
+const TEN_DIGIT_PHONE_REGEX = /^\d{10}$/
+
 export function UsersPage() {
   const { start: startMembersTour } = useWalkthrough('members')
   const navigate = useNavigate()
@@ -644,15 +646,20 @@ export function UsersPage() {
     setEmailError(exists ? 'This email is already registered.' : null)
   }
 
-  const normalizePhone = (value: string) => value.replace(/\D/g, '')
+  const isValidPhone = (value: string) => TEN_DIGIT_PHONE_REGEX.test(value.trim())
+  const normalizePhone = (value: string) => value.trim()
   const handlePhoneBlur = () => {
     const phone = form.phone?.trim()
     if (!phone) {
       setPhoneError(null)
       return
     }
+    if (!isValidPhone(phone)) {
+      setPhoneError('Phone number must be exactly 10 digits.')
+      return
+    }
     const phoneDigits = normalizePhone(phone)
-    const exists = users.some((u) => normalizePhone((u.phone ?? '').trim()) === phoneDigits && phoneDigits.length > 0)
+    const exists = users.some((u) => normalizePhone((u.phone ?? '').trim()) === phoneDigits)
     setPhoneError(exists ? 'This phone number is already registered.' : null)
   }
 
@@ -687,7 +694,12 @@ export function UsersPage() {
       setFormError('This email is already registered.')
       return
     }
-    if (phone && normalizePhone(phone).length > 0 && users.some((u) => normalizePhone((u.phone ?? '').trim()) === normalizePhone(phone))) {
+    if (phone && !isValidPhone(phone)) {
+      setPhoneError('Phone number must be exactly 10 digits.')
+      setFormError('Phone number must be exactly 10 digits.')
+      return
+    }
+    if (phone && users.some((u) => normalizePhone((u.phone ?? '').trim()) === normalizePhone(phone))) {
       setPhoneError('This phone number is already registered.')
       setFormError('This phone number is already registered.')
       return
@@ -1165,7 +1177,8 @@ export function UsersPage() {
                     label="Phone"
                     value={form.phone ?? ''}
                     onChange={(e) => {
-                      setForm((f) => ({ ...f, phone: e.target.value }))
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 10)
+                      setForm((f) => ({ ...f, phone: value }))
                       if (phoneError) setPhoneError(null)
                     }}
                     onBlur={handlePhoneBlur}

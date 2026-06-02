@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Services;
+using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
 using GymManagement.API.Services;
@@ -108,7 +109,16 @@ namespace GymManagement.API.Controllers
             if (!string.IsNullOrWhiteSpace(dto.LastName))
                 user.LastName = dto.LastName.Trim();
             if (dto.Phone != null)
-                user.Phone = string.IsNullOrWhiteSpace(dto.Phone) ? null : dto.Phone.Trim();
+            {
+                try
+                {
+                    user.Phone = PhoneNumberValidator.NormalizeOptionalPhone(dto.Phone);
+                }
+                catch (ArgumentException ex)
+                {
+                    return BadRequest(new { message = ex.Message });
+                }
+            }
             if (dto.ProfilePictureUrl != null)
             {
                 var previous = user.ProfilePictureUrl;

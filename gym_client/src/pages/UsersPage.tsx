@@ -1034,12 +1034,10 @@ export function UsersPage() {
           continue
         }
         seenPhones.add(r.phone)
-        if (!r.username?.trim()) {
-          log.push(`${r.email}: username is required.`)
-          continue
-        }
-        if (!r.password || r.password.length < MIN_LOGIN_PASSWORD_LENGTH) {
-          log.push(`${r.email}: password is required (min ${MIN_LOGIN_PASSWORD_LENGTH} characters).`)
+        const loginUsername = r.username?.trim() || r.phone
+        const loginPassword = r.password?.trim() || r.phone
+        if (loginPassword.length < MIN_LOGIN_PASSWORD_LENGTH) {
+          log.push(`${r.email}: password must be at least ${MIN_LOGIN_PASSWORD_LENGTH} characters.`)
           continue
         }
         const payload: CreateUserDto = {
@@ -1056,8 +1054,8 @@ export function UsersPage() {
           profilePictureUrl: undefined,
           preferredGymTime: undefined,
           isActive: r.isActive,
-          username: r.username,
-          password: r.password,
+          username: loginUsername,
+          password: loginPassword,
           role: 1,
           planId: undefined,
           membershipStartDate: undefined,
@@ -1675,10 +1673,11 @@ export function UsersPage() {
                 Required columns: <strong className="text-slate-200">firstName</strong>,{' '}
                 <strong className="text-slate-200">lastName</strong>,{' '}
                 <strong className="text-slate-200">email</strong>,{' '}
+                <strong className="text-slate-200">phone</strong>,{' '}
                 <strong className="text-slate-200">dateOfBirth</strong> (YYYY-MM-DD),{' '}
-                <strong className="text-slate-200">gender</strong>,{' '}
-                <strong className="text-slate-200">username</strong>,{' '}
-                <strong className="text-slate-200">password</strong> (min 6 characters). Optional: phone, isActive.
+                <strong className="text-slate-200">gender</strong>. Optional: aadhaarNumber, isActive, username,
+                password. When username/password are omitted, both default to the member&apos;s phone number (10
+                digits). Admins can change login credentials later on the member profile.
               </p>
               <div className="flex flex-wrap gap-2">
                 <button

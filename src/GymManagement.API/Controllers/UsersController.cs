@@ -114,6 +114,15 @@ namespace GymManagement.API.Controllers
         [HasPermission(PermissionCodes.CREATE_MEMBER)]
         public async Task<ActionResult<UserDto>> CreateUser(CreateUserDto createUserDto)
         {
+            if (string.IsNullOrWhiteSpace(createUserDto.Username)
+                || string.IsNullOrWhiteSpace(createUserDto.Password))
+            {
+                return BadRequest(new
+                {
+                    message = "Username and password are required for portal and mobile login.",
+                });
+            }
+
             try
             {
                 var user = await _userService.CreateUserAsync(createUserDto);

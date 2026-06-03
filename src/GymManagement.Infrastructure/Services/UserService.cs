@@ -192,6 +192,53 @@ namespace GymManagement.Infrastructure.Services
             if (normalizedAadhaar != null)
                 await EnsureAadhaarNotDuplicateAsync(normalizedAadhaar);
 
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                return await CreateUserWithinTransactionAsync(
+                    createUserDto,
+                    normalizedPhone,
+                    normalizedAadhaar);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        private async Task<UserDto> CreateUserWithinTransactionAsync(
+            CreateUserDto createUserDto,
+            string normalizedPhone,
+            string? normalizedAadhaar)
+        {
+            var accountRole = createUserDto.Role ?? Role.User;
+
+            // Portal / mobile login (AuthUsers.Email stores the login username).
+            // Validate and check availability before any DB writes so Users is never left without AuthUsers.
+            var loginId = !string.IsNullOrWhiteSpace(createUserDto.Username)
+                ? createUserDto.Username.Trim()
+                : createUserDto.Email?.Trim();
+            var password = createUserDto.Password?.Trim();
+            var willCreateAuth = !string.IsNullOrEmpty(password) || !string.IsNullOrWhiteSpace(loginId);
+            string? passwordHash = null;
+            if (willCreateAuth)
+            {
+                if (string.IsNullOrWhiteSpace(loginId))
+                    throw new ArgumentException("Username is required for portal and mobile login.");
+                if (string.IsNullOrEmpty(password))
+                    throw new ArgumentException("Password is required.");
+                if (password.Length < 6)
+                    throw new ArgumentException("Password must be at least 6 characters.");
+
+                var usernameCheck = await _usernameAvailability.CheckAsync(loginId);
+                if (!usernameCheck.IsAvailable)
+                    throw new ConflictException(
+                        usernameCheck.ValidationError ?? UsernameAvailabilityService.DuplicateUsernameMessage);
+
+                passwordHash = PasswordHasher.Hash(password);
+            }
+
             var user = new User
             {
                 FirstName = createUserDto.FirstName,
@@ -212,41 +259,19 @@ namespace GymManagement.Infrastructure.Services
             await _unitOfWork.Users.AddAsync(user);
             await _unitOfWork.SaveChangesAsync();
 
-            if (normalizedAadhaar != null)
-                await LogAadhaarAuditAsync(user.Id, "Aadhaar Created", null, normalizedAadhaar);
-
-            var accountRole = createUserDto.Role ?? Role.User;
-
-            // Portal / mobile login (AuthUsers.Email stores the login username)
-            var loginId = !string.IsNullOrWhiteSpace(createUserDto.Username)
-                ? createUserDto.Username.Trim()
-                : createUserDto.Email?.Trim();
-            var password = createUserDto.Password?.Trim();
-            if (!string.IsNullOrEmpty(password) || !string.IsNullOrWhiteSpace(loginId))
+            if (willCreateAuth && passwordHash != null)
             {
-                if (string.IsNullOrWhiteSpace(loginId))
-                    throw new ArgumentException("Username is required for portal and mobile login.");
-                if (string.IsNullOrEmpty(password))
-                    throw new ArgumentException("Password is required.");
-                if (password.Length < 6)
-                    throw new ArgumentException("Password must be at least 6 characters.");
-
-                var usernameCheck = await _usernameAvailability.CheckAsync(loginId);
-                if (!usernameCheck.IsAvailable)
-                    throw new ConflictException(
-                        usernameCheck.ValidationError ?? UsernameAvailabilityService.DuplicateUsernameMessage);
-
-                var passwordHash = PasswordHasher.Hash(password);
-
-                var authUser = new AuthUser
+                await _unitOfWork.AuthUsers.AddAsync(new AuthUser
                 {
-                    Email = loginId,
+                    Email = loginId!,
                     PasswordHash = passwordHash,
-                    UserId = user.Id
-                };
-                await _unitOfWork.AuthUsers.AddAsync(authUser);
+                    UserId = user.Id,
+                });
                 await _unitOfWork.SaveChangesAsync();
             }
+
+            if (normalizedAadhaar != null)
+                await LogAadhaarAuditAsync(user.Id, "Aadhaar Created", null, normalizedAadhaar);
 
             UserMembership? createdMembership = null;
             MembershipPlan? createdPlan = null;
@@ -351,6 +376,7 @@ namespace GymManagement.Infrastructure.Services
                 }
             }
 
+            await _db.Database.CurrentTransaction!.CommitAsync();
             return dto;
         }
 

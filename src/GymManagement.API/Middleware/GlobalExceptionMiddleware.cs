@@ -132,9 +132,7 @@ public sealed class GlobalExceptionMiddleware
         if (sqlMessage != null
             && (sqlMessage.Contains("membership_approval_requests", StringComparison.OrdinalIgnoreCase)
                 || sqlMessage.Contains("membership_audit_logs", StringComparison.OrdinalIgnoreCase)
-                || sqlMessage.Contains("IX_user_memberships_one_active_per_user", StringComparison.OrdinalIgnoreCase)
-                || sqlMessage.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase)
-                || sqlMessage.Contains("Invalid column name", StringComparison.OrdinalIgnoreCase)))
+                || sqlMessage.Contains("IX_user_memberships_one_active_per_user", StringComparison.OrdinalIgnoreCase)))
         {
             return (
                 StatusCodes.Status500InternalServerError,
@@ -144,7 +142,7 @@ public sealed class GlobalExceptionMiddleware
         }
 
         var detail = "The server could not process this request. Please retry or contact support.";
-        if (environment.IsDevelopment())
+        if (environment.IsDevelopment() || environment.IsStaging())
         {
             var dev = ex.GetBaseException().Message;
             if (!string.IsNullOrWhiteSpace(dev))

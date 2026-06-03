@@ -192,19 +192,23 @@ namespace GymManagement.Infrastructure.Services
             if (normalizedAadhaar != null)
                 await EnsureAadhaarNotDuplicateAsync(normalizedAadhaar);
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-            try
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                return await CreateUserWithinTransactionAsync(
-                    createUserDto,
-                    normalizedPhone,
-                    normalizedAadhaar);
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+                try
+                {
+                    return await CreateUserWithinTransactionAsync(
+                        createUserDto,
+                        normalizedPhone,
+                        normalizedAadhaar);
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         private async Task<UserDto> CreateUserWithinTransactionAsync(

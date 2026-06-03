@@ -89,7 +89,7 @@ And allow the redirect origin in your OAuth / App Check settings if applicable.
 | API CORS error | `CORS_ORIGIN_0` in `deploy/.env.uat` must be `https://uat.tigerfitness.tech` |
 | SSL error | `sudo certbot certificates`; re-run `setup-ssl-uat.sh` |
 | Wrong database | UAT uses volume `gym_uat_sqlserver_data`, not production’s |
-| “Database schema is out of date” / 500 on save user | Pull latest `uat`, rebuild, restart API: `./deploy/scripts/update-uat.sh` then `./deploy/scripts/migrate-uat.sh`. Confirm `DATABASE_AUTO_MIGRATE=true` in `deploy/.env.uat`. Check `docker logs gym-uat-api --tail 100` for “migrations applied” or “membership lifecycle”. |
+| “Database schema is out of date” / 500 on save user | Run **`./deploy/scripts/fix-uat-membership-schema.sh`** (pulls `uat`, fixes stuck migration history, rebuilds API). Confirm `DATABASE_AUTO_MIGRATE=true` in `deploy/.env.uat`. Then `docker logs gym-uat-api --tail 100` should show “Membership lifecycle schema is ready.” |
 | `address already in use` on `127.0.0.1:1434` | Usually duplicate SQL port mappings from merged compose files (fixed with `ports: !override` in `docker-compose.uat.yml`). Pull latest `uat`, then `bash deploy/scripts/fix-uat-sql-port.sh` and redeploy. Or set `SQLSERVER_PUBLISH_PORT=1435` in `deploy/.env.uat` |
 
 ```bash

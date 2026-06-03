@@ -20,7 +20,8 @@ public static class DatabaseSchemaPatch
     }
 
     /// <summary>
-    /// Applies membership lifecycle tables/indexes when UAT/production started without AutoMigrate.
+    /// Applies membership lifecycle tables/indexes when UAT/production started without AutoMigrate,
+    /// or when migration history was recorded without creating tables.
     /// </summary>
     private static async Task EnsureMembershipLifecycleMigrationAsync(
         ApplicationDbContext db,
@@ -29,29 +30,60 @@ public static class DatabaseSchemaPatch
     {
         const string migrationId = "20260603092400_MembershipLifecycleAndUniqueActiveMembership";
 
+        if (await TableExistsAsync(db, "membership_audit_logs", cancellationToken).ConfigureAwait(false))
+            return;
+
+        logger.LogWarning(
+            "Membership lifecycle tables are missing. Applying pending EF migrations (expected: {MigrationId}).",
+            migrationId);
+
         try
         {
-            var applied = await db.Database.GetAppliedMigrationsAsync(cancellationToken).ConfigureAwait(false);
-            if (applied.Contains(migrationId))
-                return;
-
-            var pending = await db.Database.GetPendingMigrationsAsync(cancellationToken).ConfigureAwait(false);
-            if (!pending.Contains(migrationId))
+            var pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken).ConfigureAwait(false)).ToList();
+            if (pending.Count == 0)
             {
-                logger.LogDebug("Membership lifecycle migration {MigrationId} is not pending.", migrationId);
-                return;
+                throw new InvalidOperationException(
+                    $"Migration {migrationId} is recorded in history but membership_audit_logs is missing. " +
+                    "On UAT run: ./deploy/scripts/fix-uat-membership-schema.sh");
             }
 
-            logger.LogInformation("Applying membership lifecycle migration {MigrationId}...", migrationId);
-            await db.Database.MigrateAsync(migrationId, cancellationToken).ConfigureAwait(false);
-            logger.LogInformation("Membership lifecycle schema is ready.");
+            logger.LogInformation("Applying {Count} pending migration(s)...", pending.Count);
+            await db.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!await TableExistsAsync(db, "membership_audit_logs", cancellationToken).ConfigureAwait(false))
+            {
+                logger.LogError(
+                    "Migrations finished but membership_audit_logs is still missing. " +
+                    "On UAT run: ./deploy/scripts/fix-uat-membership-schema.sh");
+            }
+            else
+            {
+                logger.LogInformation("Membership lifecycle schema is ready.");
+            }
         }
         catch (Exception ex)
         {
-            logger.LogWarning(
+            logger.LogError(
                 ex,
-                "Could not apply membership lifecycle migration. Restart API with Database__AutoMigrate=true or run update-uat.sh.");
+                "Could not apply membership lifecycle migration. On UAT run: ./deploy/scripts/fix-uat-membership-schema.sh");
+            throw;
         }
+    }
+
+    private static async Task<bool> TableExistsAsync(
+        ApplicationDbContext db,
+        string tableName,
+        CancellationToken cancellationToken)
+    {
+        if (tableName is not ("membership_audit_logs" or "membership_approval_requests"))
+            return false;
+
+        await using var cmd = db.Database.GetDbConnection().CreateCommand();
+        cmd.CommandText = $"SELECT CASE WHEN OBJECT_ID(N'{tableName}', N'U') IS NOT NULL THEN 1 ELSE 0 END";
+        if (cmd.Connection!.State != System.Data.ConnectionState.Open)
+            await cmd.Connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var scalar = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return Convert.ToInt32(scalar) == 1;
     }
 
     /// <summary>

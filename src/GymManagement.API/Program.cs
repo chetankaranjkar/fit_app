@@ -834,7 +834,9 @@ else
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Schema patch check failed.");
+            logger.LogError(ex, "Schema patch failed.");
+            if (app.Environment.IsStaging())
+                throw;
         }
     }
     else

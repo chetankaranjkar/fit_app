@@ -804,7 +804,9 @@ SELECT CASE WHEN OBJECT_ID('dbo.Users','U') IS NOT NULL AND OBJECT_ID('dbo.Roles
 else
 {
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    var autoMigrate = builder.Configuration.GetValue<bool>("Database:AutoMigrate", false);
+    var autoMigrate = builder.Configuration.GetValue<bool>(
+        "Database:AutoMigrate",
+        app.Environment.IsProduction() || app.Environment.IsStaging());
     if (autoMigrate && !useSqlite)
     {
         try

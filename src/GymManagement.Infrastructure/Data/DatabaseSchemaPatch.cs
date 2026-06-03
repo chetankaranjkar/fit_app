@@ -16,6 +16,42 @@ public static class DatabaseSchemaPatch
 
         await EnsureBranchCheckInRadiusOffsetAsync(db, logger, cancellationToken).ConfigureAwait(false);
         await EnsureRetailCatalogTablesAsync(db, logger, cancellationToken).ConfigureAwait(false);
+        await EnsureMembershipLifecycleMigrationAsync(db, logger, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Applies membership lifecycle tables/indexes when UAT/production started without AutoMigrate.
+    /// </summary>
+    private static async Task EnsureMembershipLifecycleMigrationAsync(
+        ApplicationDbContext db,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        const string migrationId = "20260603092400_MembershipLifecycleAndUniqueActiveMembership";
+
+        try
+        {
+            var applied = await db.Database.GetAppliedMigrationsAsync(cancellationToken).ConfigureAwait(false);
+            if (applied.Contains(migrationId))
+                return;
+
+            var pending = await db.Database.GetPendingMigrationsAsync(cancellationToken).ConfigureAwait(false);
+            if (!pending.Contains(migrationId))
+            {
+                logger.LogDebug("Membership lifecycle migration {MigrationId} is not pending.", migrationId);
+                return;
+            }
+
+            logger.LogInformation("Applying membership lifecycle migration {MigrationId}...", migrationId);
+            await db.Database.MigrateAsync(migrationId, cancellationToken).ConfigureAwait(false);
+            logger.LogInformation("Membership lifecycle schema is ready.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Could not apply membership lifecycle migration. Restart API with Database__AutoMigrate=true or run update-uat.sh.");
+        }
     }
 
     /// <summary>

@@ -101,6 +101,11 @@ const MembershipPaymentHistoryPage = lazy(() =>
 const WaiveOffRequestsPage = lazy(() =>
   import('../pages/WaiveOffRequestsPage').then((m) => ({ default: m.WaiveOffRequestsPage })),
 )
+const MembershipApprovalRequestsPage = lazy(() =>
+  import('../pages/MembershipApprovalRequestsPage').then((m) => ({
+    default: m.MembershipApprovalRequestsPage,
+  })),
+)
 const BillingReportsPage = lazy(() =>
   import('../pages/BillingReportsPage').then((m) => ({ default: m.BillingReportsPage })),
 )
@@ -314,6 +319,10 @@ const router = createBrowserRouter([
               { path: '/dashboard/payments/collect', element: withSuspense(<CollectMembershipPaymentPage />) },
               { path: '/dashboard/payments/history', element: withSuspense(<MembershipPaymentHistoryPage />) },
               { path: '/dashboard/payments/waive-offs', element: withSuspense(<WaiveOffRequestsPage />) },
+              {
+                path: '/dashboard/payments/membership-approvals',
+                element: withSuspense(<MembershipApprovalRequestsPage />),
+              },
               { path: '/dashboard/payments/reports', element: withSuspense(<BillingReportsPage />) },
               { path: '/dashboard/coupons', element: withSuspense(<CouponsPage />) },
               { path: '/dashboard/retail/products', element: withSuspense(<RetailProductsPage />) },

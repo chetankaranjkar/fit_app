@@ -35,6 +35,9 @@ const AUTH_PERMISSION_CODES = {
   refundPayment: 'REFUND_PAYMENT',
   approveWaiveOff: 'APPROVE_WAIVE_OFF',
   viewFinancialAudit: 'VIEW_FINANCIAL_AUDIT',
+  submitMembershipRequest: 'SUBMIT_MEMBERSHIP_REQUEST',
+  approveMembershipRequest: 'APPROVE_MEMBERSHIP_REQUEST',
+  viewMembershipAudit: 'VIEW_MEMBERSHIP_AUDIT',
 } as const
 
 function normalizeLoginResponse(raw: Record<string, unknown>): LoginResponse {
@@ -200,6 +203,12 @@ export const authService = {
   canTrainerAccess: () => authService.hasPermission(AUTH_PERMISSION_CODES.trainerAccess),
   canUsersAccess: () => authService.hasPermission(AUTH_PERMISSION_CODES.usersAccess),
   canCreateUsers: () => authService.hasPermission(AUTH_PERMISSION_CODES.createUsers),
+  canApproveMembershipRequest: () =>
+    authService.hasPermission(AUTH_PERMISSION_CODES.approveMembershipRequest) ||
+    authService.hasAppRole('ADMIN'),
+  canViewMembershipAudit: () =>
+    authService.hasPermission(AUTH_PERMISSION_CODES.viewMembershipAudit) ||
+    authService.hasAppRole('ADMIN'),
   hasAppRole: (roleName: string) => {
     const n = roleName.trim().toUpperCase()
     if (!n) return false

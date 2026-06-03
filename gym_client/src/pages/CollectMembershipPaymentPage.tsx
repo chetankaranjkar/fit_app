@@ -106,6 +106,36 @@ export function CollectMembershipPaymentPage() {
     return getRemainingBalance(data)
   }, [data])
 
+  /** Live totals from payment record (stays in sync after coupon apply). */
+  const summaryForCard = useMemo(() => {
+    if (!data) return null
+    const membershipFee = getMembershipAmount(data)
+    const couponDiscount = data.couponDiscountAmount ?? 0
+    const approvedWaiveOff = data.waiverAmount ?? 0
+    const netPayableAmount = computeNetPayable(
+      data.totalAmount,
+      data.discountAmount,
+      data.waiverAmount,
+      data.netPayableAmount,
+      data.finalBillAmount,
+      couponDiscount,
+    )
+    return {
+      membershipFee,
+      couponDiscount,
+      approvedWaiveOff,
+      netPayableAmount,
+      totalPaid: data.paidAmount,
+      outstandingBalance: remainingBeforePay,
+      isOverdue: data.paymentStatus === 'Overdue',
+      planName: data.planName,
+      userId: data.userId,
+      memberName: financialSummary?.memberName ?? null,
+      memberPhotoUrl: financialSummary?.memberPhotoUrl ?? null,
+      memberCode: financialSummary?.memberCode ?? null,
+    }
+  }, [data, financialSummary, remainingBeforePay])
+
   const pendingAfter = useMemo(() => {
     if (!data) return 0
     return Math.max(0, remainingBeforePay - paidNum)
@@ -119,15 +149,18 @@ export function CollectMembershipPaymentPage() {
     },
     onSuccess: (res) => {
       queryClient.setQueryData(['membership-payment', membershipId], res)
+      queryClient.invalidateQueries({ queryKey: ['membership-financial-summary', membershipId] })
+      const due = getRemainingBalance(res)
+      setAmount(String(Math.round(due * 100) / 100))
       setAppliedCoupon({
         valid: true,
         discountAmount: res.couponDiscountAmount ?? 0,
-        finalAmount: res.finalBillAmount ?? res.netPayableAmount ?? 0,
+        finalAmount: res.finalBillAmount ?? res.netPayableAmount ?? due,
         message: 'Coupon locked to invoice',
         couponCode: res.couponCode,
         couponId: res.couponId,
       })
-      toast.success('Coupon applied')
+      toast.success(`Coupon applied — pay ${formatInr(due)}`)
     },
     onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Failed to apply coupon')),
   })
@@ -248,16 +281,16 @@ export function CollectMembershipPaymentPage() {
                   {paymentStatusLabel(data.paymentStatus)}
                 </span>
               </div>
-              {financialSummary ? (
+              {summaryForCard ? (
                 <MembershipFinancialSummaryCard
                   className="mt-4"
-                  membershipFee={financialSummary.membershipFee}
-                  couponDiscount={financialSummary.couponDiscount}
-                  approvedWaiveOff={financialSummary.approvedWaiveOff}
-                  netPayable={financialSummary.netPayableAmount}
-                  totalPaid={financialSummary.totalPaid}
-                  outstandingBalance={financialSummary.outstandingBalance}
-                  isOverdue={financialSummary.isOverdue}
+                  membershipFee={summaryForCard.membershipFee}
+                  couponDiscount={summaryForCard.couponDiscount}
+                  approvedWaiveOff={summaryForCard.approvedWaiveOff}
+                  netPayable={summaryForCard.netPayableAmount}
+                  totalPaid={summaryForCard.totalPaid}
+                  outstandingBalance={summaryForCard.outstandingBalance}
+                  isOverdue={summaryForCard.isOverdue}
                 />
               ) : (
                 <BillingSummaryCard
@@ -382,13 +415,33 @@ export function CollectMembershipPaymentPage() {
                         : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
                     }`}>
                       {appliedCoupon.valid ? (
-                        <p className="font-semibold">✓ Coupon applied — Discount: {formatInr(appliedCoupon.discountAmount)}</p>
+                        <>
+                          <p className="font-semibold">✓ Coupon applied — Discount: {formatInr(appliedCoupon.discountAmount)}</p>
+                          <p className="mt-1 text-slate-300">
+                            Amount to pay now:{' '}
+                            <span className="text-base font-bold text-white">{formatInr(remainingBeforePay)}</span>
+                          </p>
+                        </>
                       ) : (
                         <p>✗ {appliedCoupon.message}</p>
                       )}
                     </div>
                   )}
                 </div>
+                {data.couponLocked && (data.couponDiscountAmount ?? 0) > 0 && (
+                  <div className="sm:col-span-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/90">
+                      Payable after coupon
+                    </p>
+                    <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-100">
+                      {formatInr(remainingBeforePay)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {formatInr(getMembershipAmount(data))} membership fee − {formatInr(data.couponDiscountAmount ?? 0)} coupon
+                      {data.paidAmount > 0 ? ` − ${formatInr(data.paidAmount)} already paid` : ''}
+                    </p>
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">Method</label>
                   <select
@@ -475,17 +528,17 @@ export function CollectMembershipPaymentPage() {
           </>
         )}
 
-        {financialSummary && (
+        {summaryForCard && (
           <PaymentConfirmationModal
             open={confirmOpen}
             onClose={() => setConfirmOpen(false)}
             onConfirm={() => mutation.mutate()}
             confirming={mutation.isPending}
-            memberName={financialSummary.memberName ?? 'Member'}
-            memberId={financialSummary.memberCode ?? `M-${financialSummary.userId ?? data?.userId}`}
-            memberPhotoUrl={financialSummary.memberPhotoUrl}
+            memberName={summaryForCard.memberName ?? 'Member'}
+            memberId={summaryForCard.memberCode ?? `M-${summaryForCard.userId ?? data?.userId}`}
+            memberPhotoUrl={summaryForCard.memberPhotoUrl}
             planName={data?.planName}
-            summary={financialSummary}
+            summary={summaryForCard}
             paymentAmount={paidNum}
           />
         )}

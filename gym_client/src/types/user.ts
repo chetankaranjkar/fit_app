@@ -81,9 +81,10 @@ export interface CreateUserDto {
   profilePictureUrl?: string | null
   preferredGymTime?: string | null
   isActive: boolean
+  /** Login username for portal / mobile (stored as AuthUsers.Email). */
   username?: string | null
   password?: string | null
-  /** Role for login account when username/password set: 1 Member, 2 Instructor, 3 Admin. Default Member. */
+  /** Role for the login account: 1 Member, 2 Instructor, 3 Admin. Default Member. */
   role?: UserRole | UserRoleString | number | string | null
   /** Optional. If set, a membership will be created for the user. */
   planId?: number | null
@@ -124,6 +125,8 @@ export interface UpdateUserDto {
   userTypeIds?: number[] | null
   /** Admin: set a new login password (min 6 characters). Omit to leave unchanged. */
   password?: string | null
-  /** Login email when creating a new account (if user has no login yet). */
+  /** Portal / mobile login username (AuthUsers.Email). Updates existing login or sets id when creating a new account. */
+  username?: string | null
+  /** Fallback login id when creating a new account if username is empty. */
   email?: string | null
 }

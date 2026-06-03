@@ -10,6 +10,8 @@ export function Modal({
   children,
   size = 'default',
   scrollable = false,
+  closeOnBackdropClick = true,
+  closeOnEscape = true,
 }: {
   open: boolean
   onClose: () => void
@@ -17,9 +19,13 @@ export function Modal({
   children: React.ReactNode
   size?: ModalSize
   scrollable?: boolean
+  /** When false, clicking the dimmed backdrop does not dismiss (use for long forms). */
+  closeOnBackdropClick?: boolean
+  /** When false, Escape does not dismiss. */
+  closeOnEscape?: boolean
 }) {
   useEffect(() => {
-    if (!open) return
+    if (!open || !closeOnEscape) return
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -29,7 +35,7 @@ export function Modal({
       document.removeEventListener('keydown', handleEscape)
       document.body.style.overflow = ''
     }
-  }, [open, onClose])
+  }, [open, onClose, closeOnEscape])
 
   if (!open) return null
 
@@ -38,19 +44,25 @@ export function Modal({
     ? 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-6 py-5'
     : 'overflow-y-auto overscroll-contain max-h-[calc(100dvh-8rem)] px-6 py-5'
 
-  /* Portal to body. Full-screen scrim button sits under a pointer-events-none flex layer so outside clicks always dismiss. */
+  const backdropClassName = 'absolute inset-0 bg-black/45'
+  const backdropStyle = {
+    WebkitBackdropFilter: 'blur(18px)',
+    backdropFilter: 'blur(18px)',
+  } as const
+
   return createPortal(
     <div className="fixed inset-0 z-[200]" data-lenis-prevent>
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default bg-black/45"
-        style={{
-          WebkitBackdropFilter: 'blur(18px)',
-          backdropFilter: 'blur(18px)',
-        }}
-        aria-label="Close dialog"
-        onClick={onClose}
-      />
+      {closeOnBackdropClick ? (
+        <button
+          type="button"
+          className={`${backdropClassName} cursor-default`}
+          style={backdropStyle}
+          aria-label="Close dialog"
+          onClick={onClose}
+        />
+      ) : (
+        <div className={backdropClassName} style={backdropStyle} aria-hidden />
+      )}
       <div className="pointer-events-none relative z-10 flex max-h-[100dvh] min-h-0 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
         <div className="flex min-h-0 w-full flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-8">
           <div

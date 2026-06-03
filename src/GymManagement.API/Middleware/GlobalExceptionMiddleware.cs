@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using GymManagement.Core.DTOs;
 using GymManagement.Core.Exceptions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -57,6 +58,12 @@ public sealed class GlobalExceptionMiddleware
             };
             problem.Extensions["traceId"] = traceId;
 
+            if (ex is ActiveMembershipConflictException activeEx)
+            {
+                problem.Extensions["code"] = ActiveMembershipConflictDto.ErrorCode;
+                problem.Extensions["activeMembership"] = activeEx.Details;
+            }
+
             await context.Response.WriteAsJsonAsync(problem);
         }
     }
@@ -75,6 +82,11 @@ public sealed class GlobalExceptionMiddleware
                 "Resource not found.",
                 string.IsNullOrWhiteSpace(notFoundEx.Message) ? "Requested resource does not exist." : notFoundEx.Message,
                 "https://httpstatuses.com/404"),
+            ActiveMembershipConflictException activeMembershipEx => (
+                StatusCodes.Status409Conflict,
+                "Active membership exists.",
+                activeMembershipEx.Details.Message,
+                "https://httpstatuses.com/409"),
             ConflictException conflictEx => (
                 StatusCodes.Status409Conflict,
                 "Operation conflict.",

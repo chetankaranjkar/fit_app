@@ -23,6 +23,10 @@ namespace GymManagement.Core.Services
         /// </summary>
         Task<IReadOnlyList<AppRoleDto>> GetUserAppRolesAsync(int userId);
 
+        /// <summary>Application roles per user id (for paged assignment grids).</summary>
+        Task<IReadOnlyDictionary<int, IReadOnlyList<AppRoleDto>>> GetUserAppRolesByUserIdsAsync(
+            IReadOnlyCollection<int> userIds);
+
         /// <summary>All permission codes defined in the system (for ADMIN effective set).</summary>
         Task<IReadOnlyList<string>> GetAllPermissionCodesAsync();
     }

@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
 import { DataPageSection } from '../components/layout/DataPageShell'
 import { MembershipStatusBadge } from '../components/billing/MembershipStatusBadge'
+import { RequestMembershipVoidModal } from '../components/memberships/RequestMembershipVoidModal'
 import {
   DataFilterSelect,
   DataToolbar,
@@ -20,6 +22,21 @@ import { Modal } from '../components/ui/Modal'
 import { userMembershipsService } from '../services/userMemberships.service'
 import { usersService } from '../services/users.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
+import { getApiErrorMessage } from '../lib/apiErrors'
+import {
+  findOccupyingMembershipConflict,
+  occupiesMembershipSlot,
+} from '../lib/membershipRules'
+import {
+  getMembershipCollectPaymentPath,
+  membershipStatusClickTitle,
+} from '../lib/membershipPaymentNavigation'
+import {
+  membershipToConflict,
+  parseActiveMembershipConflict,
+} from '../lib/activeMembershipConflict'
+import { ActiveMembershipConflictModal } from '../components/memberships/ActiveMembershipConflictModal'
+import type { ActiveMembershipConflict } from '../types/activeMembershipConflict'
 import type {
   UserMembership,
   CreateUserMembershipDto,
@@ -52,12 +69,18 @@ const statusOptions: MembershipStatus[] = [
   'Expired',
 ]
 
-const statusLabel: Record<MembershipStatus, string> = {
+const statusLabel: Partial<Record<MembershipStatus, string>> = {
   Active: 'Active',
   ActivePendingPayment: 'Active (Pending Payment)',
   PartialPayment: 'Partial Payment',
   Paused: 'Paused',
   Expired: 'Expired',
+  Frozen: 'Frozen',
+  Cancelled: 'Cancelled',
+  Pending: 'Pending',
+  VoidPending: 'Void pending',
+  Voided: 'Voided',
+  Transferred: 'Transferred',
 }
 
 /** Add days to a date string (YYYY-MM-DD), return YYYY-MM-DD */
@@ -67,6 +90,9 @@ function addDays(dateStr: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
 }
+
+/** Shared prefix so create/update/delete invalidate the paged list too. */
+const MEMBERSHIPS_QUERY_KEY = ['user-memberships'] as const
 
 const defaultCreate: CreateUserMembershipDto = {
   userId: 0,
@@ -109,6 +135,8 @@ export function UserMembershipsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
+  const [voidTarget, setVoidTarget] = useState<UserMembership | null>(null)
+  const [activeConflict, setActiveConflict] = useState<ActiveMembershipConflict | null>(null)
   const [editing, setEditing] = useState<UserMembership | null>(null)
   const [form, setForm] = useState<CreateUserMembershipDto>(defaultCreate)
   const [formError, setFormError] = useState<string | null>(null)
@@ -123,7 +151,7 @@ export function UserMembershipsPage() {
   const memberDropdownRef = useRef<HTMLDivElement>(null)
 
   const { data: membershipsPage, isLoading, isFetching } = useQuery({
-    queryKey: ['user-memberships-paged', page, pageSize, debouncedListSearch, statusFilter],
+    queryKey: [...MEMBERSHIPS_QUERY_KEY, 'paged', page, pageSize, debouncedListSearch, statusFilter],
     queryFn: async () => {
       const { data } = await userMembershipsService.getPaged({
         page,
@@ -177,6 +205,20 @@ export function UserMembershipsPage() {
     setPage(1)
   }, [debouncedListSearch, statusFilter])
 
+  const { data: existingActiveConflict } = useQuery({
+    queryKey: ['active-membership-conflict', form.userId],
+    queryFn: async () => {
+      const res = await userMembershipsService.getActiveConflict(form.userId)
+      if (res.status === 200 && res.data) return res.data
+      const { data: rows } = await userMembershipsService.getByUserId(form.userId)
+      const occupying = Array.isArray(rows)
+        ? findOccupyingMembershipConflict(rows, form.userId)
+        : undefined
+      return occupying ? membershipToConflict(occupying) : null
+    },
+    enabled: modalOpen && !editing && form.userId > 0,
+  })
+
   const { data: plans = [] } = useQuery({
     queryKey: ['membership-plans'],
     queryFn: async () => {
@@ -194,29 +236,41 @@ export function UserMembershipsPage() {
   const createMutation = useMutation({
     mutationFn: (dto: CreateUserMembershipDto) => userMembershipsService.create(dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-memberships'] })
+      queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
       setModalOpen(false)
       setForm(defaultCreate)
       setFormError(null)
     },
-    onError: (err: Error) => setFormError(err.message || 'Failed to create membership'),
+    onError: (err: unknown) => {
+      const conflict = parseActiveMembershipConflict(err)
+      if (conflict?.membershipId) {
+        setActiveConflict(conflict)
+        setModalOpen(false)
+        return
+      }
+      setFormError(getApiErrorMessage(err, 'Failed to create membership'))
+    },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, dto }: { id: number; dto: UpdateUserMembershipDto }) =>
       userMembershipsService.update(id, dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-memberships'] })
+      queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
+      setModalOpen(false)
       setEditing(null)
       setForm(defaultCreate)
       setFormError(null)
     },
-    onError: (err: Error) => setFormError(err.message || 'Failed to update membership'),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => userMembershipsService.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user-memberships'] }),
+    onError: (err: unknown) => {
+      const conflict = parseActiveMembershipConflict(err)
+      if (conflict?.membershipId) {
+        setActiveConflict(conflict)
+        setModalOpen(false)
+        return
+      }
+      setFormError(getApiErrorMessage(err, 'Failed to update membership'))
+    },
   })
 
   const membershipStats = useMemo(() => {
@@ -262,7 +316,32 @@ export function UserMembershipsPage() {
     setMemberDropdownOpen(false)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const showActiveConflict = (conflict: ActiveMembershipConflict) => {
+    setActiveConflict(conflict)
+    setModalOpen(false)
+  }
+
+  const handleRenewActive = (conflict: ActiveMembershipConflict) => {
+    setActiveConflict(null)
+    navigate(
+      `/dashboard/payments/collect?membershipId=${conflict.membershipId}&userId=${conflict.userId}`,
+    )
+  }
+
+  const handleUpgradeActive = (conflict: ActiveMembershipConflict) => {
+    setActiveConflict(null)
+    const row = memberships.find((m) => m.id === conflict.membershipId)
+    if (row) {
+      openEdit(row)
+      return
+    }
+    void userMembershipsService.getById(conflict.membershipId).then(({ data }) => {
+      if (data) openEdit(data)
+      else toast.error('Could not load membership for upgrade.')
+    })
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
     const userId = editing ? editing.userId : form.userId
@@ -270,6 +349,31 @@ export function UserMembershipsPage() {
     if (!editing && (userId === 0 || planId === 0)) {
       setFormError('Please select a member and a plan.')
       return
+    }
+    if (!editing) {
+      const localRow = findOccupyingMembershipConflict(memberships, userId)
+      if (localRow) {
+        showActiveConflict(membershipToConflict(localRow))
+        return
+      }
+      try {
+        const { status, data } = await userMembershipsService.getActiveConflict(userId)
+        if (status === 200 && data) {
+          showActiveConflict(data)
+          return
+        }
+      } catch {
+        /* server enforces on POST */
+      }
+    } else {
+      const targetStatus = form.status ?? editing.status
+      if (occupiesMembershipSlot(targetStatus)) {
+        const localRow = findOccupyingMembershipConflict(memberships, userId, editing.id)
+        if (localRow) {
+          showActiveConflict(membershipToConflict(localRow))
+          return
+        }
+      }
     }
     if (editing) {
       updateMutation.mutate({
@@ -286,38 +390,31 @@ export function UserMembershipsPage() {
         planId: form.planId,
         startDate: form.startDate,
         endDate: form.endDate,
-        status: form.status,
+        status: form.status ?? 'Active',
       })
     }
   }
 
-  const handleDelete = (m: UserMembership) => {
-    if (!window.confirm('Delete this membership record?')) return
-    deleteMutation.mutate(m.id)
+  const handleRequestVoid = (m: UserMembership) => {
+    if (m.status === 'Voided' || m.status === 'Transferred') {
+      toast.error('This membership is already voided or transferred.')
+      return
+    }
+    setVoidTarget(m)
   }
 
   const membershipStatusAction = (m: UserMembership) => {
-    if (m.status === 'PartialPayment' || m.status === 'ActivePendingPayment' || m.status === 'Expired') {
-      return () =>
-        navigate(`/dashboard/payments/collect?membershipId=${m.id}&userId=${m.userId}`)
-    }
+    const collectPath = getMembershipCollectPaymentPath(m)
+    if (collectPath) return () => navigate(collectPath)
     if (m.status === 'Paused') return () => openEdit(m)
     return () => navigate(`/dashboard/users/${m.userId}`)
   }
 
   const membershipStatusTitle = (status: MembershipStatus) => {
-    switch (status) {
-      case 'PartialPayment':
-        return 'Collect remaining amount'
-      case 'ActivePendingPayment':
-        return 'Open payment collection'
-      case 'Paused':
-        return 'Edit membership'
-      case 'Expired':
-        return 'Collect renewal payment'
-      default:
-        return 'Open member profile'
-    }
+    const collectTitle = membershipStatusClickTitle(status)
+    if (collectTitle) return collectTitle
+    if (status === 'Paused') return 'Edit membership'
+    return 'Open member profile'
   }
 
   const membershipColumns = useMemo<DataGridColumnDef<UserMembership>[]>(
@@ -394,13 +491,22 @@ export function UserMembershipsPage() {
             row={row}
             actions={[
               { id: 'edit', label: 'Edit', onClick: openEdit },
-              { id: 'delete', label: 'Delete', variant: 'danger', onClick: handleDelete },
+              ...(row.status !== 'Voided' && row.status !== 'Transferred'
+                ? [
+                    {
+                      id: 'void',
+                      label: 'Request void',
+                      variant: 'danger' as const,
+                      onClick: handleRequestVoid,
+                    },
+                  ]
+                : []),
             ]}
           />
         ),
       },
     ],
-    [navigate, openEdit, handleDelete],
+    [navigate, openEdit, handleRequestVoid],
   )
 
   const selectedMember = users.find((u) => u.id === form.userId)
@@ -461,7 +567,7 @@ export function UserMembershipsPage() {
                   onChange={(v) => setStatusFilter(v as 'all' | MembershipStatus)}
                   ariaLabel="Filter by status"
                   options={[
-                    { value: 'all', label: 'All status' },
+                    { value: 'all', label: 'Operational (hide voided)' },
                     ...statusOptions.map((s) => ({ value: s, label: statusLabel[s] })),
                   ]}
                 />
@@ -506,6 +612,29 @@ export function UserMembershipsPage() {
               {formError}
             </p>
           )}
+          {!editing && existingActiveConflict ? (
+            <div
+              role="alert"
+              className="rounded-xl border border-amber-400/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+            >
+              <p className="font-medium">Member already has an active membership.</p>
+              <p className="mt-1 text-amber-200/90">
+                {existingActiveConflict.planName ?? 'Plan'} · ends{' '}
+                {formatDate(existingActiveConflict.endDate)} · {existingActiveConflict.remainingDays}{' '}
+                days left
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => showActiveConflict(existingActiveConflict)}
+                >
+                  View options
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {!editing && (
             <>
               <div ref={memberDropdownRef} className="relative">
@@ -639,7 +768,7 @@ export function UserMembershipsPage() {
             >
               {statusOptions.map((s) => (
                 <option key={s} value={s} className="bg-slate-900">
-                  {statusLabel[s]}
+                  {statusLabel[s] ?? s}
                 </option>
               ))}
             </select>
@@ -648,12 +777,37 @@ export function UserMembershipsPage() {
             <Button type="button" variant="secondary" onClick={closeModal}>
               Cancel
             </Button>
-            <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+            <Button
+              type="submit"
+              disabled={
+                createMutation.isPending ||
+                updateMutation.isPending ||
+                (!editing && !!existingActiveConflict)
+              }
+            >
               {editing ? 'Update' : 'Create'}
             </Button>
           </div>
         </form>
       </Modal>
+
+      <RequestMembershipVoidModal
+        open={voidTarget != null}
+        membership={voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onSubmitted={() => {
+          queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
+          queryClient.invalidateQueries({ queryKey: ['membership-approval-requests'] })
+        }}
+      />
+
+      <ActiveMembershipConflictModal
+        open={activeConflict != null}
+        conflict={activeConflict}
+        onClose={() => setActiveConflict(null)}
+        onRenew={handleRenewActive}
+        onUpgrade={handleUpgradeActive}
+      />
     </DashboardLayout>
   )
 }

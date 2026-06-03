@@ -177,7 +177,19 @@ export function rowsToMemberImports(rows: string[][]): {
       }
     }
     const username = idx.has('username') ? get('username').trim() : ''
-    const password = idx.has('password') ? get('password') : ''
+    const password = idx.has('password') ? get('password').trim() : ''
+    if (!username) {
+      errors.push(`Row ${lineNo}: username is required for portal / mobile login.`)
+      continue
+    }
+    if (!password) {
+      errors.push(`Row ${lineNo}: password is required.`)
+      continue
+    }
+    if (password.length < 6) {
+      errors.push(`Row ${lineNo}: password must be at least 6 characters.`)
+      continue
+    }
 
     out.push({
       firstName,
@@ -188,16 +200,16 @@ export function rowsToMemberImports(rows: string[][]): {
       dateOfBirth,
       gender,
       isActive,
-      username: username || undefined,
-      password: password || undefined,
+      username,
+      password,
     })
   }
 
   return { rows: out, errors }
 }
 
-export const MEMBERS_CSV_TEMPLATE = `firstName,lastName,email,phone,aadhaarNumber,dateOfBirth,gender,isActive
-Jane,Doe,jane.doe@example.com,9876543210,123412341234,1990-05-15,Female,true`
+export const MEMBERS_CSV_TEMPLATE = `firstName,lastName,email,phone,aadhaarNumber,dateOfBirth,gender,isActive,username,password
+Jane,Doe,jane.doe@example.com,9876543210,123412341234,1990-05-15,Female,true,jane.doe,ChangeMe123`
 
 export function downloadMembersCsv(filename: string, headers: string[], lines: string[][]) {
   const esc = (v: string) => {

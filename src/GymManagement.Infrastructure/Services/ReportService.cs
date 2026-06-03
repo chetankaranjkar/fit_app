@@ -22,9 +22,15 @@ namespace GymManagement.Infrastructure.Services
             var to = toDate.Date;
             if (to < from) (from, to) = (to, from);
 
+            var voidedMembershipIds = await _context.UserMemberships.AsNoTracking()
+                .Where(m => !m.IsDeleted && m.Status == MembershipStatus.Voided)
+                .Select(m => m.Id)
+                .ToListAsync();
+
             var payments = await _context.Payments
                 .AsNoTracking()
                 .Where(p => p.PaymentDate.Date >= from && p.PaymentDate.Date <= to)
+                .Where(p => !voidedMembershipIds.Contains(p.MembershipId))
                 .ToListAsync();
 
             var paymentById = payments.ToDictionary(p => p.Id);

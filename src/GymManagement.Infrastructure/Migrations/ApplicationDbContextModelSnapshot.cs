@@ -2451,6 +2451,147 @@ namespace GymManagement.Infrastructure.Migrations
                     b.ToTable("MemberActivitySummary", (string)null);
                 });
 
+            modelBuilder.Entity("GymManagement.Domain.Entities.MembershipApprovalRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdminRemarks")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ApprovedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MemberId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MembershipId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PreviousMembershipStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ProposedChangesJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("RejectedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RejectedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RequestType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("RequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RequestedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MemberId");
+
+                    b.HasIndex("MembershipId");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("RequestedDate");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("membership_approval_requests", (string)null);
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.MembershipAuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviceInfo")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("IPAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MembershipId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NewValue")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("OldValue")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PerformedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MembershipId");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.HasIndex("PerformedDate");
+
+                    b.ToTable("membership_audit_logs", (string)null);
+                });
+
             modelBuilder.Entity("GymManagement.Domain.Entities.MembershipPayment", b =>
                 {
                     b.Property<int>("Id")
@@ -5195,7 +5336,10 @@ namespace GymManagement.Infrastructure.Migrations
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_user_memberships_one_active_per_user")
+                        .HasFilter("[IsDeleted] = 0 AND [Status] = N'Active'");
 
                     b.ToTable("user_memberships", (string)null);
                 });
@@ -6473,6 +6617,52 @@ namespace GymManagement.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.MembershipApprovalRequest", b =>
+                {
+                    b.HasOne("GymManagement.Domain.Entities.User", "Member")
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GymManagement.Domain.Entities.UserMembership", "Membership")
+                        .WithMany()
+                        .HasForeignKey("MembershipId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GymManagement.Domain.Entities.User", "RequestedBy")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Member");
+
+                    b.Navigation("Membership");
+
+                    b.Navigation("RequestedBy");
+                });
+
+            modelBuilder.Entity("GymManagement.Domain.Entities.MembershipAuditLog", b =>
+                {
+                    b.HasOne("GymManagement.Domain.Entities.UserMembership", "Membership")
+                        .WithMany()
+                        .HasForeignKey("MembershipId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GymManagement.Domain.Entities.User", "PerformedBy")
+                        .WithMany()
+                        .HasForeignKey("PerformedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Membership");
+
+                    b.Navigation("PerformedBy");
                 });
 
             modelBuilder.Entity("GymManagement.Domain.Entities.MembershipPayment", b =>

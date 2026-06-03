@@ -6,7 +6,13 @@ const statusLabel: Record<MembershipStatus, string> = {
   ActivePendingPayment: 'Pending payment',
   PartialPayment: 'Partial payment',
   Paused: 'Paused',
+  Frozen: 'Frozen',
+  Cancelled: 'Cancelled',
+  Pending: 'Pending',
   Expired: 'Expired',
+  VoidPending: 'Void pending',
+  Voided: 'Voided',
+  Transferred: 'Transferred',
 }
 
 const variantMap: Record<MembershipStatus, StatusBadgeVariant> = {
@@ -14,7 +20,13 @@ const variantMap: Record<MembershipStatus, StatusBadgeVariant> = {
   ActivePendingPayment: 'info',
   PartialPayment: 'warning',
   Paused: 'warning',
+  Frozen: 'info',
+  Cancelled: 'warning',
+  Pending: 'info',
   Expired: 'neutral',
+  VoidPending: 'warning',
+  Voided: 'danger',
+  Transferred: 'info',
 }
 
 export function MembershipStatusBadge({
@@ -26,8 +38,8 @@ export function MembershipStatusBadge({
   onClick?: () => void
   title?: string
 }) {
-  const label = statusLabel[status]
-  const variant = variantMap[status]
+  const label = statusLabel[status] ?? status
+  const variant = variantMap[status] ?? 'neutral'
 
   if (!onClick) {
     return (

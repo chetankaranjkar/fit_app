@@ -18,6 +18,13 @@ namespace GymManagement.Infrastructure.Migrations
 
             migrationBuilder.Sql(
                 """
+                IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Users_Phone' AND object_id = OBJECT_ID(N'Users'))
+                    DROP INDEX [IX_Users_Phone] ON [Users];
+                IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Users_MobileNumber' AND object_id = OBJECT_ID(N'Users'))
+                    DROP INDEX [IX_Users_MobileNumber] ON [Users];
+                IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_Users_MobileNumber' AND object_id = OBJECT_ID(N'Users'))
+                    DROP INDEX [UQ_Users_MobileNumber] ON [Users];
+
                 UPDATE u
                 SET Phone = CASE
                     WHEN LEN(d.DigitsOnly) >= 10
@@ -52,12 +59,8 @@ namespace GymManagement.Infrastructure.Migrations
                 UPDATE Users SET Phone = NULL
                 WHERE Id IN (SELECT Id FROM DupPhones WHERE rn > 1);
 
-                IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Users_Phone' AND object_id = OBJECT_ID(N'Users'))
-                    DROP INDEX [IX_Users_Phone] ON [Users];
-                IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Users_MobileNumber' AND object_id = OBJECT_ID(N'Users'))
-                    DROP INDEX [IX_Users_MobileNumber] ON [Users];
-                IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_Users_MobileNumber' AND object_id = OBJECT_ID(N'Users'))
-                    DROP INDEX [UQ_Users_MobileNumber] ON [Users];
+                UPDATE Users SET Phone = NULL WHERE Phone IS NOT NULL AND (LEN(Phone) <> 10 OR Phone NOT LIKE '[6789][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]');
+                UPDATE Users SET EmergencyPhone = NULL WHERE EmergencyPhone IS NOT NULL AND (LEN(EmergencyPhone) <> 10 OR EmergencyPhone NOT LIKE '[6789][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]');
 
                 IF COL_LENGTH('Users', 'Phone') IS NOT NULL
                     ALTER TABLE [Users] ALTER COLUMN [Phone] nvarchar(10) NULL;

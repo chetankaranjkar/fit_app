@@ -10,8 +10,8 @@ namespace GymManagement.Core.Services
         Task<PagedResultDto<UserMembershipDto>> GetPagedAsync(int page, int pageSize, string? search = null, MembershipStatus? status = null);
         Task<IEnumerable<UserMembershipDto>> GetByUserIdAsync(int userId);
         Task<UserMembershipDto?> GetByIdAsync(int id);
-        Task<UserMembershipDto> CreateAsync(CreateUserMembershipDto dto);
-        Task<UserMembershipDto?> UpdateAsync(int id, UpdateUserMembershipDto dto);
-        Task<bool> DeleteAsync(int id);
+        Task<ActiveMembershipConflictDto?> GetActiveMembershipConflictForUserAsync(int userId, int? excludeMembershipId = null);
+        Task<UserMembershipDto> CreateAsync(CreateUserMembershipDto dto, int performedByUserId);
+        Task<UserMembershipDto?> UpdateAsync(int id, UpdateUserMembershipDto dto, int performedByUserId);
     }
 }

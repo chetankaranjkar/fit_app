@@ -200,12 +200,20 @@ export function AddTrainerModal({ open, onClose }: Props) {
       let aadhaarDigits: string | undefined
       let phoneDigits: string
       try {
-        if (!mobileAvailability.isAvailable) {
+        phoneDigits = validatePhoneNumber(form.newPhone, true)
+        if (mobileAvailability.status === 'checking' || mobileAvailability.status === 'idle') {
+          throw new Error('Please wait — checking mobile number…')
+        }
+        if (mobileAvailability.status === 'taken' || mobileAvailability.status === 'invalid_format') {
           throw new Error(
             mobileAvailability.error ?? 'This mobile number is already registered with another user.',
           )
         }
-        phoneDigits = validatePhoneNumber(form.newPhone, true)
+        if (mobileAvailability.status !== 'available') {
+          throw new Error(
+            mobileAvailability.error ?? 'This mobile number is already registered with another user.',
+          )
+        }
         aadhaarDigits = validateAadhaarNumber(form.newAadhaarNumber)
       } catch (err) {
         throw new Error(err instanceof Error ? err.message : 'Invalid user details.')

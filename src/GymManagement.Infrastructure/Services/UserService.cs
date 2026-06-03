@@ -23,6 +23,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly ApplicationDbContext _db;
         private readonly ICurrentUserAccessContext _accessContext;
         private readonly IMobileNumberAvailabilityService _mobileAvailability;
+        private readonly IUsernameAvailabilityService _usernameAvailability;
 
         public UserService(
             IUnitOfWork unitOfWork,
@@ -32,7 +33,8 @@ namespace GymManagement.Infrastructure.Services
             IRbacService rbacService,
             ApplicationDbContext db,
             ICurrentUserAccessContext accessContext,
-            IMobileNumberAvailabilityService mobileAvailability)
+            IMobileNumberAvailabilityService mobileAvailability,
+            IUsernameAvailabilityService usernameAvailability)
         {
             _unitOfWork = unitOfWork;
             _membershipPaymentService = membershipPaymentService;
@@ -42,6 +44,7 @@ namespace GymManagement.Infrastructure.Services
             _db = db;
             _accessContext = accessContext;
             _mobileAvailability = mobileAvailability;
+            _usernameAvailability = usernameAvailability;
         }
 
         public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
@@ -214,21 +217,30 @@ namespace GymManagement.Infrastructure.Services
 
             var accountRole = createUserDto.Role ?? Role.User;
 
-            // Create AuthUser (single auth table) if email and password are provided
-            if (!string.IsNullOrEmpty(createUserDto.Password) && !string.IsNullOrWhiteSpace(createUserDto.Email))
+            // Portal / mobile login (AuthUsers.Email stores the login username)
+            var loginId = !string.IsNullOrWhiteSpace(createUserDto.Username)
+                ? createUserDto.Username.Trim()
+                : createUserDto.Email?.Trim();
+            var password = createUserDto.Password?.Trim();
+            if (!string.IsNullOrEmpty(password) || !string.IsNullOrWhiteSpace(loginId))
             {
-                var emailForAuth = createUserDto.Email.Trim();
-                var emailLower = emailForAuth.ToLowerInvariant();
-                var existingAuth = await _unitOfWork.AuthUsers
-                    .FirstOrDefaultAsync(a => a.Email.ToLower() == emailLower);
-                if (existingAuth != null)
-                    throw new ConflictException("Email already exists in another account.");
+                if (string.IsNullOrWhiteSpace(loginId))
+                    throw new ArgumentException("Username is required for portal and mobile login.");
+                if (string.IsNullOrEmpty(password))
+                    throw new ArgumentException("Password is required.");
+                if (password.Length < 6)
+                    throw new ArgumentException("Password must be at least 6 characters.");
 
-                var passwordHash = PasswordHasher.Hash(createUserDto.Password);
+                var usernameCheck = await _usernameAvailability.CheckAsync(loginId);
+                if (!usernameCheck.IsAvailable)
+                    throw new ConflictException(
+                        usernameCheck.ValidationError ?? UsernameAvailabilityService.DuplicateUsernameMessage);
+
+                var passwordHash = PasswordHasher.Hash(password);
 
                 var authUser = new AuthUser
                 {
-                    Email = emailForAuth,
+                    Email = loginId,
                     PasswordHash = passwordHash,
                     UserId = user.Id
                 };
@@ -248,6 +260,7 @@ namespace GymManagement.Infrastructure.Services
                     createdPlan = plan;
                     var startDate = createUserDto.MembershipStartDate?.Date ?? DateTime.UtcNow.Date;
                     var endDate = startDate.AddDays(plan.DurationDays);
+                    await UserMembershipConflictGuard.EnsureNoActiveMembershipBeforeCreateAsync(_db, user.Id);
                     var membership = new UserMembership
                     {
                         UserId = user.Id,
@@ -257,7 +270,16 @@ namespace GymManagement.Infrastructure.Services
                         Status = MembershipStatus.Active
                     };
                     await _unitOfWork.UserMemberships.AddAsync(membership);
-                    await _unitOfWork.SaveChangesAsync();
+                    try
+                    {
+                        await _unitOfWork.SaveChangesAsync();
+                    }
+                    catch (DbUpdateException ex) when (UserMembershipConflictGuard.IsDuplicateActiveMembershipIndex(ex))
+                    {
+                        var dup = await UserMembershipConflictGuard.TryGetActiveConflictAsync(_db, user.Id)
+                            ?? new ActiveMembershipConflictDto { Message = UserMembershipConflictCodes.Message, UserId = user.Id };
+                        throw new ActiveMembershipConflictException(dup);
+                    }
                     createdMembership = membership;
 
                     await _membershipPaymentService.EnsureBillingForNewMembershipAsync(user, membership, plan);
@@ -389,6 +411,7 @@ namespace GymManagement.Infrastructure.Services
                 {
                     var startDate = updateUserDto.MembershipStartDate?.Date ?? DateTime.UtcNow.Date;
                     var endDate = startDate.AddDays(plan.DurationDays);
+                    await UserMembershipConflictGuard.EnsureNoActiveMembershipBeforeCreateAsync(_db, id);
                     var membership = new UserMembership
                     {
                         UserId = id,
@@ -398,7 +421,16 @@ namespace GymManagement.Infrastructure.Services
                         Status = MembershipStatus.Active
                     };
                     await _unitOfWork.UserMemberships.AddAsync(membership);
-                    await _unitOfWork.SaveChangesAsync();
+                    try
+                    {
+                        await _unitOfWork.SaveChangesAsync();
+                    }
+                    catch (DbUpdateException ex) when (UserMembershipConflictGuard.IsDuplicateActiveMembershipIndex(ex))
+                    {
+                        var dup = await UserMembershipConflictGuard.TryGetActiveConflictAsync(_db, id)
+                            ?? new ActiveMembershipConflictDto { Message = UserMembershipConflictCodes.Message, UserId = id };
+                        throw new ActiveMembershipConflictException(dup);
+                    }
 
                     await _membershipPaymentService.EnsureBillingForNewMembershipAsync(user, membership, plan);
                 }
@@ -427,9 +459,44 @@ namespace GymManagement.Infrastructure.Services
             await _provisioning.EnsureProfilesForUserAsync(id);
 
             if (!string.IsNullOrWhiteSpace(updateUserDto.Password))
-                await ApplyAdminPasswordUpdateAsync(user, updateUserDto.Password, updateUserDto.Email);
+            {
+                var loginIdForNewAccount = !string.IsNullOrWhiteSpace(updateUserDto.Username)
+                    ? updateUserDto.Username
+                    : updateUserDto.Email;
+                await ApplyAdminPasswordUpdateAsync(user, updateUserDto.Password, loginIdForNewAccount);
+            }
+
+            if (updateUserDto.Username != null)
+                await ApplyAdminLoginUsernameUpdateAsync(user.Id, updateUserDto.Username);
 
             return await GetUserByIdAsync(id);
+        }
+
+        private async Task ApplyAdminLoginUsernameUpdateAsync(int userId, string newUsername)
+        {
+            var loginId = newUsername.Trim();
+            if (string.IsNullOrEmpty(loginId))
+                throw new ArgumentException("Username is required.");
+
+            var authUser = (await _unitOfWork.AuthUsers.GetAllAsync())
+                .FirstOrDefault(a => a.UserId == userId);
+            if (authUser == null)
+                throw new ArgumentException(
+                    "This user does not have a login account yet. Set a password to create one, or save a username together with a new password.");
+
+            if (string.Equals(authUser.Email, loginId, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var usernameCheck = await _usernameAvailability.CheckAsync(loginId, userId);
+            if (!usernameCheck.IsAvailable)
+                throw new ConflictException(
+                    usernameCheck.ValidationError ?? UsernameAvailabilityService.DuplicateUsernameMessage);
+
+            authUser.Email = loginId;
+            authUser.FailedLoginAttempts = 0;
+            authUser.LockoutEnd = null;
+            _unitOfWork.AuthUsers.Update(authUser);
+            await _unitOfWork.SaveChangesAsync();
         }
 
         private async Task ApplyAdminPasswordUpdateAsync(User user, string newPassword, string? loginEmail)

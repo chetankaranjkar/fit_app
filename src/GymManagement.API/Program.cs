@@ -225,6 +225,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
 builder.Services.AddScoped<ICurrentUserAccessContext, HttpCurrentUserAccessContext>();
 builder.Services.AddScoped<IMobileNumberAvailabilityService, MobileNumberAvailabilityService>();
+builder.Services.AddScoped<IUsernameAvailabilityService, UsernameAvailabilityService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<IExerciseService, ExerciseService>();
@@ -255,7 +256,9 @@ builder.Services.AddScoped<ISupplementTrackingService, GymManagement.Infrastruct
 builder.Services.AddScoped<IAttendanceLogService, AttendanceLogService>();
 builder.Services.AddScoped<IUserBodyImageService, UserBodyImageService>();
 builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();
-builder.Services.AddScoped<IUserMembershipService, UserMembershipService>();
+        builder.Services.AddScoped<IUserMembershipService, UserMembershipService>();
+        builder.Services.AddScoped<IMembershipApprovalRequestService, MembershipApprovalRequestService>();
+        builder.Services.AddScoped<IMembershipAuditService, MembershipAuditService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IBillingCalculationService, BillingCalculationService>();

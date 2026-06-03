@@ -19,6 +19,15 @@ public static class PermissionCodes
 
     /// <summary>View financial audit logs (admin).</summary>
     public const string ViewFinancialAudit = "VIEW_FINANCIAL_AUDIT";
+
+    /// <summary>Submit membership void/cancel/change approval requests (staff).</summary>
+    public const string SubmitMembershipRequest = "SUBMIT_MEMBERSHIP_REQUEST";
+
+    /// <summary>Approve or reject membership lifecycle requests (admin).</summary>
+    public const string ApproveMembershipRequest = "APPROVE_MEMBERSHIP_REQUEST";
+
+    /// <summary>View membership lifecycle audit trail (admin).</summary>
+    public const string ViewMembershipAudit = "VIEW_MEMBERSHIP_AUDIT";
     public const string TrainerAccess = "TrainerAccess";
     public const string UsersAccess = "UsersAccess";
 

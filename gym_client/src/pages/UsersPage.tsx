@@ -6,7 +6,6 @@ import {
   DataFilterSelect,
   DataToolbar,
   EnterpriseDataGrid,
-  RowActionsMenu,
   StatusBadge,
   type DataGridColumnDef,
 } from '../components/data-grid'
@@ -20,6 +19,7 @@ import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
+import { MemberMembershipsModal } from '../components/users/MemberMembershipsModal'
 import { useWalkthrough } from '../modules/help/hooks/useWalkthrough'
 import { usersService } from '../services/users.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
@@ -36,6 +36,7 @@ import type { Trainer } from '../types/trainer'
 import {
   displayAadhaar,
   formatAadhaarForExport,
+  isValidAadhaarInput,
   normalizeAadhaarInput,
   stripAadhaarFormatting,
   validateAadhaarNumber,
@@ -48,6 +49,7 @@ import {
   validatePhoneNumber,
 } from '../lib/phone'
 import { useMobileNumberAvailability } from '../hooks/useMobileNumberAvailability'
+import { useUsernameAvailability } from '../hooks/useUsernameAvailability'
 import { MobileNumberAvailabilityHint } from '../components/users/MobileNumberAvailabilityHint'
 
 function getDashboardUser() {
@@ -166,38 +168,98 @@ function PaymentDueCell({
   )
 }
 
+function memberDisplayName(user: Pick<User, 'firstName' | 'lastName'>) {
+  return `${user.firstName} ${user.lastName}`.trim() || '—'
+}
+
+function memberInitials(user: Pick<User, 'firstName' | 'lastName'>) {
+  const name = memberDisplayName(user)
+  return name !== '—' ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '—'
+}
+
+function MemberAvatar({
+  user,
+  size = 'md',
+  onClick,
+}: {
+  user: Pick<User, 'firstName' | 'lastName' | 'profilePictureUrl'>
+  size?: 'sm' | 'md'
+  onClick?: () => void
+}) {
+  const name = memberDisplayName(user)
+  const initials = memberInitials(user)
+  const frameClass =
+    size === 'sm'
+      ? 'h-8 w-8 rounded-lg text-[10px]'
+      : 'h-10 w-10 rounded-xl text-sm shadow-md'
+
+  const frame = (
+    <span
+      className={`relative flex shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-blue-500/50 to-purple-600/50 font-bold text-white ring-1 ring-white/10 transition-all duration-300 ease-out group-hover/avatar:z-20 group-hover/avatar:scale-[1.28] group-hover/avatar:shadow-lg group-hover/avatar:shadow-black/40 group-hover/avatar:ring-2 group-hover/avatar:ring-blue-400/50 ${frameClass}`}
+    >
+      {user.profilePictureUrl ? (
+        <img
+          src={user.profilePictureUrl}
+          alt=""
+          className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/avatar:scale-[1.5]"
+        />
+      ) : (
+        <span className="transition-transform duration-300 ease-out group-hover/avatar:scale-125">
+          {initials}
+        </span>
+      )}
+    </span>
+  )
+
+  if (!onClick) {
+    return <span className="group/avatar relative inline-flex">{frame}</span>
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`View ${name}`}
+      className="group/avatar relative z-0 inline-flex shrink-0 rounded-xl transition-transform hover:z-20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
+    >
+      {frame}
+    </button>
+  )
+}
+
 function UserCard({
   user,
   onView,
+  onViewMemberships,
   onEdit,
-  onDelete,
   onDeactivate,
   onActivate,
   onCollectPayment,
 }: {
   user: User
   onView: (u: User) => void
+  onViewMemberships: (u: User) => void
   onEdit: (u: User) => void
-  onDelete: (id: number, name: string) => void
   onDeactivate: (u: User) => void
   onActivate: (u: User) => void
   onCollectPayment?: (u: User) => void
 }) {
-  const name = `${user.firstName} ${user.lastName}`.trim() || '—'
+  const name = memberDisplayName(user)
   const age = getAge(user.dateOfBirth)
-  const initials = name !== '—' ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '—'
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.06] hover:shadow-lg hover:shadow-black/20">
+    <div className="group relative overflow-visible rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.06] hover:shadow-lg hover:shadow-black/20">
       {/* Top: avatar + name + status */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-500/50 to-purple-600/50 text-sm font-bold text-white shadow-md ring-1 ring-white/10">
-            {user.profilePictureUrl
-              ? <img src={user.profilePictureUrl} alt="" className="h-full w-full object-cover" />
-              : initials}
-          </div>
+        <div className="flex min-w-0 items-center gap-3">
+          <MemberAvatar user={user} onClick={() => onView(user)} />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white leading-tight">{name}</p>
+            <button
+              type="button"
+              onClick={() => onView(user)}
+              className="block max-w-full truncate text-left text-sm font-semibold leading-tight text-white transition hover:text-blue-200 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 rounded-sm"
+            >
+              {name}
+            </button>
             {age != null && <p className="text-[11px] text-slate-500">Age {age}</p>}
           </div>
         </div>
@@ -236,13 +298,13 @@ function UserCard({
       <div className="my-3 h-px bg-white/5" />
 
       {/* Actions */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-3 gap-1.5">
         <button
           type="button"
-          onClick={() => onView(user)}
-          className="rounded-lg bg-white/5 py-2 text-[11px] font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+          onClick={() => onViewMemberships(user)}
+          className="rounded-lg bg-violet-500/10 py-2 text-[11px] font-semibold text-violet-200 transition hover:bg-violet-500/20"
         >
-          View
+          Memberships
         </button>
         <button
           type="button"
@@ -268,13 +330,6 @@ function UserCard({
             On
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => onDelete(user.id, name)}
-          className="rounded-lg bg-rose-500/10 py-2 text-[11px] font-semibold text-rose-300 transition hover:bg-rose-500/20"
-        >
-          Del
-        </button>
       </div>
     </div>
   )
@@ -315,13 +370,18 @@ export function UsersPage() {
   const [isAdding, setIsAdding] = useState(false)
   const [form, setForm] = useState<CreateUserDto>(defaultCreateForm)
   const mobileAvailability = useMobileNumberAvailability(form.phone ?? '', { enabled: isAdding })
+  const usernameAvailability = useUsernameAvailability(form.username ?? '', {
+    enabled: isAdding && Boolean(form.username?.trim()),
+  })
   const [formError, setFormError] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [emergencyPhoneError, setEmergencyPhoneError] = useState<string | null>(null)
   const [aadhaarError, setAadhaarError] = useState<string | null>(null)
   const [usernameError, setUsernameError] = useState<string | null>(null)
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  const MIN_LOGIN_PASSWORD_LENGTH = 6
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
@@ -330,6 +390,7 @@ export function UsersPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [importLog, setImportLog] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
+  const [membershipModalUser, setMembershipModalUser] = useState<User | null>(null)
   const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true
   )
@@ -467,17 +528,13 @@ export function UsersPage() {
       setEmergencyPhoneError(null)
       setAadhaarError(null)
       setUsernameError(null)
+      setPasswordError(null)
       const p = created?.pendingPaymentCollection
       if (p?.membershipId && p.membershipPaymentId) {
         navigate(`/dashboard/payments/collect?membershipId=${p.membershipId}&userId=${p.userId}`)
       }
     },
     onError: (err: unknown) => setFormError(getCreateUserErrorMessage(err)),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => usersService.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   })
 
   const updateMutation = useMutation({
@@ -493,7 +550,7 @@ export function UsersPage() {
     setEmailError(null)
     setPhoneError(null)
     setUsernameError(null)
-    setUsernameAvailable(null)
+    setPasswordError(null)
   }
 
   /** Open add-member modal when coming from dashboard (+ sessionStorage survives Strict Mode remounts) */
@@ -515,7 +572,7 @@ export function UsersPage() {
     setEmailError(null)
     setPhoneError(null)
     setUsernameError(null)
-    setUsernameAvailable(null)
+    setPasswordError(null)
     if (st?.openAddMember) {
       navigate(location.pathname, { replace: true, state: {} })
     }
@@ -536,7 +593,7 @@ export function UsersPage() {
     setEmailError(null)
     setPhoneError(null)
     setUsernameError(null)
-    setUsernameAvailable(null)
+    setPasswordError(null)
   }
 
   const handleEmailBlur = () => {
@@ -565,7 +622,11 @@ export function UsersPage() {
   }
 
   const handlePhoneBlur = () => {
-    setPhoneError(mobileAvailability.error)
+    if (mobileAvailability.status === 'taken' || mobileAvailability.status === 'invalid_format') {
+      setPhoneError(mobileAvailability.error)
+    } else {
+      setPhoneError(null)
+    }
   }
 
   const handleEmergencyPhoneBlur = () => {
@@ -580,13 +641,27 @@ export function UsersPage() {
   const handleUsernameBlur = () => {
     const username = form.username?.trim()
     if (!username) {
-      setUsernameError(null)
-      setUsernameAvailable(null)
+      setUsernameError('Username is required.')
       return
     }
-    const exists = users.some((u) => (u.username ?? '').toLowerCase() === username.toLowerCase())
-    setUsernameError(exists ? 'This username is already in use.' : null)
-    setUsernameAvailable(exists ? false : true)
+    if (usernameAvailability.status === 'taken') {
+      setUsernameError(usernameAvailability.error)
+    } else {
+      setUsernameError(null)
+    }
+  }
+
+  const handlePasswordBlur = () => {
+    const password = form.password ?? ''
+    if (!password.trim()) {
+      setPasswordError('Password is required.')
+      return
+    }
+    if (password.length < MIN_LOGIN_PASSWORD_LENGTH) {
+      setPasswordError(`Password must be at least ${MIN_LOGIN_PASSWORD_LENGTH} characters.`)
+      return
+    }
+    setPasswordError(null)
   }
 
   const handleSubmitAdd = (e: React.FormEvent) => {
@@ -596,12 +671,29 @@ export function UsersPage() {
       setFormError('First name, last name and email are required.')
       return
     }
-    if (emailError || usernameError || phoneError || emergencyPhoneError || aadhaarError) {
+    if (emailError || usernameError || passwordError || phoneError || emergencyPhoneError || aadhaarError) {
       setFormError('Please fix the errors above before saving.')
       return
     }
     const email = form.email?.trim().toLowerCase()
     const username = form.username?.trim()
+    const password = form.password ?? ''
+    if (!username) {
+      setUsernameError('Username is required.')
+      setFormError('Username is required for portal and mobile login.')
+      return
+    }
+    if (!password.trim()) {
+      setPasswordError('Password is required.')
+      setFormError('Password is required for portal and mobile login.')
+      return
+    }
+    if (password.length < MIN_LOGIN_PASSWORD_LENGTH) {
+      const pwdMsg = `Password must be at least ${MIN_LOGIN_PASSWORD_LENGTH} characters.`
+      setPasswordError(pwdMsg)
+      setFormError(pwdMsg)
+      return
+    }
     let phoneDigits: string
     let emergencyPhoneDigits: string | undefined
     try {
@@ -619,15 +711,46 @@ export function UsersPage() {
       setFormError('This email is already registered.')
       return
     }
-    if (!mobileAvailability.isAvailable) {
+    const phoneFormatErr = getPhoneValidationError(form.phone, true)
+    if (phoneFormatErr) {
+      setPhoneError(phoneFormatErr)
+      setFormError(phoneFormatErr)
+      return
+    }
+    if (mobileAvailability.status === 'checking' || mobileAvailability.status === 'idle') {
+      const msg = 'Please wait — checking mobile number…'
+      setPhoneError(msg)
+      setFormError(msg)
+      return
+    }
+    if (mobileAvailability.status === 'taken') {
       const msg = mobileAvailability.error ?? PHONE_MESSAGES.duplicate
       setPhoneError(msg)
       setFormError(msg)
       return
     }
-    if (username && users.some((u) => (u.username ?? '').toLowerCase() === username.toLowerCase())) {
-      setUsernameError('This username is already in use.')
-      setFormError('This username is already in use.')
+    if (mobileAvailability.status !== 'available') {
+      const msg = mobileAvailability.error ?? PHONE_MESSAGES.duplicate
+      setPhoneError(msg)
+      setFormError(msg)
+      return
+    }
+    if (usernameAvailability.status === 'checking' || usernameAvailability.status === 'idle') {
+      const msg = 'Please wait — checking username…'
+      setUsernameError(msg)
+      setFormError(msg)
+      return
+    }
+    if (usernameAvailability.status === 'taken') {
+      const msg = usernameAvailability.error ?? 'This username is already in use.'
+      setUsernameError(msg)
+      setFormError(msg)
+      return
+    }
+    if (usernameAvailability.status !== 'available') {
+      const msg = usernameAvailability.error ?? 'This username is already in use.'
+      setUsernameError(msg)
+      setFormError(msg)
       return
     }
     let aadhaarDigits: string | undefined
@@ -659,8 +782,8 @@ export function UsersPage() {
       emergencyContact: form.emergencyContact?.trim() || undefined,
       emergencyPhone: emergencyPhoneDigits,
       preferredGymTime: form.preferredGymTime?.trim() || undefined,
-      username: form.username?.trim() || undefined,
-      password: form.password || undefined,
+      username,
+      password,
       role: 1,
       planId: form.planId && form.planId > 0 ? form.planId : undefined,
       membershipStartDate: form.membershipStartDate || undefined,
@@ -677,6 +800,10 @@ export function UsersPage() {
     navigate(`/dashboard/users/${user.id}?mode=view`)
   }
 
+  const handleViewMemberships = (user: User) => {
+    setMembershipModalUser(user)
+  }
+
   const handleCollectPayment = (user: User) => {
     if (!user.openMembershipId) return
     navigate(`/dashboard/payments/collect?membershipId=${user.openMembershipId}&userId=${user.id}`)
@@ -684,11 +811,6 @@ export function UsersPage() {
 
   const handleEdit = (user: User) => {
     navigate(`/dashboard/users/${user.id}`)
-  }
-
-  const handleDelete = (id: number, name: string) => {
-    if (!window.confirm(`Delete user "${name}"? This cannot be undone.`)) return
-    deleteMutation.mutate(id)
   }
 
   const handleDeactivate = (user: User) => {
@@ -710,23 +832,22 @@ export function UsersPage() {
         minWidth: 250,
         width: 280,
         sortable: true,
+        overflowVisible: true,
         accessorFn: (u) => `${u.firstName} ${u.lastName}`.trim(),
         cell: ({ row }) => {
-          const name = `${row.firstName} ${row.lastName}`.trim() || '—'
+          const name = memberDisplayName(row)
           const age = getAge(row.dateOfBirth)
-          const initials =
-            name !== '—' ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '—'
           return (
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-blue-500/40 to-purple-600/40 text-[10px] font-bold text-white ring-1 ring-white/10">
-                {row.profilePictureUrl ? (
-                  <img src={row.profilePictureUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  initials
-                )}
-              </div>
+              <MemberAvatar user={row} size="sm" onClick={() => handleViewUser(row)} />
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-white">{name}</p>
+                <button
+                  type="button"
+                  onClick={() => handleViewUser(row)}
+                  className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-blue-200 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 rounded-sm"
+                >
+                  {name}
+                </button>
                 <p className="truncate text-[10px] text-slate-500">
                   {row.email || '—'}
                   {age != null ? ` · ${age}y` : ''}
@@ -793,48 +914,49 @@ export function UsersPage() {
       },
       {
         id: 'actions',
-        header: '',
-        width: 72,
-        minWidth: 72,
+        header: 'Actions',
+        width: 248,
+        minWidth: 228,
         align: 'right',
+        overflowVisible: true,
         cell: ({ row }) => (
-          <RowActionsMenu
-            row={row}
-            actions={[
-              { id: 'view', label: 'View', onClick: handleViewUser },
-              { id: 'edit', label: 'Edit', onClick: handleEdit },
-              {
-                id: 'collect',
-                label: 'Collect payment',
-                onClick: handleCollectPayment,
-                hidden: (u) => !u.openMembershipId,
-              },
-              row.isActive
-                ? {
-                    id: 'deactivate',
-                    label: 'Deactivate',
-                    variant: 'warning',
-                    onClick: handleDeactivate,
-                  }
-                : {
-                    id: 'activate',
-                    label: 'Activate',
-                    variant: 'success',
-                    onClick: handleActivate,
-                  },
-              {
-                id: 'delete',
-                label: 'Delete',
-                variant: 'danger',
-                onClick: (u) =>
-                  handleDelete(u.id, `${u.firstName} ${u.lastName}`.trim() || 'User'),
-              },
-            ]}
-          />
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => handleViewMemberships(row)}
+              className="rounded-lg bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-200 transition hover:bg-violet-500/20"
+            >
+              Memberships
+            </button>
+            <button
+              type="button"
+              onClick={() => handleEdit(row)}
+              className="rounded-lg bg-blue-500/10 px-2.5 py-1 text-[11px] font-semibold text-blue-300 transition hover:bg-blue-500/20"
+            >
+              Edit
+            </button>
+            {row.isActive ? (
+              <button
+                type="button"
+                onClick={() => handleDeactivate(row)}
+                className="rounded-lg bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20"
+              >
+                Deactivate
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleActivate(row)}
+                className="rounded-lg bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+              >
+                Activate
+              </button>
+            )}
+          </div>
         ),
       },
     ],
-    [handleActivate, handleCollectPayment, handleDeactivate, handleDelete, handleEdit, handleViewUser],
+    [handleActivate, handleDeactivate, handleEdit, handleViewMemberships],
   )
 
   const handleExportFiltered = () => {
@@ -912,6 +1034,14 @@ export function UsersPage() {
           continue
         }
         seenPhones.add(r.phone)
+        if (!r.username?.trim()) {
+          log.push(`${r.email}: username is required.`)
+          continue
+        }
+        if (!r.password || r.password.length < MIN_LOGIN_PASSWORD_LENGTH) {
+          log.push(`${r.email}: password is required (min ${MIN_LOGIN_PASSWORD_LENGTH} characters).`)
+          continue
+        }
         const payload: CreateUserDto = {
           firstName: r.firstName,
           lastName: r.lastName,
@@ -1152,6 +1282,8 @@ export function UsersPage() {
             title="Add user"
             size="wide"
             scrollable
+            closeOnBackdropClick={false}
+            closeOnEscape={false}
           >
             <form onSubmit={handleSubmitAdd} className="space-y-4">
               {/* Hidden inputs so Chrome autofill targets these instead of the visible Username/Password */}
@@ -1315,38 +1447,51 @@ export function UsersPage() {
                 </div>
               </div>
 
-              {/* Login (optional) */}
+              {/* Login credentials (required) */}
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <h3 className="mb-0.5 text-sm font-semibold text-white">Login (optional)</h3>
+                <h3 className="mb-0.5 text-sm font-semibold text-white">
+                  Login credentials <span className="text-rose-400">*</span>
+                </h3>
                 <p className="mb-2 text-xs text-slate-400">
-                  Leave blank if this user will not log in. Role above applies when you set a username and password.
+                  Username and password are required. The member uses these credentials to sign in to the web portal
+                  and mobile app.
                 </p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Input
-                    label="Username"
-                    name="new_user_login"
-                    autoComplete="off"
-                    value={form.username ?? ''}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, username: e.target.value }))
-                      setUsernameError(null)
-                      setUsernameAvailable(null)
-                    }}
-                    onBlur={handleUsernameBlur}
-                    placeholder="Leave blank if no login"
-                    error={usernameError ?? undefined}
-                    success={usernameAvailable === true}
-                    successMessage="Username is available."
-                    className="!rounded-lg !px-3 !py-2 text-sm"
-                  />
+                  <div>
+                    <Input
+                      label="Username"
+                      name="new_user_login"
+                      autoComplete="off"
+                      value={form.username ?? ''}
+                      onChange={(e) => {
+                        setForm((f) => ({ ...f, username: e.target.value }))
+                        setUsernameError(null)
+                      }}
+                      onBlur={handleUsernameBlur}
+                      placeholder="e.g. rajesh.kumar"
+                      required
+                      error={usernameError ?? usernameAvailability.error ?? undefined}
+                      className="!rounded-lg !px-3 !py-2 text-sm"
+                    />
+                    <MobileNumberAvailabilityHint
+                      status={usernameAvailability.status}
+                      message={usernameAvailability.message}
+                    />
+                  </div>
                   <Input
                     label="Password"
                     type="password"
                     name="new_user_pass"
                     autoComplete="new-password"
                     value={form.password ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                    placeholder="If username set"
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, password: e.target.value }))
+                      setPasswordError(null)
+                    }}
+                    onBlur={handlePasswordBlur}
+                    placeholder={`Min. ${MIN_LOGIN_PASSWORD_LENGTH} characters`}
+                    required
+                    error={passwordError ?? undefined}
                     className="!rounded-lg !px-3 !py-2 text-sm"
                   />
                 </div>
@@ -1531,8 +1676,9 @@ export function UsersPage() {
                 <strong className="text-slate-200">lastName</strong>,{' '}
                 <strong className="text-slate-200">email</strong>,{' '}
                 <strong className="text-slate-200">dateOfBirth</strong> (YYYY-MM-DD),{' '}
-                <strong className="text-slate-200">gender</strong>. Optional: phone, isActive,
-                username, password.
+                <strong className="text-slate-200">gender</strong>,{' '}
+                <strong className="text-slate-200">username</strong>,{' '}
+                <strong className="text-slate-200">password</strong> (min 6 characters). Optional: phone, isActive.
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -1612,8 +1758,8 @@ export function UsersPage() {
                         key={u.id}
                         user={u}
                         onView={handleViewUser}
+                        onViewMemberships={handleViewMemberships}
                         onEdit={handleEdit}
-                        onDelete={handleDelete}
                         onDeactivate={handleDeactivate}
                         onActivate={handleActivate}
                         onCollectPayment={handleCollectPayment}
@@ -1653,6 +1799,12 @@ export function UsersPage() {
         </section>
       </div>
       </DataPageShell>
+
+      <MemberMembershipsModal
+        user={membershipModalUser}
+        open={membershipModalUser != null}
+        onClose={() => setMembershipModalUser(null)}
+      />
     </DashboardLayout>
   )
 }

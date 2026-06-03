@@ -89,9 +89,10 @@ namespace GymManagement.Core.DTOs
         public string? ProfilePictureUrl { get; set; }
         public string? PreferredGymTime { get; set; }
         public bool IsActive { get; set; } = true;
+        /// <summary>Login username for portal / mobile (stored as <c>AuthUsers.Email</c>).</summary>
         public string? Username { get; set; }
         public string? Password { get; set; }
-        /// <summary>Role for the login account when Email/Password are provided: User (Member), Instructor, or Admin. Defaults to User.</summary>
+        /// <summary>Role for the login account: User (Member), Instructor, or Admin. Defaults to User.</summary>
         public Role? Role { get; set; }
         /// <summary>Optional. If set, a membership will be created for the user.</summary>
         public int? PlanId { get; set; }
@@ -133,7 +134,9 @@ namespace GymManagement.Core.DTOs
         public List<int>? UserTypeIds { get; set; }
         /// <summary>When set by an admin, updates or creates the member login password (min 6 characters).</summary>
         public string? Password { get; set; }
-        /// <summary>Login email when creating a new AuthUser (required if the user has no login yet).</summary>
+        /// <summary>Portal / mobile login username (<c>AuthUsers.Email</c>). Updates existing login or sets id when creating a new account.</summary>
+        public string? Username { get; set; }
+        /// <summary>Fallback login id when creating a new AuthUser if <see cref="Username"/> is empty.</summary>
         public string? Email { get; set; }
     }
 }

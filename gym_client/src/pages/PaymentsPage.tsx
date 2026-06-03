@@ -657,6 +657,12 @@ export function PaymentsPage() {
               Waive-off requests
             </Link>
             <Link
+              to="/dashboard/payments/membership-approvals"
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
+            >
+              Membership approvals
+            </Link>
+            <Link
               to="/dashboard/payments/reports"
               className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
             >

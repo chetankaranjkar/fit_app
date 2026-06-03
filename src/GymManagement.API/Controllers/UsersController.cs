@@ -20,17 +20,20 @@ namespace GymManagement.API.Controllers
     {
         private readonly IUserService _userService;
         private readonly IMobileNumberAvailabilityService _mobileAvailability;
+        private readonly IUsernameAvailabilityService _usernameAvailability;
         private readonly IRbacService _rbacService;
         private readonly WebRootImageStorage _imageStorage;
 
         public UsersController(
             IUserService userService,
             IMobileNumberAvailabilityService mobileAvailability,
+            IUsernameAvailabilityService usernameAvailability,
             IRbacService rbacService,
             WebRootImageStorage imageStorage)
         {
             _userService = userService;
             _mobileAvailability = mobileAvailability;
+            _usernameAvailability = usernameAvailability;
             _rbacService = rbacService;
             _imageStorage = imageStorage;
         }
@@ -43,6 +46,17 @@ namespace GymManagement.API.Controllers
             [FromQuery] int? excludeUserId = null)
         {
             var result = await _mobileAvailability.CheckAsync(mobile, excludeUserId);
+            return Ok(result);
+        }
+
+        /// <summary>Real-time check: is this login username available (<c>AuthUsers.Email</c>).</summary>
+        [HttpGet("check-username")]
+        [HasPermission(PermissionCodes.UsersAccess)]
+        public async Task<ActionResult<UsernameAvailabilityDto>> CheckUsernameAvailability(
+            [FromQuery] string? username,
+            [FromQuery] int? excludeUserId = null)
+        {
+            var result = await _usernameAvailability.CheckAsync(username, excludeUserId);
             return Ok(result);
         }
 

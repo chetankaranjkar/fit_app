@@ -2,8 +2,14 @@ export type MembershipStatus =
   | 'Active'
   | 'Expired'
   | 'Paused'
+  | 'Frozen'
+  | 'Cancelled'
+  | 'Pending'
   | 'ActivePendingPayment'
   | 'PartialPayment'
+  | 'VoidPending'
+  | 'Voided'
+  | 'Transferred'
 
 export interface UserMembership {
   id: number
@@ -25,6 +31,7 @@ export interface CreateUserMembershipDto {
 }
 
 export interface UpdateUserMembershipDto {
+  planId?: number | null
   startDate?: string | null
   endDate?: string | null
   status?: MembershipStatus | null

@@ -20,6 +20,8 @@ export type DataGridColumnDef<T> = {
   cell?: (ctx: { row: T; value: unknown }) => ReactNode
   /** Header filter placeholder */
   filterPlaceholder?: string
+  /** Keep cell overflow visible (auto-enabled for id `actions`) */
+  overflowVisible?: boolean
 }
 
 export type DataGridSortState = {

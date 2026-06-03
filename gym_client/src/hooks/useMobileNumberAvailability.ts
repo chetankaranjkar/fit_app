@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getPhoneValidationError, normalizePhoneNumber } from '../lib/phone'
+import { getPhoneValidationError, normalizePhoneNumber, PHONE_MESSAGES } from '../lib/phone'
 import { usersService } from '../services/users.service'
 
 const DEBOUNCE_MS = 400
 
-export type MobileAvailabilityStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
+export type MobileAvailabilityStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'taken'
+  | 'invalid_format'
 
 export function useMobileNumberAvailability(
   rawMobile: string,
@@ -23,37 +28,37 @@ export function useMobileNumberAvailability(
   const normalized = formatError ? null : normalizePhoneNumber(debounced)
   const canCheck = enabled && normalized != null && normalized.length === 10
 
-  const { data, isFetching, isError } = useQuery({
+  const { data, isFetching } = useQuery({
     queryKey: ['mobile-availability', normalized, options?.excludeUserId],
-    queryFn: async () => (await usersService.checkMobileAvailability(normalized!, options?.excludeUserId)).data,
+    queryFn: () => usersService.checkMobileAvailability(normalized!, options?.excludeUserId),
     enabled: canCheck,
     staleTime: 30_000,
-    retry: 0,
+    retry: 1,
   })
 
   let status: MobileAvailabilityStatus = 'idle'
   if (debounced.length === 0) status = 'idle'
-  else if (formatError) status = 'invalid'
+  else if (formatError) status = 'invalid_format'
   else if (!canCheck) status = 'idle'
   else if (isFetching) status = 'checking'
-  else if (isError) status = 'invalid'
   else if (data?.isAvailable) status = 'available'
-  else status = 'taken'
+  else if (data) status = 'taken'
+  else status = 'idle'
 
   const message =
     status === 'available'
-      ? '✓ Mobile Number Available'
+      ? '✓ Mobile number available'
       : status === 'taken'
-        ? '✗ Mobile Number Already Registered'
-        : status === 'invalid'
-          ? formatError ?? data?.validationError ?? 'Invalid mobile number'
+        ? '✗ Mobile number already registered'
+        : status === 'invalid_format'
+          ? (formatError ?? PHONE_MESSAGES.length)
           : null
 
   const error =
     status === 'taken'
-      ? data?.validationError ?? 'This mobile number is already registered with another user.'
-      : status === 'invalid'
-        ? formatError ?? data?.validationError ?? null
+      ? (data?.validationError ?? PHONE_MESSAGES.duplicate)
+      : status === 'invalid_format'
+        ? formatError
         : null
 
   return {

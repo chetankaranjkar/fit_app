@@ -1315,12 +1315,20 @@ function EditTrainerModal({
     let emergencyPhoneDigits: string | null
     let aadhaarDigits: string | undefined
     try {
-      if (!mobileAvailability.isAvailable && mobileAvailability.status !== 'idle') {
+      phoneDigits = validatePhoneNumber(personalForm.phone, true)
+      if (mobileAvailability.status === 'checking' || mobileAvailability.status === 'idle') {
+        throw new Error('Please wait — checking mobile number…')
+      }
+      if (mobileAvailability.status === 'taken' || mobileAvailability.status === 'invalid_format') {
         throw new Error(
           mobileAvailability.error ?? 'This mobile number is already registered with another user.',
         )
       }
-      phoneDigits = validatePhoneNumber(personalForm.phone, true)
+      if (mobileAvailability.status !== 'available') {
+        throw new Error(
+          mobileAvailability.error ?? 'This mobile number is already registered with another user.',
+        )
+      }
       emergencyPhoneDigits = validateOptionalPhoneNumber(personalForm.emergencyPhone) ?? null
       const rawAadhaar = personalForm.aadhaarNumber.trim()
       if (rawAadhaar) aadhaarDigits = validateAadhaarNumber(rawAadhaar)

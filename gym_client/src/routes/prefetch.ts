@@ -29,6 +29,8 @@ const loaders: Record<string, Loader> = {
   '/dashboard/payments/collect': () => import('../pages/CollectMembershipPaymentPage'),
   '/dashboard/payments/history': () => import('../pages/MembershipPaymentHistoryPage'),
   '/dashboard/payments/waive-offs': () => import('../pages/WaiveOffRequestsPage'),
+  '/dashboard/payments/membership-approvals': () =>
+    import('../pages/MembershipApprovalRequestsPage'),
   '/dashboard/payments/reports': () => import('../pages/BillingReportsPage'),
   '/dashboard/security': () => import('../pages/SecurityPage'),
   '/dashboard/roles': () => import('../pages/RolesPage'),

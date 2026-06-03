@@ -68,27 +68,46 @@ namespace GymManagement.Infrastructure.Services
         /// <inheritdoc />
         public async Task<IReadOnlyList<AppRoleDto>> GetUserAppRolesAsync(int userId)
         {
+            var map = await GetUserAppRolesByUserIdsAsync(new[] { userId });
+            return map.TryGetValue(userId, out var roles) ? roles : Array.Empty<AppRoleDto>();
+        }
+
+        /// <inheritdoc />
+        public async Task<IReadOnlyDictionary<int, IReadOnlyList<AppRoleDto>>> GetUserAppRolesByUserIdsAsync(
+            IReadOnlyCollection<int> userIds)
+        {
+            if (userIds.Count == 0)
+                return new Dictionary<int, IReadOnlyList<AppRoleDto>>();
+
+            var idSet = userIds.Distinct().ToList();
             var rows = await _db.UserRoles
                 .AsNoTracking()
-                .Where(ur => ur.UserId == userId)
+                .Where(ur => idSet.Contains(ur.UserId))
                 .Include(ur => ur.Role)
                     .ThenInclude(r => r.RolePermissions)
                 .ToListAsync();
 
             return rows
-                .GroupBy(ur => ur.RoleId)
-                .Select(g => g.First().Role)
-                .OrderBy(r => r.Name)
-                .Select(r => new AppRoleDto
-                {
-                    Id = r.Id,
-                    Name = r.Name,
-                    Description = r.Description,
-                    IsActive = r.IsActive,
-                    PermissionIds = r.RolePermissions.Select(rp => rp.PermissionId).Distinct().ToList()
-                })
-                .ToList();
+                .GroupBy(ur => ur.UserId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyList<AppRoleDto>)g
+                        .GroupBy(ur => ur.RoleId)
+                        .Select(grp => grp.First().Role)
+                        .OrderBy(r => r.Name)
+                        .Select(MapAppRole)
+                        .ToList());
         }
+
+        private static AppRoleDto MapAppRole(AppRole r) =>
+            new()
+            {
+                Id = r.Id,
+                Name = r.Name,
+                Description = r.Description,
+                IsActive = r.IsActive,
+                PermissionIds = r.RolePermissions.Select(rp => rp.PermissionId).Distinct().ToList(),
+            };
 
         /// <summary>
         /// <c>UserRoles</c> → <c>Role.RolePermissions</c> → <see cref="Permission"/> (flattened with EF <c>SelectMany</c>).

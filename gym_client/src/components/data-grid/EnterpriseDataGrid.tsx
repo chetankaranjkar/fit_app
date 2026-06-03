@@ -260,6 +260,7 @@ export function EnterpriseDataGrid<T>({
           const meta = cell.column.columnDef.meta as DataGridColumnDef<T>
           const width = getColWidth(meta)
           const isSticky = stickyFirstColumn && (meta.sticky || colIndex === 0)
+          const overflowVisible = meta.overflowVisible === true || meta.id === 'actions'
           return (
             <td
               key={cell.id}
@@ -269,7 +270,8 @@ export function EnterpriseDataGrid<T>({
                 ...(isSticky ? { left: stickyLeft(colIndex) } : {}),
               }}
               className={[
-                'h-[52px] max-h-[52px] px-3 align-middle text-sm text-slate-200',
+                'h-[52px] px-3 align-middle text-sm text-slate-200',
+                overflowVisible ? 'overflow-visible' : 'max-h-[52px] overflow-hidden',
                 isSticky
                   ? 'sticky z-10 bg-[rgba(11,11,26,0.98)] group-hover:bg-[rgba(18,16,36,0.98)]'
                   : '',
@@ -277,7 +279,7 @@ export function EnterpriseDataGrid<T>({
                 meta.align === 'right' ? 'text-right' : meta.align === 'center' ? 'text-center' : '',
               ].join(' ')}
             >
-              <div className="max-w-full truncate">
+              <div className={overflowVisible ? 'max-w-full overflow-visible' : 'max-w-full truncate'}>
                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
               </div>
             </td>

@@ -1,7 +1,8 @@
 import type { MobileAvailabilityStatus } from '../../hooks/useMobileNumberAvailability'
+import type { UsernameAvailabilityStatus } from '../../hooks/useUsernameAvailability'
 
 type Props = {
-  status: MobileAvailabilityStatus
+  status: MobileAvailabilityStatus | UsernameAvailabilityStatus
   message: string | null
 }
 

@@ -226,7 +226,8 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 | Auth | `/api/Auth` |
 | Users | `/api/Users` |
 | User aggregate | `GET /api/Users/{id}/aggregate` |
-| Assign role | `POST /api/Users/{id}/roles` body `{ roleCode }` |
+| Assign role | `POST /api/Users/{id}/roles` body `{ roleCode }` (or Config UI: `POST /api/Roles/users/{id}/roles`) |
+| Roles & user assignment UI | `/dashboard/roles` — tabs **Role permissions** / **User roles**; APIs `GET /api/Roles/user-assignments`, assign/revoke under `/api/Roles/users/...` |
 | Members list | `GET /api/Members` |
 | Staff list | `GET /api/Staff` |
 | Trainers | `/api/Trainers`, `GET/POST .../clients` |
@@ -310,6 +311,47 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 
 ---
 
+## 11b. User memberships (one occupying membership per member)
+
+**Rule:** A member may have only **one occupying** membership at a time: `Active`, `ActivePendingPayment`, `PartialPayment`, `Frozen`, `Pending`, or `VoidPending`. While any of these exists, **no new membership row may be created** — use collect payment (renew) or edit the existing row (upgrade). Returns **409** (`ACTIVE_MEMBERSHIP_EXISTS`) with plan, status, dates, remaining days, and actions (view / renew / upgrade). `Expired`, `Cancelled`, and `Voided` allow a new membership.
+
+**Enforced in:** DB unique index `IX_user_memberships_one_active_per_user` (Active only), `UserMembershipConflictGuard` (all occupying statuses), `UserMembershipService` / `UserService`, `GET /api/UserMemberships/active-conflict/{userId}`, and `/dashboard/user-memberships` conflict modal.
+
+**Existing duplicates** (e.g. two `ActivePendingPayment` rows for Rajesh Yadav) must be fixed manually: void/cancel or expire one row, then use the remaining membership for payment or upgrade.
+
+---
+
+## 11c. Membership lifecycle (no delete)
+
+**Policy:** `user_memberships` rows are **never** physically deleted. Staff request changes; admins approve. Terminal statuses: `Cancelled`, `Voided`, `Transferred`.
+
+| Status | Meaning | Badge |
+|--------|---------|-------|
+| `Active` | Current paid/active | Green |
+| `Expired` | End date passed | Gray |
+| `Cancelled` | Admin-approved cancel | Orange |
+| `VoidPending` | Void requested | Yellow |
+| `Voided` | Admin-approved void | Red |
+| `Transferred` | Transferred out | Blue |
+
+**Void flow:** Memberships grid → **Request void** (not delete) → `POST /api/membership-requests` (`RequestType: Void`) → membership → `VoidPending` → admin **Membership approvals** → **Approve** (ADMIN role or `APPROVE_MEMBERSHIP_REQUEST`) → `Voided`. Voided rows are hidden from the default membership list; history remains under member **Membership History** and `GET /api/membership-audit`. Payments and audit rows are retained. **Created** audit entries show who originally added a duplicate row.
+
+**Post-payment edits:** Plan/date/status changes after the first completed installment require an approval request (`DateChange`, `PlanChange`, `FeeChange`, etc.).
+
+**Routes:** `/dashboard/payments/membership-approvals` (admin queue), user detail → **Membership History** tab (all statuses visible).
+
+**APIs:** `POST/GET /api/membership-requests`, `POST …/approve`, `POST …/reject`, `GET /api/membership-audit`. `DELETE /api/UserMemberships/{id}` returns **400** with *"Membership deletion is not allowed. Submit a void request."*
+
+**Tables:** `membership_approval_requests`, `membership_audit_logs`.
+
+**Permissions:** `Payments` (submit/list), `APPROVE_MEMBERSHIP_REQUEST` (admin approve/reject), `VIEW_MEMBERSHIP_AUDIT` (audit log).
+
+**Migrate:** `20260603092400_MembershipLifecycleAndUniqueActiveMembership`.
+
+**Dashboard:** Active member count = distinct users with `Status = Active` only. Revenue excludes payments tied to `Voided` memberships.
+
+---
+
 ## 12. Enterprise membership billing & payments
 
 **Tables:** `membership_payments` (billing header per `user_memberships`), `membership_payment_transactions` (installments with receipt, status, void/refund audit), `waive_off_requests`, `financial_audit_logs`.
@@ -331,6 +373,7 @@ Only transactions with **Status = Completed** count toward paid/outstanding. **V
 | `/dashboard/payments/collect?membershipId=` | Collect installment (confirmation modal, duplicate check, receipt) |
 | `/dashboard/payments/history` | Transaction list, filters, void/refund |
 | `/dashboard/payments/waive-offs` | Request list; admin approve/reject |
+| `/dashboard/payments/membership-approvals` | Membership void/cancel/change approvals |
 | `/dashboard/payments/reports` | Collection, outstanding, coupon, waive-off, void/refund reports + CSV export |
 | User detail → **Payment History** tab | Financial summary card, member ledger, billing table |
 

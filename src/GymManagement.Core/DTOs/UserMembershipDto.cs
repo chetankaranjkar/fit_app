@@ -31,6 +31,7 @@ namespace GymManagement.Core.DTOs
 
     public class UpdateUserMembershipDto
     {
+        public int? PlanId { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public MembershipStatus? Status { get; set; }

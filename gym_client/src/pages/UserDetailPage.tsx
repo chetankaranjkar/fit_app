@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -26,7 +26,10 @@ import { trainersService } from '../services/trainers.service'
 import { userTypesService } from '../services/userTypes.service'
 import { workoutPlansService } from '../services/workoutPlans.service'
 import { userSchedulesService } from '../services/userSchedules.service'
-import { userMembershipsService } from '../services/userMemberships.service'
+import {
+  listMembershipsForUser,
+  userMembershipsByUserQueryKey,
+} from '../services/userMemberships.service'
 import { userDietPlansService } from '../services/userDietPlans.service'
 import { memberHasDietAssignment, primaryDietAssignment } from '../lib/userDietPlanUtils'
 import {
@@ -39,6 +42,7 @@ import { TrainerHealthAlertPanel } from '../modules/health-profile/components/Tr
 import { healthProfileService } from '../modules/health-profile/services/healthProfile.service'
 import { MemberSupplementsPanel } from '../modules/supplement-tracking/components/MemberSupplementsPanel'
 import { MemberPaymentHistoryTab } from '../components/users/MemberPaymentHistoryTab'
+import { MemberMembershipHistoryTab } from '../components/users/MemberMembershipHistoryTab'
 import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
 import { formatInr } from '../lib/formatInr'
 import { displayAadhaar, validateAadhaarNumber } from '../lib/aadhaar'
@@ -49,6 +53,7 @@ import {
   validatePhoneNumber,
 } from '../lib/phone'
 import { useMobileNumberAvailability } from '../hooks/useMobileNumberAvailability'
+import { useUsernameAvailability } from '../hooks/useUsernameAvailability'
 import { MobileNumberAvailabilityHint } from '../components/users/MobileNumberAvailabilityHint'
 import type { User, UpdateUserDto } from '../types/user'
 import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
@@ -193,6 +198,18 @@ const TABS_META: TabDef[] = [
     ),
   },
   {
+    id: 'Membership History',
+    icon: (
+      <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+        />
+      </svg>
+    ),
+  },
+  {
     id: 'In Action',
     icon: (
       <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -202,8 +219,29 @@ const TABS_META: TabDef[] = [
   },
 ]
 
-const TAB_IDS = ['Details', 'Body Metrics', 'Graph', 'Payment History', 'In Action'] as const
+const TAB_IDS = [
+  'Details',
+  'Body Metrics',
+  'Graph',
+  'Payment History',
+  'Membership History',
+  'In Action',
+] as const
 type TabId = (typeof TAB_IDS)[number]
+
+const TAB_FROM_SEARCH_PARAM: Record<string, TabId> = {
+  details: 'Details',
+  metrics: 'Body Metrics',
+  'body-metrics': 'Body Metrics',
+  graph: 'Graph',
+  payments: 'Payment History',
+  'payment-history': 'Payment History',
+  membership: 'Membership History',
+  'membership-history': 'Membership History',
+  memberships: 'Membership History',
+  action: 'In Action',
+  'in-action': 'In Action',
+}
 
 const selectClass =
   'w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20'
@@ -215,6 +253,7 @@ export function UserDetailPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const viewMode = searchParams.get('mode') === 'view'
+  const tabFromUrl = searchParams.get('tab')
   const id = userId ? parseInt(userId, 10) : NaN
   const dietPlansAssignQuery = useMemo(() => {
     if (!Number.isFinite(id) || id <= 0) return ''
@@ -228,7 +267,17 @@ export function UserDetailPage() {
   }, [id, userId])
   const { userName } = getDashboardUser()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<TabId>('Details')
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const key = tabFromUrl?.trim().toLowerCase() ?? ''
+    return TAB_FROM_SEARCH_PARAM[key] ?? 'Details'
+  })
+
+  useEffect(() => {
+    const key = tabFromUrl?.trim().toLowerCase() ?? ''
+    const next = TAB_FROM_SEARCH_PARAM[key]
+    if (next) setActiveTab(next)
+  }, [tabFromUrl])
+
   const [addDetailOpen, setAddDetailOpen] = useState(false)
   const [addMetricsOpen, setAddMetricsOpen] = useState(false)
   const [editProfileOpen, setEditProfileOpen] = useState(false)
@@ -249,7 +298,13 @@ export function UserDetailPage() {
   })
   const [loginPassword, setLoginPassword] = useState('')
   const [loginPasswordConfirm, setLoginPasswordConfirm] = useState('')
-  const [loginEmail, setLoginEmail] = useState('')
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginUsernameBaseline, setLoginUsernameBaseline] = useState('')
+  const [loginUsernameError, setLoginUsernameError] = useState<string | null>(null)
+  const loginUsernameAvailability = useUsernameAvailability(loginUsername, {
+    enabled: editProfileOpen,
+    excludeUserId: id,
+  })
   const [detailForm, setDetailForm] = useState<CreateUserDetailDto>({
     userId: 0,
     height: 0,
@@ -376,12 +431,11 @@ export function UserDetailPage() {
   })
 
   const { data: userMemberships = [], isLoading: membershipsLoading } = useQuery({
-    queryKey: ['userMemberships', id],
-    queryFn: async () => {
-      const { data } = await userMembershipsService.getByUserId(id)
-      return Array.isArray(data) ? data : []
-    },
+    queryKey: userMembershipsByUserQueryKey(id),
+    queryFn: () => listMembershipsForUser(id),
     enabled: Number.isInteger(id) && id > 0,
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   const { data: userDietAssignments = [], isLoading: dietAssignmentsLoading } = useQuery({
@@ -516,7 +570,9 @@ export function UserDetailPage() {
       setProfileForm({})
       setLoginPassword('')
       setLoginPasswordConfirm('')
-      setLoginEmail('')
+      setLoginUsername('')
+      setLoginUsernameBaseline('')
+      setLoginUsernameError(null)
       setProfileError(null)
       const p = updated?.pendingPaymentCollection
       if (p?.membershipId && p.membershipPaymentId) {
@@ -907,7 +963,10 @@ export function UserDetailPage() {
     setEmergencyPhoneError(null)
     setLoginPassword('')
     setLoginPasswordConfirm('')
-    setLoginEmail(user.email?.trim() ?? user.username?.trim() ?? '')
+    const currentLogin = user.username?.trim() || user.email?.trim() || ''
+    setLoginUsername(currentLogin)
+    setLoginUsernameBaseline(currentLogin)
+    setLoginUsernameError(null)
     setProfilePhoneDraft(user.phone ?? '')
     setEditProfileOpen(true)
   }
@@ -915,7 +974,9 @@ export function UserDetailPage() {
   const handleCloseEditProfile = () => {
     setLoginPassword('')
     setLoginPasswordConfirm('')
-    setLoginEmail('')
+    setLoginUsername('')
+    setLoginUsernameBaseline('')
+    setLoginUsernameError(null)
     setAadhaarError(null)
     setPhoneError(null)
     setEmergencyPhoneError(null)
@@ -931,6 +992,44 @@ export function UserDetailPage() {
 
     const pwd = loginPassword.trim()
     const hasLogin = Boolean(user.username?.trim() || user.email?.trim())
+    const trimmedLoginUsername = loginUsername.trim()
+    const loginUsernameChanged = trimmedLoginUsername !== loginUsernameBaseline.trim()
+
+    if (hasLogin && !trimmedLoginUsername) {
+      setLoginUsernameError('Username is required.')
+      setProfileError('Username is required for portal and mobile login.')
+      return
+    }
+
+    if (loginUsernameChanged || (!hasLogin && pwd)) {
+      if (!trimmedLoginUsername) {
+        setLoginUsernameError('Username is required.')
+        setProfileError('Username is required for portal and mobile login.')
+        return
+      }
+      if (
+        loginUsernameAvailability.status === 'checking' ||
+        loginUsernameAvailability.status === 'idle'
+      ) {
+        const msg = 'Please wait — checking username…'
+        setLoginUsernameError(msg)
+        setProfileError(msg)
+        return
+      }
+      if (loginUsernameAvailability.status === 'taken') {
+        const msg = loginUsernameAvailability.error ?? 'This username is already in use.'
+        setLoginUsernameError(msg)
+        setProfileError(msg)
+        return
+      }
+      if (loginUsernameAvailability.status !== 'available') {
+        const msg = loginUsernameAvailability.error ?? 'This username is already in use.'
+        setLoginUsernameError(msg)
+        setProfileError(msg)
+        return
+      }
+    }
+
     if (pwd) {
       if (pwd.length < 6) {
         setProfileError('Password must be at least 6 characters.')
@@ -940,8 +1039,8 @@ export function UserDetailPage() {
         setProfileError('Password and confirmation do not match.')
         return
       }
-      if (!hasLogin && !loginEmail.trim()) {
-        setProfileError('Login email is required when creating a new login for this member.')
+      if (!hasLogin && !trimmedLoginUsername) {
+        setProfileError('Username is required when creating a new login for this member.')
         return
       }
     }
@@ -960,8 +1059,24 @@ export function UserDetailPage() {
       baseline?.trainerId && baseline.trainerId > 0 ? baseline.trainerId : undefined
     const trainerUnchanged = baseline != null && formTrainerId === baseTrainerId
 
-    if (!mobileAvailability.isAvailable && mobileAvailability.status !== 'idle') {
-      const msg = mobileAvailability.error ?? 'This mobile number is already registered with another user.'
+    if (mobileAvailability.status === 'checking' || mobileAvailability.status === 'idle') {
+      const msg = 'Please wait — checking mobile number…'
+      setPhoneError(msg)
+      setProfileError(msg)
+      return
+    }
+    if (mobileAvailability.status === 'taken' || mobileAvailability.status === 'invalid_format') {
+      const msg =
+        mobileAvailability.error ??
+        'This mobile number is already registered with another user.'
+      setPhoneError(msg)
+      setProfileError(msg)
+      return
+    }
+    if (mobileAvailability.status !== 'available') {
+      const msg =
+        mobileAvailability.error ??
+        'This mobile number is already registered with another user.'
       setPhoneError(msg)
       setProfileError(msg)
       return
@@ -1007,7 +1122,10 @@ export function UserDetailPage() {
       trainerId: !trainerUnchanged ? (formTrainerId ?? 0) : undefined,
       userTypeIds: mergeUserTypeIdsForSave(profileForm.userTypeIds, user, userTypes),
       password: pwd || undefined,
-      email: pwd && !hasLogin ? loginEmail.trim() : undefined,
+      username:
+        loginUsernameChanged || (!hasLogin && pwd && trimmedLoginUsername)
+          ? trimmedLoginUsername
+          : undefined,
     }
     updateProfileMutation.mutate(payload)
   }
@@ -1194,6 +1312,9 @@ export function UserDetailPage() {
             memberPhotoUrl={user.profilePictureUrl}
           />
         )}
+        {activeTab === 'Membership History' && Number.isFinite(id) && id > 0 && (
+          <MemberMembershipHistoryTab userId={id} />
+        )}
         {activeTab === 'In Action' && (
           <InActionTab
             attendanceLogs={attendanceLogs}
@@ -1331,30 +1452,48 @@ export function UserDetailPage() {
                 />
                 <div className="sm:col-span-2 space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <div>
-                    <p className={labelClass}>Login account</p>
-                    {user.username?.trim() || user.email?.trim() ? (
-                      <p className="mt-1 text-sm text-slate-300">
-                        {user.username?.trim() || user.email?.trim()}
-                        <span className="text-slate-500"> · used to sign in (email cannot be changed here)</span>
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-sm text-amber-200/90">No login yet — set email and password below.</p>
-                    )}
-                    <p className="mt-2 text-xs text-slate-500">
-                      Enter a new password to reset login or enable sign-in. Leave password blank to keep unchanged.
+                    <p className={labelClass}>Login credentials</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Username is used to sign in on the web portal and mobile app. Leave password blank to keep the
+                      current password.
                     </p>
+                    {!user.username?.trim() && !user.email?.trim() ? (
+                      <p className="mt-2 text-sm text-amber-200/90">
+                        No login yet — set a username and password below to enable sign-in.
+                      </p>
+                    ) : null}
                   </div>
-                  {!user.username?.trim() && !user.email?.trim() && (
+                  <div>
                     <Input
-                      label="Login email"
-                      type="email"
+                      label="Username"
                       autoComplete="off"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="member@example.com"
-                      required={loginPassword.length > 0}
+                      value={loginUsername}
+                      onChange={(e) => {
+                        setLoginUsername(e.target.value)
+                        setLoginUsernameError(null)
+                      }}
+                      onBlur={() => {
+                        if (!loginUsername.trim()) {
+                          setLoginUsernameError('Username is required.')
+                          return
+                        }
+                        if (loginUsernameAvailability.status === 'taken') {
+                          setLoginUsernameError(loginUsernameAvailability.error)
+                        } else {
+                          setLoginUsernameError(null)
+                        }
+                      }}
+                      placeholder="e.g. rajesh.kumar"
+                      required
+                      error={loginUsernameError ?? loginUsernameAvailability.error ?? undefined}
                     />
-                  )}
+                    {loginUsername.trim() ? (
+                      <MobileNumberAvailabilityHint
+                        status={loginUsernameAvailability.status}
+                        message={loginUsernameAvailability.message}
+                      />
+                    ) : null}
+                  </div>
                   <Input
                     label="New password"
                     type="password"

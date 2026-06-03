@@ -1,7 +1,8 @@
 namespace GymManagement.Domain.Entities
 {
     /// <summary>
-    /// Allowed values are stored in membership_status table: Active, Expired, Frozen, Cancelled, Pending.
+    /// Allowed values are stored in membership_status table and enforced in application code.
+    /// Membership records are never physically deleted; terminal states include Voided and Cancelled.
     /// </summary>
     public enum MembershipStatus
     {
@@ -14,6 +15,12 @@ namespace GymManagement.Domain.Entities
         ActivePendingPayment,
         /// <summary>Part of the membership fee has been paid; balance is outstanding.</summary>
         PartialPayment,
+        /// <summary>Void requested; awaiting admin approval.</summary>
+        VoidPending,
+        /// <summary>Admin-approved void; record retained permanently.</summary>
+        Voided,
+        /// <summary>Membership transferred to another member/plan context.</summary>
+        Transferred,
     }
 
     public class UserMembership : BaseEntity

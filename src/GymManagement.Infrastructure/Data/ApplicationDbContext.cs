@@ -74,6 +74,8 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<MembershipPayment> MembershipPayments { get; set; }
         public DbSet<MembershipPaymentTransaction> MembershipPaymentTransactions { get; set; }
         public DbSet<WaiveOffRequest> WaiveOffRequests { get; set; }
+        public DbSet<MembershipApprovalRequest> MembershipApprovalRequests { get; set; }
+        public DbSet<MembershipAuditLog> MembershipAuditLogs { get; set; }
         public DbSet<FinancialAuditLog> FinancialAuditLogs { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
@@ -806,6 +808,10 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.EndDate);
                 entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.UserId)
+                    .IsUnique()
+                    .HasDatabaseName("IX_user_memberships_one_active_per_user")
+                    .HasFilter("[IsDeleted] = 0 AND [Status] = N'Active'");
                 entity.ToTable("user_memberships");
             });
 
@@ -922,6 +928,55 @@ namespace GymManagement.Infrastructure.Data
                     .HasForeignKey(e => e.MembershipPaymentId)
                     .OnDelete(DeleteBehavior.Restrict);
                 entity.ToTable("waive_off_requests");
+            });
+
+            modelBuilder.Entity<MembershipApprovalRequest>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Reason).IsRequired().HasMaxLength(2000);
+                entity.Property(e => e.AdminRemarks).HasMaxLength(1000);
+                entity.Property(e => e.ProposedChangesJson).HasMaxLength(4000);
+                entity.Property(e => e.RequestType).IsRequired().HasConversion<string>().HasMaxLength(40);
+                entity.Property(e => e.Status).IsRequired().HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.PreviousMembershipStatus).HasConversion<string>().HasMaxLength(50);
+                entity.HasIndex(e => e.MembershipId);
+                entity.HasIndex(e => e.MemberId);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.RequestedDate);
+                entity.HasOne(e => e.Membership)
+                    .WithMany()
+                    .HasForeignKey(e => e.MembershipId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Member)
+                    .WithMany()
+                    .HasForeignKey(e => e.MemberId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.RequestedBy)
+                    .WithMany()
+                    .HasForeignKey(e => e.RequestedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.ToTable("membership_approval_requests");
+            });
+
+            modelBuilder.Entity<MembershipAuditLog>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Action).IsRequired().HasConversion<string>().HasMaxLength(60);
+                entity.Property(e => e.OldValue).HasMaxLength(4000);
+                entity.Property(e => e.NewValue).HasMaxLength(4000);
+                entity.Property(e => e.IPAddress).HasMaxLength(64);
+                entity.Property(e => e.DeviceInfo).HasMaxLength(512);
+                entity.HasIndex(e => e.MembershipId);
+                entity.HasIndex(e => e.PerformedDate);
+                entity.HasOne(e => e.Membership)
+                    .WithMany()
+                    .HasForeignKey(e => e.MembershipId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.PerformedBy)
+                    .WithMany()
+                    .HasForeignKey(e => e.PerformedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.ToTable("membership_audit_logs");
             });
 
             modelBuilder.Entity<FinancialAuditLog>(entity =>
@@ -1418,6 +1473,8 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<MembershipPayment>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<MembershipPaymentTransaction>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<WaiveOffRequest>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<MembershipApprovalRequest>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<MembershipAuditLog>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<FinancialAuditLog>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<Invoice>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<InvoiceItem>().HasQueryFilter(ii => ii.Invoice != null && !ii.Invoice.IsDeleted && !ii.IsDeleted);

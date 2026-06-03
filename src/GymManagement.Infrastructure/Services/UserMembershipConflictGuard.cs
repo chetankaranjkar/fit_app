@@ -136,7 +136,17 @@ internal static class UserMembershipConflictGuard
 
                         && m.UserId == userId
 
-                        && UserMembershipRules.OccupyingStatuses.Contains(m.Status)
+                        && (m.Status == MembershipStatus.Active
+
+                            || m.Status == MembershipStatus.ActivePendingPayment
+
+                            || m.Status == MembershipStatus.PartialPayment
+
+                            || m.Status == MembershipStatus.Frozen
+
+                            || m.Status == MembershipStatus.Pending
+
+                            || m.Status == MembershipStatus.VoidPending)
 
                         && (!excludeMembershipId.HasValue || m.Id != excludeMembershipId.Value))
 

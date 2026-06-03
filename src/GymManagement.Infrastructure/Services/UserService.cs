@@ -267,7 +267,9 @@ namespace GymManagement.Infrastructure.Services
                         PlanId = plan.Id,
                         StartDate = startDate,
                         EndDate = endDate,
-                        Status = MembershipStatus.Active
+                        Status = IsTrialMembershipPlan(plan)
+                            ? MembershipStatus.Active
+                            : MembershipStatus.ActivePendingPayment,
                     };
                     await _unitOfWork.UserMemberships.AddAsync(membership);
                     try
@@ -627,7 +629,22 @@ namespace GymManagement.Infrastructure.Services
             var appRoles = (await _unitOfWork.AppRoles.GetAllAsync()).Where(r => roleIds.Contains(r.Id)).ToDictionary(r => r.Id);
             return allUr
                 .GroupBy(ur => ur.UserId)
-                .ToDictionary(g => g.Key, g => g.Select(ur => appRoles[ur.RoleId].Name).ToList());
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(ur => appRoles.TryGetValue(ur.RoleId, out var role) ? role.Name : null)
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .Select(name => name!)
+                        .ToList());
+        }
+
+        private static bool IsTrialMembershipPlan(MembershipPlan plan)
+        {
+            var name = (plan.PlanName ?? string.Empty).Trim().ToLowerInvariant();
+            return plan.Price <= 0m
+                || plan.DurationDays <= 15
+                || name.Contains("trial")
+                || name.Contains("trail")
+                || name.Contains("free");
         }
 
         private UserDto MapToDto(User user, AuthUser? authUser = null, bool isInstructorProfile = false, List<UserTypeDto>? userTypes = null, List<string>? appRoleNamesFromUserRoles = null)

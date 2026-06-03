@@ -129,6 +129,20 @@ public sealed class GlobalExceptionMiddleware
                 "https://httpstatuses.com/500");
         }
 
+        if (sqlMessage != null
+            && (sqlMessage.Contains("membership_approval_requests", StringComparison.OrdinalIgnoreCase)
+                || sqlMessage.Contains("membership_audit_logs", StringComparison.OrdinalIgnoreCase)
+                || sqlMessage.Contains("IX_user_memberships_one_active_per_user", StringComparison.OrdinalIgnoreCase)
+                || sqlMessage.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase)
+                || sqlMessage.Contains("Invalid column name", StringComparison.OrdinalIgnoreCase)))
+        {
+            return (
+                StatusCodes.Status500InternalServerError,
+                "Database schema is out of date.",
+                "On the UAT server run: git pull origin uat && ./deploy/scripts/update-uat.sh (applies EF migrations). Then retry.",
+                "https://httpstatuses.com/500");
+        }
+
         var detail = "The server could not process this request. Please retry or contact support.";
         if (environment.IsDevelopment())
         {

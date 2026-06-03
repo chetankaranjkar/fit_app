@@ -34,7 +34,10 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed. P
     return 'Your session has expired. Please sign in again.'
   }
   if (status === 404) return 'The requested resource was not found.'
-  if (status != null && status >= 500) return DEFAULT_SERVER
+  if (status != null && status >= 500) {
+    if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail
+    return DEFAULT_SERVER
+  }
   if (!ax?.response) return DEFAULT_NETWORK
   if (typeof data?.message === 'string' && data.message.trim()) return data.message
   if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail

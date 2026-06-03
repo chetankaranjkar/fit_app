@@ -10,6 +10,7 @@ using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
 using GymManagement.Core.Validation;
+using GymManagement.Infrastructure.Services;
 
 namespace GymManagement.API.Controllers
 {
@@ -118,6 +119,15 @@ namespace GymManagement.API.Controllers
                 var user = await _userService.CreateUserAsync(createUserDto);
                 return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
             }
+            catch (ActiveMembershipConflictException ex)
+            {
+                return Conflict(new
+                {
+                    message = ex.Details.Message,
+                    code = ActiveMembershipConflictDto.ErrorCode,
+                    activeMembership = ex.Details,
+                });
+            }
             catch (ConflictException ex)
             {
                 return Conflict(new { message = ex.Message });
@@ -129,6 +139,14 @@ namespace GymManagement.API.Controllers
             catch (DbUpdateException ex) when (IsDuplicatePhoneException(ex))
             {
                 return Conflict(new { message = "A user with this phone number already exists." });
+            }
+            catch (DbUpdateException ex) when (IsDuplicateAuthEmailException(ex))
+            {
+                return Conflict(new { message = UsernameAvailabilityService.DuplicateUsernameMessage });
+            }
+            catch (DbUpdateException ex) when (IsDuplicateActiveMembershipIndex(ex))
+            {
+                return Conflict(new { message = UserMembershipConflictCodes.Message });
             }
         }
 
@@ -155,6 +173,15 @@ namespace GymManagement.API.Controllers
 
                 return Ok(user);
             }
+            catch (ActiveMembershipConflictException ex)
+            {
+                return Conflict(new
+                {
+                    message = ex.Details.Message,
+                    code = ActiveMembershipConflictDto.ErrorCode,
+                    activeMembership = ex.Details,
+                });
+            }
             catch (ConflictException ex)
             {
                 return Conflict(new { message = ex.Message });
@@ -170,6 +197,14 @@ namespace GymManagement.API.Controllers
             catch (DbUpdateException ex) when (IsDuplicatePhoneException(ex))
             {
                 return Conflict(new { message = PhoneNumberValidator.DuplicatePhoneMessage });
+            }
+            catch (DbUpdateException ex) when (IsDuplicateAuthEmailException(ex))
+            {
+                return Conflict(new { message = UsernameAvailabilityService.DuplicateUsernameMessage });
+            }
+            catch (DbUpdateException ex) when (IsDuplicateActiveMembershipIndex(ex))
+            {
+                return Conflict(new { message = UserMembershipConflictCodes.Message });
             }
         }
 
@@ -188,6 +223,31 @@ namespace GymManagement.API.Controllers
                 }
                 inner = inner.InnerException;
             }
+            return false;
+        }
+
+        private static bool IsDuplicateAuthEmailException(DbUpdateException ex)
+        {
+            for (var inner = ex.InnerException; inner != null; inner = inner.InnerException)
+            {
+                if (inner is SqlException sqlEx
+                    && (sqlEx.Message.Contains("AuthUsers", StringComparison.OrdinalIgnoreCase)
+                        || sqlEx.Message.Contains("Email", StringComparison.OrdinalIgnoreCase))
+                    && (sqlEx.Number == 2601 || sqlEx.Number == 2627))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsDuplicateActiveMembershipIndex(DbUpdateException ex)
+        {
+            for (var inner = ex.InnerException; inner != null; inner = inner.InnerException)
+            {
+                if (inner.Message.Contains("IX_user_memberships_one_active_per_user", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
             return false;
         }
 

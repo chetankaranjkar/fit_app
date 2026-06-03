@@ -42,13 +42,13 @@ export function useUsernameAvailability(
 
   const message =
     status === 'available'
-      ? '✓ Username available'
+      ? '✓ Email available for login'
       : status === 'taken'
-        ? '✗ Username already in use'
+        ? '✗ Email already used for login'
         : null
 
   const error =
-    status === 'taken' ? (data?.validationError ?? 'This username is already in use.') : null
+    status === 'taken' ? (data?.validationError ?? 'This email is already in use for login.') : null
 
   return {
     status,

@@ -56,7 +56,13 @@ export function GlobalSearch({ className = '' }: { className?: string }) {
     queryFn: async (): Promise<SearchResults> => {
       const q = debouncedQuery
       const [usersRes, trainersRes, plansRes] = await Promise.all([
-        usersService.getPaged({ page: 1, pageSize: 8, search: q, membersOnly: true }),
+        usersService.getPaged({
+          page: 1,
+          pageSize: 8,
+          search: q,
+          membersOnly: true,
+          includeBilling: false,
+        }),
         trainersService.getPaged({ page: 1, pageSize: 6, search: q }),
         membershipPlansService.getAll(),
       ])

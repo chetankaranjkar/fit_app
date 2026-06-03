@@ -227,7 +227,7 @@ export function AddTrainerModal({ open, onClose }: Props) {
         dateOfBirth: form.newDateOfBirth || '1990-01-01',
         gender: form.newGender || form.gender || 'Prefer not to say',
         isActive: true,
-        password: form.newPassword.trim() || undefined,
+        password: form.newPassword.trim() || form.newEmail.trim(),
         role: 2,
         userTypeIds: trainerUserTypeId ? [trainerUserTypeId] : [],
         instructorSpecialization: form.specialization.trim() || null,

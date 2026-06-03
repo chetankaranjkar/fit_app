@@ -20,7 +20,7 @@ export function MemberDashboardPage() {
   })
   const { data: dietPlan } = useQuery({
     queryKey: ['member-diet-plan'],
-    queryFn: async () => (await meService.getDietPlan()).data,
+    queryFn: () => meService.getDietPlan(),
     retry: false,
   })
 

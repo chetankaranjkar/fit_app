@@ -298,10 +298,9 @@ export function UserDetailPage() {
   })
   const [loginPassword, setLoginPassword] = useState('')
   const [loginPasswordConfirm, setLoginPasswordConfirm] = useState('')
-  const [loginUsername, setLoginUsername] = useState('')
-  const [loginUsernameBaseline, setLoginUsernameBaseline] = useState('')
-  const [loginUsernameError, setLoginUsernameError] = useState<string | null>(null)
-  const loginUsernameAvailability = useUsernameAvailability(loginUsername, {
+  const [profileEmailError, setProfileEmailError] = useState<string | null>(null)
+  const [profileEmailBaseline, setProfileEmailBaseline] = useState('')
+  const loginEmailAvailability = useUsernameAvailability(profileForm.email ?? '', {
     enabled: editProfileOpen,
     excludeUserId: id,
   })
@@ -570,9 +569,8 @@ export function UserDetailPage() {
       setProfileForm({})
       setLoginPassword('')
       setLoginPasswordConfirm('')
-      setLoginUsername('')
-      setLoginUsernameBaseline('')
-      setLoginUsernameError(null)
+      setProfileEmailBaseline('')
+      setProfileEmailError(null)
       setProfileError(null)
       const p = updated?.pendingPaymentCollection
       if (p?.membershipId && p.membershipPaymentId) {
@@ -942,6 +940,7 @@ export function UserDetailPage() {
     setProfileForm({
       firstName: user.firstName,
       lastName: user.lastName,
+      email: user.email?.trim() ?? '',
       phone: user.phone ?? '',
       aadhaarNumber: user.aadhaarNumber ?? '',
       dateOfBirth: user.dateOfBirth?.slice(0, 10) ?? '',
@@ -963,10 +962,8 @@ export function UserDetailPage() {
     setEmergencyPhoneError(null)
     setLoginPassword('')
     setLoginPasswordConfirm('')
-    const currentLogin = user.username?.trim() || user.email?.trim() || ''
-    setLoginUsername(currentLogin)
-    setLoginUsernameBaseline(currentLogin)
-    setLoginUsernameError(null)
+    setProfileEmailBaseline(user.email?.trim() ?? '')
+    setProfileEmailError(null)
     setProfilePhoneDraft(user.phone ?? '')
     setEditProfileOpen(true)
   }
@@ -974,9 +971,8 @@ export function UserDetailPage() {
   const handleCloseEditProfile = () => {
     setLoginPassword('')
     setLoginPasswordConfirm('')
-    setLoginUsername('')
-    setLoginUsernameBaseline('')
-    setLoginUsernameError(null)
+    setProfileEmailBaseline('')
+    setProfileEmailError(null)
     setAadhaarError(null)
     setPhoneError(null)
     setEmergencyPhoneError(null)
@@ -991,40 +987,35 @@ export function UserDetailPage() {
     setProfileError(null)
 
     const pwd = loginPassword.trim()
-    const hasLogin = Boolean(user.username?.trim() || user.email?.trim())
-    const trimmedLoginUsername = loginUsername.trim()
-    const loginUsernameChanged = trimmedLoginUsername !== loginUsernameBaseline.trim()
+    const hasLogin = Boolean(user.email?.trim())
+    const trimmedEmail = (profileForm.email ?? '').trim().toLowerCase()
+    const emailChanged = trimmedEmail !== profileEmailBaseline.trim().toLowerCase()
 
-    if (hasLogin && !trimmedLoginUsername) {
-      setLoginUsernameError('Username is required.')
-      setProfileError('Username is required for portal and mobile login.')
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      setProfileEmailError('Enter a valid email address.')
+      setProfileError('Email is required for portal and mobile login.')
       return
     }
 
-    if (loginUsernameChanged || (!hasLogin && pwd)) {
-      if (!trimmedLoginUsername) {
-        setLoginUsernameError('Username is required.')
-        setProfileError('Username is required for portal and mobile login.')
-        return
-      }
+    if (emailChanged || (!hasLogin && pwd)) {
       if (
-        loginUsernameAvailability.status === 'checking' ||
-        loginUsernameAvailability.status === 'idle'
+        loginEmailAvailability.status === 'checking' ||
+        loginEmailAvailability.status === 'idle'
       ) {
-        const msg = 'Please wait — checking username…'
-        setLoginUsernameError(msg)
+        const msg = 'Please wait — checking email…'
+        setProfileEmailError(msg)
         setProfileError(msg)
         return
       }
-      if (loginUsernameAvailability.status === 'taken') {
-        const msg = loginUsernameAvailability.error ?? 'This username is already in use.'
-        setLoginUsernameError(msg)
+      if (loginEmailAvailability.status === 'taken') {
+        const msg = loginEmailAvailability.error ?? 'This email is already in use for login.'
+        setProfileEmailError(msg)
         setProfileError(msg)
         return
       }
-      if (loginUsernameAvailability.status !== 'available') {
-        const msg = loginUsernameAvailability.error ?? 'This username is already in use.'
-        setLoginUsernameError(msg)
+      if (loginEmailAvailability.status !== 'available') {
+        const msg = loginEmailAvailability.error ?? 'This email is already in use for login.'
+        setProfileEmailError(msg)
         setProfileError(msg)
         return
       }
@@ -1037,10 +1028,6 @@ export function UserDetailPage() {
       }
       if (pwd !== loginPasswordConfirm.trim()) {
         setProfileError('Password and confirmation do not match.')
-        return
-      }
-      if (!hasLogin && !trimmedLoginUsername) {
-        setProfileError('Username is required when creating a new login for this member.')
         return
       }
     }
@@ -1122,10 +1109,7 @@ export function UserDetailPage() {
       trainerId: !trainerUnchanged ? (formTrainerId ?? 0) : undefined,
       userTypeIds: mergeUserTypeIdsForSave(profileForm.userTypeIds, user, userTypes),
       password: pwd || undefined,
-      username:
-        loginUsernameChanged || (!hasLogin && pwd && trimmedLoginUsername)
-          ? trimmedLoginUsername
-          : undefined,
+      email: emailChanged ? trimmedEmail : undefined,
     }
     updateProfileMutation.mutate(payload)
   }
@@ -1450,48 +1434,49 @@ export function UserDetailPage() {
                   onChange={(e) => setProfileForm((f) => ({ ...f, lastName: e.target.value }))}
                   required
                 />
+                <div>
+                  <Input
+                    label="Email (login)"
+                    type="email"
+                    value={profileForm.email ?? ''}
+                    onChange={(e) => {
+                      setProfileForm((f) => ({ ...f, email: e.target.value }))
+                      setProfileEmailError(null)
+                    }}
+                    onBlur={() => {
+                      const email = (profileForm.email ?? '').trim().toLowerCase()
+                      if (!email) {
+                        setProfileEmailError('Email is required.')
+                        return
+                      }
+                      if (!email.includes('@')) {
+                        setProfileEmailError('Enter a valid email address.')
+                        return
+                      }
+                      if (loginEmailAvailability.status === 'taken') {
+                        setProfileEmailError(loginEmailAvailability.error)
+                      } else {
+                        setProfileEmailError(null)
+                      }
+                    }}
+                    required
+                    error={profileEmailError ?? loginEmailAvailability.error ?? undefined}
+                  />
+                  <MobileNumberAvailabilityHint
+                    status={loginEmailAvailability.status}
+                    message={loginEmailAvailability.message}
+                  />
+                </div>
                 <div className="sm:col-span-2 space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <div>
-                    <p className={labelClass}>Login credentials</p>
+                    <p className={labelClass}>Login password</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Username is used to sign in on the web portal and mobile app. Leave password blank to keep the
-                      current password.
+                      Leave blank to keep the current password. Set a password to create or reset portal / mobile login.
                     </p>
-                    {!user.username?.trim() && !user.email?.trim() ? (
+                    {!user.email?.trim() ? (
                       <p className="mt-2 text-sm text-amber-200/90">
-                        No login yet — set a username and password below to enable sign-in.
+                        No login yet — set email above and a password below to enable sign-in.
                       </p>
-                    ) : null}
-                  </div>
-                  <div>
-                    <Input
-                      label="Username"
-                      autoComplete="off"
-                      value={loginUsername}
-                      onChange={(e) => {
-                        setLoginUsername(e.target.value)
-                        setLoginUsernameError(null)
-                      }}
-                      onBlur={() => {
-                        if (!loginUsername.trim()) {
-                          setLoginUsernameError('Username is required.')
-                          return
-                        }
-                        if (loginUsernameAvailability.status === 'taken') {
-                          setLoginUsernameError(loginUsernameAvailability.error)
-                        } else {
-                          setLoginUsernameError(null)
-                        }
-                      }}
-                      placeholder="e.g. rajesh.kumar"
-                      required
-                      error={loginUsernameError ?? loginUsernameAvailability.error ?? undefined}
-                    />
-                    {loginUsername.trim() ? (
-                      <MobileNumberAvailabilityHint
-                        status={loginUsernameAvailability.status}
-                        message={loginUsernameAvailability.message}
-                      />
                     ) : null}
                   </div>
                   <Input
@@ -2453,7 +2438,7 @@ function DetailsTab({
           }
         >
           <InfoRow label="Full name" value={`${user.firstName} ${user.lastName}`.trim() || '—'} />
-          <InfoRow label="Email" value={user.email} />
+          <InfoRow label="Login email" value={user.email ?? '—'} />
           <InfoRow label="Gender" value={user.gender || '—'} />
           <InfoRow label="Date of birth" value={formatDate(user.dateOfBirth)} />
           <InfoRow
@@ -2534,7 +2519,6 @@ function DetailsTab({
               )
             }
           />
-          <InfoRow label="Username" value={user.username ?? '—'} />
         </InfoCard>
       </div>
 

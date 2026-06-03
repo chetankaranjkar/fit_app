@@ -444,8 +444,9 @@ namespace GymManagement.API.Controllers
                 .FirstOrDefaultAsync()
                 .ConfigureAwait(false);
 
+            // No active assignment is normal — do not use 404 (clients treat it as a broken route).
             if (assignment?.DietPlan == null)
-                return NotFound();
+                return NoContent();
 
             var plan = assignment.DietPlan;
             return Ok(new MeDietPlanDto

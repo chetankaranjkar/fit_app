@@ -24,6 +24,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly ICurrentUserAccessContext _accessContext;
         private readonly IMobileNumberAvailabilityService _mobileAvailability;
         private readonly IUsernameAvailabilityService _usernameAvailability;
+        private int? _cachedMemberUserTypeId;
 
         public UserService(
             IUnitOfWork unitOfWork,
@@ -76,7 +77,8 @@ namespace GymManagement.Infrastructure.Services
             int pageSize,
             string? search = null,
             bool membersOnly = false,
-            bool? isActive = null)
+            bool? isActive = null,
+            bool includeBillingSummary = true)
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
@@ -85,40 +87,40 @@ namespace GymManagement.Infrastructure.Services
             if (isActive.HasValue)
                 query = query.Where(u => u.IsActive == isActive.Value);
 
+            if (membersOnly)
+                query = await ApplyMembersOnlyFilterAsync(query).ConfigureAwait(false);
+
             query = ApplyUserSearchFilter(query, search);
 
-            if (membersOnly)
-            {
-                query = query.Where(u =>
-                    _db.UserUserTypes.Any(uut =>
-                        uut.UserId == u.Id
-                        && _db.UserTypes.Any(ut => ut.Id == uut.UserTypeId && ut.Name == "Member")));
-            }
-
-            var totalCount = await query.CountAsync();
+            var totalCount = await query.CountAsync().ConfigureAwait(false);
             var pageUsers = await query
                 .OrderByDescending(u => u.RegistrationDate)
                 .ThenByDescending(u => u.Id)
                 .Skip((safePage - 1) * safePageSize)
                 .Take(safePageSize)
-                .ToListAsync();
+                .ToListAsync()
+                .ConfigureAwait(false);
 
             var userIds = pageUsers.Select(u => u.Id).ToHashSet();
             var pageAuth = await _db.AuthUsers.AsNoTracking()
-                .Where(a => a.UserId.HasValue && userIds.Contains(a.UserId.Value))
-                .ToListAsync();
+                .Where(a => !a.IsDeleted && a.UserId.HasValue && userIds.Contains(a.UserId.Value))
+                .ToListAsync()
+                .ConfigureAwait(false);
             var authByUserId = pageAuth
                 .Where(a => a.UserId.HasValue)
                 .GroupBy(a => a.UserId!.Value)
                 .ToDictionary(g => g.Key, g => g.First());
             var trainerUserIds = (await _db.Trainers.AsNoTracking()
-                .Where(t => userIds.Contains(t.UserId))
+                .Where(t => !t.IsDeleted && userIds.Contains(t.UserId))
                 .Select(t => t.UserId)
-                .ToListAsync()).ToHashSet();
-            var userTypesByUserId = await GetUserTypesByUserIdsAsync(userIds);
-            var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(userIds);
-            var billingByUserId = await GetBillingSummariesByUserIdsAsync(userIds);
-            var trainerAssignmentByUserId = await GetActiveTrainerAssignmentByUserIdsAsync(userIds);
+                .ToListAsync()
+                .ConfigureAwait(false)).ToHashSet();
+            var userTypesByUserId = await GetUserTypesByUserIdsAsync(userIds).ConfigureAwait(false);
+            var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(userIds).ConfigureAwait(false);
+            var billingByUserId = includeBillingSummary
+                ? await GetBillingSummariesByUserIdsAsync(userIds).ConfigureAwait(false)
+                : new Dictionary<int, UserBillingListSummary>();
+            var trainerAssignmentByUserId = await GetActiveTrainerAssignmentByUserIdsAsync(userIds).ConfigureAwait(false);
 
             var items = pageUsers.Select(u =>
             {
@@ -218,18 +220,15 @@ namespace GymManagement.Infrastructure.Services
         {
             var accountRole = createUserDto.Role ?? Role.User;
 
-            // Portal / mobile login (AuthUsers.Email stores the login username).
-            // Validate and check availability before any DB writes so Users is never left without AuthUsers.
-            var loginId = !string.IsNullOrWhiteSpace(createUserDto.Username)
-                ? createUserDto.Username.Trim()
-                : createUserDto.Email?.Trim();
+            // Portal / mobile login id is stored in AuthUsers.Email (member signs in with their email).
+            var loginId = ResolveLoginId(createUserDto);
             var password = createUserDto.Password?.Trim();
             var willCreateAuth = !string.IsNullOrEmpty(password) || !string.IsNullOrWhiteSpace(loginId);
             string? passwordHash = null;
             if (willCreateAuth)
             {
                 if (string.IsNullOrWhiteSpace(loginId))
-                    throw new ArgumentException("Username is required for portal and mobile login.");
+                    throw new ArgumentException("Email is required for portal and mobile login.");
                 if (string.IsNullOrEmpty(password))
                     throw new ArgumentException("Password is required.");
                 if (password.Length < 6)
@@ -384,6 +383,260 @@ namespace GymManagement.Infrastructure.Services
             return dto;
         }
 
+        public const int BulkImportMembersMaxBatchSize = 500;
+
+        public async Task<BulkImportMembersResultDto> BulkImportMembersAsync(BulkImportMembersRequestDto request)
+        {
+            var members = request.Members ?? new List<CreateUserDto>();
+            if (members.Count == 0)
+                return new BulkImportMembersResultDto();
+
+            if (members.Count > BulkImportMembersMaxBatchSize)
+                throw new ArgumentException($"A maximum of {BulkImportMembersMaxBatchSize} members can be imported per request.");
+
+            var result = new BulkImportMembersResultDto();
+            var existingPhones = await _db.Users.AsNoTracking()
+                .Where(u => !u.IsDeleted && u.Phone != null)
+                .Select(u => u.Phone!)
+                .ToListAsync()
+                .ConfigureAwait(false);
+            var phoneSet = new HashSet<string>(existingPhones, StringComparer.Ordinal);
+
+            var existingLoginIds = await _db.AuthUsers.AsNoTracking()
+                .Where(a => !a.IsDeleted)
+                .Select(a => a.Email)
+                .ToListAsync()
+                .ConfigureAwait(false);
+            var loginSet = new HashSet<string>(
+                existingLoginIds.Select(e => e.Trim().ToLowerInvariant()),
+                StringComparer.Ordinal);
+
+            var existingAadhaar = await _db.Users.AsNoTracking()
+                .Where(u => !u.IsDeleted && u.AadhaarNumber != null)
+                .Select(u => u.AadhaarNumber!)
+                .ToListAsync()
+                .ConfigureAwait(false);
+            var aadhaarSet = new HashSet<string>(existingAadhaar, StringComparer.Ordinal);
+
+            var validUserTypeIds = await _db.UserTypes.AsNoTracking()
+                .Where(ut => !ut.IsDeleted)
+                .Select(ut => ut.Id)
+                .ToHashSetAsync()
+                .ConfigureAwait(false);
+
+            var memberAppRole = (await _unitOfWork.AppRoles.GetAllAsync().ConfigureAwait(false))
+                .FirstOrDefault(r => string.Equals(r.Name, "MEMBER", StringComparison.OrdinalIgnoreCase));
+
+            var batchPhones = new HashSet<string>(StringComparer.Ordinal);
+            var batchLogins = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var batchAadhaar = new HashSet<string>(StringComparer.Ordinal);
+            var prepared = new List<PreparedBulkMember>();
+
+            for (var i = 0; i < members.Count; i++)
+            {
+                var dto = members[i];
+                var label = string.IsNullOrWhiteSpace(dto.Email) ? $"row {i + 1}" : dto.Email.Trim();
+
+                try
+                {
+                    var loginId = ResolveLoginId(dto);
+                    if (string.IsNullOrWhiteSpace(loginId))
+                    {
+                        result.Log.Add($"{label}: email is required for login.");
+                        continue;
+                    }
+
+                    var password = dto.Password?.Trim();
+                    if (string.IsNullOrEmpty(password))
+                    {
+                        result.Log.Add($"{label}: password is required.");
+                        continue;
+                    }
+
+                    if (password.Length < 6)
+                    {
+                        result.Log.Add($"{label}: password must be at least 6 characters.");
+                        continue;
+                    }
+
+                    var normalizedPhone = PhoneNumberValidator.NormalizeRequiredPhone(dto.Phone);
+                    var loginKey = loginId.ToLowerInvariant();
+
+                    if (batchLogins.Contains(loginKey) || loginSet.Contains(loginKey))
+                    {
+                        result.Log.Add($"Skipped (exists): {loginId}");
+                        continue;
+                    }
+
+                    if (batchPhones.Contains(normalizedPhone) || phoneSet.Contains(normalizedPhone))
+                    {
+                        result.Log.Add($"Duplicate phone number: {normalizedPhone} ({loginId})");
+                        continue;
+                    }
+
+                    string? normalizedAadhaar = null;
+                    try
+                    {
+                        normalizedAadhaar = AadhaarNumberValidator.TryNormalizeOptionalAadhaar(dto.AadhaarNumber);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        result.Log.Add($"{label}: {ex.Message}");
+                        continue;
+                    }
+
+                    if (normalizedAadhaar != null)
+                    {
+                        if (batchAadhaar.Contains(normalizedAadhaar) || aadhaarSet.Contains(normalizedAadhaar))
+                        {
+                            result.Log.Add($"{label}: Aadhaar number is already registered.");
+                            continue;
+                        }
+
+                        batchAadhaar.Add(normalizedAadhaar);
+                        aadhaarSet.Add(normalizedAadhaar);
+                    }
+
+                    batchLogins.Add(loginKey);
+                    loginSet.Add(loginKey);
+                    batchPhones.Add(normalizedPhone);
+                    phoneSet.Add(normalizedPhone);
+
+                    var now = DateTime.UtcNow;
+                    var user = new User
+                    {
+                        FirstName = dto.FirstName.Trim(),
+                        LastName = dto.LastName.Trim(),
+                        Phone = normalizedPhone,
+                        AadhaarNumber = normalizedAadhaar,
+                        DateOfBirth = dto.DateOfBirth,
+                        Gender = dto.Gender,
+                        Address = dto.Address,
+                        EmergencyContact = dto.EmergencyContact,
+                        EmergencyPhone = PhoneNumberValidator.NormalizeOptionalPhone(dto.EmergencyPhone),
+                        ProfilePictureUrl = dto.ProfilePictureUrl,
+                        PreferredGymTime = dto.PreferredGymTime,
+                        IsActive = dto.IsActive,
+                        RegistrationDate = now,
+                    };
+
+                    var userTypeIds = (dto.UserTypeIds ?? new List<int>())
+                        .Where(id => id > 0 && validUserTypeIds.Contains(id))
+                        .Distinct()
+                        .ToList();
+
+                    prepared.Add(new PreparedBulkMember
+                    {
+                        Password = password,
+                        User = user,
+                        AuthUser = new AuthUser
+                        {
+                            Email = loginId,
+                            CreatedDate = now,
+                        },
+                        Member = new Member
+                        {
+                            EmergencyContact = user.EmergencyContact,
+                            EmergencyPhone = user.EmergencyPhone,
+                            PreferredGymTime = user.PreferredGymTime,
+                            DateOfBirth = user.DateOfBirth,
+                            Gender = user.Gender,
+                            RegistrationDate = now,
+                            IsActive = user.IsActive,
+                        },
+                        UserUserTypes = userTypeIds.Select(typeId => new UserUserType { UserTypeId = typeId }).ToList(),
+                        MemberRoleId = memberAppRole?.Id,
+                    });
+                }
+                catch (ArgumentException ex)
+                {
+                    result.Log.Add($"{label}: {ex.Message}");
+                }
+            }
+
+            if (prepared.Count == 0)
+                return result;
+
+            Parallel.ForEach(prepared, item =>
+            {
+                item.PasswordHash = PasswordHasher.Hash(item.Password);
+            });
+
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync().ConfigureAwait(false);
+                try
+                {
+                    var users = prepared.Select(p => p.User).ToList();
+                    await _db.Users.AddRangeAsync(users).ConfigureAwait(false);
+                    await _db.SaveChangesAsync().ConfigureAwait(false);
+
+                    var authUsers = new List<AuthUser>(prepared.Count);
+                    var members = new List<Member>(prepared.Count);
+                    var userUserTypes = new List<UserUserType>();
+                    var userRoles = new List<UserRole>();
+
+                    for (var i = 0; i < prepared.Count; i++)
+                    {
+                        var row = prepared[i];
+                        var userId = row.User.Id;
+                        row.AuthUser.UserId = userId;
+                        row.AuthUser.PasswordHash = row.PasswordHash!;
+                        authUsers.Add(row.AuthUser);
+
+                        row.Member.UserId = userId;
+                        members.Add(row.Member);
+
+                        foreach (var link in row.UserUserTypes)
+                        {
+                            link.UserId = userId;
+                            userUserTypes.Add(link);
+                        }
+
+                        if (row.MemberRoleId.HasValue)
+                        {
+                            userRoles.Add(new UserRole
+                            {
+                                UserId = userId,
+                                RoleId = row.MemberRoleId.Value,
+                                CreatedDate = DateTime.UtcNow,
+                            });
+                        }
+                    }
+
+                    await _db.AuthUsers.AddRangeAsync(authUsers).ConfigureAwait(false);
+                    if (userUserTypes.Count > 0)
+                        await _db.UserUserTypes.AddRangeAsync(userUserTypes).ConfigureAwait(false);
+                    if (userRoles.Count > 0)
+                        await _db.UserRoles.AddRangeAsync(userRoles).ConfigureAwait(false);
+                    await _db.Members.AddRangeAsync(members).ConfigureAwait(false);
+                    await _db.SaveChangesAsync().ConfigureAwait(false);
+
+                    await transaction.CommitAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    await transaction.RollbackAsync().ConfigureAwait(false);
+                    throw;
+                }
+            }).ConfigureAwait(false);
+
+            result.Imported = prepared.Count;
+            return result;
+        }
+
+        private sealed class PreparedBulkMember
+        {
+            public string Password { get; init; } = string.Empty;
+            public string? PasswordHash { get; set; }
+            public User User { get; init; } = null!;
+            public AuthUser AuthUser { get; init; } = null!;
+            public Member Member { get; init; } = null!;
+            public List<UserUserType> UserUserTypes { get; init; } = new();
+            public int? MemberRoleId { get; init; }
+        }
+
         public async Task<UserDto?> UpdateUserAsync(int id, UpdateUserDto updateUserDto)
         {
             var user = await _unitOfWork.Users.GetByIdAsync(id);
@@ -492,29 +745,53 @@ namespace GymManagement.Infrastructure.Services
 
             if (!string.IsNullOrWhiteSpace(updateUserDto.Password))
             {
-                var loginIdForNewAccount = !string.IsNullOrWhiteSpace(updateUserDto.Username)
-                    ? updateUserDto.Username
-                    : updateUserDto.Email;
+                var loginIdForNewAccount = ResolveLoginIdForUpdate(updateUserDto);
                 await ApplyAdminPasswordUpdateAsync(user, updateUserDto.Password, loginIdForNewAccount);
             }
 
-            if (updateUserDto.Username != null)
-                await ApplyAdminLoginUsernameUpdateAsync(user.Id, updateUserDto.Username);
+            var loginEmailUpdate = ResolveLoginIdForUpdate(updateUserDto, emailOnly: true);
+            if (loginEmailUpdate != null)
+                await ApplyAdminLoginIdUpdateAsync(user.Id, loginEmailUpdate);
 
             return await GetUserByIdAsync(id);
         }
 
-        private async Task ApplyAdminLoginUsernameUpdateAsync(int userId, string newUsername)
+        private static string? ResolveLoginId(CreateUserDto dto)
         {
-            var loginId = newUsername.Trim();
+            var email = dto.Email?.Trim();
+            if (!string.IsNullOrWhiteSpace(email))
+                return email;
+            return string.IsNullOrWhiteSpace(dto.Username) ? null : dto.Username.Trim();
+        }
+
+        private static string? ResolveLoginIdForUpdate(UpdateUserDto dto, bool emailOnly = false)
+        {
+            if (dto.Email != null)
+            {
+                var email = dto.Email.Trim();
+                if (string.IsNullOrEmpty(email))
+                    throw new ArgumentException("Email is required for portal and mobile login.");
+                return email;
+            }
+
+            if (emailOnly || dto.Username == null)
+                return null;
+
+            var legacy = dto.Username.Trim();
+            return string.IsNullOrEmpty(legacy) ? null : legacy;
+        }
+
+        private async Task ApplyAdminLoginIdUpdateAsync(int userId, string newLoginId)
+        {
+            var loginId = newLoginId.Trim();
             if (string.IsNullOrEmpty(loginId))
-                throw new ArgumentException("Username is required.");
+                throw new ArgumentException("Email is required for portal and mobile login.");
 
             var authUser = (await _unitOfWork.AuthUsers.GetAllAsync())
                 .FirstOrDefault(a => a.UserId == userId);
             if (authUser == null)
                 throw new ArgumentException(
-                    "This user does not have a login account yet. Set a password to create one, or save a username together with a new password.");
+                    "This user does not have a login account yet. Set a password to create one, or save an email together with a new password.");
 
             if (string.Equals(authUser.Email, loginId, StringComparison.OrdinalIgnoreCase))
                 return;
@@ -652,19 +929,20 @@ namespace GymManagement.Infrastructure.Services
         {
             if (userIds.Count == 0)
                 return new Dictionary<int, List<string>>();
-            var allUr = (await _unitOfWork.UserRoles.FindAsync(ur => userIds.Contains(ur.UserId))).ToList();
-            if (allUr.Count == 0)
-                return new Dictionary<int, List<string>>();
-            var roleIds = allUr.Select(ur => ur.RoleId).Distinct().ToHashSet();
-            var appRoles = (await _unitOfWork.AppRoles.GetAllAsync()).Where(r => roleIds.Contains(r.Id)).ToDictionary(r => r.Id);
-            return allUr
-                .GroupBy(ur => ur.UserId)
+
+            var rows = await (
+                from ur in _db.UserRoles.AsNoTracking()
+                join role in _db.AppRoles.AsNoTracking() on ur.RoleId equals role.Id
+                where !ur.IsDeleted && role.IsActive && userIds.Contains(ur.UserId)
+                select new { ur.UserId, role.Name })
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            return rows
+                .GroupBy(r => r.UserId)
                 .ToDictionary(
                     g => g.Key,
-                    g => g.Select(ur => appRoles.TryGetValue(ur.RoleId, out var role) ? role.Name : null)
-                        .Where(name => !string.IsNullOrWhiteSpace(name))
-                        .Select(name => name!)
-                        .ToList());
+                    g => g.Select(r => r.Name).Where(name => !string.IsNullOrWhiteSpace(name)).Distinct().ToList());
         }
 
         private static bool IsTrialMembershipPlan(MembershipPlan plan)
@@ -739,33 +1017,63 @@ namespace GymManagement.Infrastructure.Services
             await _db.SaveChangesAsync();
         }
 
+        private async Task<IQueryable<User>> ApplyMembersOnlyFilterAsync(IQueryable<User> query)
+        {
+            var memberTypeId = await ResolveMemberUserTypeIdAsync().ConfigureAwait(false);
+            if (!memberTypeId.HasValue)
+                return query.Where(_ => false);
+
+            return query.Where(u =>
+                _db.UserUserTypes.Any(uut =>
+                    !uut.IsDeleted
+                    && uut.UserId == u.Id
+                    && uut.UserTypeId == memberTypeId.Value));
+        }
+
+        private async Task<int?> ResolveMemberUserTypeIdAsync()
+        {
+            if (_cachedMemberUserTypeId.HasValue)
+                return _cachedMemberUserTypeId;
+
+            _cachedMemberUserTypeId = await _db.UserTypes.AsNoTracking()
+                .Where(ut => !ut.IsDeleted && ut.Name == "Member")
+                .Select(ut => (int?)ut.Id)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+            return _cachedMemberUserTypeId;
+        }
+
         private IQueryable<User> ApplyUserSearchFilter(IQueryable<User> query, string? search)
         {
             var trimmedSearch = search?.Trim();
-            if (string.IsNullOrWhiteSpace(trimmedSearch))
+            if (string.IsNullOrWhiteSpace(trimmedSearch) || trimmedSearch.Length < 2)
                 return query;
 
             var digitSearch = AadhaarNumberValidator.StripFormatting(trimmedSearch);
             var isDigitOnlySearch = digitSearch.Length > 0
                 && digitSearch.Length == trimmedSearch.Count(char.IsDigit);
 
+            var likeSearch = $"%{trimmedSearch}%";
+            var emailUserIds = _db.AuthUsers.AsNoTracking()
+                .Where(a => !a.IsDeleted && a.UserId != null && EF.Functions.Like(a.Email, likeSearch))
+                .Select(a => a.UserId!.Value);
+
             if (isDigitOnlySearch && digitSearch.Length == 12)
             {
                 return query.Where(u =>
                     u.AadhaarNumber == digitSearch
-                    || EF.Functions.Like(u.FirstName, $"%{trimmedSearch}%")
-                    || EF.Functions.Like(u.LastName, $"%{trimmedSearch}%")
                     || (u.Phone != null && u.Phone.Contains(digitSearch))
-                    || _db.AuthUsers.Any(a => a.UserId == u.Id && a.Email.Contains(trimmedSearch)));
+                    || EF.Functions.Like(u.FirstName, likeSearch)
+                    || EF.Functions.Like(u.LastName, likeSearch)
+                    || emailUserIds.Contains(u.Id));
             }
 
-            var likeSearch = $"%{trimmedSearch}%";
             return query.Where(u =>
                 EF.Functions.Like(u.FirstName, likeSearch)
                 || EF.Functions.Like(u.LastName, likeSearch)
                 || (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch))
                 || (isDigitOnlySearch && u.AadhaarNumber != null && u.AadhaarNumber.Contains(digitSearch))
-                || _db.AuthUsers.Any(a => a.UserId == u.Id && EF.Functions.Like(a.Email, likeSearch)));
+                || emailUserIds.Contains(u.Id));
         }
 
         private sealed class UserBillingListSummary
@@ -780,14 +1088,38 @@ namespace GymManagement.Infrastructure.Services
             if (idSet.Count == 0)
                 return new Dictionary<int, UserBillingListSummary>();
 
-            var billings = (await _unitOfWork.MembershipPayments.FindAsync(
-                p => idSet.Contains(p.UserId) && !p.IsDeleted)).ToList();
+            var billings = await _db.MembershipPayments.AsNoTracking()
+                .Where(p => !p.IsDeleted && idSet.Contains(p.UserId))
+                .Select(p => new
+                {
+                    p.UserId,
+                    p.Id,
+                    p.MembershipId,
+                    p.CreatedDate,
+                    p.PaymentStatus,
+                    p.PendingAmount,
+                    p.NextDueDate,
+                    p.PaymentDate,
+                })
+                .ToListAsync()
+                .ConfigureAwait(false);
 
             return billings
                 .GroupBy(p => p.UserId)
                 .ToDictionary(g => g.Key, g =>
                 {
-                    var latest = g.OrderByDescending(p => p.CreatedDate).First();
+                    var latestRow = g.OrderByDescending(p => p.CreatedDate).First();
+                    var latest = new MembershipPayment
+                    {
+                        Id = latestRow.Id,
+                        UserId = latestRow.UserId,
+                        MembershipId = latestRow.MembershipId,
+                        CreatedDate = latestRow.CreatedDate,
+                        PaymentStatus = latestRow.PaymentStatus,
+                        PendingAmount = latestRow.PendingAmount,
+                        NextDueDate = latestRow.NextDueDate,
+                        PaymentDate = latestRow.PaymentDate,
+                    };
                     var hasOpen = g.Any(p =>
                         p.PaymentStatus != MembershipPaymentStatus.Paid && p.PendingAmount > 0.02m);
                     return new UserBillingListSummary { Latest = latest, HasOpenBalance = hasOpen };
@@ -825,21 +1157,31 @@ namespace GymManagement.Infrastructure.Services
         private async Task<Dictionary<int, List<UserTypeDto>>> GetUserTypesByUserIdsAsync(IEnumerable<int> userIds)
         {
             var idSet = userIds.ToHashSet();
-            if (idSet.Count == 0) return new Dictionary<int, List<UserTypeDto>>();
-            var uuts = (await _unitOfWork.UserUserTypes.FindAsync(uut => idSet.Contains(uut.UserId))).ToList();
-            var typeIds = uuts.Select(x => x.UserTypeId).Distinct().ToList();
-            var types = (await _unitOfWork.UserTypes.GetAllAsync()).Where(t => typeIds.Contains(t.Id)).ToDictionary(t => t.Id);
-            var result = new Dictionary<int, List<UserTypeDto>>();
-            foreach (var userId in idSet)
-            {
-                var dtos = uuts.Where(uut => uut.UserId == userId)
-                    .Select(uut => types.GetValueOrDefault(uut.UserTypeId))
-                    .Where(t => t != null)
-                    .Select(t => new UserTypeDto { Id = t!.Id, Name = t.Name, Description = t.Description })
-                    .ToList();
-                result[userId] = dtos;
-            }
-            return result;
+            if (idSet.Count == 0)
+                return new Dictionary<int, List<UserTypeDto>>();
+
+            var rows = await (
+                from uut in _db.UserUserTypes.AsNoTracking()
+                join ut in _db.UserTypes.AsNoTracking() on uut.UserTypeId equals ut.Id
+                where !uut.IsDeleted && !ut.IsDeleted && idSet.Contains(uut.UserId)
+                select new
+                {
+                    uut.UserId,
+                    TypeId = ut.Id,
+                    ut.Name,
+                    ut.Description,
+                }).ToListAsync().ConfigureAwait(false);
+
+            return rows
+                .GroupBy(r => r.UserId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(r => new UserTypeDto
+                    {
+                        Id = r.TypeId,
+                        Name = r.Name,
+                        Description = r.Description,
+                    }).ToList());
         }
 
         private async Task<List<UserTypeDto>> GetUserTypeDtosForUserAsync(int userId)
@@ -897,35 +1239,36 @@ namespace GymManagement.Infrastructure.Services
             if (userIds.Count == 0)
                 return new Dictionary<int, (int, string)>();
 
-            var assignments = (await _unitOfWork.UserInstructors.FindAsync(ui =>
-                userIds.Contains(ui.UserId) && ui.IsActive && !ui.EndDate.HasValue)).ToList();
-            if (assignments.Count == 0)
-                return new Dictionary<int, (int, string)>();
+            var rows = await (
+                from ui in _db.UserInstructors.AsNoTracking()
+                join trainer in _db.Trainers.AsNoTracking() on ui.TrainerId equals trainer.Id
+                join trainerUser in _db.Users.AsNoTracking() on trainer.UserId equals trainerUser.Id
+                where !ui.IsDeleted
+                    && !trainer.IsDeleted
+                    && !trainerUser.IsDeleted
+                    && userIds.Contains(ui.UserId)
+                    && ui.IsActive
+                    && !ui.EndDate.HasValue
+                select new
+                {
+                    ui.UserId,
+                    ui.TrainerId,
+                    ui.AssignmentDate,
+                    TrainerName = (trainerUser.FirstName + " " + trainerUser.LastName).Trim(),
+                }).ToListAsync().ConfigureAwait(false);
 
-            var primaryByUser = assignments
-                .GroupBy(a => a.UserId)
-                .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.AssignmentDate).First());
-
-            var trainerIds = primaryByUser.Values.Select(a => a.TrainerId).Distinct().ToList();
-            var trainers = (await _unitOfWork.Trainers.FindAsync(t => trainerIds.Contains(t.Id))).ToDictionary(t => t.Id);
-            var trainerUserIds = trainers.Values.Select(t => t.UserId).Distinct().ToList();
-            var trainerUsers = (await _unitOfWork.Users.FindAsync(u => trainerUserIds.Contains(u.Id)))
-                .ToDictionary(u => u.Id);
-
-            var result = new Dictionary<int, (int, string)>();
-            foreach (var entry in primaryByUser)
-            {
-                var userId = entry.Key;
-                var assignment = entry.Value;
-                if (!trainers.TryGetValue(assignment.TrainerId, out var trainer))
-                    continue;
-                var name = trainerUsers.TryGetValue(trainer.UserId, out var tu)
-                    ? $"{tu.FirstName} {tu.LastName}".Trim()
-                    : $"Trainer #{trainer.Id}";
-                result[userId] = (assignment.TrainerId, name);
-            }
-
-            return result;
+            return rows
+                .GroupBy(r => r.UserId)
+                .ToDictionary(
+                    g => g.Key,
+                    g =>
+                    {
+                        var best = g.OrderByDescending(r => r.AssignmentDate).First();
+                        var name = string.IsNullOrWhiteSpace(best.TrainerName)
+                            ? $"Trainer #{best.TrainerId}"
+                            : best.TrainerName;
+                        return (best.TrainerId, name);
+                    });
         }
 
         private static void EnrichWithTrainerAssignment(UserDto dto, (int TrainerId, string TrainerName)? assignment)

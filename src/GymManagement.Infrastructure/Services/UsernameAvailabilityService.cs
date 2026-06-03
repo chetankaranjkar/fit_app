@@ -7,7 +7,7 @@ namespace GymManagement.Infrastructure.Services;
 
 public sealed class UsernameAvailabilityService : IUsernameAvailabilityService
 {
-    public const string DuplicateUsernameMessage = "This username is already in use.";
+    public const string DuplicateUsernameMessage = "This email is already in use for login.";
 
     private readonly ApplicationDbContext _db;
 

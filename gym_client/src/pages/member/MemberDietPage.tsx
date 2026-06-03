@@ -275,14 +275,7 @@ export function MemberDietPage() {
   const { userName } = getDashboardUser()
   const { data: plan, isLoading } = useQuery({
     queryKey: ['member-diet-plan'],
-    queryFn: async () => {
-      try {
-        const { data } = await meService.getDietPlan()
-        return data
-      } catch {
-        return null
-      }
-    },
+    queryFn: () => meService.getDietPlan(),
   })
 
   const totals = useMemo(() => {

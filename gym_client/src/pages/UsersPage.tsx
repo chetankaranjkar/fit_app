@@ -348,7 +348,6 @@ const defaultCreateForm: CreateUserDto = {
   emergencyPhone: '',
   preferredGymTime: '',
   isActive: true,
-  username: '',
   password: '',
   role: undefined,
   planId: undefined,
@@ -370,15 +369,15 @@ export function UsersPage() {
   const [isAdding, setIsAdding] = useState(false)
   const [form, setForm] = useState<CreateUserDto>(defaultCreateForm)
   const mobileAvailability = useMobileNumberAvailability(form.phone ?? '', { enabled: isAdding })
-  const usernameAvailability = useUsernameAvailability(form.username ?? '', {
-    enabled: isAdding && Boolean(form.username?.trim()),
+  const loginEmailAvailability = useUsernameAvailability(form.email ?? '', {
+    enabled: isAdding && Boolean(form.email?.trim()),
   })
   const [formError, setFormError] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [emergencyPhoneError, setEmergencyPhoneError] = useState<string | null>(null)
   const [aadhaarError, setAadhaarError] = useState<string | null>(null)
-  const [usernameError, setUsernameError] = useState<string | null>(null)
+  const [loginEmailError, setLoginEmailError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
 
   const MIN_LOGIN_PASSWORD_LENGTH = 6
@@ -390,6 +389,9 @@ export function UsersPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [importLog, setImportLog] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
+
+  const BULK_IMPORT_BATCH_SIZE = 250
   const [membershipModalUser, setMembershipModalUser] = useState<User | null>(null)
   const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true
@@ -414,24 +416,29 @@ export function UsersPage() {
     setSearchQuery(searchParams.get('q') ?? '')
   }, [searchParams])
 
+  const MIN_USER_SEARCH_CHARS = 2
+
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearchQuery(searchQuery.trim()), 250)
+    const timer = window.setTimeout(() => setDebouncedSearchQuery(searchQuery.trim()), 350)
     return () => window.clearTimeout(timer)
   }, [searchQuery])
 
+  const effectiveSearch =
+    debouncedSearchQuery.length >= MIN_USER_SEARCH_CHARS ? debouncedSearchQuery : undefined
+
   useEffect(() => {
     setPage(1)
-  }, [debouncedSearchQuery, statusFilter])
+  }, [effectiveSearch, statusFilter])
 
   const { data: usersPage, isLoading, error, isFetching } = useQuery({
-    queryKey: ['users-paged', page, pageSize, debouncedSearchQuery, statusFilter],
+    queryKey: ['users-paged', page, pageSize, effectiveSearch, statusFilter],
     queryFn: async () => {
       const isActive =
         statusFilter === 'all' ? undefined : statusFilter === 'active'
       const { data } = await usersService.getPaged({
         page,
         pageSize,
-        search: debouncedSearchQuery || undefined,
+        search: effectiveSearch,
         membersOnly: true,
         isActive,
       })
@@ -527,7 +534,7 @@ export function UsersPage() {
       setPhoneError(null)
       setEmergencyPhoneError(null)
       setAadhaarError(null)
-      setUsernameError(null)
+      setLoginEmailError(null)
       setPasswordError(null)
       const p = created?.pendingPaymentCollection
       if (p?.membershipId && p.membershipPaymentId) {
@@ -549,7 +556,7 @@ export function UsersPage() {
     setFormError(null)
     setEmailError(null)
     setPhoneError(null)
-    setUsernameError(null)
+    setLoginEmailError(null)
     setPasswordError(null)
   }
 
@@ -571,7 +578,7 @@ export function UsersPage() {
     setFormError(null)
     setEmailError(null)
     setPhoneError(null)
-    setUsernameError(null)
+    setLoginEmailError(null)
     setPasswordError(null)
     if (st?.openAddMember) {
       navigate(location.pathname, { replace: true, state: {} })
@@ -592,18 +599,35 @@ export function UsersPage() {
     setFormError(null)
     setEmailError(null)
     setPhoneError(null)
-    setUsernameError(null)
+    setLoginEmailError(null)
     setPasswordError(null)
   }
 
   const handleEmailBlur = () => {
     const email = form.email?.trim().toLowerCase()
     if (!email) {
-      setEmailError(null)
+      setEmailError('Email is required.')
+      setLoginEmailError(null)
       return
     }
-    const exists = users.some((u) => (u.email ?? '').toLowerCase() === email)
-    setEmailError(exists ? 'This email is already registered.' : null)
+    if (!email.includes('@')) {
+      setEmailError('Enter a valid email address.')
+      setLoginEmailError(null)
+      return
+    }
+    if (loginEmailAvailability.status === 'taken') {
+      const msg = loginEmailAvailability.error ?? 'This email is already in use for login.'
+      setEmailError(msg)
+      setLoginEmailError(msg)
+      return
+    }
+    if (loginEmailAvailability.status === 'available') {
+      setEmailError(null)
+      setLoginEmailError(null)
+      return
+    }
+    setEmailError(null)
+    setLoginEmailError(null)
   }
 
   const handleAadhaarBlur = () => {
@@ -638,19 +662,6 @@ export function UsersPage() {
     setEmergencyPhoneError(getPhoneValidationError(raw, true))
   }
 
-  const handleUsernameBlur = () => {
-    const username = form.username?.trim()
-    if (!username) {
-      setUsernameError('Username is required.')
-      return
-    }
-    if (usernameAvailability.status === 'taken') {
-      setUsernameError(usernameAvailability.error)
-    } else {
-      setUsernameError(null)
-    }
-  }
-
   const handlePasswordBlur = () => {
     const password = form.password ?? ''
     if (!password.trim()) {
@@ -664,6 +675,20 @@ export function UsersPage() {
     setPasswordError(null)
   }
 
+  const canSetPasswordFromPhone = getPhoneValidationError(form.phone, true) === null
+
+  const handleUsePhoneAsPassword = () => {
+    try {
+      const phoneDigits = validatePhoneNumber(form.phone, true)
+      setForm((f) => ({ ...f, password: phoneDigits }))
+      setPasswordError(null)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : PHONE_MESSAGES.length
+      setPhoneError(msg)
+      setPasswordError(msg)
+    }
+  }
+
   const handleSubmitAdd = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
@@ -671,16 +696,15 @@ export function UsersPage() {
       setFormError('First name, last name and email are required.')
       return
     }
-    if (emailError || usernameError || passwordError || phoneError || emergencyPhoneError || aadhaarError) {
+    if (emailError || loginEmailError || passwordError || phoneError || emergencyPhoneError || aadhaarError) {
       setFormError('Please fix the errors above before saving.')
       return
     }
     const email = form.email?.trim().toLowerCase()
-    const username = form.username?.trim()
     const password = form.password ?? ''
-    if (!username) {
-      setUsernameError('Username is required.')
-      setFormError('Username is required for portal and mobile login.')
+    if (!email || !email.includes('@')) {
+      setEmailError('Enter a valid email address.')
+      setFormError('Email is required for portal and mobile login.')
       return
     }
     if (!password.trim()) {
@@ -704,11 +728,6 @@ export function UsersPage() {
       if (form.emergencyPhone?.trim()) setEmergencyPhoneError(msg)
       else setPhoneError(msg)
       setFormError(msg)
-      return
-    }
-    if (users.some((u) => (u.email ?? '').toLowerCase() === email)) {
-      setEmailError('This email is already registered.')
-      setFormError('This email is already registered.')
       return
     }
     const phoneFormatErr = getPhoneValidationError(form.phone, true)
@@ -735,21 +754,24 @@ export function UsersPage() {
       setFormError(msg)
       return
     }
-    if (usernameAvailability.status === 'checking' || usernameAvailability.status === 'idle') {
-      const msg = 'Please wait — checking username…'
-      setUsernameError(msg)
+    if (loginEmailAvailability.status === 'checking' || loginEmailAvailability.status === 'idle') {
+      const msg = 'Please wait — checking email…'
+      setLoginEmailError(msg)
+      setEmailError(msg)
       setFormError(msg)
       return
     }
-    if (usernameAvailability.status === 'taken') {
-      const msg = usernameAvailability.error ?? 'This username is already in use.'
-      setUsernameError(msg)
+    if (loginEmailAvailability.status === 'taken') {
+      const msg = loginEmailAvailability.error ?? 'This email is already in use for login.'
+      setLoginEmailError(msg)
+      setEmailError(msg)
       setFormError(msg)
       return
     }
-    if (usernameAvailability.status !== 'available') {
-      const msg = usernameAvailability.error ?? 'This username is already in use.'
-      setUsernameError(msg)
+    if (loginEmailAvailability.status !== 'available') {
+      const msg = loginEmailAvailability.error ?? 'This email is already in use for login.'
+      setLoginEmailError(msg)
+      setEmailError(msg)
       setFormError(msg)
       return
     }
@@ -782,7 +804,6 @@ export function UsersPage() {
       emergencyContact: form.emergencyContact?.trim() || undefined,
       emergencyPhone: emergencyPhoneDigits,
       preferredGymTime: form.preferredGymTime?.trim() || undefined,
-      username,
       password,
       role: 1,
       planId: form.planId && form.planId > 0 ? form.planId : undefined,
@@ -1009,18 +1030,16 @@ export function UsersPage() {
     }
     setImporting(true)
     setImportLog([])
+    setImportProgress(null)
     try {
       const text = await file.text()
       const grid = parseCsvLines(text)
       const { rows: parsed, errors } = rowsToMemberImports(grid)
       const log = [...errors]
       const seenPhones = new Set<string>()
-      let ok = 0
+      const payloads: CreateUserDto[] = []
+
       for (const r of parsed) {
-        if (users.some((u) => (u.email ?? '').toLowerCase() === r.email)) {
-          log.push(`Skipped (exists): ${r.email}`)
-          continue
-        }
         if (!r.phone) {
           log.push(`${r.email}: phone is required.`)
           continue
@@ -1029,18 +1048,13 @@ export function UsersPage() {
           log.push(`Row duplicate phone: ${r.phone} (${r.email})`)
           continue
         }
-        if (users.some((u) => u.phone === r.phone)) {
-          log.push(`Duplicate phone number: ${r.phone} (${r.email})`)
-          continue
-        }
         seenPhones.add(r.phone)
-        const loginUsername = r.username?.trim() || r.phone
         const loginPassword = r.password?.trim() || r.phone
         if (loginPassword.length < MIN_LOGIN_PASSWORD_LENGTH) {
           log.push(`${r.email}: password must be at least ${MIN_LOGIN_PASSWORD_LENGTH} characters.`)
           continue
         }
-        const payload: CreateUserDto = {
+        payloads.push({
           firstName: r.firstName,
           lastName: r.lastName,
           email: r.email,
@@ -1054,7 +1068,6 @@ export function UsersPage() {
           profilePictureUrl: undefined,
           preferredGymTime: undefined,
           isActive: r.isActive,
-          username: loginUsername,
           password: loginPassword,
           role: 1,
           planId: undefined,
@@ -1064,21 +1077,34 @@ export function UsersPage() {
           instructorBio: undefined,
           instructorHireDate: undefined,
           userTypeIds: [memberTypeId],
-        }
-        try {
-          await usersService.create(payload)
-          ok++
-        } catch (err: unknown) {
-          log.push(`${r.email}: ${getCreateUserErrorMessage(err)}`)
-        }
+        })
       }
+
+      const total = payloads.length
+      setImportProgress({ done: 0, total })
+      let ok = 0
+
+      for (let offset = 0; offset < payloads.length; offset += BULK_IMPORT_BATCH_SIZE) {
+        const batch = payloads.slice(offset, offset + BULK_IMPORT_BATCH_SIZE)
+        try {
+          const { data } = await usersService.bulkImportMembers(batch, { timeoutMs: 300_000 })
+          ok += data.imported ?? 0
+          if (data.log?.length) log.push(...data.log)
+        } catch (err: unknown) {
+          const msg = getCreateUserErrorMessage(err)
+          log.push(`Batch ${Math.floor(offset / BULK_IMPORT_BATCH_SIZE) + 1} failed (${batch.length} rows): ${msg}`)
+        }
+        setImportProgress({ done: Math.min(offset + batch.length, total), total })
+      }
+
       setImportLog(log)
-      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      await queryClient.invalidateQueries({ queryKey: ['users-paged'] })
       toast.success(`Imported ${ok} member(s). Review log for skips or errors.`)
     } catch {
       toast.error('Could not read CSV file.')
     } finally {
       setImporting(false)
+      setImportProgress(null)
     }
   }
 
@@ -1255,7 +1281,7 @@ export function UsersPage() {
               <DataToolbar
                 searchValue={searchQuery}
                 onSearchChange={setSearchQuery}
-                searchPlaceholder="Search name, email, phone, Aadhaar…"
+                searchPlaceholder="Search name, email, phone, Aadhaar (min. 2 characters)…"
                 searchAriaLabel="Search members"
                 filters={
                   <DataFilterSelect
@@ -1370,20 +1396,30 @@ export function UsersPage() {
                     required
                     className="!rounded-lg !px-3 !py-2 text-sm"
                   />
-                  <Input
-                    label="Email"
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, email: e.target.value }))
-                      if (emailError) setEmailError(null)
-                    }}
-                    onBlur={handleEmailBlur}
-                    placeholder="john@example.com"
-                    required
-                    error={emailError ?? undefined}
-                    className="!rounded-lg !px-3 !py-2 text-sm"
-                  />
+                  <div>
+                    <Input
+                      label="Email (login)"
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => {
+                        setForm((f) => ({ ...f, email: e.target.value }))
+                        if (emailError) setEmailError(null)
+                        setLoginEmailError(null)
+                      }}
+                      onBlur={handleEmailBlur}
+                      placeholder="john@example.com"
+                      required
+                      error={emailError ?? loginEmailError ?? loginEmailAvailability.error ?? undefined}
+                      className="!rounded-lg !px-3 !py-2 text-sm"
+                    />
+                    <MobileNumberAvailabilityHint
+                      status={loginEmailAvailability.status}
+                      message={loginEmailAvailability.message}
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Used to sign in on the web portal and mobile app. Must be unique.
+                    </p>
+                  </div>
                   <div>
                     <Input
                       label="Phone"
@@ -1445,53 +1481,49 @@ export function UsersPage() {
                 </div>
               </div>
 
-              {/* Login credentials (required) */}
+              {/* Login password (email above is the login id) */}
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                 <h3 className="mb-0.5 text-sm font-semibold text-white">
-                  Login credentials <span className="text-rose-400">*</span>
+                  Login password <span className="text-rose-400">*</span>
                 </h3>
                 <p className="mb-2 text-xs text-slate-400">
-                  Username and password are required. The member uses these credentials to sign in to the web portal
-                  and mobile app.
+                  The member signs in with their email and this password. Use the button to copy the mobile number, or
+                  set a custom password. An admin can change both later on the member profile.
                 </p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
+                <div className="flex max-w-xl flex-col gap-2 sm:flex-row sm:items-end">
+                  <div className="min-w-0 flex-1">
                     <Input
-                      label="Username"
-                      name="new_user_login"
-                      autoComplete="off"
-                      value={form.username ?? ''}
+                      label="Password"
+                      type="password"
+                      name="new_user_pass"
+                      autoComplete="new-password"
+                      value={form.password ?? ''}
                       onChange={(e) => {
-                        setForm((f) => ({ ...f, username: e.target.value }))
-                        setUsernameError(null)
+                        setForm((f) => ({ ...f, password: e.target.value }))
+                        setPasswordError(null)
                       }}
-                      onBlur={handleUsernameBlur}
-                      placeholder="e.g. rajesh.kumar"
+                      onBlur={handlePasswordBlur}
+                      placeholder={`Min. ${MIN_LOGIN_PASSWORD_LENGTH} characters`}
                       required
-                      error={usernameError ?? usernameAvailability.error ?? undefined}
+                      error={passwordError ?? undefined}
                       className="!rounded-lg !px-3 !py-2 text-sm"
                     />
-                    <MobileNumberAvailabilityHint
-                      status={usernameAvailability.status}
-                      message={usernameAvailability.message}
-                    />
                   </div>
-                  <Input
-                    label="Password"
-                    type="password"
-                    name="new_user_pass"
-                    autoComplete="new-password"
-                    value={form.password ?? ''}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, password: e.target.value }))
-                      setPasswordError(null)
-                    }}
-                    onBlur={handlePasswordBlur}
-                    placeholder={`Min. ${MIN_LOGIN_PASSWORD_LENGTH} characters`}
-                    required
-                    error={passwordError ?? undefined}
-                    className="!rounded-lg !px-3 !py-2 text-sm"
-                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUsePhoneAsPassword}
+                    disabled={!canSetPasswordFromPhone}
+                    title={
+                      canSetPasswordFromPhone
+                        ? 'Set password to the mobile number above'
+                        : 'Enter a valid 10-digit mobile number first'
+                    }
+                    className="shrink-0 whitespace-nowrap"
+                  >
+                    Use mobile as password
+                  </Button>
                 </div>
               </div>
 
@@ -1675,9 +1707,9 @@ export function UsersPage() {
                 <strong className="text-slate-200">email</strong>,{' '}
                 <strong className="text-slate-200">phone</strong>,{' '}
                 <strong className="text-slate-200">dateOfBirth</strong> (YYYY-MM-DD),{' '}
-                <strong className="text-slate-200">gender</strong>. Optional: aadhaarNumber, isActive, username,
-                password. When username/password are omitted, both default to the member&apos;s phone number (10
-                digits). Admins can change login credentials later on the member profile.
+                <strong className="text-slate-200">gender</strong>. Optional: aadhaarNumber, isActive, password (defaults
+                to phone if omitted). Login uses the email column; password defaults to phone for bulk import. Admins can
+                change email and password later on the member profile.
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -1703,7 +1735,11 @@ export function UsersPage() {
                 />
               </label>
               {importing ? (
-                <p className="text-slate-400">Importing…</p>
+                <p className="text-slate-400">
+                  {importProgress && importProgress.total > 0
+                    ? `Importing… ${importProgress.done} / ${importProgress.total} rows`
+                    : 'Importing…'}
+                </p>
               ) : null}
               {importLog.length > 0 ? (
                 <div className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-[11px] text-slate-300">

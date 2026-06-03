@@ -14,6 +14,8 @@ export const usersService = {
     search?: string
     membersOnly?: boolean
     isActive?: boolean
+    /** Skip payment summary joins for faster typeahead search. */
+    includeBilling?: boolean
   }) => {
     const query = new URLSearchParams()
     query.set('page', String(params.page))
@@ -21,6 +23,7 @@ export const usersService = {
     if (params.search?.trim()) query.set('search', params.search.trim())
     if (params.membersOnly) query.set('membersOnly', 'true')
     if (typeof params.isActive === 'boolean') query.set('isActive', String(params.isActive))
+    if (params.includeBilling === false) query.set('includeBilling', 'false')
     return api.get<PagedUsersResponse>(`/Users/paged?${query.toString()}`)
   },
   getById: (id: number) => api.get<User>(`/Users/${id}`),
@@ -97,6 +100,12 @@ export const usersService = {
     }
   },
   create: (data: CreateUserDto) => api.post<User>('/Users', data),
+  bulkImportMembers: (members: CreateUserDto[], options?: { timeoutMs?: number }) =>
+    api.post<{ imported: number; log: string[] }>(
+      '/Users/bulk-import',
+      { members },
+      options?.timeoutMs != null ? { timeout: options.timeoutMs } : undefined,
+    ),
   update: (id: number, data: UpdateUserDto) => api.put<User>(`/Users/${id}`, data),
   delete: (id: number) => api.delete(`/Users/${id}`),
   getDetails: (userId: number) => api.get<UserDetailDto[]>(`/Users/${userId}/details`),

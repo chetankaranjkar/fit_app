@@ -89,7 +89,7 @@ namespace GymManagement.Core.DTOs
         public string? ProfilePictureUrl { get; set; }
         public string? PreferredGymTime { get; set; }
         public bool IsActive { get; set; } = true;
-        /// <summary>Login username for portal / mobile (stored as <c>AuthUsers.Email</c>).</summary>
+        /// <summary>Deprecated: use <see cref="Email"/> as login id. Optional legacy alias.</summary>
         public string? Username { get; set; }
         public string? Password { get; set; }
         /// <summary>Role for the login account: User (Member), Instructor, or Admin. Defaults to User.</summary>
@@ -134,10 +134,10 @@ namespace GymManagement.Core.DTOs
         public List<int>? UserTypeIds { get; set; }
         /// <summary>When set by an admin, updates or creates the member login password (min 6 characters).</summary>
         public string? Password { get; set; }
-        /// <summary>Portal / mobile login username (<c>AuthUsers.Email</c>). Updates existing login or sets id when creating a new account.</summary>
-        public string? Username { get; set; }
-        /// <summary>Fallback login id when creating a new AuthUser if <see cref="Username"/> is empty.</summary>
+        /// <summary>Portal / mobile login email (<c>AuthUsers.Email</c>). Updates login id when changed.</summary>
         public string? Email { get; set; }
+        /// <summary>Deprecated: use <see cref="Email"/>. Legacy login id update.</summary>
+        public string? Username { get; set; }
     }
 }
 

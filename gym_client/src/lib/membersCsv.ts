@@ -176,9 +176,8 @@ export function rowsToMemberImports(rows: string[][]): {
         continue
       }
     }
-    const usernameOverride = idx.has('username') ? get('username').trim() : ''
     const passwordOverride = idx.has('password') ? get('password').trim() : ''
-    const username = usernameOverride || phone
+    const username = email
     const password = passwordOverride || phone
     if (password.length < 6) {
       errors.push(`Row ${lineNo}: password must be at least 6 characters.`)

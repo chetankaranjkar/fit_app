@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { api } from '../lib/api'
 
 export type MeProfile = {
@@ -156,5 +157,18 @@ export const meService = {
   getProfile: () => api.get<MeProfile>('/me/profile'),
   getWorkoutPlans: () => api.get<MeWorkoutPlanSummary[]>('/me/workout-plans'),
   getWorkoutProgram: () => api.get<MeWorkoutProgram>('/me/workout-program'),
-  getDietPlan: () => api.get<MeDietPlan>('/me/diet-plan'),
+  /** Returns null when the member has no active diet plan (204/404), not an error. */
+  getDietPlan: async () => {
+    try {
+      const res = await api.get<MeDietPlan>('/me/diet-plan')
+      if (res.status === 204 || res.data == null) return null
+      return res.data
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status
+        if (status === 404 || status === 204) return null
+      }
+      throw err
+    }
+  },
 }

@@ -22,14 +22,7 @@ export function MemberPortalPage() {
 
   const dietQuery = useQuery({
     queryKey: ['member-diet-plan'],
-    queryFn: async () => {
-      try {
-        const { data } = await meService.getDietPlan()
-        return data
-      } catch {
-        return null
-      }
-    },
+    queryFn: () => meService.getDietPlan(),
   })
 
   const programQuery = useQuery({

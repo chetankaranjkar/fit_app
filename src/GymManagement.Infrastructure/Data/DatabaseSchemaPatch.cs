@@ -15,8 +15,58 @@ public static class DatabaseSchemaPatch
             return;
 
         await EnsureBranchCheckInRadiusOffsetAsync(db, logger, cancellationToken).ConfigureAwait(false);
+        await EnsureAuditLogsTableAsync(db, logger, cancellationToken).ConfigureAwait(false);
         await EnsureRetailCatalogTablesAsync(db, logger, cancellationToken).ConfigureAwait(false);
         await EnsureMembershipLifecycleMigrationAsync(db, logger, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Aadhaar audit writes use <c>AuditLogs</c>; model snapshot includes the table but it was never migrated on some environments.
+    /// </summary>
+    private static async Task EnsureAuditLogsTableAsync(
+        ApplicationDbContext db,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        const string migrationId = "20260604120000_EnsureAuditLogsTable";
+
+        const string sql = """
+            IF OBJECT_ID(N'AuditLogs', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [AuditLogs] (
+                    [Id] bigint NOT NULL IDENTITY,
+                    [UserId] int NULL,
+                    [Action] nvarchar(100) NOT NULL,
+                    [Entity] nvarchar(100) NOT NULL,
+                    [OldValue] nvarchar(max) NULL,
+                    [NewValue] nvarchar(max) NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_AuditLogs] PRIMARY KEY ([Id])
+                );
+                CREATE INDEX [IX_AuditLogs_CreatedAt] ON [AuditLogs] ([CreatedAt]);
+                CREATE INDEX [IX_AuditLogs_Entity_CreatedAt] ON [AuditLogs] ([Entity], [CreatedAt]);
+                CREATE INDEX [IX_AuditLogs_UserId] ON [AuditLogs] ([UserId]);
+            END
+
+            IF NOT EXISTS (
+                SELECT 1 FROM dbo.__EFMigrationsHistory
+                WHERE MigrationId = N'20260604120000_EnsureAuditLogsTable'
+            )
+            BEGIN
+                INSERT INTO dbo.__EFMigrationsHistory (MigrationId, ProductVersion)
+                VALUES (N'20260604120000_EnsureAuditLogsTable', N'9.0.0');
+            END
+            """;
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(sql, cancellationToken).ConfigureAwait(false);
+            logger.LogInformation("Schema patch applied: AuditLogs table ({MigrationId})", migrationId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Schema patch for AuditLogs failed. Run: dotnet ef database update");
+        }
     }
 
     /// <summary>

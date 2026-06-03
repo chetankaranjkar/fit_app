@@ -81,7 +81,7 @@ export interface CreateUserDto {
   profilePictureUrl?: string | null
   preferredGymTime?: string | null
   isActive: boolean
-  /** Login username for portal / mobile (stored as AuthUsers.Email). */
+  /** @deprecated Use email as login id. Optional legacy alias for AuthUsers.Email. */
   username?: string | null
   password?: string | null
   /** Role for the login account: 1 Member, 2 Instructor, 3 Admin. Default Member. */
@@ -125,8 +125,8 @@ export interface UpdateUserDto {
   userTypeIds?: number[] | null
   /** Admin: set a new login password (min 6 characters). Omit to leave unchanged. */
   password?: string | null
-  /** Portal / mobile login username (AuthUsers.Email). Updates existing login or sets id when creating a new account. */
-  username?: string | null
-  /** Fallback login id when creating a new account if username is empty. */
+  /** Portal / mobile login email (AuthUsers.Email). Updates login id when changed. */
   email?: string | null
+  /** @deprecated Use email. Legacy login id update. */
+  username?: string | null
 }

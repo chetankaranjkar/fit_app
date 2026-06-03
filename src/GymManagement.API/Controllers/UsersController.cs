@@ -76,7 +76,8 @@ namespace GymManagement.API.Controllers
             [FromQuery] int pageSize = 50,
             [FromQuery] string? search = null,
             [FromQuery] bool membersOnly = false,
-            [FromQuery] bool? isActive = null)
+            [FromQuery] bool? isActive = null,
+            [FromQuery] bool includeBilling = true)
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
@@ -85,7 +86,8 @@ namespace GymManagement.API.Controllers
                 safePageSize,
                 search,
                 membersOnly,
-                isActive);
+                isActive,
+                includeBilling);
             return Ok(result);
         }
 
@@ -114,12 +116,12 @@ namespace GymManagement.API.Controllers
         [HasPermission(PermissionCodes.CREATE_MEMBER)]
         public async Task<ActionResult<UserDto>> CreateUser(CreateUserDto createUserDto)
         {
-            if (string.IsNullOrWhiteSpace(createUserDto.Username)
+            if (string.IsNullOrWhiteSpace(createUserDto.Email)
                 || string.IsNullOrWhiteSpace(createUserDto.Password))
             {
                 return BadRequest(new
                 {
-                    message = "Username and password are required for portal and mobile login.",
+                    message = "Email and password are required for portal and mobile login.",
                 });
             }
 
@@ -156,6 +158,33 @@ namespace GymManagement.API.Controllers
             catch (DbUpdateException ex) when (IsDuplicateActiveMembershipIndex(ex))
             {
                 return Conflict(new { message = UserMembershipConflictCodes.Message });
+            }
+        }
+
+        /// <summary>Batch member import for CSV uploads (up to 500 rows per request).</summary>
+        [HttpPost("bulk-import")]
+        [HasPermission(PermissionCodes.CREATE_MEMBER)]
+        public async Task<ActionResult<BulkImportMembersResultDto>> BulkImportMembers(BulkImportMembersRequestDto request)
+        {
+            if (request.Members == null || request.Members.Count == 0)
+                return BadRequest(new { message = "At least one member row is required." });
+
+            try
+            {
+                var result = await _userService.BulkImportMembersAsync(request);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (DbUpdateException ex) when (IsDuplicatePhoneException(ex))
+            {
+                return Conflict(new { message = "A user with this phone number already exists in this batch or database." });
+            }
+            catch (DbUpdateException ex) when (IsDuplicateAuthEmailException(ex))
+            {
+                return Conflict(new { message = UsernameAvailabilityService.DuplicateUsernameMessage });
             }
         }
 

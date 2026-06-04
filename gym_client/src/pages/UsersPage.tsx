@@ -936,23 +936,23 @@ export function UsersPage() {
       {
         id: 'actions',
         header: 'Actions',
-        width: 248,
-        minWidth: 228,
-        align: 'right',
+        width: 300,
+        minWidth: 300,
+        align: 'left',
         overflowVisible: true,
         cell: ({ row }) => (
-          <div className="flex flex-wrap items-center justify-end gap-1">
+          <div className="flex flex-nowrap items-center justify-start gap-1 whitespace-nowrap">
             <button
               type="button"
               onClick={() => handleViewMemberships(row)}
-              className="rounded-lg bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-200 transition hover:bg-violet-500/20"
+              className="shrink-0 rounded-lg bg-violet-500/10 px-2 py-1 text-[11px] font-semibold text-violet-200 transition hover:bg-violet-500/20"
             >
               Memberships
             </button>
             <button
               type="button"
               onClick={() => handleEdit(row)}
-              className="rounded-lg bg-blue-500/10 px-2.5 py-1 text-[11px] font-semibold text-blue-300 transition hover:bg-blue-500/20"
+              className="shrink-0 rounded-lg bg-blue-500/10 px-2 py-1 text-[11px] font-semibold text-blue-300 transition hover:bg-blue-500/20"
             >
               Edit
             </button>
@@ -960,7 +960,7 @@ export function UsersPage() {
               <button
                 type="button"
                 onClick={() => handleDeactivate(row)}
-                className="rounded-lg bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20"
+                className="shrink-0 rounded-lg bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20"
               >
                 Deactivate
               </button>
@@ -968,7 +968,7 @@ export function UsersPage() {
               <button
                 type="button"
                 onClick={() => handleActivate(row)}
-                className="rounded-lg bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                className="shrink-0 rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
               >
                 Activate
               </button>

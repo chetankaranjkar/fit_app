@@ -560,7 +560,7 @@ export function UserDetailPage() {
     mutationFn: (dto: UpdateUserDto) => usersService.update(id, dto).then((r) => r.data),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['user', id] })
-      queryClient.invalidateQueries({ queryKey: ['users'] })
+      void queryClient.invalidateQueries({ queryKey: ['users-paged'] })
       if (updated?.assignedTrainerId) {
         queryClient.invalidateQueries({ queryKey: ['trainer-clients', updated.assignedTrainerId] })
       }
@@ -1513,7 +1513,7 @@ export function UserDetailPage() {
                     persistUrl={async (url) => {
                       await usersService.update(id, { profilePictureUrl: url })
                       await queryClient.invalidateQueries({ queryKey: ['user', id] })
-                      await queryClient.invalidateQueries({ queryKey: ['users'] })
+                      await queryClient.invalidateQueries({ queryKey: ['users-paged'] })
                     }}
                   />
                 )}

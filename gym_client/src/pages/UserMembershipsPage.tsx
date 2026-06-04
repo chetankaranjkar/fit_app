@@ -236,7 +236,8 @@ export function UserMembershipsPage() {
   const createMutation = useMutation({
     mutationFn: (dto: CreateUserMembershipDto) => userMembershipsService.create(dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
+      setPage(1)
+      void queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
       setModalOpen(false)
       setForm(defaultCreate)
       setFormError(null)

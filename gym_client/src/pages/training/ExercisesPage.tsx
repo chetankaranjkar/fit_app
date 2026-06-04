@@ -167,6 +167,7 @@ export function ExercisesPage() {
   const createMutation = useMutation({
     mutationFn: (payload: CreateExerciseDto) => exercisesService.create(payload),
     onSuccess: () => {
+      setPage(1)
       void queryClient.invalidateQueries({ queryKey: ['exercises'] })
       void queryClient.invalidateQueries({ queryKey: ['exercises-paged'] })
       handleCloseModal()

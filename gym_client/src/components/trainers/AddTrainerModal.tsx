@@ -27,6 +27,8 @@ import {
 interface Props {
   open: boolean
   onClose: () => void
+  /** Called after a trainer is created (e.g. reset list page). */
+  onAdded?: () => void
 }
 
 type WizardStep = 0 | 1 | 2
@@ -141,7 +143,7 @@ function buildTrainerExtras(form: FormState): Omit<CreateTrainerDto, 'userId'> {
   }
 }
 
-export function AddTrainerModal({ open, onClose }: Props) {
+export function AddTrainerModal({ open, onClose, onAdded }: Props) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<AddMode>('existing')
   const [step, setStep] = useState<WizardStep>(0)
@@ -245,9 +247,10 @@ export function AddTrainerModal({ open, onClose }: Props) {
       await trainersService.update(trainer.id, updateDto)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trainers'] })
-      queryClient.invalidateQueries({ queryKey: ['trainer-stats'] })
-      queryClient.invalidateQueries({ queryKey: ['users'] })
+      void queryClient.invalidateQueries({ queryKey: ['trainers-paged'] })
+      void queryClient.invalidateQueries({ queryKey: ['trainer-stats'] })
+      void queryClient.invalidateQueries({ queryKey: ['users-paged'] })
+      onAdded?.()
       reset()
       onClose()
     },

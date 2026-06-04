@@ -187,7 +187,7 @@ export function TrainerDetailPage() {
     mutationFn: (payload: UpdateTrainerDto) => trainersService.update(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trainer', id] })
-      queryClient.invalidateQueries({ queryKey: ['trainers'] })
+      void queryClient.invalidateQueries({ queryKey: ['trainers-paged'] })
     },
   })
 
@@ -285,7 +285,7 @@ export function TrainerDetailPage() {
               onDelete={async () => {
                 if (!window.confirm('Delete this trainer permanently?')) return
                 await trainersService.delete(trainer.id)
-                queryClient.invalidateQueries({ queryKey: ['trainers'] })
+                void queryClient.invalidateQueries({ queryKey: ['trainers-paged'] })
                 navigate('/dashboard/trainers')
               }}
             />
@@ -299,7 +299,7 @@ export function TrainerDetailPage() {
         trainer={trainer}
         onTrainerUpdated={() => {
           queryClient.invalidateQueries({ queryKey: ['trainer', id] })
-          queryClient.invalidateQueries({ queryKey: ['trainers'] })
+          void queryClient.invalidateQueries({ queryKey: ['trainers-paged'] })
         }}
       />
     </DashboardLayout>

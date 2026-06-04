@@ -526,7 +526,8 @@ export function UsersPage() {
   const createMutation = useMutation({
     mutationFn: (dto: CreateUserDto) => usersService.create(dto).then((r) => r.data),
     onSuccess: (created) => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setPage(1)
+      void queryClient.invalidateQueries({ queryKey: ['users-paged'] })
       setIsAdding(false)
       setForm(defaultCreateForm)
       setFormError(null)
@@ -547,7 +548,7 @@ export function UsersPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: { isActive: boolean } }) =>
       usersService.update(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['users-paged'] }),
   })
 
   const handleStartAdd = () => {

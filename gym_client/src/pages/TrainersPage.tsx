@@ -239,7 +239,11 @@ export function TrainersPage() {
         </DashboardTablePanel>
       </DashboardSubpageShell>
 
-      <AddTrainerModal open={addOpen} onClose={() => setAddOpen(false)} />
+      <AddTrainerModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onAdded={() => setPage(1)}
+      />
     </DashboardLayout>
   )
 }

@@ -186,6 +186,7 @@ export function DietPlansPage() {
   const createPlanMutation = useMutation({
     mutationFn: (dto: CreateDietPlanDto) => dietPlansService.create(dto),
     onSuccess: (res) => {
+      setPage(1)
       invalidateDietPlans()
       setPlanModalOpen(false)
       setPlanForm(defaultPlanForm)

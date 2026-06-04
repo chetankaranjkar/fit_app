@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { DrawerSection } from '../AnalyticsDrawer'
 import { EmptyState } from '../EmptyState'
 import { IconAlert, IconBell, IconInbox } from '../Icons'
-import { KPI_SNAPSHOT, MOCK_PENDING } from '../../services/mockData'
+import { useOwnerAnalyticsData } from '../../hooks/useOwnerAnalyticsData'
 import type { PendingDue } from '../../types'
 
 const inr = (n: number) => `\u20b9${n.toLocaleString('en-IN')}`
@@ -17,16 +17,17 @@ const daysDiff = (iso: string) =>
   Math.ceil((Date.now() - new Date(iso).getTime()) / 86400000)
 
 export function PaymentsDrawerBody() {
+  const { data } = useOwnerAnalyticsData()
   const [sent, setSent] = useState<Record<string, boolean>>({})
 
   const sorted = useMemo(() => {
-    return [...MOCK_PENDING].sort((a, b) => {
+    return [...(data?.pendingDues ?? [])].sort((a, b) => {
       const ao = isOverdue(a) ? 1 : 0
       const bo = isOverdue(b) ? 1 : 0
       if (ao !== bo) return bo - ao
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
     })
-  }, [])
+  }, [data?.pendingDues])
 
   const overdueCount = sorted.filter(isOverdue).length
   const totalAmount = sorted.reduce((sum, d) => sum + d.dueAmount, 0)
@@ -139,7 +140,10 @@ export function PaymentsDrawerBody() {
 }
 
 export function PaymentsDrawerSummary() {
-  const { pendingAmount, pendingCount, overdueCount } = KPI_SNAPSHOT.payments
+  const { data } = useOwnerAnalyticsData()
+  const pendingAmount = data?.payments.pendingAmount ?? 0
+  const pendingCount = data?.payments.pendingCount ?? 0
+  const overdueCount = data?.payments.overdueCount ?? 0
   return (
     <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs">
       <span className="text-slate-400">

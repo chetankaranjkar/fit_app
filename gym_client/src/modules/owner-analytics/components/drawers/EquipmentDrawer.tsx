@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { DrawerSection } from '../AnalyticsDrawer'
 import { EmptyState } from '../EmptyState'
 import { IconAlert, IconWrench } from '../Icons'
-import { KPI_SNAPSHOT, MOCK_EQUIPMENT_ISSUES } from '../../services/mockData'
+import { useOwnerAnalyticsData } from '../../hooks/useOwnerAnalyticsData'
 import type { EquipmentIssue, EquipmentStatus } from '../../types'
 
 const daysDown = (e: EquipmentIssue) => {
@@ -26,15 +26,16 @@ const statusLabel: Record<EquipmentStatus, string> = {
 }
 
 export function EquipmentDrawerBody() {
+  const { data } = useOwnerAnalyticsData()
   const { unresolved, resolved } = useMemo(() => {
-    const sorted = [...MOCK_EQUIPMENT_ISSUES].sort(
+    const sorted = [...(data?.equipmentIssues ?? [])].sort(
       (a, b) => daysDown(b) - daysDown(a),
     )
     return {
       unresolved: sorted.filter((e) => e.status !== 'RESOLVED'),
       resolved: sorted.filter((e) => e.status === 'RESOLVED'),
     }
-  }, [])
+  }, [data?.equipmentIssues])
 
   if (unresolved.length === 0 && resolved.length === 0) {
     return (
@@ -155,7 +156,10 @@ export function EquipmentDrawerBody() {
 }
 
 export function EquipmentDrawerSummary() {
-  const { downCount, longestDown, resolvedThisMonth } = KPI_SNAPSHOT.equipment
+  const { data } = useOwnerAnalyticsData()
+  const downCount = data?.equipment.downCount ?? 0
+  const longestDown = data?.equipment.longestDown ?? 0
+  const resolvedThisMonth = data?.equipment.resolvedThisMonth ?? 0
   return (
     <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs">
       <span className="text-slate-400">

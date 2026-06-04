@@ -3,8 +3,8 @@ import { DrawerSection } from '../AnalyticsDrawer'
 import { MiniSparkline } from '../MiniSparkline'
 import { EmptyState } from '../EmptyState'
 import { IconActivity, IconCalendar } from '../Icons'
-import { KPI_SNAPSHOT, MOCK_PAYMENTS, MOCK_REVENUE_30D } from '../../services/mockData'
-import type { PaymentEntry, PaymentStatus, RevenueRange } from '../../types'
+import { useOwnerAnalyticsData } from '../../hooks/useOwnerAnalyticsData'
+import type { PaymentStatus, RevenueRange } from '../../types'
 
 const inr = (n: number) => `\u20b9${n.toLocaleString('en-IN')}`
 const fmtDate = (iso: string) =>
@@ -26,30 +26,30 @@ const statusTone: Record<PaymentStatus, string> = {
 }
 
 export function RevenueDrawerBody() {
+  const { data } = useOwnerAnalyticsData()
   const [range, setRange] = useState<RevenueRange>('7d')
+  const revenue30d = data?.revenue30d ?? []
 
   const series = useMemo(() => {
-    const slice = range === '7d' ? MOCK_REVENUE_30D.slice(-7) : MOCK_REVENUE_30D
-    return slice
-  }, [range])
+    return range === '7d' ? revenue30d.slice(-7) : revenue30d
+  }, [range, revenue30d])
 
   const total = useMemo(
     () => series.reduce((sum, p) => sum + p.amount, 0),
     [series],
   )
 
-  const sortedPayments = useMemo<PaymentEntry[]>(
+  const sortedPayments = useMemo(
     () =>
-      [...MOCK_PAYMENTS].sort(
+      [...(data?.recentPayments ?? [])].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       ),
-    [],
+    [data?.recentPayments],
   )
 
-  // Simple weekly aggregation for the breakdown chip row.
   const weekly = useMemo(() => {
     const buckets: Record<string, number> = {}
-    for (const p of MOCK_REVENUE_30D) {
+    for (const p of revenue30d) {
       const d = new Date(p.date)
       // ISO week key (year-week)
       const weekStart = new Date(d)
@@ -58,7 +58,7 @@ export function RevenueDrawerBody() {
       buckets[key] = (buckets[key] ?? 0) + p.amount
     }
     return Object.entries(buckets).slice(-4)
-  }, [])
+  }, [revenue30d])
 
   return (
     <>
@@ -179,7 +179,9 @@ export function RevenueDrawerBody() {
  * Header summary strip used for the Revenue drawer \u2014 highlights week-over-week delta.
  */
 export function RevenueDrawerSummary() {
-  const { last7d, deltaPct } = KPI_SNAPSHOT.revenue
+  const { data } = useOwnerAnalyticsData()
+  const last7d = data?.revenue.last7d ?? 0
+  const deltaPct = data?.revenue.deltaPct ?? 0
   const up = deltaPct >= 0
   return (
     <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs">

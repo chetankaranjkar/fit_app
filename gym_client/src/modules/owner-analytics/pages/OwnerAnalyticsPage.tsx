@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { ModulePageShell } from '../components/ModulePageShell'
 import { KpiCard } from '../components/KpiCard'
 import { CountUp } from '../components/CountUp'
@@ -27,8 +26,8 @@ import {
   EquipmentDrawerBody,
   EquipmentDrawerSummary,
 } from '../components/drawers/EquipmentDrawer'
-import { KPI_SNAPSHOT } from '../services/mockData'
 import { useStaggerAnimation } from '../hooks/useAnimations'
+import { useOwnerAnalyticsData } from '../hooks/useOwnerAnalyticsData'
 import {
   AttentionPanel,
   MemberPulseCard,
@@ -36,9 +35,6 @@ import {
   RevenueOverviewCard,
 } from '../components/OverviewPanels'
 import type { KpiType } from '../types'
-import { reportsService } from '../../../services/reports.service'
-import { membershipPaymentsService } from '../../../services/membershipPayments.service'
-import { dashboardService } from '../../../services/dashboard.service'
 
 const inr = (n: number) => `\u20b9${n.toLocaleString('en-IN')}`
 
@@ -52,65 +48,7 @@ type DrawerConfig = {
 export function OwnerAnalyticsPage() {
   const [open, setOpen] = useState<KpiType | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
-  const { data: liveKpis } = useQuery({
-    queryKey: ['owner-analytics-kpis'],
-    queryFn: async () => {
-      const now = new Date()
-      const fromDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-      const toDate = now.toISOString().slice(0, 10)
-      const [summaryRes, reportRes, billingRes, alertsRes] = await Promise.allSettled([
-        dashboardService.getSummary(),
-        reportsService.getSummary(fromDate, toDate),
-        membershipPaymentsService.dashboard(),
-        dashboardService.getNotifications(),
-      ])
-      const summary = summaryRes.status === 'fulfilled' ? summaryRes.value.data : null
-      const activeMembers = summary?.activeMembers ?? KPI_SNAPSHOT.members.active
-      const totalMembers = summary?.totalMembers ?? KPI_SNAPSHOT.members.total
-
-      const report = reportRes.status === 'fulfilled' ? reportRes.value.data : null
-      const revenueTrend = report?.revenueTrend ?? []
-      const totalRevenue30d = revenueTrend.reduce((sum, point) => sum + (point.amount ?? 0), 0)
-      const last7d = revenueTrend.slice(-7).reduce((sum, point) => sum + (point.amount ?? 0), 0)
-      const prev7d = revenueTrend.slice(-14, -7).reduce((sum, point) => sum + (point.amount ?? 0), 0)
-      const revenueDeltaPct = prev7d > 0 ? Math.round(((last7d - prev7d) / prev7d) * 100) : 0
-
-      const billing = billingRes.status === 'fulfilled' ? billingRes.value.data : null
-      const pendingCount = billing?.pendingPaymentsCount ?? 0
-      const pendingAmount = Number(billing?.totalPendingAmount ?? 0)
-      const overdueCount = billing?.overdueMembersCount ?? 0
-
-      const alerts = alertsRes.status === 'fulfilled' ? alertsRes.value.data.alerts ?? [] : []
-      const equipmentAlerts = alerts.filter((a) => {
-        const title = String(a.title ?? '').toLowerCase()
-        const message = String(a.message ?? '').toLowerCase()
-        return title.includes('equipment') || message.includes('equipment')
-      })
-      const equipmentDownCount =
-        equipmentAlerts.reduce((sum, a) => sum + (Number(a.count) || 1), 0) || KPI_SNAPSHOT.equipment.downCount
-
-      return {
-        revenue: {
-          total30d: totalRevenue30d || KPI_SNAPSHOT.revenue.total30d,
-          last7d: last7d || KPI_SNAPSHOT.revenue.last7d,
-          deltaPct: Number.isFinite(revenueDeltaPct) ? revenueDeltaPct : KPI_SNAPSHOT.revenue.deltaPct,
-        },
-        members: {
-          active: activeMembers,
-          total: totalMembers,
-        },
-        payments: {
-          pendingCount,
-          pendingAmount,
-          overdueCount,
-        },
-        equipment: {
-          downCount: equipmentDownCount,
-          longestDown: KPI_SNAPSHOT.equipment.longestDown,
-        },
-      }
-    },
-  })
+  const { data, isFetching } = useOwnerAnalyticsData()
 
   const drawers = useMemo<Record<KpiType, DrawerConfig>>(
     () => ({
@@ -145,28 +83,34 @@ export function OwnerAnalyticsPage() {
   useStaggerAnimation(gridRef, '[data-kpi]', [])
 
   const current = open ? drawers[open] : null
+  const revenue = data?.revenue
+  const members = data?.memberKpis
+  const payments = data?.payments
+  const equipment = data?.equipment
 
   return (
     <ModulePageShell
       eyebrow="Owner Analytics"
       titleBefore="Your gym, at a "
       titleGradient="glance"
-      subtitle="Click any KPI to drill into contextual detail without leaving the page."
+      subtitle={
+        isFetching
+          ? 'Refreshing live metrics from your gym data…'
+          : 'Click any KPI to drill into contextual detail without leaving the page.'
+      }
     >
       <div ref={gridRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           type="revenue"
           label="Total Revenue (30d)"
-          value={<CountUp value={liveKpis?.revenue.total30d ?? KPI_SNAPSHOT.revenue.total30d} format={inr} />}
+          value={<CountUp value={revenue?.total30d ?? 0} format={inr} />}
           subValue={
             <>
               Last 7 days&nbsp;
-              <span className="font-semibold text-slate-300">
-                {inr(liveKpis?.revenue.last7d ?? KPI_SNAPSHOT.revenue.last7d)}
-              </span>
+              <span className="font-semibold text-slate-300">{inr(revenue?.last7d ?? 0)}</span>
             </>
           }
-          deltaPct={liveKpis?.revenue.deltaPct ?? KPI_SNAPSHOT.revenue.deltaPct}
+          deltaPct={revenue?.deltaPct ?? 0}
           deltaLabel="vs previous 7 days"
           tone="emerald"
           icon={<IconRupee className="size-5" />}
@@ -175,13 +119,11 @@ export function OwnerAnalyticsPage() {
         <KpiCard
           type="members"
           label="Active Members"
-          value={<CountUp value={liveKpis?.members.active ?? KPI_SNAPSHOT.members.active} />}
+          value={<CountUp value={members?.active ?? 0} />}
           subValue={
             <>
               of&nbsp;
-              <span className="font-semibold text-slate-300">
-                {liveKpis?.members.total ?? KPI_SNAPSHOT.members.total}
-              </span>
+              <span className="font-semibold text-slate-300">{members?.total ?? 0}</span>
               &nbsp;members
             </>
           }
@@ -192,12 +134,12 @@ export function OwnerAnalyticsPage() {
         <KpiCard
           type="payments"
           label="Pending Payments"
-          value={<CountUp value={liveKpis?.payments.pendingCount ?? KPI_SNAPSHOT.payments.pendingCount} />}
+          value={<CountUp value={payments?.pendingCount ?? 0} />}
           subValue={
             <>
               Worth&nbsp;
               <span className="font-semibold text-slate-300">
-                {inr(liveKpis?.payments.pendingAmount ?? KPI_SNAPSHOT.payments.pendingAmount)}
+                {inr(payments?.pendingAmount ?? 0)}
               </span>
             </>
           }
@@ -208,13 +150,11 @@ export function OwnerAnalyticsPage() {
         <KpiCard
           type="equipment"
           label="Equipment Downtime"
-          value={<CountUp value={liveKpis?.equipment.downCount ?? KPI_SNAPSHOT.equipment.downCount} />}
+          value={<CountUp value={equipment?.downCount ?? 0} />}
           subValue={
             <>
               Longest&nbsp;
-              <span className="font-semibold text-slate-300">
-                {liveKpis?.equipment.longestDown ?? KPI_SNAPSHOT.equipment.longestDown}d
-              </span>
+              <span className="font-semibold text-slate-300">{equipment?.longestDown ?? 0}d</span>
               &nbsp;down
             </>
           }
@@ -224,7 +164,6 @@ export function OwnerAnalyticsPage() {
         />
       </div>
 
-      {/* Row 2: hero chart + attention rail */}
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <RevenueOverviewCard onDrillDown={setOpen} />
@@ -232,13 +171,11 @@ export function OwnerAnalyticsPage() {
         <AttentionPanel onDrillDown={setOpen} />
       </div>
 
-      {/* Row 3: activity stream + member pulse */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <RecentActivityCard onDrillDown={setOpen} />
         <MemberPulseCard onDrillDown={setOpen} />
       </div>
 
-      {/* Tip footer */}
       <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-5 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <span className="inline-flex size-9 items-center justify-center rounded-xl bg-white/5 text-slate-300">
@@ -247,9 +184,8 @@ export function OwnerAnalyticsPage() {
           <div>
             <p className="text-sm font-semibold text-white">Tip</p>
             <p className="text-xs text-slate-400">
-              Every KPI card and panel here is a live entry point. Click any card or
-              the "View details" buttons to drill deeper in a side drawer — no page
-              change needed.
+              Metrics load from billing, members, attendance, and gym operations APIs. If a
+              section is empty, add data in Payments, Members, or Equipment first.
             </p>
           </div>
         </div>

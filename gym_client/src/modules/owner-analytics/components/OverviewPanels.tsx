@@ -10,14 +10,7 @@ import {
   IconWrench,
 } from './Icons'
 import { MiniSparkline } from './MiniSparkline'
-import {
-  KPI_SNAPSHOT,
-  MOCK_EQUIPMENT_ISSUES,
-  MOCK_MEMBERS,
-  MOCK_PAYMENTS,
-  MOCK_PENDING,
-  MOCK_REVENUE_30D,
-} from '../services/mockData'
+import { useOwnerAnalyticsData } from '../hooks/useOwnerAnalyticsData'
 import type { KpiType, RevenueRange } from '../types'
 
 const inr = (n: number) => `\u20b9${n.toLocaleString('en-IN')}`
@@ -122,20 +115,23 @@ export function RevenueOverviewCard({
 }: {
   onDrillDown: (t: KpiType) => void
 }) {
+  const { data } = useOwnerAnalyticsData()
   const [range, setRange] = useState<RevenueRange>('7d')
+  const revenue30d = data?.revenue30d ?? []
 
   const series = useMemo(
-    () => (range === '7d' ? MOCK_REVENUE_30D.slice(-7) : MOCK_REVENUE_30D),
-    [range],
+    () => (range === '7d' ? revenue30d.slice(-7) : revenue30d),
+    [range, revenue30d],
   )
   const total = useMemo(
     () => series.reduce((sum, p) => sum + p.amount, 0),
     [series],
   )
   const avg = Math.round(total / Math.max(1, series.length))
-  const peak = Math.max(...series.map((p) => p.amount))
-  const { deltaPct } = KPI_SNAPSHOT.revenue
+  const peak = series.length ? Math.max(...series.map((p) => p.amount)) : 0
+  const deltaPct = data?.revenue.deltaPct ?? 0
   const up = deltaPct >= 0
+  const txCount = data?.recentPayments.length ?? 0
 
   return (
     <GlassCard>
@@ -195,7 +191,7 @@ export function RevenueOverviewCard({
       <div className="mt-4 grid grid-cols-3 gap-2">
         <Stat label="Average / day" value={inr(avg)} />
         <Stat label="Peak" value={inr(peak)} />
-        <Stat label="Transactions" value={MOCK_PAYMENTS.length.toString()} />
+        <Stat label="Transactions" value={txCount.toString()} />
       </div>
     </GlassCard>
   )
@@ -210,9 +206,10 @@ export function AttentionPanel({
 }: {
   onDrillDown: (t: KpiType) => void
 }) {
+  const { data } = useOwnerAnalyticsData()
   const topPending = useMemo(
     () =>
-      [...MOCK_PENDING]
+      [...(data?.pendingDues ?? [])]
         .sort((a, b) => {
           const ao = isDueOverdue(a.dueDate) ? 1 : 0
           const bo = isDueOverdue(b.dueDate) ? 1 : 0
@@ -220,12 +217,11 @@ export function AttentionPanel({
           return b.dueAmount - a.dueAmount
         })
         .slice(0, 3),
-    [],
+    [data?.pendingDues],
   )
   const topDown = useMemo(
-    () =>
-      MOCK_EQUIPMENT_ISSUES.filter((e) => e.status !== 'RESOLVED').slice(0, 2),
-    [],
+    () => (data?.equipmentIssues ?? []).slice(0, 2),
+    [data?.equipmentIssues],
   )
   const hasAny = topPending.length > 0 || topDown.length > 0
 
@@ -325,12 +321,13 @@ export function RecentActivityCard({
 }: {
   onDrillDown: (t: KpiType) => void
 }) {
+  const { data } = useOwnerAnalyticsData()
   const items = useMemo(
     () =>
-      [...MOCK_PAYMENTS]
+      [...(data?.recentPayments ?? [])]
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 6),
-    [],
+    [data?.recentPayments],
   )
   return (
     <GlassCard>
@@ -390,17 +387,23 @@ export function MemberPulseCard({
 }: {
   onDrillDown: (t: KpiType) => void
 }) {
-  const { active, total, inactive } = KPI_SNAPSHOT.members
+  const { data } = useOwnerAnalyticsData()
+  const active = data?.memberKpis.active ?? 0
+  const total = data?.memberKpis.total ?? 0
+  const inactive = data?.memberKpis.inactive ?? 0
   const pct = total > 0 ? Math.round((active / total) * 100) : 0
 
   const byPlan = useMemo(() => {
+    if (data?.planBuckets?.length) {
+      return data.planBuckets.map((b) => [b.plan, b.count] as [string, number])
+    }
     const buckets: Record<string, number> = {}
-    MOCK_MEMBERS.forEach((m) => {
-      const key = m.plan.split(' ')[0]
+    ;(data?.memberRows ?? []).forEach((m) => {
+      const key = m.plan.split(' ')[0] || 'Other'
       buckets[key] = (buckets[key] ?? 0) + 1
     })
     return Object.entries(buckets).sort((a, b) => b[1] - a[1])
-  }, [])
+  }, [data?.planBuckets, data?.memberRows])
 
   return (
     <GlassCard>

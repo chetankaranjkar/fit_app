@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { DrawerSection } from '../AnalyticsDrawer'
 import { EmptyState } from '../EmptyState'
 import { IconAlert, IconSearch, IconUsers } from '../Icons'
-import { KPI_SNAPSHOT, MOCK_MEMBERS } from '../../services/mockData'
+import { useOwnerAnalyticsData } from '../../hooks/useOwnerAnalyticsData'
 import type { ActiveMember, MembersFilter } from '../../types'
 
 const fmtRelative = (iso: string) => {
@@ -23,12 +23,13 @@ const isInactive = (m: ActiveMember) => {
 }
 
 export function MembersDrawerBody() {
+  const { data } = useOwnerAnalyticsData()
   const [filter, setFilter] = useState<MembersFilter>('ALL')
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return MOCK_MEMBERS.filter((m) => {
+    return (data?.memberRows ?? []).filter((m) => {
       if (filter === 'ACTIVE' && isInactive(m)) return false
       if (filter === 'INACTIVE' && !isInactive(m)) return false
       if (q && !m.name.toLowerCase().includes(q) && !m.plan.toLowerCase().includes(q)) {
@@ -36,7 +37,7 @@ export function MembersDrawerBody() {
       }
       return true
     }).sort((a, b) => new Date(b.lastVisit).getTime() - new Date(a.lastVisit).getTime())
-  }, [filter, query])
+  }, [filter, query, data?.memberRows])
 
   return (
     <>
@@ -133,7 +134,10 @@ export function MembersDrawerBody() {
 }
 
 export function MembersDrawerSummary() {
-  const { active, total, inactive } = KPI_SNAPSHOT.members
+  const { data } = useOwnerAnalyticsData()
+  const active = data?.memberKpis.active ?? 0
+  const total = data?.memberKpis.total ?? 0
+  const inactive = data?.memberKpis.inactive ?? 0
   const pct = total > 0 ? Math.round((active / total) * 100) : 0
   return (
     <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs">

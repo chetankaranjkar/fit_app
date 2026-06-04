@@ -38,6 +38,7 @@ const AUTH_PERMISSION_CODES = {
   submitMembershipRequest: 'SUBMIT_MEMBERSHIP_REQUEST',
   approveMembershipRequest: 'APPROVE_MEMBERSHIP_REQUEST',
   viewMembershipAudit: 'VIEW_MEMBERSHIP_AUDIT',
+  viewWorkoutPlanAudit: 'VIEW_WORKOUT_PLAN_AUDIT',
 } as const
 
 function normalizeLoginResponse(raw: Record<string, unknown>): LoginResponse {
@@ -208,6 +209,9 @@ export const authService = {
     authService.hasAppRole('ADMIN'),
   canViewMembershipAudit: () =>
     authService.hasPermission(AUTH_PERMISSION_CODES.viewMembershipAudit) ||
+    authService.hasAppRole('ADMIN'),
+  canViewWorkoutPlanAudit: () =>
+    authService.hasPermission(AUTH_PERMISSION_CODES.viewWorkoutPlanAudit) ||
     authService.hasAppRole('ADMIN'),
   hasAppRole: (roleName: string) => {
     const n = roleName.trim().toUpperCase()

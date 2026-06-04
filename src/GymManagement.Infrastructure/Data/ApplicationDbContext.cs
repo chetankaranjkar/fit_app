@@ -53,6 +53,8 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<Exercise> Exercises { get; set; }
         public DbSet<ExerciseStep> ExerciseSteps { get; set; }
         public DbSet<WorkoutPlan> WorkoutPlans { get; set; }
+        public DbSet<WorkoutPlanAuditLog> WorkoutPlanAuditLogs { get; set; }
+        public DbSet<GymSetting> GymSettings { get; set; }
         public DbSet<WorkoutPlanWeek> WorkoutPlanWeeks { get; set; }
         public DbSet<WorkoutPlanDay> WorkoutPlanDays { get; set; }
         public DbSet<WorkoutPlanExercise> WorkoutPlanExercises { get; set; }
@@ -442,6 +444,15 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.Thumbnail).HasMaxLength(500);
                 entity.Property(e => e.Tags).HasMaxLength(1000);
                 entity.Property(e => e.Status).HasMaxLength(32);
+                entity.Property(e => e.PlanType).HasMaxLength(32).HasDefaultValue(WorkoutPlanTypes.Program);
+                entity.HasOne(e => e.AssignedToUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.AssignedToUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => new { e.AssignedToUserId, e.PlanType })
+                    .IsUnique()
+                    .HasFilter("[PlanType] = N'Personal' AND [IsDeleted] = 0 AND [AssignedToUserId] IS NOT NULL")
+                    .HasDatabaseName("UX_WorkoutPlan_OnePersonalPlanPerUser");
                 entity.HasOne(e => e.Trainer)
                     .WithMany(i => i.WorkoutPlans)
                     .HasForeignKey(e => e.TrainerId)
@@ -990,6 +1001,29 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.CreatedDate);
                 entity.ToTable("financial_audit_logs");
+            });
+
+            modelBuilder.Entity<WorkoutPlanAuditLog>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Action).HasConversion<string>().HasMaxLength(40);
+                entity.Property(e => e.WorkoutPlanName).HasMaxLength(200);
+                entity.Property(e => e.PerformedByUserName).HasMaxLength(200);
+                entity.Property(e => e.ChangeDetails).HasMaxLength(4000);
+                entity.Property(e => e.SnapshotJson).HasColumnType("nvarchar(max)");
+                entity.Property(e => e.IPAddress).HasMaxLength(64);
+                entity.Property(e => e.DeviceInfo).HasMaxLength(512);
+                entity.HasIndex(e => e.WorkoutPlanId);
+                entity.HasIndex(e => e.AssignedToUserId);
+                entity.HasIndex(e => e.PerformedDate);
+                entity.HasIndex(e => e.Action);
+                entity.ToTable("workout_plan_audit_logs");
+            });
+
+            modelBuilder.Entity<GymSetting>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("GymSettings");
             });
 
             // Configure Invoice

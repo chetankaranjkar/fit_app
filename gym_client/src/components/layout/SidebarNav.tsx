@@ -40,6 +40,7 @@ const trainingSubItems = [
   { path: '/dashboard/training/workout-studio', label: 'Workout Studio (AI + 3D)' },
   { path: '/dashboard/training/programs', label: 'Programs' },
   { path: '/dashboard/training/workout-assignments', label: 'Workout Assignments' },
+  { path: '/dashboard/training/workout-plan-audit', label: 'Workout Plan Audit' },
 ] as const
 
 const dietSubItems = [

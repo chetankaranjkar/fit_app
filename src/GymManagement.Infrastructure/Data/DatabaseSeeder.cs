@@ -360,6 +360,7 @@ namespace GymManagement.Infrastructure.Data
                 new { Code = PermissionCodes.SubmitMembershipRequest, Name = "Submit membership requests", Description = "Submit void, cancel, and change requests for memberships" },
                 new { Code = PermissionCodes.ApproveMembershipRequest, Name = "Approve membership requests", Description = "Approve or reject membership lifecycle requests" },
                 new { Code = PermissionCodes.ViewMembershipAudit, Name = "Membership audit logs", Description = "View membership lifecycle audit trail" },
+                new { Code = PermissionCodes.ViewWorkoutPlanAudit, Name = "Workout plan audit logs", Description = "View personal workout plan audit history" },
                 new { Code = "TrainerAccess", Name = "Trainer access", Description = "Access to trainer/instructor features" },
                 new { Code = "UsersAccess", Name = "Users access", Description = "Access to users and member data" },
                 new { Code = "CREATE_MEMBER", Name = "Create member", Description = "Create new member / user accounts" },
@@ -437,6 +438,7 @@ namespace GymManagement.Infrastructure.Data
             await LinkAsync("ADMIN", PermissionCodes.SubmitMembershipRequest);
             await LinkAsync("ADMIN", PermissionCodes.ApproveMembershipRequest);
             await LinkAsync("ADMIN", PermissionCodes.ViewMembershipAudit);
+            await LinkAsync("ADMIN", PermissionCodes.ViewWorkoutPlanAudit);
             await LinkAsync("TRAINER", PermissionCodes.BookPtSessions);
             await LinkAsync("TRAINER", PermissionCodes.ManagePtSchedules);
             await LinkAsync("TRAINER", PermissionCodes.ViewTrainerEarnings);

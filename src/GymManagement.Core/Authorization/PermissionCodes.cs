@@ -28,6 +28,9 @@ public static class PermissionCodes
 
     /// <summary>View membership lifecycle audit trail (admin).</summary>
     public const string ViewMembershipAudit = "VIEW_MEMBERSHIP_AUDIT";
+
+    /// <summary>View personal workout plan audit history (admin).</summary>
+    public const string ViewWorkoutPlanAudit = "VIEW_WORKOUT_PLAN_AUDIT";
     public const string TrainerAccess = "TrainerAccess";
     public const string UsersAccess = "UsersAccess";
 

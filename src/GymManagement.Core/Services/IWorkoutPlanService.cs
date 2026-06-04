@@ -10,8 +10,13 @@ namespace GymManagement.Core.Services
         Task<IEnumerable<WorkoutPlanDto>> GetWorkoutPlansByTypeAsync(WorkoutType workoutType);
         Task<WorkoutPlanDto> CreateWorkoutPlanAsync(CreateWorkoutPlanDto createWorkoutPlanDto);
         Task<WorkoutPlanDto?> UpdateWorkoutPlanAsync(int id, CreateWorkoutPlanDto updateWorkoutPlanDto);
-        Task<bool> DeleteWorkoutPlanAsync(int id);
-        Task<WorkoutPlanDto?> SaveProgramStructureAsync(int id, SaveProgramStructureDto dto);
+        Task<bool> DeleteWorkoutPlanAsync(int id, int? performedByUserId = null, string? performedByUserName = null, CancellationToken ct = default);
+        Task<WorkoutPlanDto?> SaveProgramStructureAsync(
+            int id,
+            SaveProgramStructureDto dto,
+            int? performedByUserId = null,
+            string? performedByUserName = null,
+            CancellationToken ct = default);
         Task<WorkoutPlanDto?> CloneWorkoutPlanAsync(int id, CloneWorkoutPlanDto dto);
     }
 }

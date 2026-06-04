@@ -27,6 +27,14 @@ namespace GymManagement.Domain.Entities
         /// <summary>Draft | Active | Archived</summary>
         public string Status { get; set; } = "Active";
 
+        /// <summary><see cref="WorkoutPlanTypes.Program"/> or <see cref="WorkoutPlanTypes.Personal"/>.</summary>
+        public string PlanType { get; set; } = WorkoutPlanTypes.Program;
+
+        /// <summary>Owner member for personal plans only.</summary>
+        public int? AssignedToUserId { get; set; }
+
+        public User? AssignedToUser { get; set; }
+
         // Navigation properties
         public Trainer? Trainer { get; set; }
         public Organization? Organization { get; set; }

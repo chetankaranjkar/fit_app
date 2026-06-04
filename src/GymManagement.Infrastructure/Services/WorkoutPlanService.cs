@@ -10,15 +10,23 @@ namespace GymManagement.Infrastructure.Services
     {
         private const string WorkoutPlanMetaPrefix = "[WPMETA]";
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IWorkoutPlanAuditService? _workoutPlanAudit;
+        private readonly IPersonalWorkoutPlanAccessService? _personalPlanAccess;
 
-        public WorkoutPlanService(IUnitOfWork unitOfWork)
+        public WorkoutPlanService(
+            IUnitOfWork unitOfWork,
+            IWorkoutPlanAuditService? workoutPlanAudit = null,
+            IPersonalWorkoutPlanAccessService? personalPlanAccess = null)
         {
             _unitOfWork = unitOfWork;
+            _workoutPlanAudit = workoutPlanAudit;
+            _personalPlanAccess = personalPlanAccess;
         }
 
         public async Task<IEnumerable<WorkoutPlanDto>> GetAllWorkoutPlansAsync()
         {
-            var workoutPlans = await _unitOfWork.WorkoutPlans.GetAllAsync();
+            var workoutPlans = (await _unitOfWork.WorkoutPlans.GetAllAsync())
+                .Where(p => !string.Equals(p.PlanType, WorkoutPlanTypes.Personal, StringComparison.OrdinalIgnoreCase));
             var instructors = await _unitOfWork.Trainers.GetAllAsync();
             var users = await _unitOfWork.Users.GetAllAsync();
             var instructorDict = instructors.ToDictionary(i => i.Id);
@@ -122,6 +130,7 @@ namespace GymManagement.Infrastructure.Services
                 EstimatedCaloriesBurn = createWorkoutPlanDto.EstimatedCaloriesBurn,
                 Tags = SerializeTags(createWorkoutPlanDto.Tags),
                 Status = createWorkoutPlanDto.Status,
+                PlanType = WorkoutPlanTypes.Program,
                 IsActive = true
             };
 
@@ -199,19 +208,46 @@ namespace GymManagement.Infrastructure.Services
             return await GetWorkoutPlanByIdAsync(id);
         }
 
-        public async Task<bool> DeleteWorkoutPlanAsync(int id)
+        public async Task<bool> DeleteWorkoutPlanAsync(
+            int id,
+            int? performedByUserId = null,
+            string? performedByUserName = null,
+            CancellationToken ct = default)
         {
             var workoutPlan = await _unitOfWork.WorkoutPlans.GetByIdAsync(id);
             if (workoutPlan == null) return false;
+
+            if (string.Equals(workoutPlan.PlanType, WorkoutPlanTypes.Personal, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_workoutPlanAudit == null || performedByUserId is not > 0)
+                    throw new InvalidOperationException("Personal workout plan deletion requires audit context.");
+
+                return await _workoutPlanAudit.DeletePersonalWorkoutPlanWithAuditAsync(
+                    id,
+                    performedByUserId.Value,
+                    performedByUserName ?? "System",
+                    ct);
+            }
+
             _unitOfWork.WorkoutPlans.Delete(workoutPlan);
             await _unitOfWork.SaveChangesAsync();
             return true;
         }
 
-        public async Task<WorkoutPlanDto?> SaveProgramStructureAsync(int id, SaveProgramStructureDto dto)
+        public async Task<WorkoutPlanDto?> SaveProgramStructureAsync(
+            int id,
+            SaveProgramStructureDto dto,
+            int? performedByUserId = null,
+            string? performedByUserName = null,
+            CancellationToken ct = default)
         {
             var plan = await _unitOfWork.WorkoutPlans.GetByIdAsync(id);
             if (plan == null) return null;
+
+            var isPersonal = string.Equals(plan.PlanType, WorkoutPlanTypes.Personal, StringComparison.OrdinalIgnoreCase);
+            var oldExerciseRows = isPersonal
+                ? await LoadStructureExerciseRowsAsync(id)
+                : null;
 
             var orphanExercises = await _unitOfWork.WorkoutPlanExercises.FindAsync(e => e.WorkoutPlanId == id && !e.IsDeleted);
             foreach (var e in orphanExercises)
@@ -277,7 +313,90 @@ namespace GymManagement.Infrastructure.Services
             }
 
             await _unitOfWork.SaveChangesAsync();
+
+            if (isPersonal && _workoutPlanAudit != null && performedByUserId is > 0)
+            {
+                var newExerciseRows = await LoadStructureExerciseRowsAsync(id);
+                await LogPersonalStructureChangesAsync(
+                    plan,
+                    oldExerciseRows!,
+                    newExerciseRows,
+                    performedByUserId.Value,
+                    performedByUserName ?? "User",
+                    ct);
+            }
+
             return await GetWorkoutPlanByIdAsync(id);
+        }
+
+        private sealed record StructureExerciseRow(int ExerciseId, int? WorkoutPlanDayId, int? Sets, int? Reps, int Order);
+
+        private async Task<List<StructureExerciseRow>> LoadStructureExerciseRowsAsync(int planId)
+        {
+            var rows = await _unitOfWork.WorkoutPlanExercises.FindAsync(e => e.WorkoutPlanId == planId && !e.IsDeleted);
+            return rows
+                .Select(e => new StructureExerciseRow(e.ExerciseId, e.WorkoutPlanDayId, e.Sets, e.Reps, e.Order))
+                .ToList();
+        }
+
+        private static string StructureRowKey(StructureExerciseRow row) =>
+            $"{row.ExerciseId}:{row.WorkoutPlanDayId ?? 0}";
+
+        private async Task LogPersonalStructureChangesAsync(
+            WorkoutPlan plan,
+            IReadOnlyList<StructureExerciseRow> before,
+            IReadOnlyList<StructureExerciseRow> after,
+            int performedByUserId,
+            string performedByUserName,
+            CancellationToken ct)
+        {
+            var beforeMap = before.ToDictionary(StructureRowKey);
+            var afterMap = after.ToDictionary(StructureRowKey);
+
+            foreach (var (key, row) in afterMap)
+            {
+                if (beforeMap.ContainsKey(key)) continue;
+                await _workoutPlanAudit!.LogAsync(
+                    WorkoutPlanAuditAction.ExerciseAdded,
+                    plan.Id,
+                    plan.Name,
+                    plan.AssignedToUserId,
+                    performedByUserId,
+                    performedByUserName,
+                    changeDetails: $"Added exercise #{row.ExerciseId} to personal plan structure.",
+                    ct: ct);
+            }
+
+            foreach (var (key, row) in beforeMap)
+            {
+                if (afterMap.ContainsKey(key)) continue;
+                await _workoutPlanAudit!.LogAsync(
+                    WorkoutPlanAuditAction.ExerciseRemoved,
+                    plan.Id,
+                    plan.Name,
+                    plan.AssignedToUserId,
+                    performedByUserId,
+                    performedByUserName,
+                    changeDetails: $"Removed exercise #{row.ExerciseId} from personal plan structure.",
+                    ct: ct);
+            }
+
+            foreach (var (key, oldRow) in beforeMap)
+            {
+                if (!afterMap.TryGetValue(key, out var newRow)) continue;
+                if (oldRow.Sets == newRow.Sets && oldRow.Reps == newRow.Reps && oldRow.Order == newRow.Order)
+                    continue;
+
+                await _workoutPlanAudit!.LogAsync(
+                    WorkoutPlanAuditAction.ExerciseUpdated,
+                    plan.Id,
+                    plan.Name,
+                    plan.AssignedToUserId,
+                    performedByUserId,
+                    performedByUserName,
+                    changeDetails: $"Updated exercise #{oldRow.ExerciseId} (sets/reps/order).",
+                    ct: ct);
+            }
         }
 
         public async Task<WorkoutPlanDto?> CloneWorkoutPlanAsync(int id, CloneWorkoutPlanDto dto)

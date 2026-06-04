@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useMemo, useState, type ComponentType } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import {
   Activity,
   ArrowLeft,
@@ -19,8 +20,10 @@ import {
   Timer,
   TrendingUp,
   Trophy,
+  Trash2,
   User,
   Zap,
+  Plus,
 } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../../components/layout/DataPageShell'
@@ -33,6 +36,10 @@ import {
   type MePlanDayOutline,
   type MeWorkoutExerciseLine,
 } from '../../services/me.service'
+import { personalWorkoutPlansService } from '../../services/personalWorkoutPlans.service'
+import type { WorkoutPlan } from '../../types/workoutPlan'
+import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 
 type IconType = ComponentType<{ className?: string }>
 
@@ -715,6 +722,135 @@ function EmptyState() {
 }
 
 // -------------------------------------------------------------
+// Personal plans (member-owned)
+// -------------------------------------------------------------
+
+function PersonalPlansSection() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [name, setName] = useState('')
+
+  const { data: plans = [], isLoading } = useQuery({
+    queryKey: ['member-personal-plans'],
+    queryFn: async () => {
+      const { data } = await personalWorkoutPlansService.listMine()
+      return data
+    },
+  })
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      personalWorkoutPlansService.createMine({
+        name: name.trim(),
+        workoutType: 'Strength',
+        duration: 45,
+        difficultyLevel: 'Beginner',
+        durationDays: 30,
+        workoutsPerWeek: 3,
+      }),
+    onSuccess: (res) => {
+      toast.success('Personal plan created')
+      setName('')
+      void queryClient.invalidateQueries({ queryKey: ['member-personal-plans'] })
+      const created = res.data as WorkoutPlan
+      if (created?.id) {
+        navigate(`/dashboard/member/workouts/personal/${created.id}`)
+      }
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : null
+      toast.error(msg ?? 'Could not create plan')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => personalWorkoutPlansService.deleteMine(id),
+    onSuccess: () => {
+      toast.success('Plan removed')
+      void queryClient.invalidateQueries({ queryKey: ['member-personal-plans'] })
+      void queryClient.invalidateQueries({ queryKey: ['member-workout-program'] })
+    },
+    onError: () => toast.error('Could not delete plan'),
+  })
+
+  return (
+    <section className="mb-8 rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/10 via-fuchsia-500/5 to-transparent p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-white">My personal plan</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Create your own workout plan separate from trainer assignments.
+          </p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="mt-4 h-16 animate-pulse rounded-xl bg-white/[0.04]" />
+      ) : plans.length === 0 ? (
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs text-slate-400">Plan name</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Home strength"
+            />
+          </div>
+          <Button
+            type="button"
+            disabled={!name.trim() || createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+          >
+            <Plus className="mr-1.5 inline size-4" />
+            Create plan
+          </Button>
+        </div>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {plans.map((plan) => (
+            <li
+              key={plan.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5"
+            >
+              <div>
+                <p className="font-medium text-white">{plan.name}</p>
+                <p className="text-xs text-slate-400">
+                  {plan.workoutsPerWeek ?? 0}x / week · {plan.durationDays ?? 0} days
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link
+                  to={`/dashboard/member/workouts/personal/${plan.id}`}
+                  className="rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-500/20"
+                >
+                  Edit schedule
+                </Link>
+                <button
+                  type="button"
+                  className="rounded-lg border border-rose-400/20 p-1.5 text-rose-300 hover:bg-rose-500/10"
+                  aria-label="Delete plan"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm(`Delete "${plan.name}"? This cannot be undone.`)) {
+                      deleteMutation.mutate(plan.id)
+                    }
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+// -------------------------------------------------------------
 // Page
 // -------------------------------------------------------------
 
@@ -750,6 +886,8 @@ export function MemberWorkoutsPage() {
             <p className="text-sm text-slate-400">Your training plan, day by day.</p>
           </div>
         </header>
+
+        <PersonalPlansSection />
 
         {isLoading ? (
           <LoadingSkeleton />

@@ -311,6 +311,33 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 
 ---
 
+## 14b. Personal workout plans (audit + GymSettings)
+
+**Model:** `WorkoutPlans.PlanType` = `Program` (default, existing templates) or `Personal` with `AssignedToUserId`. Program library APIs exclude personal rows. **One personal plan per member** enforced by filtered unique index `UX_WorkoutPlan_OnePersonalPlanPerUser` and `GymSettings` (`AllowMemberWorkoutPlanCreation`, `MaxPersonalWorkoutPlansPerMember`; `-1` = unlimited).
+
+| Access | Rule |
+|--------|------|
+| Member | Own personal plan only (`/api/personal-workout-plans/mine`) |
+| Admin | Full access + audit viewer |
+| Trainer | **No** access to personal plans (API returns 403) |
+
+| Action | API | Notes |
+|--------|-----|-------|
+| Member create/list/delete | `/api/personal-workout-plans/mine` | Delete uses transactional audit |
+| Member get/save structure | `GET/PUT .../mine/{id}`, `PUT .../mine/{id}/structure` | Logs `ExerciseAdded` / `Updated` / `Removed` on save |
+| Member UI | `/dashboard/member/workouts` (panel), `/dashboard/member/workouts/personal/:planId` (weekly editor) | Reuses `WeekScheduleTab` |
+| Admin delete personal | `DELETE /api/WorkoutPlans/{id}` | Same audit path when `PlanType=Personal` |
+| Audit history (admin) | `GET /api/workout-plan-audit` | Permission `VIEW_WORKOUT_PLAN_AUDIT` |
+| UI audit screen | `/dashboard/training/workout-plan-audit` | Filters: member, dates, action |
+
+**Delete flow (personal only):** EF transaction → full JSON snapshot in `workout_plan_audit_logs` → verify audit id → soft-delete exercises/days/weeks/schedules/plan → commit; rollback on any failure.
+
+**Audit retention:** `workout_plan_audit_logs` are never auto-deleted.
+
+**Code:** `WorkoutPlanAuditService`, `PersonalWorkoutPlanService`, `GymSettingsService`, migration `20260604180000_AddPersonalWorkoutPlanAuditAndGymSettings`.
+
+---
+
 ## 11b. User memberships (one occupying membership per member)
 
 **Rule:** A member may have only **one occupying** membership at a time: `Active`, `ActivePendingPayment`, `PartialPayment`, `Frozen`, `Pending`, or `VoidPending`. While any of these exists, **no new membership row may be created** — use collect payment (renew) or edit the existing row (upgrade). Returns **409** (`ACTIVE_MEMBERSHIP_EXISTS`) with plan, status, dates, remaining days, and actions (view / renew / upgrade). `Expired`, `Cancelled`, and `Voided` allow a new membership.

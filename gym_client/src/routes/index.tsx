@@ -29,6 +29,11 @@ const DashboardHubPage = lazy(() =>
 const MemberWorkoutsPage = lazy(() =>
   import('../pages/member/MemberWorkoutsPage').then((m) => ({ default: m.MemberWorkoutsPage })),
 )
+const MemberPersonalPlanEditPage = lazy(() =>
+  import('../pages/member/MemberPersonalPlanEditPage').then((m) => ({
+    default: m.MemberPersonalPlanEditPage,
+  })),
+)
 const TodayWorkoutPage = lazy(() =>
   import('../modules/workout-tracking').then((m) => ({ default: m.TodayWorkoutPage })),
 )
@@ -192,6 +197,11 @@ const WorkoutAdminMonitoringPage = lazy(() =>
     default: m.WorkoutAdminMonitoringPage,
   })),
 )
+const WorkoutPlanAuditPage = lazy(() =>
+  import('../pages/training/WorkoutPlanAuditPage').then((m) => ({
+    default: m.WorkoutPlanAuditPage,
+  })),
+)
 const RolesPage = lazy(() =>
   import('../pages/RolesPage').then((m) => ({ default: m.RolesPage })),
 )
@@ -341,6 +351,10 @@ const router = createBrowserRouter([
               { path: '/dashboard/trainers/:trainerId', element: withSuspense(<TrainerDetailPage />) },
               { path: '/dashboard/profile', element: withSuspense(<MemberProfilePage />) },
               { path: '/dashboard/member/workouts', element: withSuspense(<MemberWorkoutsPage />) },
+              {
+                path: '/dashboard/member/workouts/personal/:planId',
+                element: withSuspense(<MemberPersonalPlanEditPage />),
+              },
               { path: '/dashboard/member/workouts/today', element: withSuspense(<TodayWorkoutPage />) },
               { path: '/dashboard/member/workouts/live', element: withSuspense(<LiveWorkoutPage />) },
               { path: '/dashboard/member/diet', element: withSuspense(<MemberDietPage />) },
@@ -378,6 +392,10 @@ const router = createBrowserRouter([
               {
                 path: '/dashboard/training/workout-monitoring',
                 element: withSuspense(<WorkoutAdminMonitoringPage />),
+              },
+              {
+                path: '/dashboard/training/workout-plan-audit',
+                element: withSuspense(<WorkoutPlanAuditPage />),
               },
               { path: '/dashboard/diet-plans', element: withSuspense(<DietPlansDashboardPage />) },
               { path: '/dashboard/diet-plans/list', element: withSuspense(<DietPlansPage />) },

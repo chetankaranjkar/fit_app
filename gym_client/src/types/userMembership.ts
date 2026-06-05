@@ -28,6 +28,11 @@ export interface CreateUserMembershipDto {
   startDate: string
   endDate: string
   status?: MembershipStatus
+  /** Audit: where the membership was created (e.g. members_list_modal). */
+  creationSource?: string | null
+  /** create | renew — renew logs MembershipAuditAction.Renewed on the server. */
+  intent?: 'create' | 'renew' | null
+  priorMembershipId?: number | null
 }
 
 export interface UpdateUserMembershipDto {

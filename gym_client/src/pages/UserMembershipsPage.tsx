@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -6,6 +6,7 @@ import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
 import { DataPageSection } from '../components/layout/DataPageShell'
 import { MembershipStatusBadge } from '../components/billing/MembershipStatusBadge'
+import { AddUserMembershipModal } from '../components/memberships/AddUserMembershipModal'
 import { RequestMembershipVoidModal } from '../components/memberships/RequestMembershipVoidModal'
 import {
   DataFilterSelect,
@@ -20,8 +21,12 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { userMembershipsService } from '../services/userMemberships.service'
-import { usersService } from '../services/users.service'
-import { membershipPlansService } from '../services/membershipPlans.service'
+import {
+  membershipFormLabelClass,
+  membershipFormSelectClass,
+  membershipStatusLabel,
+  membershipStatusOptions,
+} from '../lib/membershipFormUtils'
 import { getApiErrorMessage } from '../lib/apiErrors'
 import {
   findOccupyingMembershipConflict,
@@ -69,43 +74,16 @@ const statusOptions: MembershipStatus[] = [
   'Expired',
 ]
 
-const statusLabel: Partial<Record<MembershipStatus, string>> = {
-  Active: 'Active',
-  ActivePendingPayment: 'Active (Pending Payment)',
-  PartialPayment: 'Partial Payment',
-  Paused: 'Paused',
-  Expired: 'Expired',
-  Frozen: 'Frozen',
-  Cancelled: 'Cancelled',
-  Pending: 'Pending',
-  VoidPending: 'Void pending',
-  Voided: 'Voided',
-  Transferred: 'Transferred',
-}
-
-/** Add days to a date string (YYYY-MM-DD), return YYYY-MM-DD */
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T12:00:00Z')
-  if (Number.isNaN(d.getTime())) return dateStr
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().slice(0, 10)
-}
-
 /** Shared prefix so create/update/delete invalidate the paged list too. */
 const MEMBERSHIPS_QUERY_KEY = ['user-memberships'] as const
 
-const defaultCreate: CreateUserMembershipDto = {
+const defaultEditForm: CreateUserMembershipDto = {
   userId: 0,
   planId: 0,
   startDate: new Date().toISOString().slice(0, 10),
   endDate: new Date().toISOString().slice(0, 10),
   status: 'Active',
 }
-
-const selectClass =
-  'w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20'
-
-const labelClass = 'mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400'
 
 const membershipMetricIcons = {
   total: (
@@ -134,21 +112,18 @@ export function UserMembershipsPage() {
   const { userName } = getDashboardUser()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [modalOpen, setModalOpen] = useState(false)
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
   const [voidTarget, setVoidTarget] = useState<UserMembership | null>(null)
   const [activeConflict, setActiveConflict] = useState<ActiveMembershipConflict | null>(null)
   const [editing, setEditing] = useState<UserMembership | null>(null)
-  const [form, setForm] = useState<CreateUserMembershipDto>(defaultCreate)
+  const [form, setForm] = useState<CreateUserMembershipDto>(defaultEditForm)
   const [formError, setFormError] = useState<string | null>(null)
-  const [memberSearch, setMemberSearch] = useState('')
-  const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('')
-  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
   const [listSearch, setListSearch] = useState('')
   const [debouncedListSearch, setDebouncedListSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | MembershipStatus>('all')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
-  const memberDropdownRef = useRef<HTMLDivElement>(null)
 
   const { data: membershipsPage, isLoading, isFetching } = useQuery({
     queryKey: [...MEMBERSHIPS_QUERY_KEY, 'paged', page, pageSize, debouncedListSearch, statusFilter],
@@ -165,37 +140,6 @@ export function UserMembershipsPage() {
   const memberships = membershipsPage?.items ?? []
   const totalMemberships = membershipsPage?.totalCount ?? 0
 
-  const { data: users = [], isFetching: usersFetching } = useQuery({
-    queryKey: ['users-paged-membership-modal', debouncedMemberSearch],
-    enabled: modalOpen && !editing,
-    queryFn: async () => {
-      const { data } = await usersService.getPaged({
-        page: 1,
-        pageSize: 100,
-        membersOnly: true,
-        isActive: true,
-        search: debouncedMemberSearch || undefined,
-      })
-      return Array.isArray(data?.items) ? data.items : []
-    },
-  })
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedMemberSearch(memberSearch.trim()), 250)
-    return () => window.clearTimeout(timer)
-  }, [memberSearch])
-
-  useEffect(() => {
-    if (!memberDropdownOpen) return
-    const onDocClick = (event: MouseEvent) => {
-      if (!memberDropdownRef.current?.contains(event.target as Node)) {
-        setMemberDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [memberDropdownOpen])
-
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedListSearch(listSearch.trim()), 250)
     return () => window.clearTimeout(timer)
@@ -205,69 +149,21 @@ export function UserMembershipsPage() {
     setPage(1)
   }, [debouncedListSearch, statusFilter])
 
-  const { data: existingActiveConflict } = useQuery({
-    queryKey: ['active-membership-conflict', form.userId],
-    queryFn: async () => {
-      const res = await userMembershipsService.getActiveConflict(form.userId)
-      if (res.status === 200 && res.data) return res.data
-      const { data: rows } = await userMembershipsService.getByUserId(form.userId)
-      const occupying = Array.isArray(rows)
-        ? findOccupyingMembershipConflict(rows, form.userId)
-        : undefined
-      return occupying ? membershipToConflict(occupying) : null
-    },
-    enabled: modalOpen && !editing && form.userId > 0,
-  })
-
-  const { data: plans = [] } = useQuery({
-    queryKey: ['membership-plans'],
-    queryFn: async () => {
-      const { data } = await membershipPlansService.getAll()
-      const list = Array.isArray(data) ? data : []
-      return list.map((p: { id?: number; Id?: number; planName?: string; PlanName?: string; durationDays?: number; DurationDays?: number; price?: number; Price?: number }) => ({
-        id: p.id ?? p.Id ?? 0,
-        planName: p.planName ?? p.PlanName ?? '',
-        durationDays: p.durationDays ?? p.DurationDays ?? 0,
-        price: p.price ?? p.Price ?? 0,
-      }))
-    },
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (dto: CreateUserMembershipDto) => userMembershipsService.create(dto),
-    onSuccess: () => {
-      setPage(1)
-      void queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
-      setModalOpen(false)
-      setForm(defaultCreate)
-      setFormError(null)
-    },
-    onError: (err: unknown) => {
-      const conflict = parseActiveMembershipConflict(err)
-      if (conflict?.membershipId) {
-        setActiveConflict(conflict)
-        setModalOpen(false)
-        return
-      }
-      setFormError(getApiErrorMessage(err, 'Failed to create membership'))
-    },
-  })
-
   const updateMutation = useMutation({
     mutationFn: ({ id, dto }: { id: number; dto: UpdateUserMembershipDto }) =>
       userMembershipsService.update(id, dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
-      setModalOpen(false)
+      setEditModalOpen(false)
       setEditing(null)
-      setForm(defaultCreate)
+      setForm(defaultEditForm)
       setFormError(null)
     },
     onError: (err: unknown) => {
       const conflict = parseActiveMembershipConflict(err)
       if (conflict?.membershipId) {
         setActiveConflict(conflict)
-        setModalOpen(false)
+        setEditModalOpen(false)
         return
       }
       setFormError(getApiErrorMessage(err, 'Failed to update membership'))
@@ -283,17 +179,7 @@ export function UserMembershipsPage() {
   }, [memberships])
 
   const openAdd = () => {
-    setEditing(null)
-    setForm({
-      ...defaultCreate,
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: new Date().toISOString().slice(0, 10),
-    })
-    setFormError(null)
-    setMemberSearch('')
-    setDebouncedMemberSearch('')
-    setMemberDropdownOpen(false)
-    setModalOpen(true)
+    setAddModalOpen(true)
   }
 
   const openEdit = (m: UserMembership) => {
@@ -306,20 +192,20 @@ export function UserMembershipsPage() {
       status: m.status,
     })
     setFormError(null)
-    setModalOpen(true)
+    setEditModalOpen(true)
   }
 
-  const closeModal = () => {
-    setModalOpen(false)
+  const closeEditModal = () => {
+    setEditModalOpen(false)
     setEditing(null)
-    setForm(defaultCreate)
+    setForm(defaultEditForm)
     setFormError(null)
-    setMemberDropdownOpen(false)
   }
 
   const showActiveConflict = (conflict: ActiveMembershipConflict) => {
     setActiveConflict(conflict)
-    setModalOpen(false)
+    setEditModalOpen(false)
+    setAddModalOpen(false)
   }
 
   const handleRenewActive = (conflict: ActiveMembershipConflict) => {
@@ -344,56 +230,25 @@ export function UserMembershipsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!editing) return
     setFormError(null)
-    const userId = editing ? editing.userId : form.userId
-    const planId = editing ? editing.planId : form.planId
-    if (!editing && (userId === 0 || planId === 0)) {
-      setFormError('Please select a member and a plan.')
-      return
-    }
-    if (!editing) {
-      const localRow = findOccupyingMembershipConflict(memberships, userId)
+    const userId = editing.userId
+    const targetStatus = form.status ?? editing.status
+    if (occupiesMembershipSlot(targetStatus)) {
+      const localRow = findOccupyingMembershipConflict(memberships, userId, editing.id)
       if (localRow) {
         showActiveConflict(membershipToConflict(localRow))
         return
       }
-      try {
-        const { status, data } = await userMembershipsService.getActiveConflict(userId)
-        if (status === 200 && data) {
-          showActiveConflict(data)
-          return
-        }
-      } catch {
-        /* server enforces on POST */
-      }
-    } else {
-      const targetStatus = form.status ?? editing.status
-      if (occupiesMembershipSlot(targetStatus)) {
-        const localRow = findOccupyingMembershipConflict(memberships, userId, editing.id)
-        if (localRow) {
-          showActiveConflict(membershipToConflict(localRow))
-          return
-        }
-      }
     }
-    if (editing) {
-      updateMutation.mutate({
-        id: editing.id,
-        dto: {
-          startDate: form.startDate,
-          endDate: form.endDate,
-          status: form.status,
-        },
-      })
-    } else {
-      createMutation.mutate({
-        userId: form.userId,
-        planId: form.planId,
+    updateMutation.mutate({
+      id: editing.id,
+      dto: {
         startDate: form.startDate,
         endDate: form.endDate,
-        status: form.status ?? 'Active',
-      })
-    }
+        status: form.status,
+      },
+    })
   }
 
   const handleRequestVoid = (m: UserMembership) => {
@@ -510,8 +365,6 @@ export function UserMembershipsPage() {
     [navigate, openEdit, handleRequestVoid],
   )
 
-  const selectedMember = users.find((u) => u.id === form.userId)
-
   return (
     <DashboardLayout userName={userName}>
       <DashboardSubpageShell
@@ -569,7 +422,7 @@ export function UserMembershipsPage() {
                   ariaLabel="Filter by status"
                   options={[
                     { value: 'all', label: 'Operational (hide voided)' },
-                    ...statusOptions.map((s) => ({ value: s, label: statusLabel[s] })),
+                    ...statusOptions.map((s) => ({ value: s, label: membershipStatusLabel[s] ?? s })),
                   ]}
                 />
               }
@@ -602,191 +455,63 @@ export function UserMembershipsPage() {
         </DashboardTablePanel>
       </DashboardSubpageShell>
 
-      <Modal
-        open={modalOpen}
-        onClose={closeModal}
-        title={editing ? 'Edit membership' : 'Add membership'}
-      >
+      <AddUserMembershipModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        creationSource="user_memberships_page"
+        extraInvalidateQueryKeys={[[...MEMBERSHIPS_QUERY_KEY, 'paged']]}
+        onCreated={() => {
+          setPage(1)
+        }}
+      />
+
+      <Modal open={editModalOpen && editing != null} onClose={closeEditModal} title="Edit membership">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {formError && (
-            <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200" role="alert">
+          {formError ? (
+            <p
+              className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+              role="alert"
+            >
               {formError}
             </p>
-          )}
-          {!editing && existingActiveConflict ? (
-            <div
-              role="alert"
-              className="rounded-xl border border-amber-400/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
-            >
-              <p className="font-medium">Member already has an active membership.</p>
-              <p className="mt-1 text-amber-200/90">
-                {existingActiveConflict.planName ?? 'Plan'} · ends{' '}
-                {formatDate(existingActiveConflict.endDate)} · {existingActiveConflict.remainingDays}{' '}
-                days left
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => showActiveConflict(existingActiveConflict)}
-                >
-                  View options
-                </Button>
-              </div>
-            </div>
           ) : null}
-          {!editing && (
-            <>
-              <div ref={memberDropdownRef} className="relative">
-                <label className={labelClass}>Member</label>
-                <button
-                  type="button"
-                  onClick={() => setMemberDropdownOpen((v) => !v)}
-                  className={`${selectClass} flex items-center justify-between`}
-                  aria-haspopup="listbox"
-                  aria-label="Select member"
-                >
-                  <span className="truncate text-left">
-                    {selectedMember
-                      ? `${selectedMember.firstName} ${selectedMember.lastName} (${selectedMember.email})`
-                      : form.userId > 0
-                        ? `User #${form.userId}`
-                        : 'Select member'}
-                  </span>
-                  <span className="ml-2 text-slate-400">▾</span>
-                </button>
-                {memberDropdownOpen ? (
-                  <div
-                    className="absolute z-50 mt-1 w-full rounded-xl border border-white/12 bg-slate-950/95 p-2 shadow-2xl shadow-blue-950/40 backdrop-blur-xl"
-                    role="listbox"
-                    aria-label="Member options"
-                  >
-                    <Input
-                      label="Search member"
-                      value={memberSearch}
-                      onChange={(e) => setMemberSearch(e.target.value)}
-                      placeholder="Search member name, email, phone..."
-                    />
-                    {usersFetching ? (
-                      <p className="mt-2 px-2 text-xs text-slate-500">Searching members…</p>
-                    ) : users.length === 0 ? (
-                      <p className="mt-2 px-2 text-xs text-slate-500">No members found.</p>
-                    ) : (
-                      <div className="mt-2 max-h-56 overflow-auto">
-                        {users.map((u) => (
-                          <button
-                            key={u.id}
-                            type="button"
-                            role="option"
-                            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                              form.userId === u.id
-                                ? 'bg-blue-500/20 text-blue-100'
-                                : 'text-slate-200 hover:bg-white/10'
-                            }`}
-                            onClick={() => {
-                              setForm((f) => ({ ...f, userId: u.id }))
-                              setMemberDropdownOpen(false)
-                            }}
-                          >
-                            {u.firstName} {u.lastName} ({u.email})
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-              <div>
-                <label className={labelClass}>Plan</label>
-                <select
-                  value={form.planId}
-                  onChange={(e) => {
-                    const planId = Number(e.target.value)
-                    const plan = plans.find((p) => p.id === planId)
-                    const start = form.startDate.slice(0, 10)
-                    const end = plan && plan.durationDays > 0 ? addDays(start, plan.durationDays) : form.endDate.slice(0, 10)
-                    setForm((f) => ({ ...f, planId, endDate: end }))
-                  }}
-                  className={selectClass}
-                  aria-label="Select plan"
-                  required
-                >
-                  <option value={0} className="bg-slate-900">
-                    Select plan
-                  </option>
-                  {plans.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-slate-900">
-                      {p.planName} — {p.durationDays} days, ₹{p.price}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
           <Input
             label="Start date"
             type="date"
             value={form.startDate.slice(0, 10)}
-            onChange={(e) => {
-              const start = e.target.value
-              if (!editing && form.planId > 0) {
-                const plan = plans.find((p) => p.id === form.planId)
-                const end = plan && plan.durationDays > 0 ? addDays(start, plan.durationDays) : form.endDate.slice(0, 10)
-                setForm((f) => ({ ...f, startDate: start, endDate: end }))
-              } else {
-                setForm((f) => ({ ...f, startDate: start }))
-              }
-            }}
+            onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
             required
           />
-          {!editing && form.planId > 0 ? (
-            <div>
-              <label className={labelClass}>End date</label>
-              <p className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100">
-                {form.endDate.slice(0, 10)}{' '}
-                <span className="text-xs text-slate-500">(from plan duration)</span>
-              </p>
-            </div>
-          ) : (
-            <Input
-              label="End date"
-              type="date"
-              value={form.endDate.slice(0, 10)}
-              onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-              required
-            />
-          )}
+          <Input
+            label="End date"
+            type="date"
+            value={form.endDate.slice(0, 10)}
+            onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+            required
+          />
           <div>
-            <label className={labelClass}>Status</label>
+            <label className={membershipFormLabelClass}>Status</label>
             <select
               value={form.status}
               onChange={(e) =>
                 setForm((f) => ({ ...f, status: e.target.value as MembershipStatus }))
               }
-              className={selectClass}
+              className={membershipFormSelectClass}
               aria-label="Select membership status"
             >
-              {statusOptions.map((s) => (
+              {membershipStatusOptions.map((s) => (
                 <option key={s} value={s} className="bg-slate-900">
-                  {statusLabel[s] ?? s}
+                  {membershipStatusLabel[s] ?? s}
                 </option>
               ))}
             </select>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={closeModal}>
+            <Button type="button" variant="secondary" onClick={closeEditModal}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={
-                createMutation.isPending ||
-                updateMutation.isPending ||
-                (!editing && !!existingActiveConflict)
-              }
-            >
-              {editing ? 'Update' : 'Create'}
+            <Button type="submit" disabled={updateMutation.isPending} isLoading={updateMutation.isPending}>
+              Update
             </Button>
           </div>
         </form>

@@ -268,17 +268,25 @@ namespace GymManagement.Infrastructure.Services
 
 
 
+            var isRenew = string.Equals(dto.Intent, "renew", StringComparison.OrdinalIgnoreCase);
+            var auditPayload = new
+            {
+                m.UserId,
+                m.PlanId,
+                m.StartDate,
+                m.EndDate,
+                m.Status,
+                dto.CreationSource,
+                dto.Intent,
+                dto.PriorMembershipId,
+            };
+
             await _audit.LogAsync(
-
                 m.Id,
-
-                MembershipAuditAction.Created,
-
+                isRenew ? MembershipAuditAction.Renewed : MembershipAuditAction.Created,
                 performedByUserId,
-
                 null,
-
-                JsonSerializer.Serialize(new { m.PlanId, m.StartDate, m.EndDate, m.Status }));
+                JsonSerializer.Serialize(auditPayload));
 
 
 

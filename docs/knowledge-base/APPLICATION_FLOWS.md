@@ -197,6 +197,8 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 | Trainers CRUD | `services/trainers.service.ts` | mock `trainers-management` store (legacy) |
 | Users CRUD | `services/users.service.ts` | — |
 | Trainer add wizard | `components/trainers/AddTrainerModal.tsx` | `TrainersManagementPage` mock |
+| Add / renew membership | `components/memberships/AddUserMembershipModal.tsx` | inline create form on pages |
+| Member membership modal state | `lib/memberMembershipState.ts` | ad-hoc status checks in UI |
 
 ### Backend (`src/`)
 
@@ -343,6 +345,17 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 **Rule:** A member may have only **one occupying** membership at a time: `Active`, `ActivePendingPayment`, `PartialPayment`, `Frozen`, `Pending`, or `VoidPending`. While any of these exists, **no new membership row may be created** — use collect payment (renew) or edit the existing row (upgrade). Returns **409** (`ACTIVE_MEMBERSHIP_EXISTS`) with plan, status, dates, remaining days, and actions (view / renew / upgrade). `Expired`, `Cancelled`, and `Voided` allow a new membership.
 
 **Enforced in:** DB unique index `IX_user_memberships_one_active_per_user` (Active only), `UserMembershipConflictGuard` (all occupying statuses), `UserMembershipService` / `UserService`, `GET /api/UserMemberships/active-conflict/{userId}`, and `/dashboard/user-memberships` conflict modal.
+
+**Add / renew from Members list:** Users grid → **Memberships** action → `MemberMembershipsModal` loads `GET /api/UserMemberships/by-user/{userId}`. State from `deriveMemberMembershipModalState` (`memberMembershipState.ts`):
+
+| State | UI |
+|-------|-----|
+| No membership | **+ Add Membership** |
+| Active / occupying | History only (no add) |
+| Expired history only | **Renew Membership** (prefills last plan, `intent: renew`) + **+ New Membership** |
+| Inactive history only (voided/cancelled) | **+ Add Membership** |
+
+Both entry points use shared **`AddUserMembershipModal`** → `POST /api/UserMemberships` (optional `creationSource`, `intent`, `priorMembershipId` for audit). Permission: **`Payments`** (`authService.canPaymentsAccess()`). Member is locked in the list modal; `/dashboard/user-memberships` opens the same modal with member picker.
 
 **Existing duplicates** (e.g. two `ActivePendingPayment` rows for Rajesh Yadav) must be fixed manually: void/cancel or expire one row, then use the remaining membership for payment or upgrade.
 

@@ -5,12 +5,17 @@ import {
   getMembershipCollectPaymentPath,
   membershipStatusClickTitle,
 } from '../../lib/membershipPaymentNavigation'
+import {
+  deriveMemberMembershipModalState,
+  formatMembershipDisplayDate,
+} from '../../lib/memberMembershipState'
 import { MembershipAuditTrail } from '../memberships/MembershipAuditTrail'
 import {
   listMembershipsForUser,
   userMembershipsByUserQueryKey,
 } from '../../services/userMemberships.service'
 import { authService } from '../../services/auth.service'
+import { Button } from '../ui/Button'
 import { MembershipStatusBadge } from '../billing/MembershipStatusBadge'
 import type { MembershipStatus, UserMembership } from '../../types/userMembership'
 
@@ -86,8 +91,19 @@ function MembershipTable({
   )
 }
 
-export function MemberMembershipHistoryTab({ userId }: { userId: number }) {
+export function MemberMembershipHistoryTab({
+  userId,
+  canManageMemberships: canManageProp,
+  onAddMembership,
+  onRenewMembership,
+}: {
+  userId: number
+  canManageMemberships?: boolean
+  onAddMembership?: () => void
+  onRenewMembership?: (latestExpired: UserMembership) => void
+}) {
   const navigate = useNavigate()
+  const canManageMemberships = canManageProp ?? authService.canPaymentsAccess()
 
   const handleCollectPayment = (m: UserMembership) => {
     const path = getMembershipCollectPaymentPath(m)
@@ -101,6 +117,11 @@ export function MemberMembershipHistoryTab({ userId }: { userId: number }) {
     staleTime: 0,
     refetchOnMount: 'always',
   })
+
+  const modalState = useMemo(
+    () => deriveMemberMembershipModalState(memberships, userId),
+    [memberships, userId],
+  )
 
   const grouped = useMemo(() => {
     const current: UserMembership[] = []
@@ -135,9 +156,14 @@ export function MemberMembershipHistoryTab({ userId }: { userId: number }) {
 
   if (memberships.length === 0) {
     return (
-      <p className="rounded-xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-400">
-        No membership records for this member.
-      </p>
+      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-8 text-center">
+        <p className="text-sm text-slate-300">No membership records found for this member.</p>
+        {canManageMemberships && onAddMembership ? (
+          <Button type="button" className="mt-4" onClick={onAddMembership}>
+            + Add Membership
+          </Button>
+        ) : null}
+      </div>
     )
   }
 
@@ -145,6 +171,46 @@ export function MemberMembershipHistoryTab({ userId }: { userId: number }) {
 
   return (
     <div className="space-y-8">
+      {modalState.state === 'expired_history_only' && modalState.latestExpired ? (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <MembershipStatusBadge status="Expired" />
+            <p className="text-sm text-amber-100">
+              Membership expired on:{' '}
+              <span className="font-medium">
+                {formatMembershipDisplayDate(modalState.latestExpired.endDate)}
+              </span>
+            </p>
+          </div>
+          {canManageMemberships ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {modalState.canRenewMembership && onRenewMembership ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => onRenewMembership(modalState.latestExpired!)}
+                >
+                  Renew Membership
+                </Button>
+              ) : null}
+              {modalState.canAddMembership && onAddMembership ? (
+                <Button type="button" onClick={onAddMembership}>
+                  + New Membership
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {modalState.state === 'inactive_history_only' && canManageMemberships && onAddMembership ? (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" onClick={onAddMembership}>
+            + Add Membership
+          </Button>
+        </div>
+      ) : null}
+
       {showFlatFallback ? (
         <MembershipTable
           title="All memberships"

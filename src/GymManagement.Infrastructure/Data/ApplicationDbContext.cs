@@ -185,6 +185,10 @@ namespace GymManagement.Infrastructure.Data
                     .HasFilter("[AadhaarNumber] IS NOT NULL AND [IsDeleted] = 0");
                 entity.HasIndex(e => e.IsActive).HasFilter("[IsDeleted] = 0");
                 entity.HasIndex(e => e.RegistrationDate);
+                entity.HasIndex(e => e.FirstName).HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => e.LastName).HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => new { e.IsDeleted, e.RegistrationDate, e.Id })
+                    .HasDatabaseName("IX_Users_IsDeleted_RegistrationDate_Id");
                 entity.HasOne(e => e.Organization)
                     .WithMany(o => o.Users)
                     .HasForeignKey(e => e.OrganizationId)
@@ -637,6 +641,9 @@ namespace GymManagement.Infrastructure.Data
                     .HasForeignKey(e => e.UserTypeId)
                     .OnDelete(DeleteBehavior.Restrict);
                 entity.HasIndex(e => new { e.UserId, e.UserTypeId }).IsUnique();
+                entity.HasIndex(e => new { e.UserTypeId, e.UserId })
+                    .HasDatabaseName("IX_UserUserTypes_UserTypeId_UserId")
+                    .HasFilter("[IsDeleted] = 0");
                 entity.ToTable("UserUserTypes");
             });
 

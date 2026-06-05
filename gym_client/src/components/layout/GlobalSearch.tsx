@@ -9,9 +9,11 @@ import type { User } from '../../types/user'
 import type { Trainer } from '../../types/trainer'
 import type { MembershipPlan } from '../../types/membershipPlan'
 import { displayAadhaar } from '../../lib/aadhaar'
-
-const MIN_CHARS = 2
-const DEBOUNCE_MS = 300
+import {
+  effectiveMemberSearchTerm,
+  MEMBER_SEARCH_DEBOUNCE_MS,
+  MEMBER_SEARCH_MIN_CHARS,
+} from '../../lib/userSearch'
 
 function memberLabel(u: User) {
   return [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || `Member #${u.id}`
@@ -41,7 +43,7 @@ export function GlobalSearch({ className = '' }: { className?: string }) {
   const [activeIndex, setActiveIndex] = useState(-1)
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), DEBOUNCE_MS)
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), MEMBER_SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [query])
 
@@ -49,20 +51,24 @@ export function GlobalSearch({ className = '' }: { className?: string }) {
     setActiveIndex(-1)
   }, [debouncedQuery])
 
-  const canSearch = debouncedQuery.length >= MIN_CHARS
+  const effectiveSearch = effectiveMemberSearchTerm(debouncedQuery)
+  const canSearch = effectiveSearch != null
 
   const { data, isFetching, isError } = useQuery({
-    queryKey: ['global-search', debouncedQuery],
-    queryFn: async (): Promise<SearchResults> => {
-      const q = debouncedQuery
+    queryKey: ['global-search', effectiveSearch],
+    queryFn: async ({ signal }): Promise<SearchResults> => {
+      const q = effectiveSearch!
       const [usersRes, trainersRes, plansRes] = await Promise.all([
-        usersService.getPaged({
-          page: 1,
-          pageSize: 8,
-          search: q,
-          membersOnly: true,
-          includeBilling: false,
-        }),
+        usersService.getPaged(
+          {
+            page: 1,
+            pageSize: 8,
+            search: q,
+            membersOnly: true,
+            includeBilling: false,
+          },
+          { signal },
+        ),
         trainersService.getPaged({ page: 1, pageSize: 6, search: q }),
         membershipPlansService.getAll(),
       ])
@@ -112,8 +118,8 @@ export function GlobalSearch({ className = '' }: { className?: string }) {
       sub: p.durationDays ? `${p.durationDays} days` : undefined,
     })),
   ]
-  if (canSearch) {
-    flatItems.push({ kind: 'view-all-members', q: debouncedQuery })
+  if (canSearch && effectiveSearch) {
+    flatItems.push({ kind: 'view-all-members', q: effectiveSearch })
   }
 
   useEffect(() => {
@@ -215,9 +221,9 @@ export function GlobalSearch({ className = '' }: { className?: string }) {
           id="global-search-results"
           className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[min(24rem,70vh)] overflow-y-auto rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.98)] py-2 shadow-2xl shadow-black/50 backdrop-blur-xl"
         >
-          {query.trim().length < MIN_CHARS ? (
-            <p className="px-4 py-3 text-xs text-slate-400">Type at least {MIN_CHARS} characters…</p>
-          ) : isFetching ? (
+          {query.trim().length < MEMBER_SEARCH_MIN_CHARS ? (
+            <p className="px-4 py-3 text-xs text-slate-400">Type at least {MEMBER_SEARCH_MIN_CHARS} characters…</p>
+          ) : query.trim() !== debouncedQuery || isFetching ? (
             <p className="px-4 py-3 text-xs text-slate-400">Searching…</p>
           ) : isError ? (
             <p className="px-4 py-3 text-xs text-rose-300">Search failed. Try again.</p>
@@ -289,9 +295,9 @@ export function GlobalSearch({ className = '' }: { className?: string }) {
                     : 'text-blue-300 hover:bg-white/5'
                 }`}
                 onMouseEnter={() => setActiveIndex(flatItems.length - 1)}
-                onClick={() => goToItem({ kind: 'view-all-members', q: debouncedQuery })}
+                onClick={() => goToItem({ kind: 'view-all-members', q: effectiveSearch ?? debouncedQuery })}
               >
-                View all member results for &ldquo;{debouncedQuery}&rdquo;
+                View all member results for &ldquo;{effectiveSearch ?? debouncedQuery}&rdquo;
               </button>
             </>
           )}

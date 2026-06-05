@@ -8,15 +8,18 @@ import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
 
 export const usersService = {
   getAll: () => api.get<User[]>('/Users'),
-  getPaged: (params: {
-    page: number
-    pageSize: number
-    search?: string
-    membersOnly?: boolean
-    isActive?: boolean
-    /** Skip payment summary joins for faster typeahead search. */
-    includeBilling?: boolean
-  }) => {
+  getPaged: (
+    params: {
+      page: number
+      pageSize: number
+      search?: string
+      membersOnly?: boolean
+      isActive?: boolean
+      /** Skip payment summary joins for faster typeahead search. */
+      includeBilling?: boolean
+    },
+    options?: { signal?: AbortSignal },
+  ) => {
     const query = new URLSearchParams()
     query.set('page', String(params.page))
     query.set('pageSize', String(params.pageSize))
@@ -24,7 +27,7 @@ export const usersService = {
     if (params.membersOnly) query.set('membersOnly', 'true')
     if (typeof params.isActive === 'boolean') query.set('isActive', String(params.isActive))
     if (params.includeBilling === false) query.set('includeBilling', 'false')
-    return api.get<PagedUsersResponse>(`/Users/paged?${query.toString()}`)
+    return api.get<PagedUsersResponse>(`/Users/paged?${query.toString()}`, { signal: options?.signal })
   },
   getById: (id: number) => api.get<User>(`/Users/${id}`),
   checkMobileAvailability: async (mobile: string, excludeUserId?: number): Promise<MobileNumberAvailability> => {

@@ -9,6 +9,7 @@ using GymManagement.Core.Security;
 using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
+using GymManagement.Infrastructure.Search;
 using GymManagement.Infrastructure.Security;
 
 namespace GymManagement.Infrastructure.Services
@@ -88,11 +89,16 @@ namespace GymManagement.Infrastructure.Services
                 query = query.Where(u => u.IsActive == isActive.Value);
 
             if (membersOnly)
-                query = await ApplyMembersOnlyFilterAsync(query).ConfigureAwait(false);
+            {
+                var memberTypeId = await ResolveMemberUserTypeIdAsync().ConfigureAwait(false);
+                if (!memberTypeId.HasValue)
+                    query = query.Where(_ => false);
+                else
+                    query = query.ApplyMembersOnlyFilter(_db.UserUserTypes, memberTypeId.Value);
+            }
 
-            query = ApplyUserSearchFilter(query, search);
+            query = query.ApplyUserSearchFilter(_db.AuthUsers, search);
 
-            var totalCount = await query.CountAsync().ConfigureAwait(false);
             var pageUsers = await query
                 .OrderByDescending(u => u.RegistrationDate)
                 .ThenByDescending(u => u.Id)
@@ -100,6 +106,10 @@ namespace GymManagement.Infrastructure.Services
                 .Take(safePageSize)
                 .ToListAsync()
                 .ConfigureAwait(false);
+
+            var totalCount = pageUsers.Count < safePageSize
+                ? (safePage - 1) * safePageSize + pageUsers.Count
+                : await query.CountAsync().ConfigureAwait(false);
 
             var userIds = pageUsers.Select(u => u.Id).ToHashSet();
             var pageAuth = await _db.AuthUsers.AsNoTracking()
@@ -193,6 +203,8 @@ namespace GymManagement.Infrastructure.Services
             var normalizedAadhaar = AadhaarNumberValidator.TryNormalizeOptionalAadhaar(createUserDto.AadhaarNumber);
             if (normalizedAadhaar != null)
                 await EnsureAadhaarNotDuplicateAsync(normalizedAadhaar);
+
+            DateOfBirthValidator.EnsureValid(createUserDto.DateOfBirth);
 
             var strategy = _db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
@@ -669,7 +681,10 @@ namespace GymManagement.Infrastructure.Services
                 }
             }
             if (updateUserDto.DateOfBirth.HasValue)
+            {
+                DateOfBirthValidator.EnsureValid(updateUserDto.DateOfBirth.Value);
                 user.DateOfBirth = updateUserDto.DateOfBirth.Value;
+            }
             if (!string.IsNullOrEmpty(updateUserDto.Gender))
                 user.Gender = updateUserDto.Gender;
             if (updateUserDto.Address != null)
@@ -1017,19 +1032,6 @@ namespace GymManagement.Infrastructure.Services
             await _db.SaveChangesAsync();
         }
 
-        private async Task<IQueryable<User>> ApplyMembersOnlyFilterAsync(IQueryable<User> query)
-        {
-            var memberTypeId = await ResolveMemberUserTypeIdAsync().ConfigureAwait(false);
-            if (!memberTypeId.HasValue)
-                return query.Where(_ => false);
-
-            return query.Where(u =>
-                _db.UserUserTypes.Any(uut =>
-                    !uut.IsDeleted
-                    && uut.UserId == u.Id
-                    && uut.UserTypeId == memberTypeId.Value));
-        }
-
         private async Task<int?> ResolveMemberUserTypeIdAsync()
         {
             if (_cachedMemberUserTypeId.HasValue)
@@ -1041,39 +1043,6 @@ namespace GymManagement.Infrastructure.Services
                 .FirstOrDefaultAsync()
                 .ConfigureAwait(false);
             return _cachedMemberUserTypeId;
-        }
-
-        private IQueryable<User> ApplyUserSearchFilter(IQueryable<User> query, string? search)
-        {
-            var trimmedSearch = search?.Trim();
-            if (string.IsNullOrWhiteSpace(trimmedSearch) || trimmedSearch.Length < 2)
-                return query;
-
-            var digitSearch = AadhaarNumberValidator.StripFormatting(trimmedSearch);
-            var isDigitOnlySearch = digitSearch.Length > 0
-                && digitSearch.Length == trimmedSearch.Count(char.IsDigit);
-
-            var likeSearch = $"%{trimmedSearch}%";
-            var emailUserIds = _db.AuthUsers.AsNoTracking()
-                .Where(a => !a.IsDeleted && a.UserId != null && EF.Functions.Like(a.Email, likeSearch))
-                .Select(a => a.UserId!.Value);
-
-            if (isDigitOnlySearch && digitSearch.Length == 12)
-            {
-                return query.Where(u =>
-                    u.AadhaarNumber == digitSearch
-                    || (u.Phone != null && u.Phone.Contains(digitSearch))
-                    || EF.Functions.Like(u.FirstName, likeSearch)
-                    || EF.Functions.Like(u.LastName, likeSearch)
-                    || emailUserIds.Contains(u.Id));
-            }
-
-            return query.Where(u =>
-                EF.Functions.Like(u.FirstName, likeSearch)
-                || EF.Functions.Like(u.LastName, likeSearch)
-                || (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch))
-                || (isDigitOnlySearch && u.AadhaarNumber != null && u.AadhaarNumber.Contains(digitSearch))
-                || emailUserIds.Contains(u.Id));
         }
 
         private sealed class UserBillingListSummary

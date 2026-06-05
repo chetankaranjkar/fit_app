@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DataPageSection, DataPageShell } from '../components/layout/DataPageShell'
 import {
   DataFilterSelect,
@@ -51,6 +51,17 @@ import {
 import { useMobileNumberAvailability } from '../hooks/useMobileNumberAvailability'
 import { useUsernameAvailability } from '../hooks/useUsernameAvailability'
 import { MobileNumberAvailabilityHint } from '../components/users/MobileNumberAvailabilityHint'
+import {
+  acceptIsoDateInput,
+  getBirthDateError,
+  MIN_BIRTH_DATE,
+  todayIsoDate,
+} from '../lib/birthDate'
+import {
+  effectiveMemberSearchTerm,
+  MEMBER_SEARCH_DEBOUNCE_MS,
+  MEMBER_SEARCH_MIN_CHARS,
+} from '../lib/userSearch'
 
 function getDashboardUser() {
   try {
@@ -379,6 +390,9 @@ export function UsersPage() {
   const [aadhaarError, setAadhaarError] = useState<string | null>(null)
   const [loginEmailError, setLoginEmailError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [dateOfBirthError, setDateOfBirthError] = useState<string | null>(null)
+  const [membershipStartDateError, setMembershipStartDateError] = useState<string | null>(null)
+  const maxBirthDate = todayIsoDate()
 
   const MIN_LOGIN_PASSWORD_LENGTH = 6
   const [searchQuery, setSearchQuery] = useState('')
@@ -416,15 +430,14 @@ export function UsersPage() {
     setSearchQuery(searchParams.get('q') ?? '')
   }, [searchParams])
 
-  const MIN_USER_SEARCH_CHARS = 2
-
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearchQuery(searchQuery.trim()), 350)
+    const timer = window.setTimeout(() => setDebouncedSearchQuery(searchQuery.trim()), MEMBER_SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [searchQuery])
 
-  const effectiveSearch =
-    debouncedSearchQuery.length >= MIN_USER_SEARCH_CHARS ? debouncedSearchQuery : undefined
+  const effectiveSearch = effectiveMemberSearchTerm(debouncedSearchQuery)
+  const isSearchPending =
+    searchQuery.trim().length >= MEMBER_SEARCH_MIN_CHARS && searchQuery.trim() !== debouncedSearchQuery
 
   useEffect(() => {
     setPage(1)
@@ -432,18 +445,22 @@ export function UsersPage() {
 
   const { data: usersPage, isLoading, error, isFetching } = useQuery({
     queryKey: ['users-paged', page, pageSize, effectiveSearch, statusFilter],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const isActive =
         statusFilter === 'all' ? undefined : statusFilter === 'active'
-      const { data } = await usersService.getPaged({
-        page,
-        pageSize,
-        search: effectiveSearch,
-        membersOnly: true,
-        isActive,
-      })
+      const { data } = await usersService.getPaged(
+        {
+          page,
+          pageSize,
+          search: effectiveSearch,
+          membersOnly: true,
+          isActive,
+        },
+        { signal },
+      )
       return data
     },
+    placeholderData: keepPreviousData,
   })
 
   const users = usersPage?.items ?? []
@@ -537,6 +554,8 @@ export function UsersPage() {
       setAadhaarError(null)
       setLoginEmailError(null)
       setPasswordError(null)
+      setDateOfBirthError(null)
+      setMembershipStartDateError(null)
       const p = created?.pendingPaymentCollection
       if (p?.membershipId && p.membershipPaymentId) {
         navigate(`/dashboard/payments/collect?membershipId=${p.membershipId}&userId=${p.userId}`)
@@ -559,6 +578,8 @@ export function UsersPage() {
     setPhoneError(null)
     setLoginEmailError(null)
     setPasswordError(null)
+    setDateOfBirthError(null)
+    setMembershipStartDateError(null)
   }
 
   /** Open add-member modal when coming from dashboard (+ sessionStorage survives Strict Mode remounts) */
@@ -581,6 +602,8 @@ export function UsersPage() {
     setPhoneError(null)
     setLoginEmailError(null)
     setPasswordError(null)
+    setDateOfBirthError(null)
+    setMembershipStartDateError(null)
     if (st?.openAddMember) {
       navigate(location.pathname, { replace: true, state: {} })
     }
@@ -602,6 +625,42 @@ export function UsersPage() {
     setPhoneError(null)
     setLoginEmailError(null)
     setPasswordError(null)
+    setDateOfBirthError(null)
+    setMembershipStartDateError(null)
+  }
+
+  const handleDateOfBirthChange = (raw: string) => {
+    const next = acceptIsoDateInput(raw)
+    if (next === null) return
+    setForm((f) => ({ ...f, dateOfBirth: next }))
+    if (dateOfBirthError) setDateOfBirthError(null)
+  }
+
+  const handleDateOfBirthBlur = (raw: string) => {
+    const err = getBirthDateError(raw, { maxDate: maxBirthDate })
+    if (err) {
+      setDateOfBirthError(err)
+      setForm((f) => ({ ...f, dateOfBirth: '' }))
+      return
+    }
+    setDateOfBirthError(null)
+  }
+
+  const handleMembershipStartDateChange = (raw: string) => {
+    const next = acceptIsoDateInput(raw)
+    if (next === null) return
+    setForm((f) => ({ ...f, membershipStartDate: next }))
+    if (membershipStartDateError) setMembershipStartDateError(null)
+  }
+
+  const handleMembershipStartDateBlur = (raw: string) => {
+    const err = getBirthDateError(raw, { label: 'Membership start date', maxDate: maxBirthDate })
+    if (err) {
+      setMembershipStartDateError(err)
+      setForm((f) => ({ ...f, membershipStartDate: '' }))
+      return
+    }
+    setMembershipStartDateError(null)
   }
 
   const handleEmailBlur = () => {
@@ -697,9 +756,35 @@ export function UsersPage() {
       setFormError('First name, last name and email are required.')
       return
     }
-    if (emailError || loginEmailError || passwordError || phoneError || emergencyPhoneError || aadhaarError) {
+    if (
+      emailError ||
+      loginEmailError ||
+      passwordError ||
+      phoneError ||
+      emergencyPhoneError ||
+      aadhaarError ||
+      dateOfBirthError ||
+      membershipStartDateError
+    ) {
       setFormError('Please fix the errors above before saving.')
       return
+    }
+    const dobValidationError = getBirthDateError(form.dateOfBirth, { maxDate: maxBirthDate })
+    if (dobValidationError) {
+      setDateOfBirthError(dobValidationError)
+      setFormError(dobValidationError)
+      return
+    }
+    if (form.planId != null && form.planId > 0) {
+      const startValidationError = getBirthDateError(form.membershipStartDate, {
+        label: 'Membership start date',
+        maxDate: maxBirthDate,
+      })
+      if (startValidationError) {
+        setMembershipStartDateError(startValidationError)
+        setFormError(startValidationError)
+        return
+      }
     }
     const email = form.email?.trim().toLowerCase()
     const password = form.password ?? ''
@@ -799,7 +884,7 @@ export function UsersPage() {
       email: form.email.trim(),
       phone: phoneDigits,
       aadhaarNumber: aadhaarDigits,
-      dateOfBirth: form.dateOfBirth || new Date().toISOString().slice(0, 10),
+      dateOfBirth: form.dateOfBirth?.trim() || maxBirthDate,
       gender: form.gender?.trim() || '',
       address: form.address?.trim() || undefined,
       emergencyContact: form.emergencyContact?.trim() || undefined,
@@ -1282,8 +1367,9 @@ export function UsersPage() {
               <DataToolbar
                 searchValue={searchQuery}
                 onSearchChange={setSearchQuery}
-                searchPlaceholder="Search name, email, phone, Aadhaar (min. 2 characters)…"
+                searchPlaceholder={`Search name, email, phone, Aadhaar (min. ${MEMBER_SEARCH_MIN_CHARS} characters)…`}
                 searchAriaLabel="Search members"
+                searchLoading={isSearchPending || isFetching}
                 filters={
                   <DataFilterSelect
                     value={statusFilter}
@@ -1461,8 +1547,12 @@ export function UsersPage() {
                   <Input
                     label="Date of birth"
                     type="date"
+                    min={MIN_BIRTH_DATE}
+                    max={maxBirthDate}
                     value={form.dateOfBirth ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
+                    onChange={(e) => handleDateOfBirthChange(e.target.value)}
+                    onBlur={(e) => handleDateOfBirthBlur(e.target.value)}
+                    error={dateOfBirthError ?? undefined}
                     className="!rounded-lg !px-3 !py-2 text-sm"
                   />
                   <div>
@@ -1641,8 +1731,12 @@ export function UsersPage() {
                       <Input
                         label="Membership start date"
                         type="date"
-                        value={form.membershipStartDate ?? new Date().toISOString().slice(0, 10)}
-                        onChange={(e) => setForm((f) => ({ ...f, membershipStartDate: e.target.value }))}
+                        min={MIN_BIRTH_DATE}
+                        max={maxBirthDate}
+                        value={form.membershipStartDate ?? maxBirthDate}
+                        onChange={(e) => handleMembershipStartDateChange(e.target.value)}
+                        onBlur={(e) => handleMembershipStartDateBlur(e.target.value)}
+                        error={membershipStartDateError ?? undefined}
                         className="!rounded-lg !px-3 !py-2 text-sm"
                       />
                     )}

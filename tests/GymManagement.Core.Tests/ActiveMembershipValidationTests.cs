@@ -48,4 +48,39 @@ public sealed class ActiveMembershipValidationTests
         var days = UserMembershipRules.ComputeRemainingDays(DateTime.UtcNow.Date.AddDays(-3));
         Assert.Equal(0, days);
     }
+
+    [Fact]
+    public void Active_with_valid_end_date_allows_gym_check_in()
+    {
+        var end = DateTime.UtcNow.Date.AddDays(10);
+        Assert.True(UserMembershipRules.AllowsGymCheckIn(MembershipStatus.Active, end));
+    }
+
+    [Fact]
+    public void Expired_status_blocks_gym_check_in_even_if_end_date_future()
+    {
+        var end = DateTime.UtcNow.Date.AddDays(10);
+        Assert.False(UserMembershipRules.AllowsGymCheckIn(MembershipStatus.Expired, end));
+    }
+
+    [Fact]
+    public void Past_end_date_blocks_gym_check_in()
+    {
+        var end = DateTime.UtcNow.Date.AddDays(-1);
+        Assert.False(UserMembershipRules.AllowsGymCheckIn(MembershipStatus.Active, end));
+    }
+
+    [Fact]
+    public void Partial_payment_with_valid_dates_allows_gym_check_in()
+    {
+        var end = DateTime.UtcNow.Date.AddDays(5);
+        Assert.True(UserMembershipRules.AllowsGymCheckIn(MembershipStatus.PartialPayment, end));
+    }
+
+    [Fact]
+    public void Frozen_blocks_gym_check_in()
+    {
+        var end = DateTime.UtcNow.Date.AddDays(30);
+        Assert.False(UserMembershipRules.AllowsGymCheckIn(MembershipStatus.Frozen, end));
+    }
 }

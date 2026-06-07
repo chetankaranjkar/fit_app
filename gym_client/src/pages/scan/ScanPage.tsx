@@ -73,6 +73,10 @@ function toastIfScanSecurityBlock(dto: AttendanceScanResponseDto | null): void {
   }
   if (dto?.errorCode === 'replay') {
     toast.error(dto.message ?? 'This scan was already used.')
+    return
+  }
+  if (dto?.errorCode === 'membership_expired') {
+    toast.error(dto.message ?? 'Membership required to check in.')
   }
 }
 

@@ -48,6 +48,7 @@ public sealed class AttendanceScanOrchestrator : IAttendanceScanOrchestrator
             {
                 Success = false,
                 Message = scan.Message,
+                ErrorCode = scan.ErrorCode,
                 AttendanceLogId = scan.AttendanceLogId,
                 DoorUnlockAttempted = scan.DoorUnlockAttempted,
                 DoorUnlockOk = scan.DoorUnlockOk,

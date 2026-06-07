@@ -25,6 +25,8 @@ public sealed class QrScanResponseDto
 {
     public bool Success { get; set; }
     public string? Message { get; set; }
+    /// <summary>e.g. <c>membership_expired</c>, <c>rate_limited</c>, <c>replay</c>.</summary>
+    public string? ErrorCode { get; set; }
     public int? AttendanceLogId { get; set; }
     public bool DoorUnlockAttempted { get; set; }
     public bool DoorUnlockOk { get; set; }

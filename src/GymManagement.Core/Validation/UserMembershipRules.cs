@@ -79,5 +79,27 @@ public static class UserMembershipRules
 
             or MembershipStatus.Transferred;
 
+    /// <summary>Machine-readable scan denial when membership does not allow gym entry.</summary>
+    public const string GymCheckInDeniedErrorCode = "membership_expired";
+
+    /// <summary>Statuses that allow QR / venue check-in when end date is still valid.</summary>
+    public static readonly MembershipStatus[] GymCheckInAllowedStatuses =
+    {
+        MembershipStatus.Active,
+        MembershipStatus.ActivePendingPayment,
+        MembershipStatus.PartialPayment,
+    };
+
+    /// <summary>
+    /// True when the member may check in: valid end date and paid / in-progress membership.
+    /// </summary>
+    public static bool AllowsGymCheckIn(MembershipStatus status, DateTime endDate, DateTime? asOfUtc = null)
+    {
+        var today = (asOfUtc ?? DateTime.UtcNow).Date;
+        if (endDate.Date < today)
+            return false;
+        return GymCheckInAllowedStatuses.Contains(status);
+    }
+
 }
 

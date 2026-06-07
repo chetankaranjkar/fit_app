@@ -1,3 +1,4 @@
+using GymManagement.Core.Caching;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Interfaces.Caching;
@@ -32,7 +33,7 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<DashboardSummaryDto> GetSummaryAsync(CancellationToken cancellationToken = default)
         {
-            const string cacheKey = "dashboard:summary:v1";
+            const string cacheKey = DashboardCacheKeys.Summary;
             var cached = await _cache.GetAsync<DashboardSummaryDto>(cacheKey, cancellationToken);
             if (cached != null)
                 return cached;
@@ -84,16 +85,27 @@ namespace GymManagement.Infrastructure.Services
                 .Where(m => !m.IsDeleted && m.Status == MembershipStatus.Voided)
                 .Select(m => m.Id);
 
-            var monthlyRevenue = await _context.Payments.AsNoTracking()
-                .Where(p => p.PaymentDate >= monthStart && p.PaymentDate < monthStart.AddMonths(1))
-                .Where(p => !voidedMembershipIds.Contains(p.MembershipId))
-                .SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
-
+            var monthEnd = monthStart.AddMonths(1);
             var todayEnd = today.AddDays(1);
-            var todayRevenue = await _context.Payments.AsNoTracking()
-                .Where(p => p.PaymentDate >= today && p.PaymentDate < todayEnd)
-                .Where(p => !voidedMembershipIds.Contains(p.MembershipId))
-                .SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
+
+            // Enterprise billing: completed installments (legacy Payments table is no longer written).
+            var completedTransactions = _context.MembershipPaymentTransactions.AsNoTracking()
+                .Where(t => !t.IsDeleted && t.Status == MembershipPaymentTransactionStatus.Completed)
+                .Join(
+                    _context.MembershipPayments.AsNoTracking().Where(mp => !mp.IsDeleted),
+                    t => t.PaymentId,
+                    mp => mp.Id,
+                    (t, mp) => new { t.TransactionAmount, t.TransactionDate, mp.MembershipId });
+
+            var monthlyRevenue = await completedTransactions
+                .Where(x => x.TransactionDate >= monthStart && x.TransactionDate < monthEnd)
+                .Where(x => !voidedMembershipIds.Contains(x.MembershipId))
+                .SumAsync(x => (decimal?)x.TransactionAmount, cancellationToken) ?? 0m;
+
+            var todayRevenue = await completedTransactions
+                .Where(x => x.TransactionDate >= today && x.TransactionDate < todayEnd)
+                .Where(x => !voidedMembershipIds.Contains(x.MembershipId))
+                .SumAsync(x => (decimal?)x.TransactionAmount, cancellationToken) ?? 0m;
 
             var trainerCount = await _context.Trainers.AsNoTracking().CountAsync(cancellationToken);
 

@@ -143,9 +143,22 @@ export async function fetchOwnerAnalyticsSnapshot(): Promise<OwnerAnalyticsSnaps
   const deltaPct = prev7 > 0 ? Math.round(((last7 - prev7) / prev7) * 100) : 0
 
   const planByUserId = new Map<number, string>()
+  const activeMembershipUserIds = new Set<number>()
+  const activeMembershipRows: ActiveMember[] = []
   if (membershipsRes.status === 'fulfilled') {
     for (const m of membershipsRes.value.data.items ?? []) {
-      if (m.userId && m.planName) planByUserId.set(m.userId, m.planName)
+      if (!m.userId) continue
+      activeMembershipUserIds.add(m.userId)
+      if (m.planName) planByUserId.set(m.userId, m.planName)
+      activeMembershipRows.push({
+        id: String(m.userId),
+        name: m.userName?.trim() || `Member #${m.userId}`,
+        plan: m.planName ?? '—',
+        lastVisit: new Date(0).toISOString(),
+        hasActiveMembership: true,
+        recentlyEngaged: false,
+        status: 'ACTIVE',
+      })
     }
   }
 
@@ -161,28 +174,48 @@ export async function fetchOwnerAnalyticsSnapshot(): Promise<OwnerAnalyticsSnaps
   }
 
   const members: ActiveMember[] = []
+  const seenUserIds = new Set<number>()
   if (usersRes.status === 'fulfilled') {
     for (const u of usersRes.value.data.items ?? []) {
+      seenUserIds.add(u.id)
       const lastVisit =
         lastVisitByUser.get(u.id) ??
         u.paymentLastPaidDate ??
         u.registrationDate ??
         new Date(0).toISOString()
-      const inactiveDays = (Date.now() - new Date(lastVisit).getTime()) / 86400000
-      const status = inactiveDays <= 7 && u.isActive ? 'ACTIVE' : 'INACTIVE'
+      const recentlyEngaged =
+        (Date.now() - new Date(lastVisit).getTime()) / 86400000 <= 7 && u.isActive
+      const hasActiveMembership = activeMembershipUserIds.has(u.id)
       members.push({
         id: String(u.id),
         name: memberDisplayName(u.firstName, u.lastName),
         plan: planByUserId.get(u.id) ?? '—',
         lastVisit,
-        status,
+        hasActiveMembership,
+        recentlyEngaged,
+        status: hasActiveMembership ? 'ACTIVE' : 'INACTIVE',
       })
     }
   }
 
-  const activeCount = members.filter((m) => m.status === 'ACTIVE').length
+  for (const row of activeMembershipRows) {
+    const userId = Number(row.id)
+    if (seenUserIds.has(userId)) continue
+    const lastVisit =
+      lastVisitByUser.get(userId) ?? row.lastVisit
+    const recentlyEngaged =
+      (Date.now() - new Date(lastVisit).getTime()) / 86400000 <= 7
+    members.push({
+      ...row,
+      lastVisit,
+      recentlyEngaged,
+    })
+    seenUserIds.add(userId)
+  }
+
   const totalMembers = summary?.totalMembers ?? members.length
-  const activeMembers = summary?.activeMembers ?? activeCount
+  const activeMembers = summary?.activeMembers ?? activeMembershipUserIds.size
+  const recentlyEngagedCount = members.filter((m) => m.recentlyEngaged).length
 
   const pendingDues: PendingDue[] = []
   if (usersRes.status === 'fulfilled') {
@@ -265,6 +298,7 @@ export async function fetchOwnerAnalyticsSnapshot(): Promise<OwnerAnalyticsSnaps
       active: activeMembers,
       total: totalMembers,
       inactive: Math.max(0, totalMembers - activeMembers),
+      recentlyEngaged: recentlyEngagedCount,
     },
     payments: {
       pendingCount: billing?.pendingPaymentsCount ?? pendingDues.length,

@@ -18,50 +18,56 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<ReportSummaryDto> GetSummaryAsync(DateTime fromDate, DateTime toDate)
         {
-            var from = fromDate.Date;
-            var to = toDate.Date;
-            if (to < from) (from, to) = (to, from);
+            var rangeFrom = fromDate.Date;
+            var rangeTo = toDate.Date;
+            if (rangeTo < rangeFrom) (rangeFrom, rangeTo) = (rangeTo, rangeFrom);
 
             var voidedMembershipIds = await _context.UserMemberships.AsNoTracking()
                 .Where(m => !m.IsDeleted && m.Status == MembershipStatus.Voided)
                 .Select(m => m.Id)
                 .ToListAsync();
 
-            var payments = await _context.Payments
-                .AsNoTracking()
-                .Where(p => p.PaymentDate.Date >= from && p.PaymentDate.Date <= to)
-                .Where(p => !voidedMembershipIds.Contains(p.MembershipId))
-                .ToListAsync();
+            var toExclusive = rangeTo.AddDays(1);
+            var revenueRows = await (
+                from t in _context.MembershipPaymentTransactions.AsNoTracking()
+                join mp in _context.MembershipPayments.AsNoTracking() on t.PaymentId equals mp.Id
+                where !t.IsDeleted
+                      && !mp.IsDeleted
+                      && t.Status == MembershipPaymentTransactionStatus.Completed
+                      && t.TransactionDate >= rangeFrom
+                      && t.TransactionDate < toExclusive
+                      && !voidedMembershipIds.Contains(mp.MembershipId)
+                select new { t.TransactionAmount, t.TransactionDate, mp.MembershipId }
+            ).ToListAsync();
 
-            var paymentById = payments.ToDictionary(p => p.Id);
             var memberships = await _context.UserMemberships
                 .AsNoTracking()
                 .Include(m => m.Plan)
-                .Where(m => m.StartDate.Date <= to && m.EndDate.Date >= from)
+                .Where(m => m.StartDate.Date <= rangeTo && m.EndDate.Date >= rangeFrom)
                 .ToListAsync();
             var membershipById = memberships.ToDictionary(m => m.Id);
 
             var attendanceLogs = await _context.AttendanceLogs
                 .AsNoTracking()
-                .Where(a => a.AttendanceDate.Date >= from && a.AttendanceDate.Date <= to)
+                .Where(a => a.AttendanceDate.Date >= rangeFrom && a.AttendanceDate.Date <= rangeTo)
                 .ToListAsync();
 
-            var revenueTrend = payments
-                .GroupBy(p => p.PaymentDate.Date)
+            var revenueTrend = revenueRows
+                .GroupBy(r => r.TransactionDate.Date)
                 .Select(g => new RevenuePointDto
                 {
                     Date = g.Key,
-                    Amount = g.Sum(x => x.Amount),
+                    Amount = g.Sum(x => x.TransactionAmount),
                     PaymentsCount = g.Count()
                 })
                 .OrderBy(x => x.Date)
                 .ToList();
 
-            var planSales = payments
-                .Where(p => membershipById.ContainsKey(p.MembershipId))
-                .GroupBy(p =>
+            var planSales = revenueRows
+                .Where(r => membershipById.ContainsKey(r.MembershipId))
+                .GroupBy(r =>
                 {
-                    var m = membershipById[p.MembershipId];
+                    var m = membershipById[r.MembershipId];
                     return new { m.PlanId, PlanName = m.Plan?.PlanName ?? $"Plan #{m.PlanId}" };
                 })
                 .Select(g => new PlanSalesPointDto
@@ -69,7 +75,7 @@ namespace GymManagement.Infrastructure.Services
                     PlanId = g.Key.PlanId,
                     PlanName = g.Key.PlanName,
                     SalesCount = g.Count(),
-                    RevenueAmount = g.Sum(x => x.Amount)
+                    RevenueAmount = g.Sum(x => x.TransactionAmount)
                 })
                 .OrderByDescending(x => x.SalesCount)
                 .ThenBy(x => x.PlanName)
@@ -79,14 +85,14 @@ namespace GymManagement.Infrastructure.Services
                 .AsNoTracking()
                 .CountAsync(m =>
                     (m.Status == MembershipStatus.Expired || m.Status == MembershipStatus.Cancelled) &&
-                    m.EndDate.Date >= from && m.EndDate.Date <= to);
+                    m.EndDate.Date >= rangeFrom && m.EndDate.Date <= rangeTo);
 
             var activeAtStart = await _context.UserMemberships
                 .AsNoTracking()
                 .CountAsync(m =>
                     m.Status == MembershipStatus.Active &&
-                    m.StartDate.Date <= from &&
-                    m.EndDate.Date >= from);
+                    m.StartDate.Date <= rangeFrom &&
+                    m.EndDate.Date >= rangeFrom);
 
             var attendanceTrend = attendanceLogs
                 .GroupBy(a => a.AttendanceDate.Date)
@@ -100,9 +106,9 @@ namespace GymManagement.Infrastructure.Services
 
             return new ReportSummaryDto
             {
-                FromDate = from,
-                ToDate = to,
-                TotalRevenue = payments.Sum(p => p.Amount),
+                FromDate = rangeFrom,
+                ToDate = rangeTo,
+                TotalRevenue = revenueRows.Sum(r => r.TransactionAmount),
                 RevenueTrend = revenueTrend,
                 PlanSales = planSales,
                 ChurnCount = churnCount,

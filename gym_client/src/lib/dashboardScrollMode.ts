@@ -6,7 +6,6 @@
 const EXACT_LOCK_ROUTES = new Set([
   '/dashboard/users',
   '/dashboard/trainers',
-  '/dashboard/attendance',
   '/dashboard/payments',
   '/dashboard/user-memberships',
   '/dashboard/membership-plans',

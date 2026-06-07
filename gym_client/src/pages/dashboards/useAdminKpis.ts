@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { dashboardService } from '../../services/dashboard.service'
 import { reportsService } from '../../services/reports.service'
-import { paymentsService } from '../../services/payments.service'
+import { membershipPaymentsService } from '../../services/membershipPayments.service'
 import { userMembershipsService } from '../../services/userMemberships.service'
 import { authService } from '../../services/auth.service'
 
@@ -10,10 +10,11 @@ function formatInr(amount: number) {
 }
 
 export function useAdminKpis() {
-  const canReports = authService.hasPermission('Reports')
+  const canReports = authService.canReportsAccess()
+  const canPayments = authService.canPaymentsAccess()
 
   return useQuery({
-    queryKey: ['admin-dashboard-kpis', canReports],
+    queryKey: ['admin-dashboard-kpis', canReports, canPayments],
     queryFn: async () => {
       const now = new Date()
       const fromDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
@@ -21,19 +22,20 @@ export function useAdminKpis() {
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
 
-      const [summaryRes, statsRes, reportRes, alertsRes, recentPaymentsRes, membershipsRes] =
+      const [summaryRes, statsRes, reportRes, alertsRes, billingDashRes, recentPaymentsRes, membershipsRes] =
         await Promise.allSettled([
           dashboardService.getSummary(),
-          dashboardService.getStatistics(),
+          canReports ? dashboardService.getStatistics() : Promise.reject('no-reports'),
           canReports ? reportsService.getSummary(fromDate, toDate) : Promise.reject('no-reports'),
           canReports ? dashboardService.getNotifications() : Promise.reject('no-reports'),
-          paymentsService.getPaged({
-            page: 1,
-            pageSize: 5,
-            fromDate: todayStart.toISOString().slice(0, 10),
-            sortBy: 'date',
-            sortDir: 'desc',
-          }),
+          canPayments ? membershipPaymentsService.dashboard() : Promise.reject('no-payments'),
+          canPayments
+            ? membershipPaymentsService.listTransactions({
+                fromDate: todayStart.toISOString().slice(0, 10),
+                toDate: toDate,
+                status: 'Completed',
+              })
+            : Promise.reject('no-payments'),
           userMembershipsService.getPaged({
             page: 1,
             pageSize: 30,
@@ -42,6 +44,7 @@ export function useAdminKpis() {
         ])
 
       const summary = summaryRes.status === 'fulfilled' ? summaryRes.value.data : null
+      const billingDash = billingDashRes.status === 'fulfilled' ? billingDashRes.value.data : null
       const report = reportRes.status === 'fulfilled' ? reportRes.value.data : null
       const alerts = alertsRes.status === 'fulfilled' ? alertsRes.value.data.alerts ?? [] : []
       const trainerRanks =
@@ -51,8 +54,12 @@ export function useAdminKpis() {
             )
           : []
 
-      const recentPayments =
-        recentPaymentsRes.status === 'fulfilled' ? recentPaymentsRes.value.data.data ?? [] : []
+      const recentTx =
+        recentPaymentsRes.status === 'fulfilled' ? recentPaymentsRes.value.data ?? [] : []
+      const recentPayments = recentTx.slice(0, 5).map((t) => ({
+        id: t.id,
+        amount: Number(t.transactionAmount ?? 0),
+      }))
 
       const memberships =
         membershipsRes.status === 'fulfilled' ? membershipsRes.value.data.items ?? [] : []
@@ -62,12 +69,21 @@ export function useAdminKpis() {
         .sort((a, b) => new Date(a.endDate!).getTime() - new Date(b.endDate!).getTime())
         .slice(0, 5)
 
+      const summaryTodayRevenue = Number(summary?.todayRevenue ?? 0)
+      const billingTodayRevenue = Number(billingDash?.todayCollections ?? 0)
+      const todayRevenue =
+        summaryTodayRevenue > 0 ? summaryTodayRevenue : billingTodayRevenue > 0 ? billingTodayRevenue : 0
+
+      const attendanceFromReport = report?.attendanceTrend?.length
+        ? report.attendanceTrend[report.attendanceTrend.length - 1]?.count
+        : undefined
+
       return {
         activeMembers: summary?.activeMembers ?? 0,
         newJoins: summary?.newMembersToday ?? 0,
         expiringSoon: summary?.expiringMembershipsNext14Days ?? 0,
-        todayRevenue: summary?.todayRevenue ?? 0,
-        attendanceToday: summary?.todayAttendance ?? report?.attendanceTrend?.slice(-1)[0]?.count ?? 0,
+        todayRevenue,
+        attendanceToday: summary?.todayAttendance ?? attendanceFromReport ?? 0,
         report,
         alerts,
         trainerRanks: trainerRanks.slice(0, 5),
@@ -77,6 +93,9 @@ export function useAdminKpis() {
         summary,
       }
     },
-    staleTime: 1000 * 60 * 2,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   })
 }

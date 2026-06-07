@@ -34,6 +34,10 @@ export interface ActiveMember {
   name: string
   plan: string
   lastVisit: string // ISO
+  /** Paid membership in force (matches dashboard Active members KPI). */
+  hasActiveMembership: boolean
+  /** Checked in within the last 7 days. */
+  recentlyEngaged: boolean
   status: MemberStatus
 }
 

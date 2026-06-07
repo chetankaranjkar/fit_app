@@ -39,6 +39,7 @@ import type { MembershipPaymentMethod } from '../types/membershipPayment'
 import type { Coupon, ValidateCouponResponse } from '../types/coupon'
 import { formatInr, formatInrWhole } from '../lib/formatInr'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import { invalidateDashboardQueries } from '../lib/dashboardQueryKeys'
 
 function getDashboardUser() {
   try {
@@ -313,6 +314,7 @@ export function PaymentsPage() {
       void queryClient.invalidateQueries({ queryKey: ['payments-stats'] })
       void queryClient.invalidateQueries({ queryKey: ['membership-payment'] })
       void queryClient.invalidateQueries({ queryKey: ['user-memberships-picker'] })
+      invalidateDashboardQueries(queryClient)
       setModalOpen(false)
       resetCollectForm()
       setFormError(null)

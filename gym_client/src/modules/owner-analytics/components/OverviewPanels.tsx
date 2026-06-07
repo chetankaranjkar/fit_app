@@ -390,8 +390,13 @@ export function MemberPulseCard({
   const { data } = useOwnerAnalyticsData()
   const active = data?.memberKpis.active ?? 0
   const total = data?.memberKpis.total ?? 0
-  const inactive = data?.memberKpis.inactive ?? 0
-  const pct = total > 0 ? Math.round((active / total) * 100) : 0
+  const visited7d = data?.memberKpis.recentlyEngaged ?? 0
+  const pct =
+    total > 0
+      ? active / total < 0.01
+        ? '<1%'
+        : `${Math.round((active / total) * 100)}%`
+      : '0%'
 
   const byPlan = useMemo(() => {
     if (data?.planBuckets?.length) {
@@ -418,23 +423,23 @@ export function MemberPulseCard({
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-emerald-400/15 bg-emerald-500/[0.06] px-3 py-3">
           <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-300/80">
-            Active
+            Active plan
           </p>
           <p className="mt-1 text-2xl font-bold text-emerald-200">
             <CountUp value={active} />
           </p>
           <p className="text-[10px] text-emerald-300/70">
-            of {total} ({pct}%)
+            of {total.toLocaleString()} ({pct})
           </p>
         </div>
         <div className="rounded-xl border border-amber-400/15 bg-amber-500/[0.06] px-3 py-3">
           <p className="text-[10px] uppercase tracking-[0.14em] text-amber-300/80">
-            Inactive &gt;7d
+            Visited 7d
           </p>
           <p className="mt-1 text-2xl font-bold text-amber-200">
-            <CountUp value={inactive} />
+            <CountUp value={visited7d} />
           </p>
-          <p className="text-[10px] text-amber-300/70">Needs outreach</p>
+          <p className="text-[10px] text-amber-300/70">Recent check-ins</p>
         </div>
       </div>
 

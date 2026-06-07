@@ -3,15 +3,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceStrict } from 'date-fns'
 import {
   AlertTriangle,
+  Calendar,
   CalendarRange,
+  CheckCircle2,
   ClipboardList,
   Clock,
   LogIn,
   LogOut,
   Search,
+  TrendingUp,
+  UserCheck,
   UserRound,
   UserX,
   Users,
+  Activity,
 } from 'lucide-react'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import {
@@ -428,77 +433,59 @@ export function AttendancePage() {
 
   const filterToolbar = (
     <div className="flex w-full min-w-0 flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="space-y-1.5">
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            <CalendarRange className="size-3.5 text-slate-500" aria-hidden />
-            Log date range
-          </span>
-          <div className="flex flex-wrap gap-2">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <CalendarRange className="size-3.5 text-sky-400" aria-hidden />
+            Date Range
+          </label>
+          <div className="flex gap-2">
             <Input
               type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
-              className="!py-2"
-              aria-label="Attendance log start date"
+              className="!py-2.5 text-xs"
+              aria-label="Start date"
             />
             <Input
               type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
-              className="!py-2"
-              aria-label="Attendance log end date"
+              className="!py-2.5 text-xs"
+              aria-label="End date"
             />
           </div>
         </div>
-        <div className="space-y-1.5">
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            <AlertTriangle className="size-3.5 text-amber-400/80" aria-hidden />
-            Exception day
-          </span>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <Search className="size-3.5 text-emerald-400" aria-hidden />
+            Search
+          </label>
           <Input
-            type="date"
-            value={anomalyDate}
-            onChange={(event) => setAnomalyDate(event.target.value)}
-            className="!py-2"
-            aria-label="Date for late and absent member detection"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Member name, notes..."
+            className="!py-2.5 text-sm"
           />
-          <p className="text-[11px] text-slate-500">Late / absent list uses this day only.</p>
         </div>
-        <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            <Search className="size-3.5 text-slate-500" aria-hidden />
-            Find &amp; status
-          </span>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search member, note, or method…"
-              className="min-w-0 flex-1 !py-2"
-            />
-            <select
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as 'all' | 'checked-in' | 'checked-out' | 'late')
-              }
-              className={`${selectClass} min-w-[180px] py-2`}
-              aria-label="Filter by attendance status"
-            >
-              <option value="all" className="bg-slate-900">
-                All statuses
-              </option>
-              <option value="checked-in" className="bg-slate-900">
-                Checked in
-              </option>
-              <option value="checked-out" className="bg-slate-900">
-                Checked out
-              </option>
-              <option value="late" className="bg-slate-900">
-                Late (exception day)
-              </option>
-            </select>
-          </div>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <Activity className="size-3.5 text-violet-400" aria-hidden />
+            Status Filter
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as 'all' | 'checked-in' | 'checked-out' | 'late')
+            }
+            className={`${selectClass} py-2.5`}
+            aria-label="Filter by status"
+          >
+            <option value="all" className="bg-slate-900">All Statuses</option>
+            <option value="checked-in" className="bg-slate-900">✓ Checked In</option>
+            <option value="checked-out" className="bg-slate-900">✓ Completed</option>
+            <option value="late" className="bg-slate-900">⚠ Late</option>
+          </select>
         </div>
       </div>
     </div>
@@ -507,95 +494,122 @@ export function AttendancePage() {
   return (
     <DashboardLayout userName={userName}>
       <DashboardSubpageShell
-        eyebrow="Operations"
-        titleBefore="Member "
-        titleGradient="attendance"
-        subtitle="Front-desk check-ins, live floor status, and exception monitoring in one operations view."
+        eyebrow="Operations Hub"
+        titleBefore="Live "
+        titleGradient="Attendance"
+        subtitle="Real-time member activity tracking, check-in management, and attendance analytics"
         showExport={false}
-        primaryAction={{ label: '+ Check in member', onClick: openCheckIn }}
+        primaryAction={{ label: '+ Check In Member', onClick: openCheckIn }}
       >
         <DataPageSection>
-        <DashboardMetricsGrid cols={4}>
-          <MetricCard
-            title="Visit logs"
-            value={stats.total}
-            gradient="from-sky-500 to-blue-600"
-            icon={<ClipboardList className="size-5" strokeWidth={2} />}
-            caption={`${startDate} → ${endDate}`}
-          />
-          <MetricCard
-            title="Active now"
-            value={stats.checkedIn}
-            gradient="from-emerald-500 to-teal-500"
-            icon={<LogIn className="size-5" strokeWidth={2} />}
-            caption="Checked in, not out"
-          />
-          <MetricCard
-            title="Completed"
-            value={stats.completed}
-            gradient="from-violet-500 to-fuchsia-500"
-            icon={<LogOut className="size-5" strokeWidth={2} />}
-            caption="Sessions closed"
-          />
-          <MetricCard
-            title="Unique members"
-            value={stats.uniqueMembers}
-            gradient="from-amber-500 to-orange-500"
-            icon={<Users className="size-5" strokeWidth={2} />}
-            caption="Distinct people in range"
-          />
-        </DashboardMetricsGrid>
-
-        <section
-          className="glass-card relative shrink-0 overflow-hidden rounded-2xl border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.07] via-transparent to-rose-500/[0.06]"
-          aria-label="Exception summary for selected day"
-        >
-          <div className="pointer-events-none absolute -right-16 -top-16 size-40 rounded-full bg-amber-500/10 blur-3xl" />
-          <div className="relative flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-200 ring-1 ring-amber-400/30">
-                <Clock className="size-5" strokeWidth={2} />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-amber-200/90">
-                  Exception snapshot
-                </p>
-                <p className="mt-0.5 text-sm text-slate-300">
-                  Punctuality signals for{' '}
-                  <span className="font-medium text-white">{anomalyDayLabel}</span>
-                </p>
+          {/* Enhanced Metrics with Better Visual Hierarchy */}
+          <div className="mb-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Today's Overview</h2>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <Calendar className="size-4" />
+                <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
               </div>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <div className="flex min-w-[120px] flex-1 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 sm:flex-initial">
-                <span className="flex size-9 items-center justify-center rounded-lg bg-amber-500/15 text-amber-300">
-                  <AlertTriangle className="size-4" />
-                </span>
-                <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Late</p>
-                  <p className="text-xl font-bold tabular-nums text-white">{stats.lateCount}</p>
+            <DashboardMetricsGrid cols={4}>
+              <MetricCard
+                title="Total Visits"
+                value={stats.total}
+                gradient="from-blue-500 via-sky-500 to-cyan-500"
+                icon={<ClipboardList className="size-5" strokeWidth={2.5} />}
+                caption={`${stats.uniqueMembers} unique members`}
+              />
+              <MetricCard
+                title="Currently Active"
+                value={stats.checkedIn}
+                gradient="from-emerald-500 via-green-500 to-teal-500"
+                icon={<UserCheck className="size-5" strokeWidth={2.5} />}
+                caption="On gym floor now"
+              />
+              <MetricCard
+                title="Completed Sessions"
+                value={stats.completed}
+                gradient="from-violet-500 via-purple-500 to-fuchsia-500"
+                icon={<CheckCircle2 className="size-5" strokeWidth={2.5} />}
+                caption="Checked out today"
+              />
+              <MetricCard
+                title="Attendance Rate"
+                value={`${stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%`}
+                gradient="from-amber-500 via-orange-500 to-rose-500"
+                icon={<TrendingUp className="size-5" strokeWidth={2.5} />}
+                caption="Session completion"
+              />
+            </DashboardMetricsGrid>
+          </div>
+
+          {/* Exception Monitoring Card - Redesigned */}
+          <div className="mb-6">
+            <div className="overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/[0.08] via-orange-500/[0.04] to-rose-500/[0.06] backdrop-blur-xl">
+              <div className="border-b border-white/5 bg-gradient-to-r from-amber-500/10 to-transparent px-6 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-12 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/20">
+                      <AlertTriangle className="size-6" strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold text-white">Exception Monitor</h3>
+                      <p className="text-sm text-amber-100/80">Track attendance anomalies</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-amber-200/80">Monitor Date:</label>
+                    <Input
+                      type="date"
+                      value={anomalyDate}
+                      onChange={(event) => setAnomalyDate(event.target.value)}
+                      className="!w-auto !py-2 text-sm"
+                      aria-label="Exception monitoring date"
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="flex min-w-[120px] flex-1 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 sm:flex-initial">
-                <span className="flex size-9 items-center justify-center rounded-lg bg-slate-500/20 text-slate-200">
-                  <UserX className="size-4" />
-                </span>
-                <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Absent</p>
-                  <p className="text-xl font-bold tabular-nums text-white">{stats.absentCount}</p>
+              <div className="grid gap-4 p-6 sm:grid-cols-2">
+                <div className="group relative overflow-hidden rounded-xl border border-amber-400/20 bg-gradient-to-br from-amber-500/10 to-orange-500/5 p-5 transition-all hover:border-amber-400/40 hover:shadow-lg hover:shadow-amber-500/10">
+                  <div className="relative flex items-center gap-4">
+                    <div className="flex size-14 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/30 transition-transform group-hover:scale-105">
+                      <Clock className="size-6" strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-amber-300/80">Late Arrivals</p>
+                      <p className="mt-1 text-3xl font-bold tabular-nums text-white">{stats.lateCount}</p>
+                      <p className="mt-1 text-xs text-amber-200/60">{anomalyDayLabel}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="group relative overflow-hidden rounded-xl border border-slate-500/20 bg-gradient-to-br from-slate-500/10 to-slate-600/5 p-5 transition-all hover:border-slate-400/40 hover:shadow-lg hover:shadow-slate-500/10">
+                  <div className="relative flex items-center gap-4">
+                    <div className="flex size-14 items-center justify-center rounded-xl bg-slate-500/20 text-slate-300 ring-1 ring-slate-400/30 transition-transform group-hover:scale-105">
+                      <UserX className="size-6" strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-300/80">No Shows</p>
+                      <p className="mt-1 text-3xl font-bold tabular-nums text-white">{stats.absentCount}</p>
+                      <p className="mt-1 text-xs text-slate-300/60">{anomalyDayLabel}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </section>
         </DataPageSection>
 
-        <div className="grid min-h-0 min-w-0 flex-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] xl:overflow-hidden">
-          <div className="flex min-h-0 min-w-0 flex-col">
+        {/* Main Content Grid */}
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
+          {/* Attendance Log Table */}
+          <div className="flex min-w-0 flex-col gap-4">
+            {/* Filter toolbar — full-width, above the table panel */}
+            <div className="glass-card rounded-2xl px-5 py-4">
+              {filterToolbar}
+            </div>
             <DashboardTablePanel
-              title="Attendance log"
-              description="Only this grid scrolls. Check out ends an active session."
-              toolbar={filterToolbar}
+              title="Attendance Log"
+              description="Complete attendance history with real-time updates"
             >
               <EnterpriseDataGrid
                 data={filteredLogs}
@@ -604,8 +618,8 @@ export function AttendancePage() {
                 loading={isLoading}
                 emptyMessage={
                   attendanceLogs.length === 0
-                    ? 'No attendance in this date range.'
-                    : 'No rows match your filters. Widen the range or clear status filter.'
+                    ? 'No attendance records in this date range.'
+                    : 'No records match your current filters.'
                 }
                 pagination={
                   totalLogs > 0
@@ -627,61 +641,95 @@ export function AttendancePage() {
             </DashboardTablePanel>
           </div>
 
-          <aside className="min-h-0 min-w-0 space-y-3 xl:overflow-y-auto">
-            <section className="glass-card dashboard-card sticky top-4 min-w-0 rounded-2xl">
-              <div className="border-b border-white/5 px-5 py-4">
-                <h2 className="text-base font-semibold text-white">Daily exceptions</h2>
-                <p className="mt-0.5 text-xs text-slate-400">
-                  Late arrivals and no-shows for the exception day above.
+          {/* Right Sidebar - Quick Actions & Exceptions */}
+          <aside className="min-w-0 space-y-4">
+            {/* Quick Actions Panel */}
+            <section className="overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/[0.08] to-sky-500/[0.04] backdrop-blur-xl">
+              <div className="border-b border-white/5 bg-gradient-to-r from-blue-500/10 to-transparent px-5 py-4">
+                <h3 className="flex items-center gap-2 text-base font-semibold text-white">
+                  <LogIn className="size-5 text-blue-400" />
+                  Quick Actions
+                </h3>
+              </div>
+              <div className="space-y-3 p-5">
+                <Button
+                  onClick={openCheckIn}
+                  className="w-full justify-center bg-gradient-to-r from-emerald-500 to-teal-500 py-3 text-sm font-semibold shadow-lg shadow-emerald-500/20 transition-all hover:shadow-xl hover:shadow-emerald-500/30"
+                >
+                  <UserCheck className="size-4" />
+                  Check In Member
+                </Button>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 text-center">
+                    <p className="text-2xl font-bold tabular-nums text-emerald-400">{stats.checkedIn}</p>
+                    <p className="mt-1 text-xs text-slate-400">Active Now</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 text-center">
+                    <p className="text-2xl font-bold tabular-nums text-violet-400">{stats.completed}</p>
+                    <p className="mt-1 text-xs text-slate-400">Completed</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Exception Details Panel */}
+            <section className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40 backdrop-blur-xl">
+              <div className="border-b border-white/5 bg-white/[0.02] px-5 py-4">
+                <h3 className="text-base font-semibold text-white">Exception Details</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  Late arrivals and no-shows for {anomalyDayLabel}
                 </p>
               </div>
-              <div className="max-h-[min(520px,calc(100vh-12rem))] overflow-y-auto p-4">
+              <div className="overflow-y-auto p-4">
                 {anomalies.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-12 text-center">
-                    <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/25">
-                      <UserRound className="size-5" strokeWidth={2} />
+                  <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-emerald-500/30 bg-emerald-500/[0.03] px-4 py-16 text-center">
+                    <div className="flex size-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 ring-2 ring-emerald-500/40 shadow-lg shadow-emerald-500/20">
+                      <CheckCircle2 className="size-8" strokeWidth={2.5} />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-slate-200">All clear</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        No late or absent signals for {anomalyDayLabel}.
+                      <p className="text-base font-semibold text-emerald-300">All Clear!</p>
+                      <p className="mt-2 text-sm text-slate-400">
+                        No attendance exceptions detected
                       </p>
+                      <p className="mt-1 text-xs text-slate-500">for {anomalyDayLabel}</p>
                     </div>
                   </div>
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="space-y-3">
                     {anomalies.map((item) => (
                       <li key={`${item.type}-${item.userId}-${item.attendanceDate}`}>
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 transition-colors hover:border-white/15 hover:bg-white/[0.05]">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-2">
+                        <div className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-all hover:border-white/20 hover:bg-white/[0.06] hover:shadow-lg">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
                               <div
-                                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-[11px] font-bold text-white ring-1 ring-white/10"
+                                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-xs font-bold text-white ring-2 ring-white/20 shadow-lg"
                                 aria-hidden
                               >
                                 {memberInitials(item.userName)}
                               </div>
-                              <p className="truncate text-sm font-medium text-white">{item.userName}</p>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-white">{item.userName}</p>
+                                <p className="mt-0.5 truncate text-xs text-slate-400">{item.message}</p>
+                              </div>
                             </div>
                             <span
-                              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                              className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ring-2 ${
                                 item.type === 'late'
-                                  ? 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'
-                                  : 'bg-slate-600/30 text-slate-200 ring-1 ring-slate-500/25'
+                                  ? 'bg-amber-500/20 text-amber-300 ring-amber-400/40'
+                                  : 'bg-slate-600/30 text-slate-300 ring-slate-500/40'
                               }`}
                             >
                               {item.type === 'late' ? 'Late' : 'Absent'}
                             </span>
                           </div>
-                          <p className="mt-2 text-xs leading-relaxed text-slate-400">{item.message}</p>
                           <button
                             type="button"
-                            className="mt-3 text-xs font-semibold text-sky-400 hover:text-sky-300"
+                            className="mt-3 text-xs font-semibold text-sky-400 transition-colors hover:text-sky-300"
                             onClick={() =>
                               selectMemberForHistory(item.userId, item.userName, users, setSelectedMember)
                             }
                           >
-                            View attendance history
+                            View Full History →
                           </button>
                         </div>
                       </li>
@@ -694,28 +742,31 @@ export function AttendancePage() {
         </div>
       </DashboardSubpageShell>
 
-      <Modal open={checkInOpen} onClose={() => setCheckInOpen(false)} title="Check in member">
-        <form onSubmit={handleSubmitCheckIn} className="space-y-4">
+      {/* Check-In Modal - Enhanced Design */}
+      <Modal open={checkInOpen} onClose={() => setCheckInOpen(false)} title="Check In Member">
+        <form onSubmit={handleSubmitCheckIn} className="space-y-5">
           {formError && (
             <div
               role="alert"
-              className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+              className="flex items-start gap-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200 backdrop-blur-sm"
             >
-              {formError}
+              <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+              <p>{formError}</p>
             </div>
           )}
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-              Member
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
+              <Users className="size-3.5 text-blue-400" />
+              Select Member
             </label>
             <select
               value={checkInUserId}
               onChange={(event) => setCheckInUserId(Number(event.target.value))}
-              className={selectClass}
+              className={`${selectClass} py-3`}
               aria-label="Member to check in"
             >
               <option value={0} className="bg-slate-900">
-                Select member
+                Choose a member...
               </option>
               {users.map((user) => (
                 <option key={user.id} value={user.id} className="bg-slate-900">
@@ -724,130 +775,192 @@ export function AttendancePage() {
               ))}
             </select>
           </div>
-          <Input
-            label="Method"
-            value={checkInMethod}
-            onChange={(event) => setCheckInMethod(event.target.value)}
-          />
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-              Notes
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
+              <Activity className="size-3.5 text-emerald-400" />
+              Check-In Method
+            </label>
+            <Input
+              value={checkInMethod}
+              onChange={(event) => setCheckInMethod(event.target.value)}
+              placeholder="e.g., Front Desk, QR Code, Mobile App"
+              className="py-3"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
+              <ClipboardList className="size-3.5 text-violet-400" />
+              Notes (Optional)
             </label>
             <textarea
               value={checkInNotes}
               onChange={(event) => setCheckInNotes(event.target.value)}
               rows={3}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
-              placeholder="Optional front-desk note"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
+              placeholder="Add any relevant notes about this check-in..."
             />
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setCheckInOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={checkInMutation.isPending}>
-              Check in
+            <Button 
+              type="submit" 
+              isLoading={checkInMutation.isPending}
+              className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25"
+            >
+              <UserCheck className="size-4" />
+              Check In Member
             </Button>
           </div>
         </form>
       </Modal>
 
+      {/* Check-Out Modal - Enhanced Design */}
       <Modal
         open={selectedCheckout !== null}
         onClose={() => setSelectedCheckout(null)}
-        title={selectedCheckout ? `Check out ${selectedCheckout.userName}` : 'Check out'}
+        title={selectedCheckout ? `Check Out: ${selectedCheckout.userName}` : 'Check Out Member'}
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
           {formError && (
             <div
               role="alert"
-              className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+              className="flex items-start gap-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200 backdrop-blur-sm"
             >
-              {formError}
+              <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+              <p>{formError}</p>
             </div>
           )}
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-            <p>Checked in at: {formatDateTime(selectedCheckout?.checkInTime)}</p>
-            <p className="mt-1">Method: {selectedCheckout?.checkInMethod || 'FrontDesk'}</p>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-              Notes
+          {selectedCheckout && (
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-sm font-bold text-white ring-2 ring-white/20">
+                  {memberInitials(selectedCheckout.userName)}
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-white">{selectedCheckout.userName}</p>
+                  <p className="text-xs text-slate-400">
+                    Checked in: {formatDateTime(selectedCheckout.checkInTime)}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Duration: {safeDuration(selectedCheckout)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
+              <ClipboardList className="size-3.5 text-violet-400" />
+              Check-Out Notes (Optional)
             </label>
             <textarea
               value={checkoutNotes}
               onChange={(event) => setCheckoutNotes(event.target.value)}
               rows={3}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
-              placeholder="Optional check-out note"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
+              placeholder="Add any notes about this check-out..."
             />
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setSelectedCheckout(null)}>
               Cancel
             </Button>
-            <Button type="button" isLoading={checkOutMutation.isPending} onClick={() => checkOutMutation.mutate()}>
-              Check out
+            <Button
+              onClick={() => checkOutMutation.mutate()}
+              isLoading={checkOutMutation.isPending}
+              className="bg-gradient-to-r from-violet-500 to-purple-500 shadow-lg shadow-violet-500/25"
+            >
+              <LogOut className="size-4" />
+              Complete Check-Out
             </Button>
           </div>
         </div>
       </Modal>
 
+      {/* Member History Modal - Enhanced Design */}
       <Modal
         open={selectedMember !== null}
         onClose={() => setSelectedMember(null)}
         title={
           selectedMember
-            ? `Attendance history: ${`${selectedMember.firstName ?? ''} ${selectedMember.lastName ?? ''}`.trim()}`
-            : 'Attendance history'
+            ? `Attendance History: ${selectedMember.firstName} ${selectedMember.lastName}`
+            : 'Member History'
         }
-        size="wide"
       >
-        <div className="space-y-3">
-          {selectedMemberLogs.length === 0 ? (
-            <p className="text-sm text-slate-400">No attendance history found for this member.</p>
-          ) : (
-            <div className="max-h-[420px] overflow-auto rounded-xl border border-white/10">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Check in</th>
-                    <th className="px-4 py-3">Check out</th>
-                    <th className="px-4 py-3">Duration</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedMemberLogs.map((log) => (
-                    <tr key={log.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                      <td className="px-4 py-3 text-slate-300">
-                        {new Date(log.attendanceDate).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-[13px] text-slate-300">
-                        {formatDateTime(log.checkInTime)}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-[13px] text-slate-300">
-                        {formatDateTime(log.checkOutTime)}
-                      </td>
-                      <td className="px-4 py-3 tabular-nums text-slate-300">{safeDuration(log)}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                            log.isCheckedIn
-                              ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
-                              : 'bg-white/[0.06] text-slate-300 ring-1 ring-white/10'
-                          }`}
-                        >
-                          {log.isCheckedIn ? 'Checked in' : 'Checked out'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  Total Sessions: <span className="text-blue-400">{selectedMemberLogs.length}</span>
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Showing all-time attendance records
+                </p>
+              </div>
             </div>
-          )}
+          </div>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {selectedMemberLogs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/10 bg-white/[0.02] py-12 text-center">
+                <ClipboardList className="size-8 text-slate-600" />
+                <p className="text-sm text-slate-400">No attendance history found</p>
+              </div>
+            ) : (
+              <ul className="space-y-3">
+                {selectedMemberLogs.map((log) => (
+                  <li key={log.id}>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-white/15 hover:bg-white/[0.06]">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="size-4 text-slate-400" />
+                            <p className="font-semibold text-white">
+                              {new Date(log.attendanceDate).toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </p>
+                          </div>
+                          <div className="mt-2 space-y-1 text-xs text-slate-400">
+                            <p className="flex items-center gap-2">
+                              <LogIn className="size-3.5 text-emerald-400" />
+                              In: {formatDateTime(log.checkInTime)}
+                            </p>
+                            {log.checkOutTime && (
+                              <p className="flex items-center gap-2">
+                                <LogOut className="size-3.5 text-violet-400" />
+                                Out: {formatDateTime(log.checkOutTime)}
+                              </p>
+                            )}
+                            <p className="flex items-center gap-2">
+                              <Clock className="size-3.5 text-blue-400" />
+                              Duration: {safeDuration(log)}
+                            </p>
+                          </div>
+                          {log.notes && (
+                            <p className="mt-2 text-xs italic text-slate-500">"{log.notes}"</p>
+                          )}
+                        </div>
+                        <StatusBadge variant={log.isCheckedIn ? 'success' : 'neutral'} dot>
+                          {log.isCheckedIn ? 'Active' : 'Completed'}
+                        </StatusBadge>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button variant="secondary" onClick={() => setSelectedMember(null)}>
+              Close
+            </Button>
+          </div>
         </div>
       </Modal>
     </DashboardLayout>

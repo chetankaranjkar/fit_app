@@ -38,7 +38,7 @@ export function HeroStat({
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</p>
           <p className="mt-1 break-words text-xl font-bold tabular-nums leading-tight text-white sm:text-2xl">
-            {numericValue != null && format ? (
+            {numericValue != null ? (
               <AnimatedStat value={numericValue} format={format} />
             ) : (
               value ?? '—'

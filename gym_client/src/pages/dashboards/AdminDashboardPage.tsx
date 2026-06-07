@@ -16,12 +16,16 @@ import { membershipPaymentsService } from '../../services/membershipPayments.ser
 
 export function AdminDashboardPage() {
   const { userName } = getDashboardUser()
-  const { data, isLoading } = useAdminKpis()
+  const { data } = useAdminKpis()
   const canBillingDash = usePermission(authService.permissionCodes.payments)
   const { data: billingDash } = useQuery({
     queryKey: ['membership-payments-dashboard'],
     queryFn: async () => (await membershipPaymentsService.dashboard()).data,
     enabled: canBillingDash,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -60,17 +64,13 @@ export function AdminDashboardPage() {
             <HeroStat
               role="admin"
               label="Today's revenue"
-              numericValue={isLoading ? 0 : data?.todayRevenue ?? 0}
+              numericValue={data?.todayRevenue ?? 0}
               format={(n) => data?.formatInr(n) ?? `₹${n}`}
             />
-            <HeroStat role="admin" label="Active members" numericValue={isLoading ? 0 : data?.activeMembers ?? 0} />
-            <HeroStat role="admin" label="New joins" numericValue={isLoading ? 0 : data?.newJoins ?? 0} />
-            <HeroStat role="admin" label="Expiring soon" numericValue={isLoading ? 0 : data?.expiringSoon ?? 0} />
-            <HeroStat
-              role="admin"
-              label="Attendance today"
-              numericValue={isLoading ? 0 : data?.attendanceToday ?? 0}
-            />
+            <HeroStat role="admin" label="Active members" numericValue={data?.activeMembers ?? 0} />
+            <HeroStat role="admin" label="New joins" numericValue={data?.newJoins ?? 0} />
+            <HeroStat role="admin" label="Expiring soon" numericValue={data?.expiringSoon ?? 0} />
+            <HeroStat role="admin" label="Attendance today" numericValue={data?.attendanceToday ?? 0} />
           </DashboardMetricsGrid>
         </header>
 

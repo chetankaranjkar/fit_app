@@ -12,6 +12,7 @@ import { waiveOffRequestsService } from '../services/waiveOffRequests.service'
 import { couponsService } from '../services/coupons.service'
 import { formatInr } from '../lib/formatInr'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import { invalidateDashboardQueries } from '../lib/dashboardQueryKeys'
 import { BillingSummaryCard } from '../components/billing/BillingSummaryCard'
 import { MembershipFinancialSummaryCard } from '../components/billing/MembershipFinancialSummaryCard'
 import { PaymentConfirmationModal } from '../components/billing/PaymentConfirmationModal'
@@ -209,6 +210,7 @@ export function CollectMembershipPaymentPage() {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['membership-payment', membershipId] })
       queryClient.invalidateQueries({ queryKey: ['membership-financial-summary', membershipId] })
+      invalidateDashboardQueries(queryClient)
       const msg =
         res.paymentStatus === 'Paid' || res.isFullyPaid
           ? 'Full payment recorded. Membership is now active.'

@@ -1,6 +1,8 @@
+using GymManagement.Core.Caching;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
+using GymManagement.Core.Interfaces.Caching;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
@@ -16,6 +18,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly ICouponService _couponService;
         private readonly IBillingCalculationService _billing;
         private readonly IFinancialAuditService _audit;
+        private readonly IAppCache _cache;
 
         public MembershipPaymentService(
             IUnitOfWork unitOfWork,
@@ -23,7 +26,8 @@ namespace GymManagement.Infrastructure.Services
             IInvoiceService invoiceService,
             ICouponService couponService,
             IBillingCalculationService billing,
-            IFinancialAuditService audit)
+            IFinancialAuditService audit,
+            IAppCache cache)
         {
             _ = unitOfWork;
             _db = db;
@@ -31,6 +35,7 @@ namespace GymManagement.Infrastructure.Services
             _couponService = couponService;
             _billing = billing;
             _audit = audit;
+            _cache = cache;
         }
 
         private static bool IsTrialPlan(MembershipPlan plan)
@@ -614,6 +619,8 @@ namespace GymManagement.Infrastructure.Services
                         header.UserId,
                         $"{{\"amount\":{dto.Amount},\"receipt\":\"{txRow.ReceiptNumber}\"}}",
                         cancellationToken);
+
+                    await _cache.RemoveAsync(DashboardCacheKeys.Summary, cancellationToken);
                 }
                 catch
                 {

@@ -443,18 +443,34 @@ export function UsersPage() {
     setPage(1)
   }, [effectiveSearch, statusFilter])
 
+  const listIsActiveFilter =
+    statusFilter === 'all' ? undefined : statusFilter === 'active'
+
+  const { data: directoryTotalCount } = useQuery({
+    queryKey: ['users-directory-total', statusFilter],
+    queryFn: async () => {
+      const { data } = await usersService.getPaged({
+        page: 1,
+        pageSize: 1,
+        membersOnly: true,
+        isActive: listIsActiveFilter,
+        includeBilling: false,
+      })
+      return data.totalCount ?? 0
+    },
+    staleTime: 60_000,
+  })
+
   const { data: usersPage, isLoading, error, isFetching } = useQuery({
     queryKey: ['users-paged', page, pageSize, effectiveSearch, statusFilter],
     queryFn: async ({ signal }) => {
-      const isActive =
-        statusFilter === 'all' ? undefined : statusFilter === 'active'
       const { data } = await usersService.getPaged(
         {
           page,
           pageSize,
           search: effectiveSearch,
           membersOnly: true,
-          isActive,
+          isActive: listIsActiveFilter,
         },
         { signal },
       )
@@ -464,10 +480,14 @@ export function UsersPage() {
   })
 
   const users = usersPage?.items ?? []
-  const totalMembers = usersPage?.totalCount ?? 0
+  /** Matches current search + status filter (drives pagination). */
+  const filteredMemberCount = usersPage?.totalCount ?? 0
+  /** Full directory size for the current status filter — unchanged by search. */
+  const directoryMemberCount = directoryTotalCount ?? filteredMemberCount
+  const isSearchActive = Boolean(effectiveSearch)
 
   const userStats = useMemo(() => {
-    const total = totalMembers
+    const total = directoryMemberCount
     const active = users.filter((u) => u.isActive).length
     const inactive = users.filter((u) => !u.isActive).length
     const morning = users.filter((u) => u.preferredGymTime === 'Morning').length
@@ -475,7 +495,7 @@ export function UsersPage() {
     const evening = users.filter((u) => u.preferredGymTime === 'Evening').length
     const night = users.filter((u) => u.preferredGymTime === 'Night').length
     return { total, active, inactive, morning, afternoon, evening, night }
-  }, [totalMembers, users])
+  }, [directoryMemberCount, users])
 
   const { data: membershipPlans = [] } = useQuery({
     queryKey: ['membershipPlans'],
@@ -545,6 +565,7 @@ export function UsersPage() {
     onSuccess: (created) => {
       setPage(1)
       void queryClient.invalidateQueries({ queryKey: ['users-paged'] })
+      void queryClient.invalidateQueries({ queryKey: ['users-directory-total'] })
       setIsAdding(false)
       setForm(defaultCreateForm)
       setFormError(null)
@@ -567,7 +588,10 @@ export function UsersPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: { isActive: boolean } }) =>
       usersService.update(id, payload),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['users-paged'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['users-paged'] })
+      void queryClient.invalidateQueries({ queryKey: ['users-directory-total'] })
+    },
   })
 
   const handleStartAdd = () => {
@@ -1185,6 +1209,7 @@ export function UsersPage() {
 
       setImportLog(log)
       await queryClient.invalidateQueries({ queryKey: ['users-paged'] })
+      await queryClient.invalidateQueries({ queryKey: ['users-directory-total'] })
       toast.success(`Imported ${ok} member(s). Review log for skips or errors.`)
     } catch {
       toast.error('Could not read CSV file.')
@@ -1361,7 +1386,9 @@ export function UsersPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-white sm:text-base">Member List</h2>
                 <span className="rounded-full bg-white/5 px-2.5 py-0.5 text-xs font-medium text-slate-400">
-                  {totalMembers} {totalMembers === 1 ? 'member' : 'members'}
+                  {isSearchActive
+                    ? `${filteredMemberCount.toLocaleString()} of ${directoryMemberCount.toLocaleString()} members`
+                    : `${directoryMemberCount.toLocaleString()} ${directoryMemberCount === 1 ? 'member' : 'members'}`}
                 </span>
               </div>
               <DataToolbar
@@ -1869,9 +1896,9 @@ export function UsersPage() {
                       </svg>
                     </div>
                     <p className="text-sm text-slate-400">
-                      {totalMembers === 0 ? 'No members yet.' : 'No members match your filter.'}
+                      {directoryMemberCount === 0 ? 'No members yet.' : 'No members match your filter.'}
                     </p>
-                    {totalMembers === 0 && (
+                    {directoryMemberCount === 0 && (
                       <button
                         type="button"
                         onClick={handleStartAdd}
@@ -1908,12 +1935,12 @@ export function UsersPage() {
                   loading={isLoading}
                   virtualize={users.length > 40}
                   emptyMessage={
-                    totalMembers === 0 ? 'No members yet.' : 'No members match your filter.'
+                    directoryMemberCount === 0 ? 'No members yet.' : 'No members match your filter.'
                   }
                   pagination={{
                     page,
                     pageSize,
-                    totalCount: totalMembers,
+                    totalCount: filteredMemberCount,
                     isFetching,
                     pageSizeOptions: [25, 50, 100],
                     onPageChange: setPage,

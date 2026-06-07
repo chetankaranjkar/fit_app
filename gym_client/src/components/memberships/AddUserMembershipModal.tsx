@@ -25,6 +25,7 @@ import {
 } from '../../lib/membershipFormUtils'
 import { ActiveMembershipConflictModal } from './ActiveMembershipConflictModal'
 import type { ActiveMembershipConflict } from '../../types/activeMembershipConflict'
+import { invalidateDashboardQueries } from '../../lib/dashboardQueryKeys'
 import type { CreateUserMembershipDto, UserMembership } from '../../types/userMembership'
 import type { User } from '../../types/user'
 
@@ -187,6 +188,7 @@ export function AddUserMembershipModal({
   const invalidateAfterCreate = async (userId: number) => {
     await queryClient.invalidateQueries({ queryKey: ['user-memberships'] })
     await queryClient.invalidateQueries({ queryKey: ['user-memberships', 'by-user', userId] })
+    invalidateDashboardQueries(queryClient)
     for (const key of extraInvalidateQueryKeys) {
       await queryClient.invalidateQueries({ queryKey: key })
     }

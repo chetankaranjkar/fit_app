@@ -17,10 +17,8 @@ const fmtRelative = (iso: string) => {
   return `${months}mo ago`
 }
 
-const isInactive = (m: ActiveMember) => {
-  const diffDays = (Date.now() - new Date(m.lastVisit).getTime()) / 86400000
-  return m.status === 'INACTIVE' || diffDays > 7
-}
+/** No paid membership in force (matches summary KPI). */
+const lacksActiveMembership = (m: ActiveMember) => !m.hasActiveMembership
 
 export function MembersDrawerBody() {
   const { data } = useOwnerAnalyticsData()
@@ -30,8 +28,8 @@ export function MembersDrawerBody() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (data?.memberRows ?? []).filter((m) => {
-      if (filter === 'ACTIVE' && isInactive(m)) return false
-      if (filter === 'INACTIVE' && !isInactive(m)) return false
+      if (filter === 'ACTIVE' && lacksActiveMembership(m)) return false
+      if (filter === 'INACTIVE' && !lacksActiveMembership(m)) return false
       if (q && !m.name.toLowerCase().includes(q) && !m.plan.toLowerCase().includes(q)) {
         return false
       }
@@ -57,7 +55,7 @@ export function MembersDrawerBody() {
                     : 'text-slate-400 hover:text-slate-200',
                 ].join(' ')}
               >
-                {f === 'ALL' ? 'All' : f === 'ACTIVE' ? 'Active' : 'Inactive'}
+                {f === 'ALL' ? 'All' : f === 'ACTIVE' ? 'Active plan' : 'No plan'}
               </button>
             ))}
           </div>
@@ -85,13 +83,13 @@ export function MembersDrawerBody() {
         ) : (
           <ul className="space-y-2">
             {filtered.map((m) => {
-              const inactive = isInactive(m)
+              const noPlan = lacksActiveMembership(m)
               return (
                 <li
                   key={m.id}
                   className={[
                     'flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition',
-                    inactive
+                    noPlan
                       ? 'border-amber-400/15 bg-amber-500/[0.04] hover:border-amber-400/30'
                       : 'border-white/10 bg-white/[0.03] hover:border-white/20',
                     'hover:bg-white/[0.05]',
@@ -107,7 +105,7 @@ export function MembersDrawerBody() {
                     <span
                       className={[
                         'absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[rgba(10,12,24,0.9)]',
-                        inactive ? 'bg-amber-400' : 'bg-emerald-400',
+                        noPlan ? 'bg-amber-400' : 'bg-emerald-400',
                       ].join(' ')}
                     />
                   </div>
@@ -117,12 +115,16 @@ export function MembersDrawerBody() {
                       {m.plan} · Last visit {fmtRelative(m.lastVisit)}
                     </p>
                   </div>
-                  {inactive && (
+                  {noPlan ? (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
                       <IconAlert className="size-3" />
-                      Inactive &gt;7d
+                      No active plan
                     </span>
-                  )}
+                  ) : m.recentlyEngaged ? (
+                    <span className="inline-flex shrink-0 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                      Visited 7d
+                    </span>
+                  ) : null}
                 </li>
               )
             })}
@@ -135,22 +137,34 @@ export function MembersDrawerBody() {
 
 export function MembersDrawerSummary() {
   const { data } = useOwnerAnalyticsData()
-  const active = data?.memberKpis.active ?? 0
+  const activePlans = data?.memberKpis.active ?? 0
   const total = data?.memberKpis.total ?? 0
-  const inactive = data?.memberKpis.inactive ?? 0
-  const pct = total > 0 ? Math.round((active / total) * 100) : 0
+  const withoutPlan = data?.memberKpis.inactive ?? 0
+  const visited7d = data?.memberKpis.recentlyEngaged ?? 0
+  const pct =
+    total > 0
+      ? activePlans / total < 0.01
+        ? '<1%'
+        : `${Math.round((activePlans / total) * 100)}%`
+      : '0%'
   return (
-    <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs">
-      <span className="text-slate-400">
-        <span className="font-semibold text-white">{active}</span>
-        &nbsp;of&nbsp;
-        <span className="font-semibold text-white">{total}</span>
-        &nbsp;members active&nbsp;
-        <span className="text-slate-500">({pct}%)</span>
-      </span>
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-300">
-        {inactive} inactive
-      </span>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs">
+        <span className="text-slate-400">
+          <span className="font-semibold text-white">{activePlans}</span>
+          &nbsp;with an active paid plan of&nbsp;
+          <span className="font-semibold text-white">{total.toLocaleString()}</span>
+          &nbsp;registered members&nbsp;
+          <span className="text-slate-500">({pct})</span>
+        </span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-300">
+          {withoutPlan.toLocaleString()} without plan
+        </span>
+      </div>
+      <p className="px-1 text-[10px] text-slate-500">
+        {visited7d} visited in the last 7 days (sample of recent members shown below — not the same as
+        active plan count).
+      </p>
     </div>
   )
 }

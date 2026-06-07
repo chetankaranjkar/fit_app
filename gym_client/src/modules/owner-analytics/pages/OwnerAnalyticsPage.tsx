@@ -59,8 +59,8 @@ export function OwnerAnalyticsPage() {
         body: <RevenueDrawerBody />,
       },
       members: {
-        title: 'Active members',
-        subtitle: 'Engagement snapshot and attendance',
+        title: 'Member plans & visits',
+        subtitle: 'Active paid memberships vs recent attendance',
         summary: <MembersDrawerSummary />,
         body: <MembersDrawerBody />,
       },
@@ -118,13 +118,15 @@ export function OwnerAnalyticsPage() {
         />
         <KpiCard
           type="members"
-          label="Active Members"
+          label="Active Plans"
           value={<CountUp value={members?.active ?? 0} />}
           subValue={
             <>
               of&nbsp;
-              <span className="font-semibold text-slate-300">{members?.total ?? 0}</span>
-              &nbsp;members
+              <span className="font-semibold text-slate-300">
+                {(members?.total ?? 0).toLocaleString()}
+              </span>
+              &nbsp;registered
             </>
           }
           tone="blue"

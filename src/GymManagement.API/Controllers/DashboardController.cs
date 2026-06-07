@@ -10,7 +10,6 @@ namespace GymManagement.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    [HasPermission(PermissionCodes.Reports)]
     public class DashboardController : ControllerBase
     {
         private readonly IDashboardService _dashboardService;
@@ -27,6 +26,7 @@ namespace GymManagement.API.Controllers
         }
 
         [HttpGet("statistics")]
+        [HasPermission(PermissionCodes.Reports)]
         public async Task<ActionResult<DashboardStatisticsDto>> GetStatistics()
         {
             var statistics = await _dashboardService.GetStatisticsAsync();
@@ -34,6 +34,7 @@ namespace GymManagement.API.Controllers
         }
 
         [HttpGet("notifications")]
+        [HasPermission(PermissionCodes.Reports)]
         public async Task<ActionResult<DashboardNotificationsDto>> GetNotifications()
         {
             var notifications = await _dashboardService.GetNotificationsAsync();

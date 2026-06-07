@@ -60,19 +60,39 @@ export const MOCK_PENDING: PendingDue[] = [
 // Members (active / inactive)
 // ---------------------------------------------------------------------------
 
+function mockMember(
+  id: string,
+  name: string,
+  plan: string,
+  lastVisit: string,
+  hasActiveMembership: boolean,
+): ActiveMember {
+  const recentlyEngaged =
+    (Date.now() - new Date(lastVisit).getTime()) / 86400000 <= 7
+  return {
+    id,
+    name,
+    plan,
+    lastVisit,
+    hasActiveMembership,
+    recentlyEngaged,
+    status: hasActiveMembership ? 'ACTIVE' : 'INACTIVE',
+  }
+}
+
 export const MOCK_MEMBERS: ActiveMember[] = [
-  { id: 'm-01', name: 'Rahul Sharma',  plan: 'Gold Quarterly',   lastVisit: daysAgo(0, 7, 30),  status: 'ACTIVE' },
-  { id: 'm-02', name: 'Priya Verma',   plan: 'Silver Monthly',   lastVisit: daysAgo(1, 19, 15), status: 'ACTIVE' },
-  { id: 'm-03', name: 'Amit Singh',    plan: 'Gold Annual',      lastVisit: daysAgo(0, 6, 45),  status: 'ACTIVE' },
-  { id: 'm-04', name: 'Anjali Nair',   plan: 'Platinum Annual',  lastVisit: daysAgo(2, 20, 0),  status: 'ACTIVE' },
-  { id: 'm-05', name: 'Vikram Patel',  plan: 'Gold Monthly',     lastVisit: daysAgo(3, 18, 30), status: 'ACTIVE' },
-  { id: 'm-06', name: 'Sneha Rao',     plan: 'Gold Monthly',     lastVisit: daysAgo(9, 8, 20),  status: 'INACTIVE' },
-  { id: 'm-07', name: 'Rohit Kapoor',  plan: 'Silver Monthly',   lastVisit: daysAgo(12, 17, 10),status: 'INACTIVE' },
-  { id: 'm-08', name: 'Kiran Desai',   plan: 'Gold Quarterly',   lastVisit: daysAgo(4, 7, 50),  status: 'ACTIVE' },
-  { id: 'm-09', name: 'Manish Jain',   plan: 'Silver Monthly',   lastVisit: daysAgo(6, 18, 5),  status: 'ACTIVE' },
-  { id: 'm-10', name: 'Aditi Reddy',   plan: 'Platinum Monthly', lastVisit: daysAgo(1, 6, 30),  status: 'ACTIVE' },
-  { id: 'm-11', name: 'Divya Shetty',  plan: 'Gold Monthly',     lastVisit: daysAgo(15, 19, 0), status: 'INACTIVE' },
-  { id: 'm-12', name: 'Pooja Sen',     plan: 'Silver Monthly',   lastVisit: daysAgo(20, 20, 15),status: 'INACTIVE' },
+  mockMember('m-01', 'Rahul Sharma', 'Gold Quarterly', daysAgo(0, 7, 30), true),
+  mockMember('m-02', 'Priya Verma', 'Silver Monthly', daysAgo(1, 19, 15), true),
+  mockMember('m-03', 'Amit Singh', 'Gold Annual', daysAgo(0, 6, 45), true),
+  mockMember('m-04', 'Anjali Nair', 'Platinum Annual', daysAgo(2, 20, 0), true),
+  mockMember('m-05', 'Vikram Patel', 'Gold Monthly', daysAgo(3, 18, 30), true),
+  mockMember('m-06', 'Sneha Rao', 'Gold Monthly', daysAgo(9, 8, 20), false),
+  mockMember('m-07', 'Rohit Kapoor', 'Silver Monthly', daysAgo(12, 17, 10), false),
+  mockMember('m-08', 'Kiran Desai', 'Gold Quarterly', daysAgo(4, 7, 50), true),
+  mockMember('m-09', 'Manish Jain', 'Silver Monthly', daysAgo(6, 18, 5), true),
+  mockMember('m-10', 'Aditi Reddy', 'Platinum Monthly', daysAgo(1, 6, 30), true),
+  mockMember('m-11', 'Divya Shetty', 'Gold Monthly', daysAgo(15, 19, 0), false),
+  mockMember('m-12', 'Pooja Sen', 'Silver Monthly', daysAgo(20, 20, 15), false),
 ]
 
 // ---------------------------------------------------------------------------
@@ -147,7 +167,8 @@ const last7 = MOCK_REVENUE_30D.slice(-7).reduce((sum, p) => sum + p.amount, 0)
 const prev7 = MOCK_REVENUE_30D.slice(-14, -7).reduce((sum, p) => sum + p.amount, 0)
 const total30 = MOCK_REVENUE_30D.reduce((sum, p) => sum + p.amount, 0)
 
-const activeMemberCount = MOCK_MEMBERS.filter((m) => m.status === 'ACTIVE').length
+const activeMemberCount = MOCK_MEMBERS.filter((m) => m.hasActiveMembership).length
+const recentlyEngagedCount = MOCK_MEMBERS.filter((m) => m.recentlyEngaged).length
 const totalMemberCount = MOCK_MEMBERS.length
 
 const pendingCount = MOCK_PENDING.length
@@ -173,6 +194,7 @@ export const KPI_SNAPSHOT = {
     active: activeMemberCount,
     total: totalMemberCount,
     inactive: totalMemberCount - activeMemberCount,
+    recentlyEngaged: recentlyEngagedCount,
   },
   payments: {
     pendingCount,

@@ -55,6 +55,7 @@ export interface QrScanRequestDto {
 export interface QrScanResponseDto {
   success: boolean
   message?: string | null
+  errorCode?: string | null
   attendanceLogId?: number | null
   doorUnlockAttempted: boolean
   doorUnlockOk: boolean

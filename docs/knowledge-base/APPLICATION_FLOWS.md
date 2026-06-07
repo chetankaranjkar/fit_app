@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-06-01 (Enterprise membership billing, payments, waive-offs).
+**Last updated:** 2026-06-03 (QR scan membership expiry gate).
 
 ---
 
@@ -430,6 +430,33 @@ Only transactions with **Status = Completed** count toward paid/outstanding. **V
 **Migrate:** `dotnet ef database update --project src/GymManagement.Infrastructure --startup-project src/GymManagement.API` (migration `20260601120000_EnterpriseBillingPaymentsWaiveOff`).
 
 **Code:** `MembershipPaymentService`, `WaiveOffRequestService`, `BillingCalculationService`, `gym_client/src/components/billing/*`, `CollectMembershipPaymentPage`, `MembershipPaymentHistoryPage`, `WaiveOffRequestsPage`.
+
+---
+
+## 12b. QR attendance check-in (membership gate)
+
+**Goal:** Block gym entry via QR when membership is missing or not valid — protects revenue without blocking staff who scan for testing.
+
+| Step | API | UI |
+|------|-----|-----|
+| Member scans branch QR | `POST /api/Attendance/scan` (mobile + web) | `/dashboard/scan`, Flutter QR flow |
+| Legacy alias | `POST /api/qr/scan` | Owner QR tools |
+
+**Gate (after geo + duplicate-scan checks, before `AttendanceLog` insert):**
+
+| Allow check-in | Deny (`errorCode: membership_expired`, HTTP 400) |
+|----------------|--------------------------------------------------|
+| `Active`, `ActivePendingPayment`, `PartialPayment` with `EndDate >= today` | No membership row; `Expired`; `Frozen`; `Voided` / `Cancelled` / `Transferred`; past `EndDate` |
+
+**Exempt roles** (gate skipped): `ADMIN`, `TRAINER`, `STAFF`, `RECEPTIONIST`, `ACCOUNTANT`.
+
+**Rules:** `UserMembershipRules.AllowsGymCheckIn` in `GymManagement.Core/Validation/UserMembershipRules.cs`.
+
+**Implementation:** `GymQrService.ScanAsync` → `EvaluateMembershipForCheckInAsync`; `AttendanceScanOrchestrator` forwards `ErrorCode` on `AttendanceScanResponseDto`.
+
+**Client UX:** Web `ScanResult` + toast when `membership_expired`; mobile maps same code to `AttendanceMembershipExpired` (renew at reception).
+
+**Renew path:** Members list → **Memberships** modal or `/dashboard/payments/collect` after staff adds/renews plan (§11b, §12).
 
 ---
 

@@ -46,6 +46,12 @@ export function ScanResult({
         </p>
       )}
 
+      {!ok && outcome.errorCode === 'membership_expired' && (
+        <p className="mt-4 rounded-xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-left text-xs leading-relaxed text-rose-100/95">
+          Gym access requires a current membership. Ask reception to renew or collect payment, then scan again.
+        </p>
+      )}
+
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/5 bg-black/35 px-4 py-4 text-xs text-slate-300">
         <DoorOpen className="size-5 text-cyan-300" aria-hidden />
         <span>

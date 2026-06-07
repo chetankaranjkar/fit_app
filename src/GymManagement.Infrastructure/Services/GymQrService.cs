@@ -1,6 +1,8 @@
+using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
+using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -152,6 +154,20 @@ public sealed class GymQrService : IGymQrService
         if (duplicate)
             return Fail("A QR check-in was already recorded in the last 5 minutes.");
 
+        if (!await IsMembershipGateExemptAsync(memberUserId, cancellationToken).ConfigureAwait(false))
+        {
+            var denial = await EvaluateMembershipForCheckInAsync(memberUserId, nowUtc, cancellationToken)
+                .ConfigureAwait(false);
+            if (denial != null)
+            {
+                _logger.LogInformation(
+                    "QR scan rejected for user {MemberId}: membership gate ({Code}).",
+                    memberUserId,
+                    denial.ErrorCode);
+                return denial;
+            }
+        }
+
         var notes = $"lat:{request.Latitude:F6}|lng:{request.Longitude:F6}|token:{token}|distM:{meters:F1}";
         var log = new AttendanceLog
         {
@@ -181,12 +197,93 @@ public sealed class GymQrService : IGymQrService
             BranchId = branch.Id,
         };
 
-        static QrScanResponseDto Fail(string message) => new()
+        static QrScanResponseDto Fail(string message, string? errorCode = null) => new()
         {
             Success = false,
             Message = message,
+            ErrorCode = errorCode,
             DoorUnlockAttempted = false,
             DoorUnlockOk = false
+        };
+    }
+
+    private static readonly string[] MembershipGateExemptRoles =
+    {
+        ApplicationRoleCodes.Admin,
+        ApplicationRoleCodes.Trainer,
+        ApplicationRoleCodes.Staff,
+        ApplicationRoleCodes.Receptionist,
+        ApplicationRoleCodes.Accountant,
+    };
+
+    private async Task<bool> IsMembershipGateExemptAsync(int userId, CancellationToken cancellationToken)
+    {
+        return await _db.UserRoles.AsNoTracking()
+            .Where(ur => ur.UserId == userId && !ur.IsDeleted)
+            .Join(
+                _db.AppRoles.AsNoTracking().Where(r => !r.IsDeleted),
+                ur => ur.RoleId,
+                r => r.Id,
+                (_, role) => role.Name)
+            .AnyAsync(
+                name => MembershipGateExemptRoles.Contains(name),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<QrScanResponseDto?> EvaluateMembershipForCheckInAsync(
+        int userId,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var rows = await _db.UserMemberships.AsNoTracking()
+            .Where(m => m.UserId == userId && !m.IsDeleted)
+            .OrderByDescending(m => m.EndDate)
+            .Select(m => new { m.Status, m.EndDate, m.PlanId })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (rows.Count == 0)
+        {
+            return new QrScanResponseDto
+            {
+                Success = false,
+                ErrorCode = UserMembershipRules.GymCheckInDeniedErrorCode,
+                Message = "No active membership on file. Renew or purchase a plan at reception to check in.",
+                DoorUnlockAttempted = false,
+                DoorUnlockOk = false,
+            };
+        }
+
+        var allowing = rows.FirstOrDefault(m => UserMembershipRules.AllowsGymCheckIn(m.Status, m.EndDate, nowUtc));
+        if (allowing != null)
+            return null;
+
+        var latest = rows[0];
+        var endLabel = latest.EndDate.Date.ToString("dd MMM yyyy");
+        var message = latest.Status switch
+        {
+            MembershipStatus.Frozen =>
+                "Your membership is frozen. Contact reception to reactivate before checking in.",
+            MembershipStatus.Voided or MembershipStatus.Cancelled or MembershipStatus.Transferred =>
+                "Your membership is no longer active. Renew at reception to check in.",
+            MembershipStatus.Expired =>
+                $"Your membership expired on {endLabel}. Renew at reception to check in.",
+            _ when latest.EndDate.Date < nowUtc.Date =>
+                $"Your membership expired on {endLabel}. Renew at reception to check in.",
+            MembershipStatus.ActivePendingPayment or MembershipStatus.PartialPayment =>
+                "Membership payment is overdue. Complete payment at reception to check in.",
+            _ =>
+                "No active membership. Renew at reception to check in.",
+        };
+
+        return new QrScanResponseDto
+        {
+            Success = false,
+            ErrorCode = UserMembershipRules.GymCheckInDeniedErrorCode,
+            Message = message,
+            DoorUnlockAttempted = false,
+            DoorUnlockOk = false,
         };
     }
 

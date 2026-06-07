@@ -18,7 +18,7 @@ public sealed class AttendanceScanResponseDto
     public bool DoorUnlockOk { get; set; }
     public string? SessionId { get; set; }
     public DateTime? SessionStartTimeUtc { get; set; }
-    /// <summary>Optional machine code: <c>rate_limited</c>, <c>replay</c>.</summary>
+    /// <summary>Optional machine code: <c>rate_limited</c>, <c>replay</c>, <c>membership_expired</c>.</summary>
     public string? ErrorCode { get; set; }
 }
 

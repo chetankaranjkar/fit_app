@@ -245,7 +245,7 @@ class QrAttendanceService {
       return AttendanceAlreadyScanned(previousCheckIn: DateTime.now());
     }
 
-    if (_isMembershipMessage(lower)) {
+    if (errorCode == 'membership_expired' || _isMembershipMessage(lower)) {
       return const AttendanceMembershipExpired();
     }
 

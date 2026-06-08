@@ -1,5 +1,6 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
+import { authService } from '../services/auth.service'
 import { getForbiddenMessage } from './apiErrors'
 import { dispatchPaymentBlocked } from './paymentBlockedEvents'
 
@@ -86,10 +87,9 @@ async function requestTokenRefresh() {
 
   const data = (response?.data ?? {}) as Record<string, unknown>
   const nextAccessToken = String(data.token ?? data.Token ?? '')
-  const nextRefreshToken = (data.refreshToken ?? data.RefreshToken) as string | undefined
   if (!nextAccessToken.trim()) throw new Error('Refresh endpoint did not return access token')
 
-  storeSession(nextAccessToken, nextRefreshToken)
+  authService.storeSession(data)
   return nextAccessToken
 }
 

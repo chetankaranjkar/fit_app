@@ -119,6 +119,59 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
+const JWT_ROLE_CLAIM_KEYS = [
+  'role',
+  'roles',
+  'http://schemas.microsoft.com/ws/2008/06/identity/claims/role',
+] as const
+
+function collectJwtRoleValues(value: unknown, out: string[]) {
+  if (typeof value === 'string' && value.trim()) {
+    out.push(value.trim())
+    return
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectJwtRoleValues(item, out)
+  }
+}
+
+/** Application role names embedded in the access token (UserRoles → JWT role claims). */
+function getJwtAppRoles(token?: string | null): string[] {
+  const accessToken = token?.trim() || localStorage.getItem(AUTH_KEYS.token)
+  if (!accessToken) return []
+  const payload = decodeJwtPayload(accessToken)
+  if (!payload) return []
+
+  const roles: string[] = []
+  for (const key of JWT_ROLE_CLAIM_KEYS) {
+    collectJwtRoleValues(payload[key], roles)
+  }
+  for (const [key, value] of Object.entries(payload)) {
+    if (key.endsWith('/role') || key.endsWith('/roles')) {
+      collectJwtRoleValues(value, roles)
+    }
+  }
+
+  return [...new Set(roles.map((r) => r.toUpperCase()).filter(Boolean))]
+}
+
+function mergeAppRoleNames(...sources: Array<string[] | undefined>): string[] {
+  const merged = new Set<string>()
+  for (const list of sources) {
+    for (const name of list ?? []) {
+      const normalized = name.trim().toUpperCase()
+      if (normalized) merged.add(normalized)
+    }
+  }
+  return [...merged]
+}
+
+function notifySessionUpdated() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('gym-session-updated'))
+  }
+}
+
 function isAccessTokenValid(token: string | null | undefined): boolean {
   const value = token?.trim()
   if (!value) return false
@@ -172,8 +225,18 @@ export const authService = {
       'token' in response && typeof response.token === 'string'
         ? (response as LoginResponse)
         : normalizeLoginResponse(response as Record<string, unknown>)
-    localStorage.setItem(AUTH_KEYS.token, normalized.token)
-    localStorage.setItem(AUTH_KEYS.user, JSON.stringify(normalized))
+    const jwtRoles = getJwtAppRoles(normalized.token)
+    const appRoles = mergeAppRoleNames(
+      normalized.appRoles,
+      jwtRoles,
+    ).map((name) => {
+      const fromStored = normalized.appRoles?.find((r) => r.toUpperCase() === name)
+      return fromStored ?? name
+    })
+    const stored: LoginResponse = { ...normalized, appRoles }
+    localStorage.setItem(AUTH_KEYS.token, stored.token)
+    localStorage.setItem(AUTH_KEYS.user, JSON.stringify(stored))
+    notifySessionUpdated()
   },
   clearSession: () => {
     localStorage.removeItem(AUTH_KEYS.token)
@@ -188,7 +251,22 @@ export const authService = {
   getCurrentUser: () => {
     const raw = getStoredUserRaw()
     if (!raw) return null
-    return normalizeLoginResponse(raw)
+    const user = normalizeLoginResponse(raw)
+    const token = user.token || localStorage.getItem(AUTH_KEYS.token) || ''
+    const appRoles = mergeAppRoleNames(user.appRoles, getJwtAppRoles(token)).map((name) => {
+      const fromStored = user.appRoles?.find((r) => r.toUpperCase() === name)
+      return fromStored ?? name
+    })
+    return { ...user, appRoles }
+  },
+  getJwtAppRoles: () => getJwtAppRoles(localStorage.getItem(AUTH_KEYS.token)),
+  getEffectiveAppRoles: () => authService.getCurrentUser()?.appRoles ?? [],
+  refreshSession: async () => {
+    const refreshToken = authService.getRefreshToken()
+    if (!refreshToken) return null
+    const { data } = await authService.refresh(refreshToken)
+    authService.storeSession((data ?? {}) as Record<string, unknown>)
+    return authService.getCurrentUser()
   },
   getPermissions: (): AuthPermission[] => authService.getCurrentUser()?.permissions ?? [],
   hasPermission: (permissionCode: string) => {

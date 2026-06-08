@@ -1,24 +1,30 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { MemberPaymentBlockedHost } from '../../billing/MemberPaymentBlockedHost'
 import { DashboardSessionProvider } from '../DashboardSessionContext'
-import { DashboardRoleProvider } from '../DashboardRoleContext'
-import { getCurrentDashboardRole, isPathAllowedForRole } from '../roleRouting'
+import { DashboardRoleProvider, usePersona } from '../DashboardRoleContext'
+import { isPathAllowedForRole } from '../roleRouting'
 
-/** Enforces role-based route access under /dashboard. */
-export function DashboardShell() {
+function DashboardShellInner() {
   const location = useLocation()
-  const role = getCurrentDashboardRole()
+  const { activePersona } = usePersona()
 
-  if (!isPathAllowedForRole(location.pathname, role)) {
+  if (!isPathAllowedForRole(location.pathname, activePersona)) {
     return <Navigate to="/dashboard" replace />
   }
 
   return (
-    <DashboardRoleProvider value={role}>
-      <DashboardSessionProvider>
-        <MemberPaymentBlockedHost />
-        <Outlet />
-      </DashboardSessionProvider>
+    <DashboardSessionProvider>
+      <MemberPaymentBlockedHost />
+      <Outlet />
+    </DashboardSessionProvider>
+  )
+}
+
+/** Enforces role-based route access under /dashboard. */
+export function DashboardShell() {
+  return (
+    <DashboardRoleProvider>
+      <DashboardShellInner />
     </DashboardRoleProvider>
   )
 }

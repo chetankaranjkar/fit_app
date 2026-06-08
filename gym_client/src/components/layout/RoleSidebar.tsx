@@ -6,6 +6,7 @@ import {
   ROLE_BRAND,
   ROLE_NAV,
   ROLE_NAV_GROUPS,
+  getOtherNavItems,
   getTrainerNavGroups,
   getTrainerNavItems,
   type NavIcon,
@@ -92,6 +93,7 @@ const accentActive: Record<string, string> = {
   admin: 'bg-gradient-to-r from-blue-500/25 to-violet-500/20 text-white border-blue-400/30 shadow-[0_0_20px_-4px_rgba(96,165,250,0.4)]',
   trainer: 'bg-gradient-to-r from-orange-500/25 to-red-500/15 text-white border-orange-400/30 shadow-[0_0_20px_-4px_rgba(251,146,60,0.4)]',
   member: 'bg-gradient-to-r from-orange-500/20 to-amber-500/15 text-white border-orange-400/25 shadow-[0_0_20px_-4px_rgba(249,115,22,0.35)]',
+  other: 'bg-gradient-to-r from-cyan-500/20 to-teal-500/15 text-white border-cyan-400/25 shadow-[0_0_20px_-4px_rgba(34,211,238,0.35)]',
 }
 
 function NavLinkItem({
@@ -147,7 +149,12 @@ export function RoleSidebar({
 }) {
   const role = useDashboardRole()
   const brand = ROLE_BRAND[role]
-  const items = role === 'trainer' ? getTrainerNavItems() : ROLE_NAV[role]
+  const items =
+    role === 'trainer'
+      ? getTrainerNavItems()
+      : role === 'other'
+        ? getOtherNavItems()
+        : ROLE_NAV[role]
   const groups = role === 'trainer' ? getTrainerNavGroups() : ROLE_NAV_GROUPS[role]
   const { pathname } = useLocation()
   const navigate = useNavigate()

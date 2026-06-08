@@ -5,6 +5,7 @@ const glow: Record<DashboardRole, string> = {
   admin: 'hover:shadow-[0_12px_40px_-12px_rgba(96,165,250,0.35)]',
   trainer: 'hover:shadow-[0_12px_40px_-12px_rgba(251,146,60,0.35)]',
   member: 'hover:shadow-[0_12px_40px_-12px_rgba(249,115,22,0.35)]',
+  other: 'hover:shadow-[0_12px_40px_-12px_rgba(34,211,238,0.35)]',
 }
 
 export function GlassPanel({

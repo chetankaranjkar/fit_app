@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authService } from '../../services/auth.service'
 import { useDashboardRoleOrCurrent } from '../../features/auth/DashboardRoleContext'
+import { PersonaSwitcher } from './PersonaSwitcher'
 import { dashboardService } from '../../services/dashboard.service'
 import { meService } from '../../services/me.service'
 import type { MeNotification } from '../../services/me.service'
@@ -107,7 +108,7 @@ export function TopNavbar({
         return { alerts: [] as DashboardAlert[], hooks: { emailEnabled: false, whatsAppEnabled: false } }
       }
     },
-    enabled: dashboardRole === 'admin' || dashboardRole === 'trainer',
+    enabled: dashboardRole === 'admin' || dashboardRole === 'trainer' || dashboardRole === 'other',
     staleTime: 120_000,
     retry: false,
   })
@@ -321,26 +322,26 @@ export function TopNavbar({
           </svg>
         </button>
 
-        {/* User chip */}
-        <button
-          type="button"
-          onClick={() => navigate('/dashboard/profile')}
-          className="ml-1 flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 py-1 pl-1 pr-3 text-left transition hover:bg-white/10"
-        >
-          <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#3b82f6,#a855f7)] text-[11px] font-bold text-white">
-            {userAvatarUrl ? (
-              <img src={userAvatarUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              initials || 'U'
-            )}
-          </span>
-          <span className="hidden flex-col leading-tight sm:flex">
-            <span className="max-w-[10rem] truncate text-xs font-semibold text-white">
+        {/* Persona + user (grouped) */}
+        <div className="flex items-center gap-1 sm:gap-1.5">
+          <PersonaSwitcher />
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/profile')}
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 py-1 pl-1 pr-2 text-left transition hover:bg-white/10 sm:pr-3"
+          >
+            <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#3b82f6,#a855f7)] text-[11px] font-bold text-white">
+              {userAvatarUrl ? (
+                <img src={userAvatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initials || 'U'
+              )}
+            </span>
+            <span className="hidden max-w-40 truncate text-xs font-semibold text-white sm:inline">
               {userName}
             </span>
-            <span className="text-[10px] text-slate-400">Administrator</span>
-          </span>
-        </button>
+          </button>
+        </div>
       </div>
     </header>
   )

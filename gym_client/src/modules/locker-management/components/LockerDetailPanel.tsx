@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { AssignLockerWizard } from './AssignLockerWizard'
 import { SidePanel } from './SidePanel'
 import { LockerStatusBadge } from './LockerStatusBadge'
 import {
@@ -31,6 +32,7 @@ export function LockerDetailPanel({
   onClose: () => void
   onEdit: (locker: Locker) => void
 }) {
+  const [assignOpen, setAssignOpen] = useState(false)
   const { data: assignments = [] } = useAssignments()
   const { data: accessLogs = [] } = useAccessLogs()
   const { data: maintenance = [] } = useMaintenance()
@@ -40,12 +42,14 @@ export function LockerDetailPanel({
     if (!locker) return null
     return (
       assignments
-        .filter((a) => a.lockerId === locker.id)
+        .filter((a) => a.lockerId === locker.id && !isExpired(a.expiryDate))
         .sort(
           (a, b) => new Date(b.assignedDate).getTime() - new Date(a.assignedDate).getTime(),
         )[0] ?? null
     )
   }, [assignments, locker])
+
+  const canAssign = locker?.status === 'AVAILABLE' && !current
 
   const recentLogs = useMemo(() => {
     if (!locker) return []
@@ -93,15 +97,23 @@ export function LockerDetailPanel({
         </span>
       }
       footer={
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-between gap-2">
           <Button variant="ghost" size="sm" onClick={handleDelete} className="text-rose-300 hover:text-rose-200">
             <IconTrash className="size-3.5" />
             Delete
           </Button>
-          <Button size="sm" onClick={() => onEdit(locker)}>
-            <IconEdit className="size-3.5" />
-            Edit locker
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => onEdit(locker)}>
+              <IconEdit className="size-3.5" />
+              Edit locker
+            </Button>
+            {canAssign ? (
+              <Button size="sm" onClick={() => setAssignOpen(true)}>
+                <IconUser className="size-3.5" />
+                Assign to member
+              </Button>
+            ) : null}
+          </div>
         </div>
       }
     >
@@ -124,6 +136,14 @@ export function LockerDetailPanel({
               assignedDate={current.assignedDate}
               expiryDate={current.expiryDate}
             />
+          ) : canAssign ? (
+            <div className="rounded-xl border border-dashed border-emerald-400/25 bg-emerald-500/[0.04] px-4 py-4 text-center">
+              <p className="text-xs text-slate-400">This locker is available and ready to assign.</p>
+              <Button size="sm" className="mt-3" onClick={() => setAssignOpen(true)}>
+                <IconUser className="size-3.5" />
+                Assign to member
+              </Button>
+            </div>
           ) : (
             <EmptyLine text="No active assignment" />
           )}
@@ -213,6 +233,14 @@ export function LockerDetailPanel({
           )}
         </Section>
       </div>
+
+      <AssignLockerWizard
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        availableLockers={[locker]}
+        preselectedLocker={locker}
+        onAssigned={() => setAssignOpen(false)}
+      />
     </SidePanel>
   )
 }

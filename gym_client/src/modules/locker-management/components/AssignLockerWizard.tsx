@@ -12,18 +12,26 @@ import type { Locker } from '../types'
 
 type Step = 0 | 1 | 2
 
-const STEP_LABELS = ['Select locker', 'Select member', 'Set duration']
+const FULL_STEP_LABELS = ['Select locker', 'Select member', 'Set duration']
+const QUICK_STEP_LABELS = ['Select member', 'Set duration']
 
 export function AssignLockerWizard({
   open,
   onClose,
   availableLockers,
+  preselectedLocker = null,
+  onAssigned,
 }: {
   open: boolean
   onClose: () => void
   availableLockers: Locker[]
+  /** When set, skip locker picker (assign from locker detail panel). */
+  preselectedLocker?: Locker | null
+  onAssigned?: () => void
 }) {
   const createMut = useCreateAssignment()
+  const quickMode = preselectedLocker != null
+  const stepLabels = quickMode ? QUICK_STEP_LABELS : FULL_STEP_LABELS
   const today = new Date().toISOString().slice(0, 10)
   const defaultExpiry = (() => {
     const d = new Date()
@@ -42,17 +50,24 @@ export function AssignLockerWizard({
 
   useEffect(() => {
     if (!open) {
-      // reset on close
       setStep(0)
       setLockerId('')
       setMemberName('')
       setAssignedDate(today)
       setExpiryDate(defaultExpiry)
       setSearch('')
+      return
     }
-    // intentionally only run when `open` flips
+    if (preselectedLocker) {
+      setLockerId(preselectedLocker.id)
+      setStep(0)
+      setMemberName('')
+      setAssignedDate(today)
+      setExpiryDate(defaultExpiry)
+    }
+    // intentionally only run when `open` / preselected locker flips
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, preselectedLocker?.id])
 
   // Cross-fade step content with a subtle horizontal slide
   useEffect(() => {
@@ -68,7 +83,10 @@ export function AssignLockerWizard({
     return () => ctx.revert()
   }, [step])
 
-  const selected = availableLockers.find((l) => l.id === lockerId) ?? null
+  const selected =
+    preselectedLocker ??
+    availableLockers.find((l) => l.id === lockerId) ??
+    null
 
   const filteredLockers = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -80,14 +98,27 @@ export function AssignLockerWizard({
     )
   }, [availableLockers, search])
 
-  const validStep0 = !!selected
-  const validStep1 = memberName.trim() !== ''
-  const validStep2 =
+  const validLocker = !!selected
+  const validMember = memberName.trim() !== ''
+  const validDuration =
     assignedDate !== '' && expiryDate !== '' && new Date(expiryDate) > new Date(assignedDate)
-  const canSubmit = validStep0 && validStep1 && validStep2
 
-  const next = () => setStep((s) => Math.min(2, (s + 1) as Step) as Step)
+  const canSubmit = validLocker && validMember && validDuration
+
+  const lastStep = quickMode ? 1 : 2
+
+  const next = () => setStep((s) => Math.min(lastStep, (s + 1) as Step) as Step)
   const back = () => setStep((s) => Math.max(0, (s - 1) as Step) as Step)
+
+  const stepValid = quickMode
+    ? step === 0
+      ? validMember
+      : validDuration
+    : step === 0
+      ? validLocker
+      : step === 1
+        ? validMember
+        : validDuration
 
   const handleSubmit = () => {
     if (!canSubmit || !selected) return
@@ -103,6 +134,7 @@ export function AssignLockerWizard({
       },
       {
         onSuccess: () => {
+          onAssigned?.()
           onClose()
         },
       },
@@ -110,12 +142,22 @@ export function AssignLockerWizard({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Assign locker to member" size="wide" scrollable>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={
+        preselectedLocker
+          ? `Assign ${preselectedLocker.lockerNumber} to member`
+          : 'Assign locker to member'
+      }
+      size="wide"
+      scrollable
+    >
       <div className="flex h-full flex-col gap-5">
-        <StepProgressBar steps={STEP_LABELS} current={step} />
+        <StepProgressBar steps={stepLabels} current={step} />
 
         <div ref={stepRef} key={step} className="min-h-[280px]">
-          {step === 0 && (
+          {!quickMode && step === 0 && (
             <StepLockerPicker
               lockers={filteredLockers}
               selectedId={lockerId}
@@ -125,10 +167,10 @@ export function AssignLockerWizard({
               noResults={availableLockers.length === 0}
             />
           )}
-          {step === 1 && (
+          {(quickMode ? step === 0 : step === 1) && (
             <StepMember memberName={memberName} setMemberName={setMemberName} locker={selected} />
           )}
-          {step === 2 && (
+          {(quickMode ? step === 1 : step === 2) && (
             <StepDuration
               locker={selected}
               memberName={memberName}
@@ -143,7 +185,7 @@ export function AssignLockerWizard({
 
         <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-4">
           <div className="text-[11px] text-slate-500">
-            Step {step + 1} of {STEP_LABELS.length}
+            Step {step + 1} of {stepLabels.length}
           </div>
           <div className="flex items-center gap-2">
             {step > 0 ? (
@@ -156,12 +198,8 @@ export function AssignLockerWizard({
                 Cancel
               </Button>
             )}
-            {step < 2 ? (
-              <Button
-                size="sm"
-                onClick={next}
-                disabled={(step === 0 && !validStep0) || (step === 1 && !validStep1)}
-              >
+            {step < lastStep ? (
+              <Button size="sm" onClick={next} disabled={!stepValid}>
                 Next
                 <IconArrowRight className="size-3.5" />
               </Button>

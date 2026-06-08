@@ -266,30 +266,20 @@ export const lockerManagementService = {
 
   async createLocker(input: LockerInput): Promise<Locker> {
     if (!USE_API) return mockLocker(input)
-    try {
-      const res = await api.post<ApiLocker>(
-        '/locker-management/lockers',
-        toApiLockerPayload(input),
-      )
-      return mapLocker(res.data)
-    } catch (err) {
-      if (import.meta.env.DEV) console.warn('[locker-management] createLocker fallback', err)
-      return mockLocker(input)
-    }
+    const res = await api.post<ApiLocker>(
+      '/locker-management/lockers',
+      toApiLockerPayload(input),
+    )
+    return mapLocker(res.data)
   },
 
   async updateLocker(id: string, input: LockerInput): Promise<Locker> {
     if (!USE_API) return { ...mockLocker(input), id }
-    try {
-      const res = await api.put<ApiLocker>(
-        `/locker-management/lockers/${id}`,
-        toApiLockerPayload(input),
-      )
-      return mapLocker(res.data)
-    } catch (err) {
-      if (import.meta.env.DEV) console.warn('[locker-management] updateLocker fallback', err)
-      return { ...mockLocker(input), id }
-    }
+    const res = await api.put<ApiLocker>(
+      `/locker-management/lockers/${id}`,
+      toApiLockerPayload(input),
+    )
+    return mapLocker(res.data)
   },
 
   async deleteLocker(id: string): Promise<void> {

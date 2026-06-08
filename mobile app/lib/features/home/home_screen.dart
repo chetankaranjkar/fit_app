@@ -702,7 +702,9 @@ class _NotificationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final urgent = notification.isMembershipExpiring && !notification.isRead;
     return GlassCard(
+      tint: urgent ? AppColors.gold.withValues(alpha: 0.12) : null,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -735,8 +737,8 @@ class _NotificationTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  notification.message,
-                  maxLines: 2,
+                  notification.displayMessage,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: AppType.subhead.copyWith(
                     color: AppColors.resolveTextSecondary(context),

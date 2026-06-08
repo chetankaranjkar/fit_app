@@ -15,6 +15,8 @@ export const usersService = {
       search?: string
       membersOnly?: boolean
       isActive?: boolean
+      /** Morning, Afternoon, Evening, or Night */
+      preferredGymTime?: string
       /** Skip payment summary joins for faster typeahead search. */
       includeBilling?: boolean
     },
@@ -26,6 +28,7 @@ export const usersService = {
     if (params.search?.trim()) query.set('search', params.search.trim())
     if (params.membersOnly) query.set('membersOnly', 'true')
     if (typeof params.isActive === 'boolean') query.set('isActive', String(params.isActive))
+    if (params.preferredGymTime?.trim()) query.set('preferredGymTime', params.preferredGymTime.trim())
     if (params.includeBilling === false) query.set('includeBilling', 'false')
     return api.get<PagedUsersResponse>(`/Users/paged?${query.toString()}`, { signal: options?.signal })
   },

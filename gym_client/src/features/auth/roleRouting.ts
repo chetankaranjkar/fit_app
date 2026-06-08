@@ -9,6 +9,7 @@ import {
   canAccessTrainingNav,
   canAccessUsersNav,
   isStaffFrontDeskOnly,
+  getStaffFrontDeskAllowedPrefixes,
 } from './navPermissions'
 
 export type DashboardRole = 'admin' | 'trainer' | 'member'
@@ -18,7 +19,14 @@ export function resolveDashboardRole(user: LoginResponse | null | undefined): Da
 
   const appRoles = (user.appRoles ?? []).map((r) => r.trim().toUpperCase()).filter(Boolean)
 
-  if (appRoles.includes('ADMIN') || appRoles.includes('STAFF')) return 'admin'
+  if (
+    appRoles.includes('ADMIN') ||
+    appRoles.includes('STAFF') ||
+    appRoles.includes('RECEPTIONIST') ||
+    appRoles.includes('ACCOUNTANT')
+  ) {
+    return 'admin'
+  }
   if (appRoles.includes('TRAINER')) return 'trainer'
   if (appRoles.includes('MEMBER')) return 'member'
 
@@ -61,27 +69,10 @@ const MEMBER_ALLOWED_PREFIXES = [
   '/help',
 ]
 
-const STAFF_FRONT_DESK_PAYMENT_PREFIXES = [
-  '/dashboard/payments/collect',
-]
-
-const STAFF_ALLOWED_PREFIXES = [
-  '/dashboard',
-  '/dashboard/reception',
-  '/dashboard/attendance',
-  '/dashboard/users',
-  '/dashboard/user-memberships',
-  '/dashboard/membership-plans',
-  '/dashboard/access/scan',
-  '/dashboard/profile',
-  ...STAFF_FRONT_DESK_PAYMENT_PREFIXES,
-  '/help',
-]
-
 export function isPathAllowedForRole(pathname: string, role: DashboardRole): boolean {
   if (role === 'admin') {
     if (isStaffFrontDeskOnly()) {
-      return STAFF_ALLOWED_PREFIXES.some(
+      return getStaffFrontDeskAllowedPrefixes().some(
         (p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith('/help'),
       )
     }

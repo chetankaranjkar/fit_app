@@ -286,6 +286,17 @@ class MeNotification {
         isRead: json['isRead'] == true,
         type: json['type']?.toString(),
       );
+
+  /// Hides server-side dedupe markers from member-facing copy.
+  String get displayMessage => stripNotificationMarker(message);
+
+  static String stripNotificationMarker(String raw) {
+    final trimmed = raw.trim();
+    final pattern = RegExp(r'\s*\[mid:\d+\]\[d:\d+\]\s*$', caseSensitive: false);
+    return trimmed.replaceAll(pattern, '').trim();
+  }
+
+  bool get isMembershipExpiring => type == 'membership_expiring';
 }
 
 class MeWorkoutPlanSummary {

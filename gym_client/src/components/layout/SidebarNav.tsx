@@ -11,7 +11,7 @@ import {
   canAccessPtNav,
   canAccessUsersNav,
   isStaffFrontDeskOnly,
-  STAFF_FRONT_DESK_LINKS,
+  getStaffFrontDeskNavLinks,
 } from '../../features/auth/navPermissions'
 import { linkPrefetchProps, prefetchRoute } from '../../routes/prefetch'
 import { BrandLogo } from '../brand/BrandLogo'
@@ -262,8 +262,10 @@ export function SidebarNav({
     '/dashboard/attendance': 'attendance',
     '/dashboard/users': 'clients',
     '/dashboard/user-memberships': 'payments',
+    '/dashboard/payments/collect': 'payments',
     '/dashboard/access/scan': 'qrDoor',
   }
+  const staffFrontDeskLinks = getStaffFrontDeskNavLinks()
 
   useEffect(() => {
     if (isUserPath) setUserOpen(true)
@@ -394,12 +396,7 @@ export function SidebarNav({
           {/* Scrollable nav links */}
           <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
             {staffFrontDesk ? (
-              STAFF_FRONT_DESK_LINKS.filter(
-                ({ path }) =>
-                  path !== '/dashboard/reception' ||
-                  authService.hasPermission('LEADS_CRM') ||
-                  authService.hasPermission('LEADS_TRAINER'),
-              ).map(({ path, label }) => {
+              staffFrontDeskLinks.map(({ path, label }) => {
                 const icon = staffNavIcon[path] ?? 'dashboard'
                 return (
                   <Link

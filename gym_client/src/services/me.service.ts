@@ -60,6 +60,7 @@ export type MeNotification = {
   message: string
   createdAt: string
   isRead: boolean
+  type?: string | null
 }
 
 export type MeDashboard = {
@@ -154,6 +155,9 @@ export type MeWorkoutProgram = {
 
 export const meService = {
   getDashboard: () => api.get<MeDashboard>('/me/dashboard'),
+  getNotifications: (take = 30) =>
+    api.get<MeNotification[]>('/me/notifications', { params: { take } }).then((r) => r.data),
+  markNotificationRead: (id: number) => api.post(`/me/notifications/${id}/read`),
   getProfile: () => api.get<MeProfile>('/me/profile'),
   getWorkoutPlans: () => api.get<MeWorkoutPlanSummary[]>('/me/workout-plans'),
   getWorkoutProgram: () => api.get<MeWorkoutProgram>('/me/workout-program'),

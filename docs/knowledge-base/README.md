@@ -30,6 +30,7 @@ Central folder for **product flows**, **identity/RBAC architecture**, **reuse ru
 | [../FIREBASE_OTP_PRODUCTION.md](../FIREBASE_OTP_PRODUCTION.md) | Firebase OTP production setup (customer billing) |
 | [../RELEASE_PROCESS.md](../RELEASE_PROCESS.md) | UAT → main release and deploy workflow |
 | [../PERFORMANCE_IMPLEMENTATION.md](../PERFORMANCE_IMPLEMENTATION.md) | Performance work shipped (paging, dashboard summary, caching) |
+| [../NOTIFICATION_WEBHOOKS.md](../NOTIFICATION_WEBHOOKS.md) | Email/WhatsApp webhook reminders (n8n, env vars, payloads) |
 | [../PERFORMANCE_AUDIT_REPORT.md](../PERFORMANCE_AUDIT_REPORT.md) | Performance audit findings |
 | [../../deploy/DEPLOYMENT-UAT.md](../../deploy/DEPLOYMENT-UAT.md) | UAT Docker / Nginx / SSL on VPS |
 | [../sql/](../sql/) | SQL scripts (workout builder, exercises) |

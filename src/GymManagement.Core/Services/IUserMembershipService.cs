@@ -8,6 +8,11 @@ namespace GymManagement.Core.Services
     {
         Task<IEnumerable<UserMembershipDto>> GetAllAsync();
         Task<PagedResultDto<UserMembershipDto>> GetPagedAsync(int page, int pageSize, string? search = null, MembershipStatus? status = null);
+        Task<PagedResultDto<ExpiringMembershipQueueItemDto>> GetExpiringQueueAsync(
+            int withinDays,
+            int page,
+            int pageSize,
+            string? search = null);
         Task<IEnumerable<UserMembershipDto>> GetByUserIdAsync(int userId);
         Task<UserMembershipDto?> GetByIdAsync(int id);
         Task<ActiveMembershipConflictDto?> GetActiveMembershipConflictForUserAsync(int userId, int? excludeMembershipId = null);

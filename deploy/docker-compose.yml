@@ -96,6 +96,11 @@ services:
       DoorDevice__Esp32BaseUrl: ${DOOR_DEVICE_URL:-}
       Notifications__EmailWebhookUrl: ${NOTIFICATIONS_EMAIL_WEBHOOK:-}
       Notifications__WhatsAppWebhookUrl: ${NOTIFICATIONS_WHATSAPP_WEBHOOK:-}
+      Notifications__EnableScheduledReminders: ${NOTIFICATIONS_ENABLE_SCHEDULED_REMINDERS:-}
+      Notifications__EnableInAppMembershipExpiryReminders: ${NOTIFICATIONS_ENABLE_IN_APP_REMINDERS:-true}
+      Notifications__MembershipExpiryReminderDays: ${NOTIFICATIONS_EXPIRY_REMINDER_DAYS:-14}
+      Notifications__InAppMembershipExpiryReminderDays: ${NOTIFICATIONS_IN_APP_EXPIRY_DAYS:-14}
+      Notifications__ReminderIntervalHours: ${NOTIFICATIONS_REMINDER_INTERVAL_HOURS:-24}
       Firebase__Enabled: ${FIREBASE_ENABLED:-false}
       Firebase__ApiKey: ${FIREBASE_API_KEY:-}
       Firebase__AuthDomain: ${FIREBASE_AUTH_DOMAIN:-}

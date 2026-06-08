@@ -26,6 +26,10 @@ namespace GymManagement.Core.DTOs
     {
         public bool EmailEnabled { get; set; }
         public bool WhatsAppEnabled { get; set; }
+        public bool ScheduledRemindersEnabled { get; set; }
+        public bool InAppExpiryRemindersEnabled { get; set; }
+        public int MembershipExpiryReminderDays { get; set; }
+        public int InAppMembershipExpiryReminderDays { get; set; }
     }
 
     public class TrainerUserCountDto

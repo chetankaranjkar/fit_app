@@ -48,3 +48,24 @@ export interface PagedUserMembershipsResponse {
   page: number
   pageSize: number
 }
+
+/** GET /api/UserMemberships/expiring-queue */
+export interface ExpiringMembershipQueueItem {
+  id: number
+  userId: number
+  planId: number
+  startDate: string
+  endDate: string
+  status: MembershipStatus
+  userName?: string | null
+  memberPhone?: string | null
+  planName?: string | null
+  daysRemaining: number
+}
+
+export interface PagedExpiringMembershipQueueResponse {
+  items: ExpiringMembershipQueueItem[]
+  totalCount: number
+  page: number
+  pageSize: number
+}

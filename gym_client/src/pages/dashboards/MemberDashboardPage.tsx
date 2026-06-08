@@ -8,6 +8,7 @@ import { TrendAreaChart } from '../../components/dashboard/premium/TrendAreaChar
 import { getDashboardUser } from '../../lib/dashboardUser'
 import { meService } from '../../services/me.service'
 import { WorkoutDashboardWidget } from '../../modules/workout-tracking'
+import { MemberNotificationsPanel } from '../../components/dashboard/MemberNotificationsPanel'
 
 export function MemberDashboardPage() {
   const { userName } = getDashboardUser()
@@ -156,17 +157,7 @@ export function MemberDashboardPage() {
           </GlassPanel>
         </div>
 
-        <GlassPanel role="member" title="Coach tips" subtitle="Personalized for you">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <article className="rounded-xl border border-orange-500/20 bg-orange-500/10 p-4 text-sm text-orange-100">
-              Consistency beats intensity — show up today.
-            </article>
-            <article className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-              {(dash?.recentNotifications ?? [])[0]?.message ??
-                'Your trainer will share updates here.'}
-            </article>
-          </div>
-        </GlassPanel>
+        <MemberNotificationsPanel fallback={dash?.recentNotifications} />
       </DashboardPageContent>
     </DashboardLayout>
   )

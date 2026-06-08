@@ -206,6 +206,27 @@ namespace GymManagement.API.Controllers
             return Ok(notifications.Select(MapNotification).ToList());
         }
 
+        /// <summary>Mark a notification as read (must belong to the logged-in member).</summary>
+        [HttpPost("notifications/{id:int}/read")]
+        public async Task<IActionResult> MarkNotificationRead(int id)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            var row = await _db.Notifications
+                .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId.Value)
+                .ConfigureAwait(false);
+            if (row == null) return NotFound();
+
+            if (!row.IsRead)
+            {
+                row.IsRead = true;
+                await _db.SaveChangesAsync().ConfigureAwait(false);
+            }
+
+            return NoContent();
+        }
+
         /// <summary>Workout plans assigned to the member via active <see cref="UserSchedule"/> rows.</summary>
         [HttpGet("workout-plans")]
         public async Task<ActionResult<IReadOnlyList<MeWorkoutPlanSummaryDto>>> GetWorkoutPlans()

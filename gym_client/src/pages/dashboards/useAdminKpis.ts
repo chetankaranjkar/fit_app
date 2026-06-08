@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { dashboardService } from '../../services/dashboard.service'
 import { reportsService } from '../../services/reports.service'
 import { membershipPaymentsService } from '../../services/membershipPayments.service'
-import { userMembershipsService } from '../../services/userMemberships.service'
 import { authService } from '../../services/auth.service'
 
 function formatInr(amount: number) {
@@ -22,7 +21,7 @@ export function useAdminKpis() {
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
 
-      const [summaryRes, statsRes, reportRes, alertsRes, billingDashRes, recentPaymentsRes, membershipsRes] =
+      const [summaryRes, statsRes, reportRes, alertsRes, billingDashRes, recentPaymentsRes] =
         await Promise.allSettled([
           dashboardService.getSummary(),
           canReports ? dashboardService.getStatistics() : Promise.reject('no-reports'),
@@ -36,11 +35,6 @@ export function useAdminKpis() {
                 status: 'Completed',
               })
             : Promise.reject('no-payments'),
-          userMembershipsService.getPaged({
-            page: 1,
-            pageSize: 30,
-            status: 'Active',
-          }),
         ])
 
       const summary = summaryRes.status === 'fulfilled' ? summaryRes.value.data : null
@@ -61,14 +55,6 @@ export function useAdminKpis() {
         amount: Number(t.transactionAmount ?? 0),
       }))
 
-      const memberships =
-        membershipsRes.status === 'fulfilled' ? membershipsRes.value.data.items ?? [] : []
-
-      const expiringList = memberships
-        .filter((m) => m.endDate)
-        .sort((a, b) => new Date(a.endDate!).getTime() - new Date(b.endDate!).getTime())
-        .slice(0, 5)
-
       const summaryTodayRevenue = Number(summary?.todayRevenue ?? 0)
       const billingTodayRevenue = Number(billingDash?.todayCollections ?? 0)
       const todayRevenue =
@@ -88,7 +74,6 @@ export function useAdminKpis() {
         alerts,
         trainerRanks: trainerRanks.slice(0, 5),
         recentPayments,
-        expiringList,
         formatInr,
         summary,
       }

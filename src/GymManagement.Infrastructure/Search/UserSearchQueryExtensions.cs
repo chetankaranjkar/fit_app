@@ -29,6 +29,23 @@ internal static class UserSearchQueryExtensions
         };
     }
 
+    public static IQueryable<User> ApplyPreferredGymTimeFilter(
+        this IQueryable<User> query,
+        IQueryable<Member> members,
+        string? preferredGymTime)
+    {
+        if (string.IsNullOrWhiteSpace(preferredGymTime))
+            return query;
+
+        var shift = preferredGymTime.Trim();
+        var memberUserIdsForShift = members.AsNoTracking()
+            .Where(m => !m.IsDeleted && m.PreferredGymTime == shift)
+            .Select(m => m.UserId);
+
+        return query.Where(u =>
+            u.PreferredGymTime == shift || memberUserIdsForShift.Contains(u.Id));
+    }
+
     public static IQueryable<User> ApplyMembersOnlyFilter(
         this IQueryable<User> query,
         IQueryable<UserUserType> userUserTypes,

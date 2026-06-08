@@ -13,11 +13,14 @@ import { useAdminKpis } from './useAdminKpis'
 import { usePermission } from '../../features/auth/hooks/usePermission'
 import { authService } from '../../services/auth.service'
 import { membershipPaymentsService } from '../../services/membershipPayments.service'
+import { RenewalQueuePanel } from '../../components/dashboard/RenewalQueuePanel'
+import { OutboundRemindersOpsPanel } from '../../components/dashboard/OutboundRemindersOpsPanel'
 
 export function AdminDashboardPage() {
   const { userName } = getDashboardUser()
   const { data } = useAdminKpis()
   const canBillingDash = usePermission(authService.permissionCodes.payments)
+  const canReports = usePermission(authService.permissionCodes.reports)
   const { data: billingDash } = useQuery({
     queryKey: ['membership-payments-dashboard'],
     queryFn: async () => (await membershipPaymentsService.dashboard()).data,
@@ -110,6 +113,14 @@ export function AdminDashboardPage() {
             </DashboardMetricsGrid>
           </section>
         ) : null}
+
+        {canBillingDash ? (
+          <section className="grid gap-6 lg:grid-cols-3">
+            <RenewalQueuePanel enabled={canBillingDash} />
+          </section>
+        ) : null}
+
+        {canReports ? <OutboundRemindersOpsPanel enabled={canReports} /> : null}
 
         <section className="grid gap-6 lg:grid-cols-3">
           <GlassPanel role="admin" title="Revenue" subtitle="Last 30 days" className="lg:col-span-2">

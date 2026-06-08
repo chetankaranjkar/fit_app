@@ -77,7 +77,8 @@ namespace GymManagement.API.Controllers
             [FromQuery] string? search = null,
             [FromQuery] bool membersOnly = false,
             [FromQuery] bool? isActive = null,
-            [FromQuery] bool includeBilling = true)
+            [FromQuery] bool includeBilling = true,
+            [FromQuery] string? preferredGymTime = null)
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
@@ -87,7 +88,8 @@ namespace GymManagement.API.Controllers
                 search,
                 membersOnly,
                 isActive,
-                includeBilling);
+                includeBilling,
+                preferredGymTime);
             return Ok(result);
         }
 

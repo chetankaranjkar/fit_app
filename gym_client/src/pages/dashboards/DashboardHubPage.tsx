@@ -1,5 +1,7 @@
 import { useDashboardRole } from '../../features/auth/DashboardRoleContext'
+import { isStaffFrontDeskOnly } from '../../features/auth/navPermissions'
 import { AdminDashboardPage } from './AdminDashboardPage'
+import { FrontDeskDashboardPage } from './FrontDeskDashboardPage'
 import { TrainerDashboardPage } from './TrainerDashboardPage'
 import { MemberDashboardPage } from './MemberDashboardPage'
 
@@ -9,5 +11,6 @@ export function DashboardHubPage() {
 
   if (role === 'trainer') return <TrainerDashboardPage />
   if (role === 'member') return <MemberDashboardPage />
+  if (isStaffFrontDeskOnly()) return <FrontDeskDashboardPage />
   return <AdminDashboardPage />
 }

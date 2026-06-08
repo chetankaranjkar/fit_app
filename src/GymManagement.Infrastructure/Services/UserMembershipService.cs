@@ -189,7 +189,97 @@ namespace GymManagement.Infrastructure.Services
 
         }
 
+        public async Task<PagedResultDto<ExpiringMembershipQueueItemDto>> GetExpiringQueueAsync(
+            int withinDays,
+            int page,
+            int pageSize,
+            string? search = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 100);
+            var windowDays = Math.Clamp(withinDays, 1, 90);
+            var today = DateTime.UtcNow.Date;
+            var windowEnd = today.AddDays(windowDays);
 
+            var renewingStatuses = new[]
+            {
+                MembershipStatus.Active,
+                MembershipStatus.ActivePendingPayment,
+                MembershipStatus.PartialPayment,
+            };
+
+            var trimmedSearch = search?.Trim();
+            var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
+
+            IQueryable<UserMembership> query = _db.UserMemberships
+                .AsNoTracking()
+                .Where(m => !m.IsDeleted
+                    && renewingStatuses.Contains(m.Status)
+                    && m.EndDate.Date >= today
+                    && m.EndDate.Date <= windowEnd);
+
+            if (!string.IsNullOrWhiteSpace(likeSearch))
+            {
+                query = query.Where(m =>
+                    _db.Users.Any(u =>
+                        u.Id == m.UserId
+                        && (EF.Functions.Like(u.FirstName, likeSearch)
+                            || EF.Functions.Like(u.LastName, likeSearch)
+                            || (u.Phone != null && EF.Functions.Like(u.Phone, likeSearch))))
+                    || _db.MembershipPlans.Any(p => p.Id == m.PlanId && EF.Functions.Like(p.PlanName, likeSearch)));
+            }
+
+            var totalCount = await query.CountAsync();
+            var pageItems = await query
+                .OrderBy(m => m.EndDate)
+                .ThenBy(m => m.UserId)
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToListAsync();
+
+            if (pageItems.Count == 0)
+            {
+                return new PagedResultDto<ExpiringMembershipQueueItemDto>
+                {
+                    Items = Array.Empty<ExpiringMembershipQueueItemDto>(),
+                    TotalCount = totalCount,
+                    Page = safePage,
+                    PageSize = safePageSize,
+                };
+            }
+
+            var userIds = pageItems.Select(x => x.UserId).Distinct().ToList();
+            var planIds = pageItems.Select(x => x.PlanId).Distinct().ToList();
+            var users = (await _unitOfWork.Users.FindAsync(u => userIds.Contains(u.Id))).ToDictionary(u => u.Id);
+            var plans = (await _unitOfWork.MembershipPlans.FindAsync(p => planIds.Contains(p.Id))).ToDictionary(p => p.Id);
+
+            var items = pageItems.Select(m =>
+            {
+                users.TryGetValue(m.UserId, out var u);
+                plans.TryGetValue(m.PlanId, out var p);
+                return new ExpiringMembershipQueueItemDto
+                {
+                    Id = m.Id,
+                    UserId = m.UserId,
+                    PlanId = m.PlanId,
+                    StartDate = m.StartDate,
+                    EndDate = m.EndDate,
+                    Status = m.Status,
+                    UserName = u != null ? $"{u.FirstName} {u.LastName}".Trim() : null,
+                    MemberPhone = u?.Phone,
+                    PlanName = p?.PlanName,
+                    DaysRemaining = Math.Max(0, (m.EndDate.Date - today).Days),
+                };
+            }).ToList();
+
+            return new PagedResultDto<ExpiringMembershipQueueItemDto>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = safePage,
+                PageSize = safePageSize,
+            };
+        }
 
         public async Task<UserMembershipDto?> GetByIdAsync(int id)
 

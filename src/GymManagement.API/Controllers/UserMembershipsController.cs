@@ -86,6 +86,20 @@ namespace GymManagement.API.Controllers
 
         }
 
+        /// <summary>Staff renewal queue — plans ending within <paramref name="withinDays"/> (default 14).</summary>
+        [HttpGet("expiring-queue")]
+        public async Task<ActionResult<PagedResultDto<ExpiringMembershipQueueItemDto>>> GetExpiringQueue(
+            [FromQuery] int withinDays = 14,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? search = null)
+        {
+            var safePage = page < 1 ? 1 : page;
+            var safePageSize = Math.Clamp(pageSize, 1, 100);
+            var result = await _service.GetExpiringQueueAsync(withinDays, safePage, safePageSize, search);
+            return Ok(result);
+        }
+
 
 
         [HttpGet("by-user/{userId}")]

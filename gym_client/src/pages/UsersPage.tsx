@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DataPageSection, DataPageShell } from '../components/layout/DataPageShell'
 import {
   DataFilterSelect,
@@ -346,6 +346,16 @@ function UserCard({
   )
 }
 
+type MemberShiftFilter = 'all' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'
+
+const MEMBER_SHIFT_FILTER_OPTIONS: { value: MemberShiftFilter; label: string }[] = [
+  { value: 'all', label: 'All shifts' },
+  { value: 'Morning', label: 'Morning' },
+  { value: 'Afternoon', label: 'Afternoon' },
+  { value: 'Evening', label: 'Evening' },
+  { value: 'Night', label: 'Night' },
+]
+
 const defaultCreateForm: CreateUserDto = {
   firstName: '',
   lastName: '',
@@ -397,6 +407,7 @@ export function UsersPage() {
   const MIN_LOGIN_PASSWORD_LENGTH = 6
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [shiftFilter, setShiftFilter] = useState<MemberShiftFilter>('all')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
@@ -441,28 +452,30 @@ export function UsersPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [effectiveSearch, statusFilter])
+  }, [effectiveSearch, statusFilter, shiftFilter])
 
   const listIsActiveFilter =
     statusFilter === 'all' ? undefined : statusFilter === 'active'
+  const listPreferredGymTimeFilter = shiftFilter === 'all' ? undefined : shiftFilter
 
   const { data: directoryTotalCount } = useQuery({
-    queryKey: ['users-directory-total', statusFilter],
+    queryKey: ['users-directory-total', statusFilter, shiftFilter],
     queryFn: async () => {
       const { data } = await usersService.getPaged({
         page: 1,
         pageSize: 1,
         membersOnly: true,
         isActive: listIsActiveFilter,
+        preferredGymTime: listPreferredGymTimeFilter,
         includeBilling: false,
       })
       return data.totalCount ?? 0
     },
-    staleTime: 60_000,
+    staleTime: shiftFilter === 'all' && statusFilter === 'all' ? 60_000 : 0,
   })
 
   const { data: usersPage, isLoading, error, isFetching } = useQuery({
-    queryKey: ['users-paged', page, pageSize, effectiveSearch, statusFilter],
+    queryKey: ['users-paged', page, pageSize, effectiveSearch, statusFilter, shiftFilter],
     queryFn: async ({ signal }) => {
       const { data } = await usersService.getPaged(
         {
@@ -471,12 +484,35 @@ export function UsersPage() {
           search: effectiveSearch,
           membersOnly: true,
           isActive: listIsActiveFilter,
+          preferredGymTime: listPreferredGymTimeFilter,
         },
         { signal },
       )
       return data
     },
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData, previousQuery) => {
+      const prevKey = previousQuery?.queryKey
+      if (!prevKey || !previousData) return undefined
+      const [, prevPage, prevPageSize, prevSearch, prevStatus, prevShift] = prevKey as [
+        string,
+        number,
+        number,
+        string | undefined,
+        string,
+        MemberShiftFilter,
+      ]
+      if (
+        prevSearch !== effectiveSearch
+        || prevStatus !== statusFilter
+        || prevShift !== shiftFilter
+      ) {
+        return undefined
+      }
+      if (prevPage !== page || prevPageSize !== pageSize) {
+        return previousData
+      }
+      return previousData
+    },
   })
 
   const users = usersPage?.items ?? []
@@ -1398,16 +1434,24 @@ export function UsersPage() {
                 searchAriaLabel="Search members"
                 searchLoading={isSearchPending || isFetching}
                 filters={
-                  <DataFilterSelect
-                    value={statusFilter}
-                    onChange={(v) => setStatusFilter(v as 'all' | 'active' | 'inactive')}
-                    ariaLabel="Filter by status"
-                    options={[
-                      { value: 'all', label: 'All status' },
-                      { value: 'active', label: 'Active' },
-                      { value: 'inactive', label: 'Inactive' },
-                    ]}
-                  />
+                  <>
+                    <DataFilterSelect
+                      value={statusFilter}
+                      onChange={(v) => setStatusFilter(v as 'all' | 'active' | 'inactive')}
+                      ariaLabel="Filter by status"
+                      options={[
+                        { value: 'all', label: 'All status' },
+                        { value: 'active', label: 'Active' },
+                        { value: 'inactive', label: 'Inactive' },
+                      ]}
+                    />
+                    <DataFilterSelect
+                      value={shiftFilter}
+                      onChange={(v) => setShiftFilter(v as MemberShiftFilter)}
+                      ariaLabel="Filter by shift"
+                      options={MEMBER_SHIFT_FILTER_OPTIONS}
+                    />
+                  </>
                 }
               />
             </div>

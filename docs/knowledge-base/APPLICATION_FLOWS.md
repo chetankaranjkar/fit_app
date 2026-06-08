@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-06-03 (QR scan membership expiry gate).
+**Last updated:** 2026-06-03 (Staff front-desk menu and dashboard).
 
 ---
 
@@ -457,6 +457,41 @@ Only transactions with **Status = Completed** count toward paid/outstanding. **V
 **Client UX:** Web `ScanResult` + toast when `membership_expired`; mobile maps same code to `AttendanceMembershipExpired` (renew at reception).
 
 **Renew path:** Members list → **Memberships** modal or `/dashboard/payments/collect` after staff adds/renews plan (§11b, §12).
+
+**Staff renewal queue:** Dashboard → **Renewal queue** panel (`GET /api/UserMemberships/expiring-queue?withinDays=14`). Lists `Active`, `ActivePendingPayment`, and `PartialPayment` rows ending soon (sorted by end date). Actions: **Collect** → `/dashboard/payments/collect`, **Renew** → shared `MemberMembershipsModal`. Requires `Payments` permission. Refreshes with dashboard KPIs after payment or membership change.
+
+**Member in-app expiry reminders:** `MembershipExpiryReminderHostedService` → `MembershipExpiryInAppNotificationService` writes `Notifications` rows (`type: membership_expiring`) at **14 / 7 / 3 / 1 / 0** days before end. Enabled by `Notifications:EnableInAppMembershipExpiryReminders` (default **true**), window `InAppMembershipExpiryReminderDays` (default **14**). Independent of outbound webhooks (`EnableScheduledReminders`).
+
+**Outbound webhooks (email / WhatsApp):** Same milestones via `MembershipExpiryWebhookReminderService` → `INotificationWebhookDispatcher`. Set `Notifications:EmailWebhookUrl` / `WhatsAppWebhookUrl` (or env `NOTIFICATIONS_EMAIL_WEBHOOK`, `NOTIFICATIONS_WHATSAPP_WEBHOOK`). `EnableScheduledReminders` auto-enables when URLs are present; override with `NOTIFICATIONS_ENABLE_SCHEDULED_REMINDERS`. Ops guide: [NOTIFICATION_WEBHOOKS.md](../NOTIFICATION_WEBHOOKS.md). Dashboard **Outbound reminders** strip (`GET /api/Dashboard/notifications` → `hooks`) shows wired status.
+
+| Surface | API / UI |
+|---------|----------|
+| Mobile home | `GET /api/me/dashboard` → `recentNotifications`; full list `GET /api/me/notifications` |
+| Member web dashboard | `MemberNotificationsPanel` on `/dashboard` |
+| Mark read | `POST /api/me/notifications/{id}/read` |
+
+---
+
+## 12c. Staff front-desk menu (web)
+
+**Who:** `STAFF` or `RECEPTIONIST` app role without owner-level nav (`ADMIN`, `Reports`, or `Config` permission → full admin sidebar).
+
+**Sidebar:** `getStaffFrontDeskNavLinks()` in `gym_client/src/features/auth/navPermissions.ts` — permission-filtered links:
+
+| Link | Requires |
+|------|----------|
+| Dashboard | — |
+| Attendance | — |
+| Members | `UsersAccess` |
+| Memberships, Collect payment | `Payments` |
+| Check-in | — |
+| Lead CRM | `LEADS_CRM` or `LEADS_TRAINER` |
+
+**Dashboard:** `FrontDeskDashboardPage` (renewal queue, quick actions) instead of owner `AdminDashboardPage`.
+
+**Route guard:** `isPathAllowedForRole` + `getStaffFrontDeskAllowedPrefixes()` — blocks gym-ops, roles, analytics, etc.; allows `/dashboard/users/:id` and `/dashboard/payments/collect` under prefix rules.
+
+**Code:** `SidebarNav.tsx` (brand subtitle **Front Desk**), `DashboardHubPage.tsx`, `roleRouting.ts`.
 
 ---
 

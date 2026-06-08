@@ -4,6 +4,8 @@ import type {
   UserMembership,
   CreateUserMembershipDto,
   PagedUserMembershipsResponse,
+  PagedExpiringMembershipQueueResponse,
+  ExpiringMembershipQueueItem,
   UpdateUserMembershipDto,
   MembershipStatus,
 } from '../types/userMembership'
@@ -60,6 +62,21 @@ export function parseUserMembershipList(data: unknown): UserMembership[] {
 export const userMembershipsByUserQueryKey = (userId: number) =>
   ['user-memberships', 'by-user', userId] as const
 
+function normalizeExpiringQueueItem(raw: Record<string, unknown>): ExpiringMembershipQueueItem {
+  return {
+    id: Number(raw.id ?? raw.Id ?? 0),
+    userId: Number(raw.userId ?? raw.UserId ?? 0),
+    planId: Number(raw.planId ?? raw.PlanId ?? 0),
+    startDate: String(raw.startDate ?? raw.StartDate ?? ''),
+    endDate: String(raw.endDate ?? raw.EndDate ?? ''),
+    status: normalizeMembershipStatus(raw.status ?? raw.Status),
+    userName: (raw.userName ?? raw.UserName ?? null) as string | null,
+    memberPhone: (raw.memberPhone ?? raw.MemberPhone ?? null) as string | null,
+    planName: (raw.planName ?? raw.PlanName ?? null) as string | null,
+    daysRemaining: Number(raw.daysRemaining ?? raw.DaysRemaining ?? 0),
+  }
+}
+
 /** Shared loader for member profile, users list modal, and conflict checks. */
 export async function listMembershipsForUser(userId: number): Promise<UserMembership[]> {
   const { data } = await api.get<unknown>(`/UserMemberships/by-user/${userId}`)
@@ -68,6 +85,30 @@ export async function listMembershipsForUser(userId: number): Promise<UserMember
 
 export const userMembershipsService = {
   getAll: () => api.get<UserMembership[]>('/UserMemberships'),
+  getExpiringQueue: async (params: {
+    withinDays?: number
+    page?: number
+    pageSize?: number
+    search?: string
+  }) => {
+    const query = new URLSearchParams()
+    query.set('withinDays', String(params.withinDays ?? 14))
+    query.set('page', String(params.page ?? 1))
+    query.set('pageSize', String(params.pageSize ?? 20))
+    if (params.search?.trim()) query.set('search', params.search.trim())
+    const { data } = await api.get<unknown>(`/UserMemberships/expiring-queue?${query.toString()}`)
+    const payload = data as Record<string, unknown>
+    const rawItems = (payload.items ?? payload.Items ?? []) as unknown[]
+    const items = rawItems
+      .map((row) => normalizeExpiringQueueItem(row as Record<string, unknown>))
+      .filter((m) => m.id > 0)
+    return {
+      items,
+      totalCount: Number(payload.totalCount ?? payload.TotalCount ?? items.length),
+      page: Number(payload.page ?? payload.Page ?? 1),
+      pageSize: Number(payload.pageSize ?? payload.PageSize ?? 20),
+    } satisfies PagedExpiringMembershipQueueResponse
+  },
   getPaged: (params: {
     page: number
     pageSize: number

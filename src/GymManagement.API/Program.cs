@@ -196,9 +196,27 @@ builder.Services.Configure<DoorDeviceOptions>(builder.Configuration.GetSection(D
 builder.Services.PostConfigure<NotificationWebhookOptions>(opts =>
 {
     if (string.IsNullOrWhiteSpace(opts.EmailWebhookUrl))
-        opts.EmailWebhookUrl = Environment.GetEnvironmentVariable("NOTIFICATIONS_EMAIL_WEBHOOK_URL");
+    {
+        opts.EmailWebhookUrl = Environment.GetEnvironmentVariable("NOTIFICATIONS_EMAIL_WEBHOOK_URL")
+            ?? Environment.GetEnvironmentVariable("NOTIFICATIONS_EMAIL_WEBHOOK");
+    }
+
     if (string.IsNullOrWhiteSpace(opts.WhatsAppWebhookUrl))
-        opts.WhatsAppWebhookUrl = Environment.GetEnvironmentVariable("NOTIFICATIONS_WHATSAPP_WEBHOOK_URL");
+    {
+        opts.WhatsAppWebhookUrl = Environment.GetEnvironmentVariable("NOTIFICATIONS_WHATSAPP_WEBHOOK_URL")
+            ?? Environment.GetEnvironmentVariable("NOTIFICATIONS_WHATSAPP_WEBHOOK");
+    }
+
+    var enableScheduled = Environment.GetEnvironmentVariable("NOTIFICATIONS_ENABLE_SCHEDULED_REMINDERS");
+    if (!string.IsNullOrWhiteSpace(enableScheduled))
+    {
+        opts.EnableScheduledReminders = enableScheduled.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || enableScheduled == "1";
+    }
+    else if (!opts.EnableScheduledReminders && opts.HasOutboundWebhook)
+    {
+        opts.EnableScheduledReminders = true;
+    }
 });
 
 builder.Services.AddHttpClient("notification-webhooks", (sp, client) =>
@@ -312,6 +330,8 @@ builder.Services.AddScoped<IBranchQrAccessService, BranchQrAccessService>();
 builder.Services.AddScoped<IGymQrService, GymQrService>();
 builder.Services.AddScoped<IDoorUnlockService, DoorUnlockService>();
 builder.Services.AddScoped<IQrExpiryReminderService, QrExpiryReminderService>();
+builder.Services.AddScoped<IMembershipExpiryInAppNotificationService, MembershipExpiryInAppNotificationService>();
+builder.Services.AddScoped<IMembershipExpiryWebhookReminderService, MembershipExpiryWebhookReminderService>();
 
 builder.Services.AddScoped<IGymQrFloorWorkoutService, GymQrFloorWorkoutService>();
 builder.Services.AddScoped<IAttendanceScanOrchestrator, AttendanceScanOrchestrator>();

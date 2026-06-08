@@ -44,4 +44,19 @@ namespace GymManagement.Core.DTOs
         public DateTime? FreezeEndDate { get; set; }
         public string? FreezeReason { get; set; }
     }
+
+    /// <summary>Staff renewal queue: memberships ending within a date window.</summary>
+    public sealed class ExpiringMembershipQueueItemDto
+    {
+        public int Id { get; set; }
+        public int UserId { get; set; }
+        public int PlanId { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public MembershipStatus Status { get; set; }
+        public string? UserName { get; set; }
+        public string? MemberPhone { get; set; }
+        public string? PlanName { get; set; }
+        public int DaysRemaining { get; set; }
+    }
 }

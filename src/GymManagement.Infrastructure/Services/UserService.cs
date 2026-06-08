@@ -79,7 +79,8 @@ namespace GymManagement.Infrastructure.Services
             string? search = null,
             bool membersOnly = false,
             bool? isActive = null,
-            bool includeBillingSummary = true)
+            bool includeBillingSummary = true,
+            string? preferredGymTime = null)
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
@@ -87,6 +88,8 @@ namespace GymManagement.Infrastructure.Services
 
             if (isActive.HasValue)
                 query = query.Where(u => u.IsActive == isActive.Value);
+
+            query = query.ApplyPreferredGymTimeFilter(_db.Members, preferredGymTime);
 
             if (membersOnly)
             {

@@ -12,7 +12,8 @@ namespace GymManagement.Core.Services
             string? search = null,
             bool membersOnly = false,
             bool? isActive = null,
-            bool includeBillingSummary = true);
+            bool includeBillingSummary = true,
+            string? preferredGymTime = null);
         Task<UserDto?> GetUserByIdAsync(int id);
         Task<UserAggregateDto?> GetUserAggregateAsync(int id);
         Task<UserDto> CreateUserAsync(CreateUserDto createUserDto);

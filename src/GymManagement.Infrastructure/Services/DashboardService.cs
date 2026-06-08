@@ -238,7 +238,11 @@ namespace GymManagement.Infrastructure.Services
             var hooks = new NotificationHookStatusDto
             {
                 EmailEnabled = !string.IsNullOrWhiteSpace(n.EmailWebhookUrl),
-                WhatsAppEnabled = !string.IsNullOrWhiteSpace(n.WhatsAppWebhookUrl)
+                WhatsAppEnabled = !string.IsNullOrWhiteSpace(n.WhatsAppWebhookUrl),
+                ScheduledRemindersEnabled = n.EnableScheduledReminders && n.HasOutboundWebhook,
+                InAppExpiryRemindersEnabled = n.EnableInAppMembershipExpiryReminders,
+                MembershipExpiryReminderDays = n.MembershipExpiryReminderDays,
+                InAppMembershipExpiryReminderDays = n.InAppMembershipExpiryReminderDays,
             };
 
             return new DashboardNotificationsDto

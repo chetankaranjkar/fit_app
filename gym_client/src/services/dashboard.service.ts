@@ -13,6 +13,10 @@ export type DashboardNotifications = {
   hooks: {
     emailEnabled: boolean
     whatsAppEnabled: boolean
+    scheduledRemindersEnabled: boolean
+    inAppExpiryRemindersEnabled: boolean
+    membershipExpiryReminderDays: number
+    inAppMembershipExpiryReminderDays: number
   }
 }
 

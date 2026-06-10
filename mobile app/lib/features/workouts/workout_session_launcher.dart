@@ -13,6 +13,8 @@ Future<void> launchLiveWorkoutSession(
   BuildContext context,
   WidgetRef ref, {
   required MeWorkoutPlanSummary plan,
+  MeWorkoutSessionTemplate? template,
+  int warmupsCompleted = 0,
 }) async {
   HapticFeedback.mediumImpact();
   final repo = WorkoutTrackingRepository.instance;
@@ -25,7 +27,12 @@ Future<void> launchLiveWorkoutSession(
     ref.invalidate(activeWorkoutProvider);
     ref.invalidate(workoutTrackingDashboardProvider);
     if (!context.mounted) return;
-    context.push('/workouts/live', extra: session);
+    context.push('/workouts/live', extra: {
+      'session': session,
+      'template': template,
+      'plan': plan,
+      'warmupsCompleted': warmupsCompleted,
+    });
   } on ApiException catch (e) {
     if (!context.mounted) return;
     await showCupertinoDialog<void>(

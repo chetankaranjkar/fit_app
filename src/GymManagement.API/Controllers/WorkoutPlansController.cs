@@ -81,6 +81,26 @@ namespace GymManagement.API.Controllers
             return Ok(workoutPlan);
         }
 
+        [HttpPut("{id}/warmup-stretch")]
+        public async Task<ActionResult<WorkoutPlanDto>> SavePlanWarmupStretch(int id, SavePlanWarmupStretchDto dto, CancellationToken ct)
+        {
+            var entity = await _unitOfWork.WorkoutPlans.GetByIdAsync(id);
+            if (entity == null)
+                return NotFound();
+            if (!await CanAccessPlanAsync(entity))
+                return Forbid();
+
+            var (performerId, performerName) = await ResolvePerformerAsync(ct);
+            var plan = await _workoutPlanService.SavePlanWarmupStretchAsync(
+                id,
+                dto,
+                performerId,
+                performerName,
+                ct);
+            if (plan == null) return NotFound();
+            return Ok(plan);
+        }
+
         [HttpPut("{id}/structure")]
         public async Task<ActionResult<WorkoutPlanDto>> SaveProgramStructure(int id, SaveProgramStructureDto dto, CancellationToken ct)
         {

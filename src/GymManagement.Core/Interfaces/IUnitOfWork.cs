@@ -17,6 +17,13 @@ namespace GymManagement.Core.Interfaces
         IRepository<WorkoutPlanWeek> WorkoutPlanWeeks { get; }
         IRepository<WorkoutPlanDay> WorkoutPlanDays { get; }
         IRepository<WorkoutPlanExercise> WorkoutPlanExercises { get; }
+        IRepository<Warmup> Warmups { get; }
+        IRepository<Stretch> Stretches { get; }
+        IRepository<WorkoutPlanWarmup> WorkoutPlanWarmups { get; }
+        IRepository<WorkoutPlanStretch> WorkoutPlanStretches { get; }
+        IRepository<WorkoutCategory> WorkoutCategories { get; }
+        IRepository<WorkoutCategoryWarmup> WorkoutCategoryWarmups { get; }
+        IRepository<WorkoutCategoryStretch> WorkoutCategoryStretches { get; }
         IRepository<UserSchedule> UserSchedules { get; }
         IRepository<WorkoutSession> WorkoutSessions { get; }
         IRepository<UserInstructor> UserInstructors { get; }

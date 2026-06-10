@@ -47,6 +47,9 @@ export interface ProgramWeekDto {
   days: ProgramDayDto[]
 }
 
+import type { WorkoutPlanStretch } from './stretch'
+import type { WorkoutPlanWarmup } from './warmup'
+
 export interface WorkoutPlan {
   id: number
   name: string
@@ -72,6 +75,13 @@ export interface WorkoutPlan {
   completionRatePercent?: number
   weeks?: ProgramWeekDto[]
   exercises: WorkoutPlanExercise[]
+  warmups?: WorkoutPlanWarmup[]
+  stretches?: WorkoutPlanStretch[]
+  workoutCategoryId?: number | null
+  workoutCategoryName?: string | null
+  useDefaultWarmups?: boolean
+  useDefaultStretches?: boolean
+  estimatedDurationSeconds?: number | null
 }
 
 export interface CreateWorkoutPlanExerciseDto {
@@ -104,6 +114,9 @@ export interface CreateWorkoutPlanDto {
   tags?: string[] | null
   status?: string
   exercises: CreateWorkoutPlanExerciseDto[]
+  workoutCategoryId?: number | null
+  useDefaultWarmups?: boolean
+  useDefaultStretches?: boolean
 }
 
 export interface ProgramExerciseWriteDto {

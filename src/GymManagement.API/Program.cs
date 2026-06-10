@@ -247,6 +247,9 @@ builder.Services.AddScoped<IUsernameAvailabilityService, UsernameAvailabilitySer
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<IExerciseService, ExerciseService>();
+builder.Services.AddScoped<IWarmupService, WarmupService>();
+builder.Services.AddScoped<IStretchService, StretchService>();
+builder.Services.AddScoped<IWorkoutCategoryService, WorkoutCategoryService>();
 builder.Services.AddScoped<IBodyPartService, BodyPartService>();
 builder.Services.AddScoped<IBodyPartMuscleService, BodyPartMuscleService>();
 builder.Services.AddScoped<IWorkoutPlanAuditService, WorkoutPlanAuditService>();

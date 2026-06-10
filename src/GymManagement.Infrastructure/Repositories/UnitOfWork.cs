@@ -24,6 +24,13 @@ namespace GymManagement.Infrastructure.Repositories
         private IRepository<WorkoutPlanWeek>? _workoutPlanWeeks;
         private IRepository<WorkoutPlanDay>? _workoutPlanDays;
         private IRepository<WorkoutPlanExercise>? _workoutPlanExercises;
+        private IRepository<Warmup>? _warmups;
+        private IRepository<Stretch>? _stretches;
+        private IRepository<WorkoutPlanWarmup>? _workoutPlanWarmups;
+        private IRepository<WorkoutPlanStretch>? _workoutPlanStretches;
+        private IRepository<WorkoutCategory>? _workoutCategories;
+        private IRepository<WorkoutCategoryWarmup>? _workoutCategoryWarmups;
+        private IRepository<WorkoutCategoryStretch>? _workoutCategoryStretches;
         private IRepository<UserSchedule>? _userSchedules;
         private IRepository<WorkoutSession>? _workoutSessions;
         private IRepository<UserInstructor>? _userInstructors;
@@ -97,6 +104,27 @@ namespace GymManagement.Infrastructure.Repositories
 
         public IRepository<WorkoutPlanExercise> WorkoutPlanExercises => 
             _workoutPlanExercises ??= new Repository<WorkoutPlanExercise>(_context);
+
+        public IRepository<Warmup> Warmups =>
+            _warmups ??= new Repository<Warmup>(_context);
+
+        public IRepository<Stretch> Stretches =>
+            _stretches ??= new Repository<Stretch>(_context);
+
+        public IRepository<WorkoutPlanWarmup> WorkoutPlanWarmups =>
+            _workoutPlanWarmups ??= new Repository<WorkoutPlanWarmup>(_context);
+
+        public IRepository<WorkoutPlanStretch> WorkoutPlanStretches =>
+            _workoutPlanStretches ??= new Repository<WorkoutPlanStretch>(_context);
+
+        public IRepository<WorkoutCategory> WorkoutCategories =>
+            _workoutCategories ??= new Repository<WorkoutCategory>(_context);
+
+        public IRepository<WorkoutCategoryWarmup> WorkoutCategoryWarmups =>
+            _workoutCategoryWarmups ??= new Repository<WorkoutCategoryWarmup>(_context);
+
+        public IRepository<WorkoutCategoryStretch> WorkoutCategoryStretches =>
+            _workoutCategoryStretches ??= new Repository<WorkoutCategoryStretch>(_context);
 
         public IRepository<UserSchedule> UserSchedules => 
             _userSchedules ??= new Repository<UserSchedule>(_context);

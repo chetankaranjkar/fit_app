@@ -6,8 +6,11 @@ import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../../components/layout/DashboardSubpageShell'
 import { Button } from '../../components/ui/Button'
 import { programsService } from '../../services/workoutPlans.service'
-import type { ProgramWeekDto } from '../../types/workoutPlan'
+import type { CreateWorkoutPlanDto, ProgramWeekDto } from '../../types/workoutPlan'
+import { PlanWarmupStretchTab } from './program/PlanWarmupStretchTab'
 import { WeekScheduleTab, toStructurePayload } from './program/WeekScheduleTab'
+import type { WorkoutPlanStretch } from '../../types/stretch'
+import type { WorkoutPlanWarmup } from '../../types/warmup'
 
 function getDashboardUser() {
   try {
@@ -22,6 +25,7 @@ function getDashboardUser() {
 
 const tabs = [
   'Overview',
+  'Warmup & Stretch',
   'Weekly Schedule',
   'Exercises',
   'Assigned Members',
@@ -55,13 +59,76 @@ export function ProgramDetailPage() {
   })
 
   const [localWeeks, setLocalWeeks] = useState<ProgramWeekDto[] | null>(null)
+  const [localWarmups, setLocalWarmups] = useState<WorkoutPlanWarmup[] | null>(null)
+  const [localStretches, setLocalStretches] = useState<WorkoutPlanStretch[] | null>(null)
+  const [localCategoryId, setLocalCategoryId] = useState<number | null>(null)
+  const [useDefaultWarmups, setUseDefaultWarmups] = useState(true)
+  const [useDefaultStretches, setUseDefaultStretches] = useState(true)
 
   const weeks = localWeeks ?? program?.weeks ?? []
+  const warmups = localWarmups ?? program?.warmups ?? []
+  const stretches = localStretches ?? program?.stretches ?? []
   const setWeeks = useCallback((w: ProgramWeekDto[]) => setLocalWeeks(w), [])
 
   useEffect(() => {
     if (program?.weeks?.length) setLocalWeeks(program.weeks)
   }, [program?.id, program?.weeks])
+
+  useEffect(() => {
+    if (program) {
+      setLocalWarmups(program.warmups ?? [])
+      setLocalStretches(program.stretches ?? [])
+      setLocalCategoryId(program.workoutCategoryId ?? null)
+      setUseDefaultWarmups(program.useDefaultWarmups ?? true)
+      setUseDefaultStretches(program.useDefaultStretches ?? true)
+    }
+  }, [program?.id, program?.warmups, program?.stretches, program?.workoutCategoryId])
+
+  function buildUpdatePayload(overrides?: Partial<CreateWorkoutPlanDto>): CreateWorkoutPlanDto | null {
+    if (!program) return null
+    const exercises =
+      program.weeks?.flatMap((w) => w.days.flatMap((d) => d.exercises)) ?? program.exercises
+    return {
+      name: program.name,
+      description: program.description,
+      workoutType: program.workoutType,
+      duration: program.duration,
+      difficultyLevel: program.difficultyLevel,
+      trainerId: program.trainerId,
+      isPublic: program.isPublic,
+      goal: program.goal,
+      durationDays: program.durationDays,
+      workoutsPerWeek: program.workoutsPerWeek,
+      thumbnail: program.thumbnail,
+      estimatedCaloriesBurn: program.estimatedCaloriesBurn,
+      tags: program.tags,
+      status: program.status,
+      workoutCategoryId: localCategoryId,
+      useDefaultWarmups,
+      useDefaultStretches,
+      exercises: exercises.map((e) => ({
+        exerciseId: e.exerciseId,
+        sets: e.sets,
+        reps: e.reps,
+        restBetweenSets: e.restBetweenSets,
+        order: e.order,
+        weight: e.weight,
+        tempo: e.tempo,
+        intensity: e.intensity,
+        notes: e.notes,
+      })),
+      ...overrides,
+    }
+  }
+
+  const saveCategoryMutation = useMutation({
+    mutationFn: () => {
+      const payload = buildUpdatePayload()
+      if (!payload) throw new Error('Program not loaded')
+      return programsService.update(id, payload).then((r) => r.data)
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['program', id] }),
+  })
 
   const saveStructureMutation = useMutation({
     mutationFn: (payload: ReturnType<typeof toStructurePayload>) =>
@@ -69,6 +136,14 @@ export function ProgramDetailPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['program', id] })
       void queryClient.invalidateQueries({ queryKey: ['programs'] })
+    },
+  })
+
+  const saveWarmupStretchMutation = useMutation({
+    mutationFn: (payload: { warmups: { warmupId: number; displayOrder: number }[]; stretches: { stretchId: number; displayOrder: number }[] }) =>
+      programsService.saveWarmupStretch(id, payload).then((r) => r.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['program', id] })
     },
   })
 
@@ -209,6 +284,16 @@ export function ProgramDetailPage() {
                               ~{program.estimatedCaloriesBurn} kcal / session
                             </span>
                           )}
+                          {program.workoutCategoryName && (
+                            <span className="rounded-lg bg-cyan-500/15 px-3 py-1 text-xs text-cyan-200">
+                              {program.workoutCategoryName}
+                            </span>
+                          )}
+                          {program.estimatedDurationSeconds != null && (
+                            <span className="rounded-lg bg-white/10 px-3 py-1 text-xs text-white">
+                              ~{Math.round(program.estimatedDurationSeconds / 60)} min est.
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -263,6 +348,26 @@ export function ProgramDetailPage() {
                       <p className="mt-2 text-xs text-slate-500">Based on completed workout sessions logged for this program.</p>
                     </div>
                   </div>
+                )}
+
+                {tab === 'Warmup & Stretch' && (
+                  <PlanWarmupStretchTab
+                    warmups={warmups}
+                    stretches={stretches}
+                    workoutCategoryId={localCategoryId}
+                    workoutCategoryName={program.workoutCategoryName}
+                    useDefaultWarmups={useDefaultWarmups}
+                    useDefaultStretches={useDefaultStretches}
+                    onWarmupsChange={setLocalWarmups}
+                    onStretchesChange={setLocalStretches}
+                    onCategoryChange={setLocalCategoryId}
+                    onUseDefaultWarmupsChange={setUseDefaultWarmups}
+                    onUseDefaultStretchesChange={setUseDefaultStretches}
+                    onSaveCategorySettings={() => saveCategoryMutation.mutate()}
+                    isSavingCategory={saveCategoryMutation.isPending}
+                    onSave={(payload) => saveWarmupStretchMutation.mutate(payload)}
+                    isSaving={saveWarmupStretchMutation.isPending}
+                  />
                 )}
 
                 {tab === 'Weekly Schedule' && (

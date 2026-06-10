@@ -17,7 +17,7 @@ import '../shell/shell_layout_metrics.dart';
 import 'workout_derived_metrics.dart';
 import 'package:flutter/services.dart';
 import 'widgets/plan_set_completion_row.dart';
-import 'workout_session_launcher.dart';
+import 'workout_flow_launcher.dart';
 
 class WorkoutDetailScreen extends ConsumerWidget {
   const WorkoutDetailScreen({super.key, required this.plan});
@@ -123,10 +123,36 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
                           ],
                         ),
                       ),
+                    if (tpl.warmups.isNotEmpty) ...[
+                      Text('WARMUP', style: FitnessText.label(context)),
+                      const SizedBox(height: AppSpacing.sm),
+                      for (final w in tpl.warmups) ...[
+                        GlassCard(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(w.name, style: FitnessText.title(context)),
+                                    Text(
+                                      '${w.durationSeconds}s · ${w.bodyPart ?? 'Mobility'}',
+                                      style: FitnessText.body(context),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
+                      const SizedBox(height: AppSpacing.md),
+                    ],
                     if (tpl.exercises.isNotEmpty) ...[
                       Row(
                         children: [
-                          Text('EXERCISE STACK', style: FitnessText.label(context)),
+                          Text('WORKOUT', style: FitnessText.label(context)),
                           const Spacer(),
                           Text(
                             '${tpl.exercises.length} blocks',
@@ -143,6 +169,32 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
                         onToggle: () => _toggle(tpl.exercises[i].planExerciseId),
                       ),
                       if (i != tpl.exercises.length - 1) const SizedBox(height: AppSpacing.md),
+                    ],
+                    if (tpl.stretches.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      Text('RECOVERY STRETCH', style: FitnessText.label(context)),
+                      const SizedBox(height: AppSpacing.sm),
+                      for (final s in tpl.stretches) ...[
+                        GlassCard(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(s.name, style: FitnessText.title(context)),
+                                    Text(
+                                      '${s.durationSeconds}s · ${s.bodyPart ?? 'Mobility'}',
+                                      style: FitnessText.body(context),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
                     ],
                     const SizedBox(height: AppSpacing.lg),
                     if (tpl.exercises.isNotEmpty) _VolumeInsight(exercises: tpl.exercises),
@@ -168,7 +220,7 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
             minimum: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
             child: CupertinoButton(
               padding: EdgeInsets.zero,
-              onPressed: () => launchLiveWorkoutSession(context, ref, plan: plan),
+              onPressed: () => launchFullWorkoutFlow(context, ref, plan: plan),
               child: Container(
                 height: 54,
                 decoration: BoxDecoration(

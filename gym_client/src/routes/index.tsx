@@ -157,6 +157,26 @@ const ExercisesPage = lazy(() =>
     default: m.ExercisesPage,
   })),
 )
+const WarmupsPage = lazy(() =>
+  import('../pages/training/WarmupsPage').then((m) => ({
+    default: m.WarmupsPage,
+  })),
+)
+const StretchesPage = lazy(() =>
+  import('../pages/training/StretchesPage').then((m) => ({
+    default: m.StretchesPage,
+  })),
+)
+const WorkoutCategoriesPage = lazy(() =>
+  import('../pages/training/WorkoutCategoriesPage').then((m) => ({
+    default: m.WorkoutCategoriesPage,
+  })),
+)
+const WorkoutCategoryDetailPage = lazy(() =>
+  import('../pages/training/WorkoutCategoryDetailPage').then((m) => ({
+    default: m.WorkoutCategoryDetailPage,
+  })),
+)
 const ExerciseManagementPage = lazy(() =>
   import('../modules/exercise-management').then((m) => ({
     default: m.ExerciseManagementPage,
@@ -363,6 +383,16 @@ const router = createBrowserRouter([
               { path: '/dashboard/member/health-profile', element: withSuspense(<MemberHealthProfilePage />) },
               { path: '/dashboard/training/body-parts', element: withSuspense(<BodyPartsPage />) },
               { path: '/dashboard/training/exercises', element: withSuspense(<ExercisesPage />) },
+              { path: '/dashboard/training/warmups', element: withSuspense(<WarmupsPage />) },
+              { path: '/dashboard/training/stretches', element: withSuspense(<StretchesPage />) },
+              {
+                path: '/dashboard/training/workout-categories',
+                element: withSuspense(<WorkoutCategoriesPage />),
+              },
+              {
+                path: '/dashboard/training/workout-categories/:categoryId',
+                element: withSuspense(<WorkoutCategoryDetailPage />),
+              },
               {
                 path: '/dashboard/training/exercises-premium',
                 element: withSuspense(<ExerciseManagementPage />),

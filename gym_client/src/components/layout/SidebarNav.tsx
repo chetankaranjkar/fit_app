@@ -35,6 +35,9 @@ const userSubItems = [
 const trainingSubItems = [
   { path: '/dashboard/training/body-parts', label: 'Body Parts' },
   { path: '/dashboard/training/exercises', label: 'Exercises' },
+  { path: '/dashboard/training/warmups', label: 'Warmups' },
+  { path: '/dashboard/training/stretches', label: 'Stretches' },
+  { path: '/dashboard/training/workout-categories', label: 'Workout categories' },
   { path: '/dashboard/training/exercises-premium', label: 'Exercises Premium' },
   { path: '/dashboard/training/workout-plan-builder', label: 'Program Builder' },
   { path: '/dashboard/training/workout-studio', label: 'Workout Studio (AI + 3D)' },

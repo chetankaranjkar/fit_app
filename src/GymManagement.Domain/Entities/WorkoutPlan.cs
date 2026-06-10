@@ -33,7 +33,12 @@ namespace GymManagement.Domain.Entities
         /// <summary>Owner member for personal plans only.</summary>
         public int? AssignedToUserId { get; set; }
 
+        public int? WorkoutCategoryId { get; set; }
+        public bool UseDefaultWarmups { get; set; } = true;
+        public bool UseDefaultStretches { get; set; } = true;
+
         public User? AssignedToUser { get; set; }
+        public WorkoutCategory? WorkoutCategory { get; set; }
 
         // Navigation properties
         public Trainer? Trainer { get; set; }
@@ -41,6 +46,8 @@ namespace GymManagement.Domain.Entities
         public ICollection<WorkoutPlanWeek> Weeks { get; set; } = new List<WorkoutPlanWeek>();
         public ICollection<WorkoutPlanDay> WorkoutPlanDays { get; set; } = new List<WorkoutPlanDay>();
         public ICollection<WorkoutPlanExercise> WorkoutPlanExercises { get; set; } = new List<WorkoutPlanExercise>();
+        public ICollection<WorkoutPlanWarmup> WorkoutPlanWarmups { get; set; } = new List<WorkoutPlanWarmup>();
+        public ICollection<WorkoutPlanStretch> WorkoutPlanStretches { get; set; } = new List<WorkoutPlanStretch>();
         public ICollection<UserSchedule> UserSchedules { get; set; } = new List<UserSchedule>();
     }
 }

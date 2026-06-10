@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import type { SavePlanWarmupStretchDto } from '../types/stretch'
 import type {
   CloneWorkoutPlanDto,
   CreateWorkoutPlanDto,
@@ -19,6 +20,8 @@ export const workoutPlansService = {
     api.put<WorkoutPlan>(`${path}/${id}/structure`, data),
   clone: (id: number, data?: CloneWorkoutPlanDto) =>
     api.post<WorkoutPlan>(`${path}/${id}/clone`, data ?? {}),
+  saveWarmupStretch: (id: number, data: SavePlanWarmupStretchDto) =>
+    api.put<WorkoutPlan>(`${path}/${id}/warmup-stretch`, data),
 }
 
 /** Alias for clearer call sites in new Programs UI. */

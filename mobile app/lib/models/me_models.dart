@@ -307,6 +307,10 @@ class MeWorkoutPlanSummary {
   final int? durationMinutes;
   final String? description;
   final int exerciseCount;
+  final int warmupCount;
+  final int stretchCount;
+  final int? estimatedDurationSeconds;
+  final String? workoutCategoryName;
 
   const MeWorkoutPlanSummary({
     required this.id,
@@ -316,6 +320,10 @@ class MeWorkoutPlanSummary {
     this.difficultyLevel,
     this.durationMinutes,
     this.description,
+    this.warmupCount = 0,
+    this.stretchCount = 0,
+    this.estimatedDurationSeconds,
+    this.workoutCategoryName,
   });
 
   factory MeWorkoutPlanSummary.fromJson(Map<String, dynamic> json) => MeWorkoutPlanSummary(
@@ -326,6 +334,76 @@ class MeWorkoutPlanSummary {
         durationMinutes: _int(json['durationMinutes']),
         description: json['description']?.toString(),
         exerciseCount: _int(json['exerciseCount']) ?? 0,
+        warmupCount: _int(json['warmupCount']) ?? 0,
+        stretchCount: _int(json['stretchCount']) ?? 0,
+        estimatedDurationSeconds: _int(json['estimatedDurationSeconds']),
+        workoutCategoryName: json['workoutCategoryName']?.toString(),
+      );
+}
+
+class MeWorkoutWarmupLine {
+  final int planWarmupId;
+  final int warmupId;
+  final String name;
+  final String? description;
+  final String? videoUrl;
+  final int durationSeconds;
+  final String? bodyPart;
+  final int displayOrder;
+
+  const MeWorkoutWarmupLine({
+    required this.planWarmupId,
+    required this.warmupId,
+    required this.name,
+    required this.durationSeconds,
+    required this.displayOrder,
+    this.description,
+    this.videoUrl,
+    this.bodyPart,
+  });
+
+  factory MeWorkoutWarmupLine.fromJson(Map<String, dynamic> json) => MeWorkoutWarmupLine(
+        planWarmupId: _int(json['planWarmupId']) ?? 0,
+        warmupId: _int(json['warmupId']) ?? 0,
+        name: json['name']?.toString() ?? '',
+        description: json['description']?.toString(),
+        videoUrl: json['videoUrl']?.toString(),
+        durationSeconds: _int(json['durationSeconds']) ?? 0,
+        bodyPart: json['bodyPart']?.toString(),
+        displayOrder: _int(json['displayOrder']) ?? 0,
+      );
+}
+
+class MeWorkoutStretchLine {
+  final int planStretchId;
+  final int stretchId;
+  final String name;
+  final String? description;
+  final String? videoUrl;
+  final int durationSeconds;
+  final String? bodyPart;
+  final int displayOrder;
+
+  const MeWorkoutStretchLine({
+    required this.planStretchId,
+    required this.stretchId,
+    required this.name,
+    required this.durationSeconds,
+    required this.displayOrder,
+    this.description,
+    this.videoUrl,
+    this.bodyPart,
+  });
+
+  factory MeWorkoutStretchLine.fromJson(Map<String, dynamic> json) => MeWorkoutStretchLine(
+        planStretchId: _int(json['planStretchId']) ?? 0,
+        stretchId: _int(json['stretchId']) ?? 0,
+        name: json['name']?.toString() ?? '',
+        description: json['description']?.toString(),
+        videoUrl: json['videoUrl']?.toString(),
+        durationSeconds: _int(json['durationSeconds']) ?? 0,
+        bodyPart: json['bodyPart']?.toString(),
+        displayOrder: _int(json['displayOrder']) ?? 0,
       );
 }
 
@@ -376,34 +454,78 @@ class MeWorkoutExerciseLine {
 
 class MeWorkoutSessionTemplate {
   final MeWorkoutPlanSummary plan;
+  final List<MeWorkoutWarmupLine> warmups;
   final List<MeWorkoutExerciseLine> exercises;
+  final List<MeWorkoutStretchLine> stretches;
   final bool filteredToToday;
   final bool isRestDay;
   final String? todayDayName;
   final bool isScheduledToday;
+  final int? workoutCategoryId;
+  final String? workoutCategoryName;
+  final int? estimatedDurationSeconds;
+  final int warmupCount;
+  final int stretchCount;
 
   const MeWorkoutSessionTemplate({
     required this.plan,
     required this.exercises,
+    this.warmups = const [],
+    this.stretches = const [],
     this.filteredToToday = false,
     this.isRestDay = false,
     this.todayDayName,
     this.isScheduledToday = true,
+    this.workoutCategoryId,
+    this.workoutCategoryName,
+    this.estimatedDurationSeconds,
+    this.warmupCount = 0,
+    this.stretchCount = 0,
   });
 
   factory MeWorkoutSessionTemplate.fromJson(Map<String, dynamic> json) => MeWorkoutSessionTemplate(
         plan: MeWorkoutPlanSummary.fromJson(
           (json['plan'] as Map?)?.cast<String, dynamic>() ?? {},
         ),
+        warmups: (json['warmups'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => MeWorkoutWarmupLine.fromJson(e.cast<String, dynamic>()))
+            .toList(),
         exercises: (json['exercises'] as List? ?? [])
             .whereType<Map>()
             .map((e) => MeWorkoutExerciseLine.fromJson(e.cast<String, dynamic>()))
+            .toList(),
+        stretches: (json['stretches'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => MeWorkoutStretchLine.fromJson(e.cast<String, dynamic>()))
             .toList(),
         filteredToToday: json['filteredToToday'] as bool? ?? false,
         isRestDay: json['isRestDay'] as bool? ?? false,
         todayDayName: json['todayDayName'] as String?,
         isScheduledToday: json['isScheduledToday'] as bool? ?? true,
+        workoutCategoryId: _int(json['workoutCategoryId']),
+        workoutCategoryName: json['workoutCategoryName']?.toString(),
+        estimatedDurationSeconds: _int(json['estimatedDurationSeconds']),
+        warmupCount: _int(json['warmupCount']) ?? 0,
+        stretchCount: _int(json['stretchCount']) ?? 0,
       );
+}
+
+/// Summary payload passed between mobility / workout / summary screens.
+class WorkoutFlowSummary {
+  final int warmupsCompleted;
+  final int exercisesCompleted;
+  final int stretchesCompleted;
+  final int durationSeconds;
+  final int? estimatedCalories;
+
+  const WorkoutFlowSummary({
+    required this.warmupsCompleted,
+    required this.exercisesCompleted,
+    required this.stretchesCompleted,
+    required this.durationSeconds,
+    this.estimatedCalories,
+  });
 }
 
 class MeWorkoutSetEntry {

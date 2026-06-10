@@ -29,17 +29,20 @@ namespace GymManagement.API.Controllers
         private readonly IMembershipPaymentService _membershipPaymentService;
         private readonly IMobileNumberAvailabilityService _mobileAvailability;
         private readonly WebRootImageStorage _imageStorage;
+        private readonly IWorkoutPlanService _workoutPlanService;
 
         public MeController(
             ApplicationDbContext db,
             IMembershipPaymentService membershipPaymentService,
             IMobileNumberAvailabilityService mobileAvailability,
-            WebRootImageStorage imageStorage)
+            WebRootImageStorage imageStorage,
+            IWorkoutPlanService workoutPlanService)
         {
             _db = db;
             _membershipPaymentService = membershipPaymentService;
             _mobileAvailability = mobileAvailability;
             _imageStorage = imageStorage;
+            _workoutPlanService = workoutPlanService;
         }
 
         /// <summary>Payment gate info for mobile / member apps (allowed while access is otherwise blocked).</summary>
@@ -623,6 +626,23 @@ namespace GymManagement.API.Controllers
                 };
             }).ToList();
 
+            var (effectiveWarmups, effectiveStretches) = await _workoutPlanService.ResolveEffectiveMobilityAsync(plan);
+
+            string? categoryName = null;
+            if (plan.WorkoutCategoryId is > 0)
+            {
+                categoryName = await _db.WorkoutCategories.AsNoTracking()
+                    .Where(c => c.Id == plan.WorkoutCategoryId.Value)
+                    .Select(c => c.Name)
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false);
+            }
+
+            var warmupSec = effectiveWarmups.Sum(w => w.DurationSeconds);
+            var stretchSec = effectiveStretches.Sum(s => s.DurationSeconds);
+            var exerciseSec = exercises.Sum(e => e.TargetSets * (45 + e.RestSeconds));
+            var estimatedDuration = warmupSec + stretchSec + exerciseSec;
+
             var summary = new MeWorkoutPlanSummaryDto
             {
                 Id = plan.Id,
@@ -631,13 +651,48 @@ namespace GymManagement.API.Controllers
                 DifficultyLevel = plan.DifficultyLevel,
                 DurationMinutes = plan.Duration > 0 ? plan.Duration : null,
                 Description = plan.Description,
-                ExerciseCount = exercises.Count
+                ExerciseCount = exercises.Count,
+                WarmupCount = effectiveWarmups.Count,
+                StretchCount = effectiveStretches.Count,
+                EstimatedDurationSeconds = estimatedDuration,
+                WorkoutCategoryName = categoryName,
             };
 
             return Ok(new MeWorkoutSessionTemplateDto
             {
                 Plan = summary,
+                Warmups = effectiveWarmups
+                    .Select(w => new MeWorkoutWarmupLineDto
+                    {
+                        PlanWarmupId = w.Id,
+                        WarmupId = w.WarmupId,
+                        Name = w.Name,
+                        Description = w.Description,
+                        VideoUrl = w.VideoUrl,
+                        DurationSeconds = w.DurationSeconds,
+                        BodyPart = w.BodyPart,
+                        DisplayOrder = w.DisplayOrder,
+                    })
+                    .ToList(),
                 Exercises = exercises,
+                Stretches = effectiveStretches
+                    .Select(s => new MeWorkoutStretchLineDto
+                    {
+                        PlanStretchId = s.Id,
+                        StretchId = s.StretchId,
+                        Name = s.Name,
+                        Description = s.Description,
+                        VideoUrl = s.VideoUrl,
+                        DurationSeconds = s.DurationSeconds,
+                        BodyPart = s.BodyPart,
+                        DisplayOrder = s.DisplayOrder,
+                    })
+                    .ToList(),
+                WorkoutCategoryId = plan.WorkoutCategoryId,
+                WorkoutCategoryName = categoryName,
+                EstimatedDurationSeconds = estimatedDuration,
+                WarmupCount = effectiveWarmups.Count,
+                StretchCount = effectiveStretches.Count,
                 FilteredToToday = filteredToToday,
                 IsRestDay = isRestDay,
                 TodayDayName = todayDayName,

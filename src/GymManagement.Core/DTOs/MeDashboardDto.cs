@@ -97,6 +97,10 @@ namespace GymManagement.Core.DTOs
         public int? DurationMinutes { get; set; }
         public string? Description { get; set; }
         public int ExerciseCount { get; set; }
+        public int WarmupCount { get; set; }
+        public int StretchCount { get; set; }
+        public int? EstimatedDurationSeconds { get; set; }
+        public string? WorkoutCategoryName { get; set; }
         public string? Goal { get; set; }
         public int? DurationDays { get; set; }
         public int? WorkoutsPerWeek { get; set; }
@@ -118,7 +122,14 @@ namespace GymManagement.Core.DTOs
     public sealed class MeWorkoutSessionTemplateDto
     {
         public MeWorkoutPlanSummaryDto Plan { get; set; } = new();
+        public IReadOnlyList<MeWorkoutWarmupLineDto> Warmups { get; set; } = Array.Empty<MeWorkoutWarmupLineDto>();
         public IReadOnlyList<MeWorkoutExerciseLineDto> Exercises { get; set; } = Array.Empty<MeWorkoutExerciseLineDto>();
+        public IReadOnlyList<MeWorkoutStretchLineDto> Stretches { get; set; } = Array.Empty<MeWorkoutStretchLineDto>();
+        public int? WorkoutCategoryId { get; set; }
+        public string? WorkoutCategoryName { get; set; }
+        public int EstimatedDurationSeconds { get; set; }
+        public int WarmupCount { get; set; }
+        public int StretchCount { get; set; }
 
         /// <summary>
         /// True when exercises were limited to today's <see cref="GymManagement.Domain.Entities.WorkoutPlanDay"/>
@@ -134,6 +145,30 @@ namespace GymManagement.Core.DTOs
 
         /// <summary>No weekly <c>UserSchedule</c> for this plan, or one exists for the user's local weekday.</summary>
         public bool IsScheduledToday { get; set; } = true;
+    }
+
+    public sealed class MeWorkoutWarmupLineDto
+    {
+        public int PlanWarmupId { get; set; }
+        public int WarmupId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string? VideoUrl { get; set; }
+        public int DurationSeconds { get; set; }
+        public string? BodyPart { get; set; }
+        public int DisplayOrder { get; set; }
+    }
+
+    public sealed class MeWorkoutStretchLineDto
+    {
+        public int PlanStretchId { get; set; }
+        public int StretchId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string? VideoUrl { get; set; }
+        public int DurationSeconds { get; set; }
+        public string? BodyPart { get; set; }
+        public int DisplayOrder { get; set; }
     }
 
     public sealed class MeWorkoutExerciseLineDto

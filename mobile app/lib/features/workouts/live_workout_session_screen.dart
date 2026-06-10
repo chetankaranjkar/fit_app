@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_exception.dart';
+import '../../models/me_models.dart';
 import '../../models/workout_tracking_models.dart';
+import 'mobility_flow_screen.dart';
 import '../../providers/me_providers.dart';
 import '../../providers/sync_status_provider.dart';
 import '../../providers/workout_tracking_providers.dart';
@@ -26,9 +28,18 @@ import 'widgets/workout_set_card.dart';
 
 /// Live set-by-set workout logging with offline persistence + auto-sync.
 class LiveWorkoutSessionScreen extends ConsumerStatefulWidget {
-  const LiveWorkoutSessionScreen({super.key, this.initialSession});
+  const LiveWorkoutSessionScreen({
+    super.key,
+    this.initialSession,
+    this.sessionTemplate,
+    this.planSummary,
+    this.warmupsCompleted = 0,
+  });
 
   final ActiveWorkoutSession? initialSession;
+  final MeWorkoutSessionTemplate? sessionTemplate;
+  final MeWorkoutPlanSummary? planSummary;
+  final int warmupsCompleted;
 
   @override
   ConsumerState<LiveWorkoutSessionScreen> createState() => _LiveWorkoutSessionScreenState();
@@ -177,7 +188,41 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
       ref.invalidate(workoutSessionHistoryProvider);
       invalidateSyncStatus(ref);
       if (!mounted) return;
+      final template = widget.sessionTemplate;
+      final plan = widget.planSummary;
       context.pop();
+      if (template != null &&
+          plan != null &&
+          template.stretches.isNotEmpty &&
+          !result.isOffline) {
+        context.push(
+          '/workouts/${plan.id}/mobility',
+          extra: {
+            'plan': plan,
+            'template': template,
+            'phase': MobilityPhase.stretch,
+            'afterWorkout': true,
+            'warmupsCompleted': widget.warmupsCompleted,
+            'exercisesCompleted': template.exercises.length,
+            'workoutDurationSeconds': _elapsedSec,
+          },
+        );
+        return;
+      }
+      if (template != null && plan != null && template.stretches.isEmpty) {
+        final summary = WorkoutFlowSummary(
+          warmupsCompleted: widget.warmupsCompleted,
+          exercisesCompleted: template.exercises.length,
+          stretchesCompleted: 0,
+          durationSeconds: _elapsedSec,
+          estimatedCalories: plan.durationMinutes,
+        );
+        context.go(
+          '/workouts/${plan.id}/summary',
+          extra: {'plan': plan, 'summary': summary},
+        );
+        return;
+      }
       if (result.isOffline && result.pendingCompleteSync) {
         await showCupertinoDialog<void>(
           context: context,

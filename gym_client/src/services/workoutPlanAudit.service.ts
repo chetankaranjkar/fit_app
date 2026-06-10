@@ -7,6 +7,24 @@ export type WorkoutPlanAuditAction =
   | 'ExerciseUpdated'
   | 'ExerciseRemoved'
   | 'Deleted'
+  | 'WarmupCreated'
+  | 'WarmupUpdated'
+  | 'WarmupDeleted'
+  | 'StretchCreated'
+  | 'StretchUpdated'
+  | 'StretchDeleted'
+  | 'WarmupAddedToWorkout'
+  | 'WarmupRemovedFromWorkout'
+  | 'StretchAddedToWorkout'
+  | 'StretchRemovedFromWorkout'
+  | 'CategoryCreated'
+  | 'CategoryUpdated'
+  | 'CategoryDeleted'
+  | 'WarmupAddedToCategory'
+  | 'WarmupRemovedFromCategory'
+  | 'StretchAddedToCategory'
+  | 'StretchRemovedFromCategory'
+  | 'WorkoutPlanAutoAssignmentChanged'
 
 export interface WorkoutPlanAuditLog {
   id: number
@@ -66,4 +84,22 @@ export const workoutPlanAuditActionLabels: Record<WorkoutPlanAuditAction, string
   ExerciseUpdated: 'Exercise updated',
   ExerciseRemoved: 'Exercise removed',
   Deleted: 'Workout plan deleted',
+  WarmupCreated: 'Warmup created',
+  WarmupUpdated: 'Warmup updated',
+  WarmupDeleted: 'Warmup deleted',
+  StretchCreated: 'Stretch created',
+  StretchUpdated: 'Stretch updated',
+  StretchDeleted: 'Stretch deleted',
+  WarmupAddedToWorkout: 'Warmup added to workout',
+  WarmupRemovedFromWorkout: 'Warmup removed from workout',
+  StretchAddedToWorkout: 'Stretch added to workout',
+  StretchRemovedFromWorkout: 'Stretch removed from workout',
+  CategoryCreated: 'Workout category created',
+  CategoryUpdated: 'Workout category updated',
+  CategoryDeleted: 'Workout category deleted',
+  WarmupAddedToCategory: 'Warmup added to category',
+  WarmupRemovedFromCategory: 'Warmup removed from category',
+  StretchAddedToCategory: 'Stretch added to category',
+  StretchRemovedFromCategory: 'Stretch removed from category',
+  WorkoutPlanAutoAssignmentChanged: 'Workout plan auto-assignment changed',
 }

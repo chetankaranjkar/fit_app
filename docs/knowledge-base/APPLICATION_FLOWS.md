@@ -340,6 +340,24 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 
 ---
 
+## 14c. Workout categories, warmups & stretches (smart templates)
+
+**Model:** `WorkoutCategories` with junction tables `WorkoutCategoryWarmups` / `WorkoutCategoryStretches`. Program templates (`WorkoutPlans`) optionally link `WorkoutCategoryId` with `UseDefaultWarmups` / `UseDefaultStretches` (default **true**). When true, mobile and API resolve mobility from the category; when false, use `WorkoutPlanWarmups` / `WorkoutPlanStretches`. Existing plans without a category keep working (empty mobility).
+
+| Admin | API | UI |
+|-------|-----|-----|
+| Category CRUD | `GET/POST/PUT/DELETE /api/workout-categories` | `/dashboard/training/workout-categories` |
+| Category defaults | `PUT /api/workout-categories/{id}/warmup-stretch` | Category detail: default warmups/stretches |
+| Warmup / stretch masters | `/api/warmups`, `/api/stretches` | Warmups / Stretches pages |
+| Plan mobility | `PUT /api/Programs/{id}/warmup-stretch` | Program detail → Warmup & Stretch tab |
+| Create program | `POST /api/Programs` (requires `workoutCategoryId`) | Programs → Create (category step) |
+
+**Mobile flow (PulseFit):** Workout detail → **Overview** (counts + est. duration) → warmup (countdown + timer + skip) → live workout → stretch → **Summary**. Template from `GET /api/me/workout-session-template/{planId}` includes resolved warmups/stretches and `estimatedDurationSeconds`.
+
+**Audit:** `WorkoutPlanAuditAction` 20–27 (category CRUD, category mobility links, plan auto-assignment). Migration `20260610140000_AddWorkoutCategories`; SQL script `docs/sql/add-workout-categories.sql`.
+
+---
+
 ## 11b. User memberships (one occupying membership per member)
 
 **Rule:** A member may have only **one occupying** membership at a time: `Active`, `ActivePendingPayment`, `PartialPayment`, `Frozen`, `Pending`, or `VoidPending`. While any of these exists, **no new membership row may be created** — use collect payment (renew) or edit the existing row (upgrade). Returns **409** (`ACTIVE_MEMBERSHIP_EXISTS`) with plan, status, dates, remaining days, and actions (view / renew / upgrade). `Expired`, `Cancelled`, and `Voided` allow a new membership.

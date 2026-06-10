@@ -46,6 +46,9 @@ const loaders: Record<string, Loader> = {
   '/dashboard/training/body-parts': () => import('../pages/training/BodyPartsPage'),
   '/dashboard/training/exercises': () => import('../pages/training/ExercisesPage'),
   '/dashboard/training/programs': () => import('../pages/training/ProgramsPage'),
+  '/dashboard/training/warmups': () => import('../pages/training/WarmupsPage'),
+  '/dashboard/training/stretches': () => import('../pages/training/StretchesPage'),
+  '/dashboard/training/workout-categories': () => import('../pages/training/WorkoutCategoriesPage'),
 
   // Diet group
   '/dashboard/diet-plans': () => import('../pages/DietPlansDashboardPage'),

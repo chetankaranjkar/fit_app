@@ -16,6 +16,7 @@ import { Modal } from '../../components/ui/Modal'
 import { exercisesService } from '../../services/exercises.service'
 import { trainersService } from '../../services/trainers.service'
 import { programsService } from '../../services/workoutPlans.service'
+import { workoutCategoriesService } from '../../services/workoutCategories.service'
 import type { Exercise } from '../../types/exercise'
 import type { Trainer } from '../../types/trainer'
 import type {
@@ -65,6 +66,7 @@ type FormState = {
   tags: string
   status: string
   isPublic: boolean
+  workoutCategoryId: number
   exercises: CreateWorkoutPlanExerciseDto[]
 }
 
@@ -82,6 +84,7 @@ const defaultForm: FormState = {
   tags: '',
   status: 'Active',
   isPublic: false,
+  workoutCategoryId: 0,
   exercises: [{ exerciseId: 0, sets: 3, reps: 12, restBetweenSets: 60, order: 1, weight: null }],
 }
 
@@ -108,6 +111,9 @@ function buildPayload(form: FormState): CreateWorkoutPlanDto {
     tags: tags.length ? tags : null,
     status: form.status.trim() || 'Active',
     isPublic: form.isPublic,
+    workoutCategoryId: form.workoutCategoryId > 0 ? form.workoutCategoryId : null,
+    useDefaultWarmups: true,
+    useDefaultStretches: true,
     exercises: form.exercises
       .filter((exercise) => exercise.exerciseId > 0)
       .map((exercise, index) => ({ ...exercise, order: index + 1 })),
@@ -141,6 +147,14 @@ export function ProgramsPage() {
     queryFn: async () => {
       const { data } = await exercisesService.getPaged({ page: 1, pageSize: 150 })
       return data.items ?? []
+    },
+  })
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['workout-categories'],
+    queryFn: async () => {
+      const { data } = await workoutCategoriesService.getAll()
+      return Array.isArray(data) ? data.filter((c) => c.isActive) : []
     },
   })
 
@@ -247,6 +261,7 @@ export function ProgramsPage() {
       tags: (plan.tags ?? []).join(', '),
       status: plan.status ?? 'Active',
       isPublic: plan.isPublic,
+      workoutCategoryId: plan.workoutCategoryId ?? 0,
       exercises:
         plan.exercises.length > 0
           ? plan.exercises
@@ -325,6 +340,10 @@ export function ProgramsPage() {
     }
     if (form.exercises.every((exercise) => exercise.exerciseId <= 0)) {
       setFormError('Add at least one exercise, or open Program Details to build week/day structure after create.')
+      return
+    }
+    if (!editing && form.workoutCategoryId <= 0) {
+      setFormError('Workout category is required.')
       return
     }
 
@@ -600,6 +619,31 @@ export function ProgramsPage() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
+                Workout category {!editing ? '*' : ''}
+              </label>
+              <select
+                value={form.workoutCategoryId}
+                onChange={(event) =>
+                  setForm((c) => ({ ...c, workoutCategoryId: Number(event.target.value) }))
+                }
+                className={selectClass}
+                required={!editing}
+              >
+                <option value={0} className="bg-slate-900">
+                  Select category…
+                </option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id} className="bg-slate-900">
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Default warmups and stretches load from the selected category.
+              </p>
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">

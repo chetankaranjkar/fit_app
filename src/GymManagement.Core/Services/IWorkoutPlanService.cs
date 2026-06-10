@@ -18,6 +18,13 @@ namespace GymManagement.Core.Services
             string? performedByUserName = null,
             CancellationToken ct = default);
         Task<WorkoutPlanDto?> CloneWorkoutPlanAsync(int id, CloneWorkoutPlanDto dto);
+        Task<WorkoutPlanDto?> SavePlanWarmupStretchAsync(
+            int id,
+            SavePlanWarmupStretchDto dto,
+            int? performedByUserId = null,
+            string? performedByUserName = null,
+            CancellationToken ct = default);
+        Task<(List<WorkoutPlanWarmupDto> Warmups, List<WorkoutPlanStretchDto> Stretches)> ResolveEffectiveMobilityAsync(WorkoutPlan plan);
     }
 }
 

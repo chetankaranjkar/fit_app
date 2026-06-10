@@ -16,6 +16,9 @@ import '../features/shell/app_shell.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/workouts/workout_detail_screen.dart';
 import '../features/workouts/live_workout_session_screen.dart';
+import '../features/workouts/mobility_flow_screen.dart';
+import '../features/workouts/workout_overview_screen.dart';
+import '../features/workouts/workout_summary_screen.dart';
 import '../models/workout_tracking_models.dart';
 import '../workout_session_screen.dart';
 import '../features/workouts/workouts_screen.dart';
@@ -114,9 +117,32 @@ final appRouter = GoRouter(
                 parentNavigatorKey: _rootNavKey,
                 pageBuilder: (context, state) {
                   final extra = state.extra;
+                  ActiveWorkoutSession? session;
+                  MeWorkoutSessionTemplate? template;
+                  MeWorkoutPlanSummary? plan;
+                  var warmupsCompleted = 0;
+                  if (extra is ActiveWorkoutSession) {
+                    session = extra;
+                  } else if (extra is Map) {
+                    session = extra['session'] is ActiveWorkoutSession
+                        ? extra['session'] as ActiveWorkoutSession
+                        : null;
+                    template = extra['template'] is MeWorkoutSessionTemplate
+                        ? extra['template'] as MeWorkoutSessionTemplate
+                        : null;
+                    plan = extra['plan'] is MeWorkoutPlanSummary
+                        ? extra['plan'] as MeWorkoutPlanSummary
+                        : null;
+                    warmupsCompleted = extra['warmupsCompleted'] is int
+                        ? extra['warmupsCompleted'] as int
+                        : 0;
+                  }
                   return _slidePage(
                     LiveWorkoutSessionScreen(
-                      initialSession: extra is ActiveWorkoutSession ? extra : null,
+                      initialSession: session,
+                      sessionTemplate: template,
+                      planSummary: plan,
+                      warmupsCompleted: warmupsCompleted,
                     ),
                   );
                 },
@@ -131,6 +157,72 @@ final appRouter = GoRouter(
                   return _slidePage(const _MissingPlan());
                 },
                 routes: [
+                  GoRoute(
+                    path: 'overview',
+                    parentNavigatorKey: _rootNavKey,
+                    pageBuilder: (context, state) {
+                      final extra = state.extra;
+                      if (extra is Map &&
+                          extra['plan'] is MeWorkoutPlanSummary &&
+                          extra['template'] is MeWorkoutSessionTemplate) {
+                        return _slidePage(
+                          WorkoutOverviewScreen(
+                            plan: extra['plan'] as MeWorkoutPlanSummary,
+                            template: extra['template'] as MeWorkoutSessionTemplate,
+                          ),
+                        );
+                      }
+                      return _slidePage(const _MissingPlan());
+                    },
+                  ),
+                  GoRoute(
+                    path: 'summary',
+                    parentNavigatorKey: _rootNavKey,
+                    pageBuilder: (context, state) {
+                      final extra = state.extra;
+                      if (extra is Map &&
+                          extra['plan'] is MeWorkoutPlanSummary &&
+                          extra['summary'] is WorkoutFlowSummary) {
+                        return _slidePage(
+                          WorkoutSummaryScreen(
+                            plan: extra['plan'] as MeWorkoutPlanSummary,
+                            summary: extra['summary'] as WorkoutFlowSummary,
+                          ),
+                        );
+                      }
+                      return _slidePage(const _MissingPlan());
+                    },
+                  ),
+                  GoRoute(
+                    path: 'mobility',
+                    parentNavigatorKey: _rootNavKey,
+                    pageBuilder: (context, state) {
+                      final extra = state.extra;
+                      if (extra is Map &&
+                          extra['plan'] is MeWorkoutPlanSummary &&
+                          extra['template'] is MeWorkoutSessionTemplate &&
+                          extra['phase'] is MobilityPhase) {
+                        return _slidePage(
+                          MobilityFlowScreen(
+                            plan: extra['plan'] as MeWorkoutPlanSummary,
+                            template: extra['template'] as MeWorkoutSessionTemplate,
+                            phase: extra['phase'] as MobilityPhase,
+                            afterWorkout: extra['afterWorkout'] as bool? ?? false,
+                            warmupsCompleted: extra['warmupsCompleted'] is int
+                                ? extra['warmupsCompleted'] as int
+                                : 0,
+                            exercisesCompleted: extra['exercisesCompleted'] is int
+                                ? extra['exercisesCompleted'] as int
+                                : 0,
+                            workoutDurationSeconds: extra['workoutDurationSeconds'] is int
+                                ? extra['workoutDurationSeconds'] as int
+                                : 0,
+                          ),
+                        );
+                      }
+                      return _slidePage(const _MissingPlan());
+                    },
+                  ),
                   GoRoute(
                     path: 'session',
                     pageBuilder: (context, state) {

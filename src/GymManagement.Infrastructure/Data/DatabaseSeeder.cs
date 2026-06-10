@@ -72,6 +72,10 @@ namespace GymManagement.Infrastructure.Data
             // Seed Exercises
             var seededExerciseCount = await SeedExercisesAsync(bodyParts);
 
+            // Seed Warmups & Stretches masters
+            await SeedWarmupsAndStretchesAsync();
+            await SeedWorkoutCategoriesAsync();
+
             // Seed Workout Plans
             await SeedWorkoutPlansAsync();
             await SeedPremiumProgramsAsync();
@@ -1583,6 +1587,238 @@ namespace GymManagement.Infrastructure.Data
                     await _context.GymOpsMaintenanceLogs.AddAsync(log);
                 }
             }
+        }
+
+        private async Task SeedWarmupsAndStretchesAsync()
+        {
+            var warmupSeeds = new (string Name, string BodyPart, int Duration, string Difficulty, int Calories)[]
+            {
+                ("Arm Circles", "Shoulders", 45, "Beginner", 8),
+                ("Shoulder Rotations", "Shoulders", 60, "Beginner", 10),
+                ("Band Pull Apart", "Upper Back", 60, "Beginner", 12),
+                ("Jumping Jacks", "Full Body", 60, "Beginner", 45),
+                ("High Knees", "Legs", 45, "Intermediate", 40),
+                ("Mountain Climbers", "Core", 45, "Intermediate", 35),
+                ("Leg Swings", "Hips", 45, "Beginner", 10),
+                ("Hip Rotations", "Hips", 45, "Beginner", 12),
+                ("Bodyweight Squats", "Legs", 60, "Beginner", 25),
+                ("Walking Lunges", "Legs", 60, "Intermediate", 30),
+                ("Arm Swings", "Shoulders", 45, "Beginner", 8),
+                ("Toe Touches", "Hamstrings", 45, "Beginner", 10),
+                ("Cat Camel", "Spine", 60, "Beginner", 8),
+                ("Scapular Pushups", "Shoulders", 45, "Intermediate", 15),
+                ("Butt Kicks", "Legs", 45, "Beginner", 30),
+                ("Jump Rope", "Cardio", 90, "Intermediate", 55),
+                ("Glute Bridges", "Glutes", 60, "Beginner", 18),
+                ("World Greatest Stretch", "Full Body", 90, "Intermediate", 20),
+                ("Ankle Mobility", "Ankles", 45, "Beginner", 6),
+                ("Wrist Mobility", "Forearms", 45, "Beginner", 5),
+                ("Lateral Lunges", "Legs", 60, "Intermediate", 28),
+                ("Inchworm Walk", "Full Body", 60, "Intermediate", 22),
+                ("Bear Crawl", "Full Body", 45, "Advanced", 35),
+                ("Light Jog", "Cardio", 120, "Beginner", 50),
+                ("Resistance Band Pulls", "Upper Back", 60, "Beginner", 14),
+                ("Standing Twist", "Core", 45, "Beginner", 10),
+                ("Knee Hugs", "Hips", 45, "Beginner", 8),
+                ("Hamstring Sweep", "Hamstrings", 45, "Beginner", 9),
+                ("Side Shuffle", "Legs", 45, "Intermediate", 25),
+                ("March In Place", "Cardio", 60, "Beginner", 20),
+            };
+
+            foreach (var (name, bodyPart, duration, difficulty, calories) in warmupSeeds)
+            {
+                if (await _unitOfWork.Warmups.ExistsAsync(w => w.Name == name))
+                    continue;
+
+                await _unitOfWork.Warmups.AddAsync(new Warmup
+                {
+                    Name = name,
+                    Description = $"Dynamic warmup: {name.ToLowerInvariant()} to prepare {bodyPart.ToLowerInvariant()}.",
+                    DurationSeconds = duration,
+                    DifficultyLevel = difficulty,
+                    BodyPart = bodyPart,
+                    CaloriesBurn = calories,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow,
+                });
+            }
+
+            var stretchSeeds = new (string Name, string BodyPart, int Duration, string Difficulty)[]
+            {
+                ("Chest Stretch", "Chest", 45, "Beginner"),
+                ("Lat Stretch", "Back", 45, "Beginner"),
+                ("Tricep Stretch", "Arms", 30, "Beginner"),
+                ("Shoulder Stretch", "Shoulders", 45, "Beginner"),
+                ("Neck Stretch", "Neck", 30, "Beginner"),
+                ("Cobra Stretch", "Spine", 45, "Beginner"),
+                ("Child Pose", "Back", 60, "Beginner"),
+                ("Hamstring Stretch", "Hamstrings", 60, "Beginner"),
+                ("Quad Stretch", "Quads", 45, "Beginner"),
+                ("Calf Stretch", "Calves", 45, "Beginner"),
+                ("Hip Flexor Stretch", "Hips", 60, "Beginner"),
+                ("Butterfly Stretch", "Hips", 60, "Beginner"),
+                ("Figure Four Stretch", "Glutes", 60, "Intermediate"),
+                ("Pigeon Stretch", "Hips", 90, "Intermediate"),
+                ("Groin Stretch", "Groin", 60, "Beginner"),
+                ("Standing Forward Fold", "Hamstrings", 60, "Beginner"),
+                ("IT Band Stretch", "Legs", 60, "Intermediate"),
+                ("Seated Twist", "Spine", 45, "Beginner"),
+                ("Lower Back Stretch", "Back", 60, "Beginner"),
+                ("Upper Back Stretch", "Upper Back", 45, "Beginner"),
+                ("Wall Chest Stretch", "Chest", 45, "Beginner"),
+                ("Cross Body Stretch", "Shoulders", 30, "Beginner"),
+                ("Kneeling Hip Stretch", "Hips", 60, "Intermediate"),
+                ("Side Bend Stretch", "Obliques", 30, "Beginner"),
+                ("Toe Reach", "Hamstrings", 45, "Beginner"),
+                ("Adductor Stretch", "Groin", 60, "Beginner"),
+                ("Glute Stretch", "Glutes", 60, "Beginner"),
+                ("Cat Cow Stretch", "Spine", 60, "Beginner"),
+                ("Prayer Stretch", "Lats", 45, "Beginner"),
+                ("Thread The Needle", "Shoulders", 60, "Intermediate"),
+            };
+
+            foreach (var (name, bodyPart, duration, difficulty) in stretchSeeds)
+            {
+                if (await _unitOfWork.Stretches.ExistsAsync(s => s.Name == name))
+                    continue;
+
+                await _unitOfWork.Stretches.AddAsync(new Stretch
+                {
+                    Name = name,
+                    Description = $"Recovery stretch for {bodyPart.ToLowerInvariant()}: hold and breathe steadily.",
+                    DurationSeconds = duration,
+                    DifficultyLevel = difficulty,
+                    BodyPart = bodyPart,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow,
+                });
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        private async Task SeedWorkoutCategoriesAsync()
+        {
+            var categoryNames = new[]
+            {
+                "Upper Body", "Lower Body", "Push", "Pull", "Legs", "Chest", "Back",
+                "Shoulders", "Arms", "Cardio", "HIIT", "Full Body",
+            };
+
+            foreach (var name in categoryNames)
+            {
+                if (await _unitOfWork.WorkoutCategories.ExistsAsync(c => c.Name == name))
+                    continue;
+                await _unitOfWork.WorkoutCategories.AddAsync(new WorkoutCategory
+                {
+                    Name = name,
+                    Description = $"Default mobility templates for {name.ToLowerInvariant()} training.",
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow,
+                });
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+
+            var extraWarmups = new (string Name, string BodyPart, int Duration, string Difficulty, int Calories)[]
+            {
+                ("Band Press", "Chest", 45, "Beginner", 10),
+                ("Band Rows", "Back", 45, "Beginner", 12),
+                ("Scapular Retractions", "Upper Back", 45, "Beginner", 8),
+            };
+            foreach (var (name, bodyPart, duration, difficulty, calories) in extraWarmups)
+            {
+                if (await _unitOfWork.Warmups.ExistsAsync(w => w.Name == name)) continue;
+                await _unitOfWork.Warmups.AddAsync(new Warmup
+                {
+                    Name = name,
+                    Description = $"Dynamic warmup: {name.ToLowerInvariant()}.",
+                    DurationSeconds = duration,
+                    DifficultyLevel = difficulty,
+                    BodyPart = bodyPart,
+                    CaloriesBurn = calories,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow,
+                });
+            }
+
+            var extraStretches = new (string Name, string BodyPart, int Duration, string Difficulty)[]
+            {
+                ("Front Delt Stretch", "Shoulders", 45, "Beginner"),
+                ("Rear Delt Stretch", "Shoulders", 45, "Beginner"),
+                ("Bicep Stretch", "Arms", 45, "Beginner"),
+            };
+            foreach (var (name, bodyPart, duration, difficulty) in extraStretches)
+            {
+                if (await _unitOfWork.Stretches.ExistsAsync(s => s.Name == name)) continue;
+                await _unitOfWork.Stretches.AddAsync(new Stretch
+                {
+                    Name = name,
+                    Description = $"Recovery stretch for {bodyPart.ToLowerInvariant()}.",
+                    DurationSeconds = duration,
+                    DifficultyLevel = difficulty,
+                    BodyPart = bodyPart,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow,
+                });
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+
+            var assignments = new Dictionary<string, (string[] Warmups, string[] Stretches)>
+            {
+                ["Upper Body"] = (
+                    new[] { "Arm Circles", "Shoulder Rotations", "Band Pull Apart", "Scapular Pushups" },
+                    new[] { "Chest Stretch", "Shoulder Stretch", "Tricep Stretch", "Lat Stretch" }),
+                ["Lower Body"] = (
+                    new[] { "Leg Swings", "Walking Lunges", "Bodyweight Squats", "Hip Rotations" },
+                    new[] { "Hamstring Stretch", "Quad Stretch", "Calf Stretch", "Hip Flexor Stretch" }),
+                ["Push"] = (
+                    new[] { "Band Press", "Arm Circles", "Shoulder Rotations" },
+                    new[] { "Chest Stretch", "Tricep Stretch", "Front Delt Stretch" }),
+                ["Pull"] = (
+                    new[] { "Band Rows", "Arm Swings", "Scapular Retractions" },
+                    new[] { "Lat Stretch", "Rear Delt Stretch", "Bicep Stretch" }),
+            };
+
+            foreach (var (categoryName, mobility) in assignments)
+            {
+                var category = (await _unitOfWork.WorkoutCategories.FindAsync(c => c.Name == categoryName)).FirstOrDefault();
+                if (category == null) continue;
+
+                var hasWarmups = await _unitOfWork.WorkoutCategoryWarmups.ExistsAsync(w => w.WorkoutCategoryId == category.Id);
+                if (hasWarmups) continue;
+
+                var order = 1;
+                foreach (var warmupName in mobility.Warmups)
+                {
+                    var warmup = (await _unitOfWork.Warmups.FindAsync(w => w.Name == warmupName)).FirstOrDefault();
+                    if (warmup == null) continue;
+                    await _unitOfWork.WorkoutCategoryWarmups.AddAsync(new WorkoutCategoryWarmup
+                    {
+                        WorkoutCategoryId = category.Id,
+                        WarmupId = warmup.Id,
+                        DisplayOrder = order++,
+                        CreatedDate = DateTime.UtcNow,
+                    });
+                }
+
+                order = 1;
+                foreach (var stretchName in mobility.Stretches)
+                {
+                    var stretch = (await _unitOfWork.Stretches.FindAsync(s => s.Name == stretchName)).FirstOrDefault();
+                    if (stretch == null) continue;
+                    await _unitOfWork.WorkoutCategoryStretches.AddAsync(new WorkoutCategoryStretch
+                    {
+                        WorkoutCategoryId = category.Id,
+                        StretchId = stretch.Id,
+                        DisplayOrder = order++,
+                        CreatedDate = DateTime.UtcNow,
+                    });
+                }
+            }
+
+            await _unitOfWork.SaveChangesAsync();
         }
 
     }

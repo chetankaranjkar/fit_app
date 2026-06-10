@@ -38,6 +38,32 @@ public class PersonalWorkoutPlansController : ControllerBase
         _db = db;
     }
 
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<WorkoutPlanDto>>> ListAllForAdmin(CancellationToken ct)
+    {
+        var userId = await ResolveProfileUserIdAsync(ct);
+        if (userId == null) return Unauthorized();
+
+        var roles = User.GetAppRoleNames();
+        if (!_access.IsAdmin(roles))
+            return Forbid();
+
+        var plans = await _db.WorkoutPlans.AsNoTracking()
+            .Where(p => p.PlanType == WorkoutPlanTypes.Personal && !p.IsDeleted)
+            .OrderByDescending(p => p.CreatedDate)
+            .ToListAsync(ct);
+
+        var result = new List<WorkoutPlanDto>();
+        foreach (var plan in plans)
+        {
+            var dto = await _workoutPlanService.GetWorkoutPlanByIdAsync(plan.Id);
+            if (dto != null)
+                result.Add(dto);
+        }
+
+        return Ok(result);
+    }
+
     [HttpGet("mine")]
     public async Task<ActionResult<IReadOnlyList<WorkoutPlanDto>>> ListMine(CancellationToken ct)
     {
@@ -98,6 +124,27 @@ public class PersonalWorkoutPlansController : ControllerBase
         return dto == null ? NotFound() : Ok(dto);
     }
 
+    [HttpPut("mine/{id:int}/warmup-stretch")]
+    public async Task<ActionResult<WorkoutPlanDto>> SaveMineWarmupStretch(
+        int id,
+        SavePlanWarmupStretchDto dto,
+        CancellationToken ct)
+    {
+        var userId = await ResolveProfileUserIdAsync(ct);
+        if (userId == null) return Unauthorized();
+
+        var plan = await _unitOfWork.WorkoutPlans.GetByIdAsync(id);
+        if (plan == null || plan.IsDeleted) return NotFound();
+
+        var roles = User.GetAppRoleNames();
+        if (!_access.CanAccessPersonalPlan(userId.Value, roles, plan))
+            return Forbid();
+
+        var (performerId, performerName) = await ResolvePerformerAsync(userId.Value, ct);
+        var updated = await _workoutPlanService.SavePlanWarmupStretchAsync(id, dto, performerId, performerName, ct);
+        return updated == null ? NotFound() : Ok(updated);
+    }
+
     [HttpPut("mine/{id:int}/structure")]
     public async Task<ActionResult<WorkoutPlanDto>> SaveMineStructure(
         int id,
@@ -117,6 +164,26 @@ public class PersonalWorkoutPlansController : ControllerBase
         var (performerId, performerName) = await ResolvePerformerAsync(userId.Value, ct);
         var updated = await _workoutPlanService.SaveProgramStructureAsync(id, dto, performerId, performerName, ct);
         return updated == null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteAsAdmin(int id, CancellationToken ct)
+    {
+        var userId = await ResolveProfileUserIdAsync(ct);
+        if (userId == null) return Unauthorized();
+
+        var roles = User.GetAppRoleNames();
+        if (!_access.IsAdmin(roles))
+            return Forbid();
+
+        var plan = await _unitOfWork.WorkoutPlans.GetByIdAsync(id);
+        if (plan == null || plan.IsDeleted) return NotFound();
+        if (!string.Equals(plan.PlanType, WorkoutPlanTypes.Personal, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "Only personal workout plans can be deleted from this endpoint." });
+
+        var (performerId, performerName) = await ResolvePerformerAsync(userId.Value, ct);
+        var ok = await _audit.DeletePersonalWorkoutPlanWithAuditAsync(id, performerId, performerName, ct);
+        return ok ? NoContent() : NotFound();
     }
 
     [HttpDelete("mine/{id:int}")]

@@ -31,6 +31,13 @@ namespace GymManagement.Core.DTOs
         public int CompletionRatePercent { get; set; }
         public List<ProgramWeekDto> Weeks { get; set; } = new();
         public List<WorkoutPlanExerciseDto> Exercises { get; set; } = new();
+        public List<WorkoutPlanWarmupDto> Warmups { get; set; } = new();
+        public List<WorkoutPlanStretchDto> Stretches { get; set; } = new();
+        public int? WorkoutCategoryId { get; set; }
+        public string? WorkoutCategoryName { get; set; }
+        public bool UseDefaultWarmups { get; set; } = true;
+        public bool UseDefaultStretches { get; set; } = true;
+        public int? EstimatedDurationSeconds { get; set; }
     }
 
     public class ProgramWeekDto
@@ -92,6 +99,11 @@ namespace GymManagement.Core.DTOs
         public List<string>? Tags { get; set; }
         public string Status { get; set; } = "Active";
         public List<CreateWorkoutPlanExerciseDto> Exercises { get; set; } = new();
+        public List<PlanWarmupWriteDto>? Warmups { get; set; }
+        public List<PlanStretchWriteDto>? Stretches { get; set; }
+        public int? WorkoutCategoryId { get; set; }
+        public bool UseDefaultWarmups { get; set; } = true;
+        public bool UseDefaultStretches { get; set; } = true;
     }
 
     public class CreateWorkoutPlanExerciseDto

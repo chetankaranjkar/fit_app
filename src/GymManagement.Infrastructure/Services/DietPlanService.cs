@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.DTOs.Common;
+using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
@@ -99,6 +100,9 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<DietPlanDto> CreateAsync(CreateDietPlanDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.PlanName))
+                throw new BadRequestException("Plan name is required.");
+
             var plan = new DietPlan
             {
                 PlanName = dto.PlanName,
@@ -145,6 +149,16 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<DietMealDto> CreateMealAsync(CreateDietMealDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.MealName))
+                throw new BadRequestException("Meal name is required.");
+
+            var planExists = await _context.DietPlans
+                .AsNoTracking()
+                .AnyAsync(p => p.Id == dto.DietPlanId)
+                .ConfigureAwait(false);
+            if (!planExists)
+                throw new NotFoundException("Diet plan not found.");
+
             var meal = new DietMeal
             {
                 DietPlanId = dto.DietPlanId,
@@ -177,6 +191,16 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<DietMealItemDto> CreateMealItemAsync(CreateDietMealItemDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.FoodName))
+                throw new BadRequestException("Food name is required.");
+
+            var mealExists = await _context.DietMeals
+                .AsNoTracking()
+                .AnyAsync(m => m.Id == dto.DietMealId && !m.DietPlan.IsDeleted)
+                .ConfigureAwait(false);
+            if (!mealExists)
+                throw new NotFoundException("Meal not found.");
+
             var item = new DietMealItem
             {
                 DietMealId = dto.DietMealId,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../components/layout/DataPageShell'
 import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
@@ -8,6 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { ListPagination } from '../components/ui/ListPagination'
+import { getApiErrorMessage } from '../lib/apiErrors'
 import { dietPlansService } from '../services/dietPlans.service'
 import type {
   DietPlanDto,
@@ -192,7 +194,8 @@ export function DietPlansPage() {
       setPlanForm(defaultPlanForm)
       setSelectedPlanId(res.data.id)
     },
-    onError: (err: Error) => setPlanFormError(err.message || 'Failed to create plan'),
+    onError: (err: Error) =>
+      setPlanFormError(getApiErrorMessage(err, 'Failed to create plan')),
   })
 
   const updatePlanMutation = useMutation({
@@ -205,7 +208,8 @@ export function DietPlansPage() {
       setEditingPlan(null)
       setPlanForm(defaultPlanForm)
     },
-    onError: (err: Error) => setPlanFormError(err.message || 'Failed to update plan'),
+    onError: (err: Error) =>
+      setPlanFormError(getApiErrorMessage(err, 'Failed to update plan')),
   })
 
   const deletePlanMutation = useMutation({
@@ -224,6 +228,7 @@ export function DietPlansPage() {
       setMealModalOpen(false)
       setMealForm({ mealName: '', mealOrder: 0 })
     },
+    onError: (err: Error) => toast.error(getApiErrorMessage(err, 'Failed to add meal')),
   })
 
   const deleteMealMutation = useMutation({
@@ -249,6 +254,7 @@ export function DietPlansPage() {
         fatsGrams: undefined,
       })
     },
+    onError: (err: Error) => toast.error(getApiErrorMessage(err, 'Failed to add food item')),
   })
 
   const updateItemMutation = useMutation({

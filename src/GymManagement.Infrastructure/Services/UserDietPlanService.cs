@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
@@ -48,6 +49,30 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<UserDietPlanDto> AssignAsync(CreateUserDietPlanDto dto)
         {
+            var member = await _context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == dto.UserId)
+                .ConfigureAwait(false);
+            if (member == null)
+                throw new NotFoundException("Member not found.");
+
+            var dietPlan = await _context.DietPlans
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == dto.DietPlanId)
+                .ConfigureAwait(false);
+            if (dietPlan == null)
+                throw new NotFoundException("Diet plan not found.");
+
+            if (dto.AssignedByTrainerId.HasValue)
+            {
+                var trainerExists = await _context.Trainers
+                    .AsNoTracking()
+                    .AnyAsync(t => t.Id == dto.AssignedByTrainerId.Value)
+                    .ConfigureAwait(false);
+                if (!trainerExists)
+                    throw new BadRequestException("Assigned trainer was not found.");
+            }
+
             // One active diet assignment per member — replace any existing active row.
             if (dto.IsActive)
             {
@@ -74,30 +99,44 @@ namespace GymManagement.Infrastructure.Services
                 Notes = dto.Notes,
             };
             _context.UserDietPlans.Add(entity);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync().ConfigureAwait(false);
 
-            var withNav = await _context.UserDietPlans
-                .AsNoTracking()
-                .Include(u => u.User)!.ThenInclude(u => u.AuthUser)
-                .Include(u => u.DietPlan)
-                .FirstAsync(u => u.Id == entity.Id);
-            var result = MapToDto(withNav);
-
-            if (dto.IsActive && withNav.User != null)
+            var memberName = $"{member.FirstName} {member.LastName}".Trim();
+            var result = new UserDietPlanDto
             {
+                Id = entity.Id,
+                UserId = entity.UserId,
+                DietPlanId = entity.DietPlanId,
+                UserName = memberName,
+                DietPlanName = dietPlan.PlanName,
+                AssignedByTrainerId = entity.AssignedByTrainerId,
+                StartDate = entity.StartDate,
+                EndDate = entity.EndDate,
+                IsActive = entity.IsActive,
+                Notes = entity.Notes,
+            };
+
+            if (dto.IsActive)
+            {
+                var memberEmail = await _context.AuthUsers
+                    .AsNoTracking()
+                    .Where(a => a.UserId == member.Id)
+                    .Select(a => a.Email)
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false);
+
                 var webhookDto = new DietAssignmentAssignedNotificationDto
                 {
-                    UserId = withNav.UserId,
-                    MemberName =
-                        $"{withNav.User.FirstName} {withNav.User.LastName}".Trim(),
-                    MemberEmail = withNav.User.AuthUser?.Email,
-                    MemberPhone = withNav.User.Phone,
-                    DietPlanId = withNav.DietPlanId,
-                    DietPlanName = withNav.DietPlan?.PlanName,
-                    StartDateUtc = withNav.StartDate,
-                    EndDateUtc = withNav.EndDate,
-                    IsActive = withNav.IsActive,
-                    Notes = withNav.Notes,
+                    UserId = entity.UserId,
+                    MemberName = memberName,
+                    MemberEmail = memberEmail,
+                    MemberPhone = member.Phone,
+                    DietPlanId = entity.DietPlanId,
+                    DietPlanName = dietPlan.PlanName,
+                    StartDateUtc = entity.StartDate,
+                    EndDateUtc = entity.EndDate,
+                    IsActive = entity.IsActive,
+                    Notes = entity.Notes,
                 };
                 await _notificationWebhookDispatcher
                     .DispatchDietAssignmentAssignedAsync(webhookDto)

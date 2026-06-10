@@ -4,6 +4,7 @@ import { useClientPagination } from '../hooks/useClientPagination'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { getApiErrorMessage } from '../lib/apiErrors'
 import { getSafeDashboardReturnPath, parseMemberIdsQuery } from '../lib/safeReturnPath'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../components/layout/DataPageShell'
@@ -167,7 +168,8 @@ export function AssignDietPlansPage() {
         navigate(returnToSafe)
       }
     },
-    onError: (err: Error) => setFormError(err.message || 'Failed to assign diet plan'),
+    onError: (err: Error) =>
+      setFormError(getApiErrorMessage(err, 'Failed to assign diet plan')),
   })
 
   const unassignMutation = useMutation({

@@ -7,6 +7,9 @@ const DEFAULT_NETWORK = 'Unable to reach the server. Check your connection and t
 
 const DEFAULT_SERVER = 'Something went wrong on our side. Please try again in a moment.'
 
+const DEFAULT_CONFLICT =
+  'This action conflicts with existing data. Refresh the page and try again.'
+
 /** User-facing message for HTTP 403 responses. */
 export function getForbiddenMessage(error?: unknown): string {
   const ax = error as AxiosError<{ message?: string; title?: string; detail?: string }> | undefined
@@ -34,6 +37,12 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed. P
     return 'Your session has expired. Please sign in again.'
   }
   if (status === 404) return 'The requested resource was not found.'
+  if (status === 409) {
+    if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail
+    if (typeof data?.message === 'string' && data.message.trim()) return data.message
+    if (typeof data?.title === 'string' && data.title.trim()) return data.title
+    return DEFAULT_CONFLICT
+  }
   if (status != null && status >= 500) {
     if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail
     if (typeof data?.title === 'string' && data.title.trim()) return data.title

@@ -6,6 +6,7 @@ const ring: Record<DashboardRole, string> = {
   admin: 'from-blue-500/30 to-violet-500/30',
   trainer: 'from-orange-500/30 to-red-500/30',
   member: 'from-orange-500/25 to-amber-600/25',
+  other: 'from-cyan-500/25 to-teal-500/25',
 }
 
 export function HeroStat({

@@ -5,6 +5,7 @@ const accents: Record<DashboardRole, string> = {
   admin: 'from-blue-500/20 to-violet-500/20 border-blue-400/20 hover:border-blue-400/40',
   trainer: 'from-orange-500/20 to-red-500/20 border-orange-400/20 hover:border-orange-400/40',
   member: 'from-orange-500/15 to-amber-500/15 border-orange-400/20 hover:border-orange-400/40',
+  other: 'from-cyan-500/15 to-teal-500/15 border-cyan-400/20 hover:border-cyan-400/40',
 }
 
 export function QuickAction({

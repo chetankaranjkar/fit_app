@@ -1818,8 +1818,9 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.Size).IsRequired().HasMaxLength(20);
                 entity.Property(e => e.Status).IsRequired().HasMaxLength(30);
                 entity.Property(e => e.Location).HasMaxLength(150);
-                entity.HasIndex(e => e.LockerNumber).IsUnique();
+                entity.HasIndex(e => e.LockerNumber).IsUnique().HasFilter("[IsDeleted] = 0");
                 entity.HasIndex(e => e.Status);
+                entity.HasQueryFilter(e => !e.IsDeleted);
                 entity.ToTable("LockerMgmt_Lockers");
             });
 

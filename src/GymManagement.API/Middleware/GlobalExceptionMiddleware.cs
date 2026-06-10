@@ -141,6 +141,26 @@ public sealed class GlobalExceptionMiddleware
                 "https://httpstatuses.com/500");
         }
 
+        if (sqlMessage != null
+            && sqlMessage.Contains("IX_LockerMgmt_Lockers_LockerNumber", StringComparison.OrdinalIgnoreCase))
+        {
+            return (
+                StatusCodes.Status409Conflict,
+                "Locker number already exists.",
+                "That locker number is already in use. Choose a different number or restore the existing locker.",
+                "https://httpstatuses.com/409");
+        }
+
+        if (sqlMessage != null
+            && sqlMessage.Contains("QUOTED_IDENTIFIER", StringComparison.OrdinalIgnoreCase))
+        {
+            return (
+                StatusCodes.Status500InternalServerError,
+                "Database session configuration error.",
+                "Restart the API after deploying the latest build (SQL Server filtered-index session fix).",
+                "https://httpstatuses.com/500");
+        }
+
         var detail = "The server could not process this request. Please retry or contact support.";
         if (environment.IsDevelopment() || environment.IsStaging())
         {

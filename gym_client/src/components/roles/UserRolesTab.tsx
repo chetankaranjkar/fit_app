@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Modal } from '../ui/Modal'
+import { authService } from '../../services/auth.service'
 import { rolesService } from '../../services/roles.service'
 import { getApiErrorMessage } from '../../lib/apiErrors'
 import type { AppRole } from '../../types/rolePermission'
@@ -84,11 +85,22 @@ export function UserRolesTab() {
         await rolesService.revokeUserRole(editUser.userId, code)
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('User roles updated')
+      const savedUserId = editUser?.userId
       setEditUser(null)
       setSelectedRoleNames([])
       queryClient.invalidateQueries({ queryKey: ['roles', 'user-assignments'] })
+      queryClient.invalidateQueries({ queryKey: ['my-app-roles'] })
+      const me = authService.getCurrentUser()
+      if (savedUserId && me?.userId === savedUserId) {
+        try {
+          await authService.refreshSession()
+          toast.success('Your session roles were refreshed')
+        } catch {
+          toast('Sign out and sign in again to update the role switcher', { icon: 'ℹ️' })
+        }
+      }
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Failed to update user roles')),
   })
@@ -116,7 +128,7 @@ export function UserRolesTab() {
     <>
       <p className="mb-4 text-sm text-slate-400">
         Assign application roles (ADMIN, STAFF, TRAINER, MEMBER, etc.) to users. Permissions come from each role&apos;s
-        Role permissions tab. Users must sign in again to refresh JWT permissions.
+        Role permissions tab. Your own role switcher refreshes automatically after save; other users should sign in again.
       </p>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

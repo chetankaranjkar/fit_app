@@ -3,6 +3,7 @@ import {
   canAccessAttendanceNav,
   canAccessTrainingNav,
   canAccessUsersNav,
+  getStaffFrontDeskNavLinks,
 } from '../../features/auth/navPermissions'
 
 export type NavIcon =
@@ -52,6 +53,7 @@ export const ROLE_NAV: Record<DashboardRole, NavItem[]> = {
     { path: '/dashboard/member/supplements', label: 'Supplements', icon: 'diet' },
     { path: '/dashboard/profile', label: 'Profile', icon: 'profile' },
   ],
+  other: [],
 }
 
 /** Collapsible sections (trainer coaching tools). */
@@ -88,15 +90,34 @@ export const ROLE_NAV_GROUPS: Record<DashboardRole, NavGroup[]> = {
     },
   ],
   member: [],
+  other: [],
 }
 
 export const ROLE_BRAND: Record<
   DashboardRole,
-  { title: string; subtitle: string; accent: 'admin' | 'trainer' | 'member' }
+  { title: string; subtitle: string; accent: 'admin' | 'trainer' | 'member' | 'other' }
 > = {
   admin: { title: 'Tiger Fitness', subtitle: 'Business Suite', accent: 'admin' },
   trainer: { title: 'Tiger Fitness', subtitle: 'Coach Hub', accent: 'trainer' },
   member: { title: 'Tiger Fitness', subtitle: 'Member', accent: 'member' },
+  other: { title: 'Tiger Fitness', subtitle: 'Staff', accent: 'other' },
+}
+
+function staffPathIcon(path: string): NavIcon {
+  if (path.includes('attendance')) return 'attendance'
+  if (path.includes('users')) return 'users'
+  if (path.includes('membership') || path.includes('payments')) return 'payments'
+  if (path.includes('scan')) return 'scan'
+  if (path.includes('reception')) return 'users'
+  return 'dashboard'
+}
+
+export function getOtherNavItems(): NavItem[] {
+  return getStaffFrontDeskNavLinks().map((link) => ({
+    path: link.path,
+    label: link.label,
+    icon: staffPathIcon(link.path),
+  }))
 }
 
 export function getTrainerNavItems(): NavItem[] {

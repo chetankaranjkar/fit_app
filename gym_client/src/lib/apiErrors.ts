@@ -27,7 +27,7 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed. P
   if (typeof ax?.userMessage === 'string' && ax.userMessage.trim()) return ax.userMessage
 
   const status = ax?.response?.status
-  const data = ax?.response?.data
+  const data = ax?.response?.data as { message?: string; detail?: string; title?: string } | undefined
   if (status === 403) return getForbiddenMessage(error)
   if (status === 401) {
     if (typeof data?.message === 'string' && data.message.trim()) return data.message
@@ -36,11 +36,13 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed. P
   if (status === 404) return 'The requested resource was not found.'
   if (status != null && status >= 500) {
     if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail
+    if (typeof data?.title === 'string' && data.title.trim()) return data.title
     return DEFAULT_SERVER
   }
   if (!ax?.response) return DEFAULT_NETWORK
   if (typeof data?.message === 'string' && data.message.trim()) return data.message
   if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail
+  if (typeof data?.title === 'string' && data.title.trim()) return data.title
   if (typeof ax.message === 'string' && ax.message.trim()) return ax.message
   return fallback
 }

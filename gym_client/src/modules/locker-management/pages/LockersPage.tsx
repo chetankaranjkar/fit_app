@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import gsap from 'gsap'
+import { getApiErrorMessage } from '../../../lib/apiErrors'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { ModulePageShell } from '../components/ModulePageShell'
@@ -249,7 +251,11 @@ export function LockersPage() {
         </section>
       </div>
 
-      <LockerFormModal mode={formMode} onClose={() => setFormMode({ kind: 'closed' })} />
+      <LockerFormModal
+        mode={formMode}
+        lockers={data}
+        onClose={() => setFormMode({ kind: 'closed' })}
+      />
 
       <LockerDetailPanel
         locker={selected}
@@ -407,9 +413,11 @@ function LockerSummaryStrip({ data }: { data: Locker[] }) {
 
 function LockerFormModal({
   mode,
+  lockers,
   onClose,
 }: {
   mode: { kind: 'closed' } | { kind: 'add' } | { kind: 'edit'; locker: Locker }
+  lockers: Locker[]
   onClose: () => void
 }) {
   const createMut = useCreateLocker()
@@ -427,13 +435,16 @@ function LockerFormModal({
         <LockerForm
           key={editing?.id ?? 'new'}
           locker={editing}
+          existingNumbers={lockers.map((l) => l.lockerNumber)}
           submitting={createMut.isPending || updateMut.isPending}
           onCancel={onClose}
           onSubmit={(input) => {
+            const onError = (err: unknown) =>
+              toast.error(getApiErrorMessage(err, 'Could not save locker.'))
             if (editing) {
-              updateMut.mutate({ id: editing.id, input }, { onSuccess: onClose })
+              updateMut.mutate({ id: editing.id, input }, { onSuccess: onClose, onError })
             } else {
-              createMut.mutate(input, { onSuccess: onClose })
+              createMut.mutate(input, { onSuccess: onClose, onError })
             }
           }}
         />
@@ -444,11 +455,13 @@ function LockerFormModal({
 
 function LockerForm({
   locker,
+  existingNumbers,
   onSubmit,
   onCancel,
   submitting,
 }: {
   locker: Locker | null
+  existingNumbers: string[]
   onSubmit: (input: {
     lockerNumber: string
     size: LockerSize
@@ -463,7 +476,16 @@ function LockerForm({
   const [status, setStatus] = useState<LockerStatus>(locker?.status ?? 'AVAILABLE')
   const [location, setLocation] = useState(locker?.location ?? '')
 
-  const valid = lockerNumber.trim() !== ''
+  const trimmedNumber = lockerNumber.trim()
+  const duplicateNumber = useMemo(() => {
+    if (!trimmedNumber) return false
+    const key = trimmedNumber.toLowerCase()
+    return existingNumbers.some(
+      (n) => n.toLowerCase() === key && n.toLowerCase() !== (locker?.lockerNumber ?? '').toLowerCase(),
+    )
+  }, [trimmedNumber, existingNumbers, locker?.lockerNumber])
+
+  const valid = trimmedNumber !== '' && !duplicateNumber
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -485,6 +507,11 @@ function LockerForm({
         required
         placeholder="e.g. A-101"
       />
+      {duplicateNumber ? (
+        <p className="text-xs text-rose-300">
+          Locker number &quot;{trimmedNumber}&quot; is already in use. Choose a different number.
+        </p>
+      ) : null}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <LabeledSelect
           label="Size"

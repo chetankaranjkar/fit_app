@@ -131,6 +131,7 @@ else
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseSqlServer(connectionString, sqlOptions => sqlOptions.EnableRetryOnFailure());
+        options.AddInterceptors(new GymManagement.Infrastructure.Data.SqlServerSessionOptionsInterceptor());
         options.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
     });
 }

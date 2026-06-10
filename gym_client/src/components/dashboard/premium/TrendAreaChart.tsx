@@ -13,12 +13,14 @@ const stroke: Record<DashboardRole, string> = {
   admin: '#60a5fa',
   trainer: '#fb923c',
   member: '#f97316',
+  other: '#22d3ee',
 }
 
 const fill: Record<DashboardRole, string> = {
   admin: 'url(#adminGrad)',
   trainer: 'url(#trainerGrad)',
   member: 'url(#memberGrad)',
+  other: 'url(#otherGrad)',
 }
 
 export function TrendAreaChart({
@@ -53,6 +55,10 @@ export function TrendAreaChart({
             <linearGradient id="memberGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#f97316" stopOpacity={0.45} />
               <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="otherGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.45} />
+              <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />

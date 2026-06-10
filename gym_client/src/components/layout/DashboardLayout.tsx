@@ -40,7 +40,9 @@ export function DashboardLayout({
       ? ['bg-orange-500/20', 'bg-red-500/12', 'bg-amber-400/10']
       : dashboardRole === 'member'
         ? ['bg-orange-500/18', 'bg-amber-500/12', 'bg-neutral-500/8']
-        : ['bg-blue-500/20', 'bg-purple-500/15', 'bg-cyan-400/10']
+        : dashboardRole === 'other'
+          ? ['bg-cyan-500/18', 'bg-teal-500/12', 'bg-blue-400/10']
+          : ['bg-blue-500/20', 'bg-purple-500/15', 'bg-cyan-400/10']
 
   useEffect(() => {
     document.documentElement.classList.add('dashboard-app')

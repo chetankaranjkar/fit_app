@@ -38,13 +38,22 @@ const trainingSubItems = [
   { path: '/dashboard/training/warmups', label: 'Warmups' },
   { path: '/dashboard/training/stretches', label: 'Stretches' },
   { path: '/dashboard/training/workout-categories', label: 'Workout categories' },
-  { path: '/dashboard/training/exercises-premium', label: 'Exercises Premium' },
   { path: '/dashboard/training/workout-plan-builder', label: 'Program Builder' },
-  { path: '/dashboard/training/workout-studio', label: 'Workout Studio (AI + 3D)' },
   { path: '/dashboard/training/programs', label: 'Programs' },
   { path: '/dashboard/training/workout-assignments', label: 'Workout Assignments' },
-  { path: '/dashboard/training/workout-plan-audit', label: 'Workout Plan Audit' },
+  {
+    path: '/dashboard/training/workout-plan-audit',
+    label: 'Workout Plan Audit',
+    permission: 'VIEW_WORKOUT_PLAN_AUDIT',
+  },
 ] as const
+
+function isTrainingSubItemVisible(item: (typeof trainingSubItems)[number]) {
+  if ('permission' in item && item.permission) {
+    return authService.hasPermission(item.permission)
+  }
+  return true
+}
 
 const dietSubItems = [
   { path: '/dashboard/diet-plans', label: 'Dashboard' },
@@ -632,7 +641,7 @@ export function SidebarNav({
                 </button>
                 {trainingOpen && (
                   <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {trainingSubItems.map(({ path, label }) => (
+                    {trainingSubItems.filter(isTrainingSubItemVisible).map(({ path, label }) => (
                       <Link
                         key={path}
                         to={path}

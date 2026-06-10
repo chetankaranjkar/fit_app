@@ -466,6 +466,11 @@ class MeWorkoutSessionTemplate {
   final int? estimatedDurationSeconds;
   final int warmupCount;
   final int stretchCount;
+  final String templateMode;
+  final int? currentProgramWeek;
+  final int? currentProgramDay;
+  final int? templateWeekCount;
+  final int? planVersion;
 
   const MeWorkoutSessionTemplate({
     required this.plan,
@@ -481,6 +486,11 @@ class MeWorkoutSessionTemplate {
     this.estimatedDurationSeconds,
     this.warmupCount = 0,
     this.stretchCount = 0,
+    this.templateMode = 'LEGACY',
+    this.currentProgramWeek,
+    this.currentProgramDay,
+    this.templateWeekCount,
+    this.planVersion,
   });
 
   factory MeWorkoutSessionTemplate.fromJson(Map<String, dynamic> json) => MeWorkoutSessionTemplate(
@@ -508,6 +518,11 @@ class MeWorkoutSessionTemplate {
         estimatedDurationSeconds: _int(json['estimatedDurationSeconds']),
         warmupCount: _int(json['warmupCount']) ?? 0,
         stretchCount: _int(json['stretchCount']) ?? 0,
+        templateMode: json['templateMode']?.toString() ?? 'LEGACY',
+        currentProgramWeek: _int(json['currentProgramWeek']),
+        currentProgramDay: _int(json['currentProgramDay']),
+        templateWeekCount: _int(json['templateWeekCount']),
+        planVersion: _int(json['planVersion']),
       );
 }
 

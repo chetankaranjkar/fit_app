@@ -258,6 +258,8 @@ builder.Services.AddScoped<IGymSettingsService, GymSettingsService>();
 builder.Services.AddScoped<IPersonalWorkoutPlanAccessService, PersonalWorkoutPlanAccessService>();
 builder.Services.AddScoped<IPersonalWorkoutPlanService, PersonalWorkoutPlanService>();
 builder.Services.AddScoped<IWorkoutPlanService, WorkoutPlanService>();
+builder.Services.AddSingleton<IWorkoutPlanEngine, WorkoutPlanEngine>();
+builder.Services.AddScoped<WorkoutPlanScheduleResolver>();
 builder.Services.AddScoped<IWorkoutTrackingService, WorkoutTrackingService>();
 builder.Services.AddScoped<IUserScheduleService, UserScheduleService>();
 builder.Services.AddScoped<ITrainerService, TrainerService>();

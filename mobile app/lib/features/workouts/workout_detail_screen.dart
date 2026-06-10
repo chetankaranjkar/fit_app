@@ -338,7 +338,14 @@ class _DetailHero extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '${plan.workoutType} • est. $kcal kcal',
+                    [
+                      plan.workoutType,
+                      'est. $kcal kcal',
+                      if (tpl.templateMode != 'LEGACY' && tpl.currentProgramWeek != null)
+                        'Week ${tpl.currentProgramWeek}',
+                      if (tpl.templateMode != 'LEGACY' && tpl.currentProgramDay != null)
+                        'Day ${tpl.currentProgramDay}',
+                    ].join(' • '),
                     style: FitnessText.body(context).copyWith(
                       color: CupertinoColors.white.withValues(alpha: 0.75),
                     ),

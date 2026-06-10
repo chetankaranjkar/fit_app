@@ -192,6 +192,11 @@ const WorkoutPlanBuilderPage = lazy(() =>
     default: m.WorkoutPlanBuilderPage,
   })),
 )
+const WorkoutPlanWizardPage = lazy(() =>
+  import('../modules/workout-plan-wizard').then((m) => ({
+    default: m.WorkoutPlanWizardPage,
+  })),
+)
 const ProgramsPage = lazy(() =>
   import('../pages/training/ProgramsPage').then((m) => ({
     default: m.ProgramsPage,
@@ -403,6 +408,10 @@ const router = createBrowserRouter([
                 element: withSuspense(<WorkoutPlanBuilderPage />),
               },
               { path: '/dashboard/training/programs', element: withSuspense(<ProgramsPage />) },
+              {
+                path: '/dashboard/training/programs/new',
+                element: withSuspense(<WorkoutPlanWizardPage />),
+              },
               {
                 path: '/dashboard/training/programs/:programId',
                 element: withSuspense(<ProgramDetailPage />),

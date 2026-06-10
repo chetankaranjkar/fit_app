@@ -27,6 +27,8 @@ export interface WorkoutPlanExercise {
   workoutPlanDayId?: number | null
 }
 
+export type TemplateMode = 'SIMPLE' | 'ADVANCED' | 'LEGACY'
+
 export interface ProgramDayDto {
   id: number
   weekId: number
@@ -38,6 +40,8 @@ export interface ProgramDayDto {
   isRestDay: boolean
   orderIndex: number
   exercises: WorkoutPlanExercise[]
+  warmups?: import('./warmup').WorkoutPlanWarmup[]
+  stretches?: import('./stretch').WorkoutPlanStretch[]
 }
 
 export interface ProgramWeekDto {
@@ -82,6 +86,12 @@ export interface WorkoutPlan {
   useDefaultWarmups?: boolean
   useDefaultStretches?: boolean
   estimatedDurationSeconds?: number | null
+  repeatTemplate?: boolean
+  templateMode?: TemplateMode
+  templateWeekCount?: number
+  version?: number
+  currentWeek?: number | null
+  currentDay?: number | null
 }
 
 export interface CreateWorkoutPlanExerciseDto {
@@ -117,6 +127,9 @@ export interface CreateWorkoutPlanDto {
   workoutCategoryId?: number | null
   useDefaultWarmups?: boolean
   useDefaultStretches?: boolean
+  repeatTemplate?: boolean
+  templateMode?: TemplateMode
+  templateWeekCount?: number
 }
 
 export interface ProgramExerciseWriteDto {
@@ -140,6 +153,8 @@ export interface ProgramDayWriteDto {
   isRestDay: boolean
   orderIndex: number
   exercises: ProgramExerciseWriteDto[]
+  warmups?: import('./warmup').PlanWarmupWriteDto[]
+  stretches?: import('./stretch').PlanStretchWriteDto[]
 }
 
 export interface ProgramWeekWriteDto {
@@ -150,6 +165,12 @@ export interface ProgramWeekWriteDto {
 
 export interface SaveProgramStructureDto {
   weeks: ProgramWeekWriteDto[]
+  templateMode?: TemplateMode
+  templateWeekCount?: number
+  repeatTemplate?: boolean
+  workoutCategoryId?: number | null
+  useDefaultWarmups?: boolean
+  useDefaultStretches?: boolean
 }
 
 export interface CloneWorkoutPlanDto {

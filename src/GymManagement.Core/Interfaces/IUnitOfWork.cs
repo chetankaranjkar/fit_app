@@ -62,6 +62,12 @@ namespace GymManagement.Core.Interfaces
         /// </summary>
         Task SyncUserUserTypesAsync(int userId, IReadOnlyCollection<int> userTypeIds);
 
+        /// <summary>
+        /// Sets role permission assignments to match <paramref name="permissionIds"/> (active rows only).
+        /// Revives soft-deleted junction rows when re-assigning the same pair (unique index on RoleId + PermissionId).
+        /// </summary>
+        Task SyncRolePermissionsAsync(int roleId, IReadOnlyCollection<int> permissionIds);
+
         Task BeginTransactionAsync();
         Task CommitTransactionAsync();
         Task RollbackTransactionAsync();

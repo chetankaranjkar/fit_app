@@ -255,6 +255,43 @@ namespace GymManagement.Infrastructure.Repositories
             }
         }
 
+        public async Task SyncRolePermissionsAsync(int roleId, IReadOnlyCollection<int> permissionIds)
+        {
+            var desired = permissionIds.Where(pid => pid > 0).Distinct().ToHashSet();
+            var allRows = await _context.RolePermissions
+                .IgnoreQueryFilters()
+                .Where(rp => rp.RoleId == roleId)
+                .ToListAsync();
+
+            var now = DateTime.UtcNow;
+
+            foreach (var permissionId in desired)
+            {
+                var existing = allRows.FirstOrDefault(r => r.PermissionId == permissionId);
+                if (existing == null)
+                {
+                    await _context.RolePermissions.AddAsync(new RolePermission
+                    {
+                        RoleId = roleId,
+                        PermissionId = permissionId,
+                    });
+                }
+                else if (existing.IsDeleted)
+                {
+                    existing.IsDeleted = false;
+                    existing.UpdatedDate = now;
+                    _context.RolePermissions.Update(existing);
+                }
+            }
+
+            foreach (var row in allRows.Where(r => !desired.Contains(r.PermissionId) && !r.IsDeleted))
+            {
+                row.IsDeleted = true;
+                row.UpdatedDate = now;
+                _context.RolePermissions.Update(row);
+            }
+        }
+
         public async Task BeginTransactionAsync()
         {
             _transaction = await _context.Database.BeginTransactionAsync();

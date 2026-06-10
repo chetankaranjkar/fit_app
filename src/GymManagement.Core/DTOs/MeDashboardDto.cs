@@ -145,6 +145,12 @@ namespace GymManagement.Core.DTOs
 
         /// <summary>No weekly <c>UserSchedule</c> for this plan, or one exists for the user's local weekday.</summary>
         public bool IsScheduledToday { get; set; } = true;
+
+        public string TemplateMode { get; set; } = "LEGACY";
+        public int? CurrentProgramWeek { get; set; }
+        public int? CurrentProgramDay { get; set; }
+        public int? TemplateWeekCount { get; set; }
+        public int PlanVersion { get; set; } = 1;
     }
 
     public sealed class MeWorkoutWarmupLineDto

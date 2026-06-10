@@ -37,6 +37,11 @@ namespace GymManagement.Domain.Entities
         public bool UseDefaultWarmups { get; set; } = true;
         public bool UseDefaultStretches { get; set; } = true;
 
+        public bool RepeatTemplate { get; set; } = true;
+        public string TemplateMode { get; set; } = WorkoutPlanTemplateModes.Legacy;
+        public int TemplateWeekCount { get; set; } = 1;
+        public int Version { get; set; } = 1;
+
         public User? AssignedToUser { get; set; }
         public WorkoutCategory? WorkoutCategory { get; set; }
 
@@ -49,5 +54,6 @@ namespace GymManagement.Domain.Entities
         public ICollection<WorkoutPlanWarmup> WorkoutPlanWarmups { get; set; } = new List<WorkoutPlanWarmup>();
         public ICollection<WorkoutPlanStretch> WorkoutPlanStretches { get; set; } = new List<WorkoutPlanStretch>();
         public ICollection<UserSchedule> UserSchedules { get; set; } = new List<UserSchedule>();
+        public ICollection<WorkoutPlanVersion> PlanVersions { get; set; } = new List<WorkoutPlanVersion>();
     }
 }

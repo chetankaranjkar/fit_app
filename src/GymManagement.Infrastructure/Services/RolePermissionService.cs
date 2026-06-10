@@ -112,17 +112,9 @@ namespace GymManagement.Infrastructure.Services
 
         private async Task SetRolePermissionsAsync(int roleId, List<int> permissionIds)
         {
-            var existing = (await _unitOfWork.RolePermissions.GetAllAsync()).Where(rp => rp.RoleId == roleId).ToList();
-            foreach (var rp in existing)
-            {
-                _unitOfWork.RolePermissions.Delete(rp);
-            }
             var validIds = (await _unitOfWork.Permissions.GetAllAsync()).Select(p => p.Id).ToHashSet();
-            foreach (var pid in permissionIds.Distinct())
-            {
-                if (!validIds.Contains(pid)) continue;
-                await _unitOfWork.RolePermissions.AddAsync(new RolePermission { RoleId = roleId, PermissionId = pid });
-            }
+            var filtered = permissionIds.Where(validIds.Contains).Distinct().ToList();
+            await _unitOfWork.SyncRolePermissionsAsync(roleId, filtered);
         }
     }
 }

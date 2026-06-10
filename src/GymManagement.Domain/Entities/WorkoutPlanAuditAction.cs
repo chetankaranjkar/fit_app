@@ -26,4 +26,9 @@ public enum WorkoutPlanAuditAction
     StretchAddedToCategory = 25,
     StretchRemovedFromCategory = 26,
     WorkoutPlanAutoAssignmentChanged = 27,
+    PlanCloned = 28,
+    VersionCreated = 29,
+    TemplateChanged = 30,
+    CategoryChanged = 31,
+    DayChanged = 32,
 }

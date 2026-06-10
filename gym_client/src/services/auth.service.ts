@@ -289,8 +289,7 @@ export const authService = {
     authService.hasPermission(AUTH_PERMISSION_CODES.viewMembershipAudit) ||
     authService.hasAppRole('ADMIN'),
   canViewWorkoutPlanAudit: () =>
-    authService.hasPermission(AUTH_PERMISSION_CODES.viewWorkoutPlanAudit) ||
-    authService.hasAppRole('ADMIN'),
+    authService.hasPermission(AUTH_PERMISSION_CODES.viewWorkoutPlanAudit),
   hasAppRole: (roleName: string) => {
     const n = roleName.trim().toUpperCase()
     if (!n) return false

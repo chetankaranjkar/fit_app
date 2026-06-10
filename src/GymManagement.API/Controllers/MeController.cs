@@ -11,6 +11,7 @@ using GymManagement.Core.Services;
 using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
+using GymManagement.Infrastructure.Services;
 using GymManagement.API.Services;
 using GymManagement.API.Extensions;
 
@@ -29,20 +30,20 @@ namespace GymManagement.API.Controllers
         private readonly IMembershipPaymentService _membershipPaymentService;
         private readonly IMobileNumberAvailabilityService _mobileAvailability;
         private readonly WebRootImageStorage _imageStorage;
-        private readonly IWorkoutPlanService _workoutPlanService;
+        private readonly WorkoutPlanScheduleResolver _scheduleResolver;
 
         public MeController(
             ApplicationDbContext db,
             IMembershipPaymentService membershipPaymentService,
             IMobileNumberAvailabilityService mobileAvailability,
             WebRootImageStorage imageStorage,
-            IWorkoutPlanService workoutPlanService)
+            WorkoutPlanScheduleResolver scheduleResolver)
         {
             _db = db;
             _membershipPaymentService = membershipPaymentService;
             _mobileAvailability = mobileAvailability;
             _imageStorage = imageStorage;
-            _workoutPlanService = workoutPlanService;
+            _scheduleResolver = scheduleResolver;
         }
 
         /// <summary>Payment gate info for mobile / member apps (allowed while access is otherwise blocked).</summary>
@@ -526,24 +527,12 @@ namespace GymManagement.API.Controllers
                 .FirstOrDefaultAsync(p => p.Id == planId && !p.IsDeleted && p.IsActive);
             if (plan == null) return NotFound();
 
-            var allLines = await _db.WorkoutPlanExercises.AsNoTracking()
-                .Where(e => e.WorkoutPlanId == planId && !e.IsDeleted)
-                .Include(e => e.Exercise)
-                .ThenInclude(ex => ex.BodyPart)
-                .OrderBy(e => e.Order)
-                .ToListAsync()
-                .ConfigureAwait(false);
-
-            var planDays = await _db.WorkoutPlanDays.AsNoTracking()
-                .Where(d => d.WorkoutPlanId == planId)
-                .ToListAsync()
+            var offset = utcOffsetMinutes ?? 0;
+            var (resolved, effectiveWarmups, effectiveStretches) = await _scheduleResolver
+                .ResolveForUserAsync(planId, userId.Value, DateTime.UtcNow, offset)
                 .ConfigureAwait(false);
 
             var localDow = LocalDayOfWeekFromUtcOffset(utcOffsetMinutes);
-            var isoWeekday = IsoWeekdayNumber(localDow);
-            var targetPlanDay = planDays.FirstOrDefault(d => d.DayNumber == isoWeekday);
-            var hasDayAssignedExercises = allLines.Any(e => e.WorkoutPlanDayId != null);
-
             var hasAnyScheduleForPlan = await _db.UserSchedules.AsNoTracking().AnyAsync(s =>
                 s.UserId == userId.Value
                 && s.WorkoutPlanId == planId
@@ -555,43 +544,39 @@ namespace GymManagement.API.Controllers
                 && s.DayOfWeek == localDow).ConfigureAwait(false);
             var isScheduledToday = !hasAnyScheduleForPlan || hasScheduleThisLocalWeekday;
 
-            var filteredToToday = false;
-            var isRestDay = false;
-            string? todayDayName = null;
+            var filteredToToday = resolved.PlanDay != null
+                || WorkoutPlanTemplateModes.Normalize(plan.TemplateMode) != WorkoutPlanTemplateModes.Legacy;
+            var isRestDay = resolved.IsRestDay;
+            var todayDayName = resolved.PlanDay != null && !string.IsNullOrWhiteSpace(resolved.PlanDay.Name)
+                ? resolved.PlanDay.Name
+                : null;
+
             List<WorkoutPlanExercise> lineEntities;
-
-            if (hasDayAssignedExercises && targetPlanDay != null)
+            if (resolved.Exercises.Count > 0)
             {
-                filteredToToday = true;
-                if (!string.IsNullOrWhiteSpace(targetPlanDay.Name))
-                    todayDayName = targetPlanDay.Name;
-
-                if (targetPlanDay.IsRestDay)
-                {
-                    isRestDay = true;
-                    lineEntities = new List<WorkoutPlanExercise>();
-                }
-                else
-                {
-                    var forDay = allLines
-                        .Where(e => e.WorkoutPlanDayId == targetPlanDay.Id)
-                        .OrderBy(e => e.Order)
-                        .ToList();
-                    if (forDay.Count == 0)
-                    {
-                        lineEntities = allLines;
-                        filteredToToday = false;
-                        todayDayName = null;
-                    }
-                    else
-                    {
-                        lineEntities = forDay;
-                    }
-                }
+                lineEntities = await _db.WorkoutPlanExercises.AsNoTracking()
+                    .Where(e => resolved.Exercises.Select(x => x.Id).Contains(e.Id))
+                    .Include(e => e.Exercise)
+                    .ThenInclude(ex => ex.BodyPart)
+                    .OrderBy(e => e.Order)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+            }
+            else if (!isRestDay)
+            {
+                lineEntities = await _db.WorkoutPlanExercises.AsNoTracking()
+                    .Where(e => e.WorkoutPlanId == planId && !e.IsDeleted)
+                    .Include(e => e.Exercise)
+                    .ThenInclude(ex => ex.BodyPart)
+                    .OrderBy(e => e.Order)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+                filteredToToday = false;
+                todayDayName = null;
             }
             else
             {
-                lineEntities = allLines;
+                lineEntities = new List<WorkoutPlanExercise>();
             }
 
             var exerciseIds = lineEntities.Select(x => x.ExerciseId).Distinct().ToList();
@@ -625,8 +610,6 @@ namespace GymManagement.API.Controllers
                     LastRepsDone = lastReps
                 };
             }).ToList();
-
-            var (effectiveWarmups, effectiveStretches) = await _workoutPlanService.ResolveEffectiveMobilityAsync(plan);
 
             string? categoryName = null;
             if (plan.WorkoutCategoryId is > 0)
@@ -696,7 +679,12 @@ namespace GymManagement.API.Controllers
                 FilteredToToday = filteredToToday,
                 IsRestDay = isRestDay,
                 TodayDayName = todayDayName,
-                IsScheduledToday = isScheduledToday
+                IsScheduledToday = isScheduledToday,
+                TemplateMode = resolved.TemplateMode,
+                CurrentProgramWeek = resolved.CurrentProgramWeek,
+                CurrentProgramDay = resolved.CurrentProgramDay,
+                TemplateWeekCount = plan.TemplateWeekCount,
+                PlanVersion = plan.Version,
             });
         }
 

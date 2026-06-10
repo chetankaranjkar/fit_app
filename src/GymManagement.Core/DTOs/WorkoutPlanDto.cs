@@ -38,6 +38,12 @@ namespace GymManagement.Core.DTOs
         public bool UseDefaultWarmups { get; set; } = true;
         public bool UseDefaultStretches { get; set; } = true;
         public int? EstimatedDurationSeconds { get; set; }
+        public bool RepeatTemplate { get; set; } = true;
+        public string TemplateMode { get; set; } = WorkoutPlanTemplateModes.Legacy;
+        public int TemplateWeekCount { get; set; } = 1;
+        public int Version { get; set; } = 1;
+        public int? CurrentWeek { get; set; }
+        public int? CurrentDay { get; set; }
     }
 
     public class ProgramWeekDto
@@ -60,6 +66,8 @@ namespace GymManagement.Core.DTOs
         public bool IsRestDay { get; set; }
         public int OrderIndex { get; set; }
         public List<WorkoutPlanExerciseDto> Exercises { get; set; } = new();
+        public List<WorkoutPlanWarmupDto> Warmups { get; set; } = new();
+        public List<WorkoutPlanStretchDto> Stretches { get; set; } = new();
     }
 
     public class WorkoutPlanExerciseDto
@@ -104,6 +112,9 @@ namespace GymManagement.Core.DTOs
         public int? WorkoutCategoryId { get; set; }
         public bool UseDefaultWarmups { get; set; } = true;
         public bool UseDefaultStretches { get; set; } = true;
+        public bool RepeatTemplate { get; set; } = true;
+        public string TemplateMode { get; set; } = WorkoutPlanTemplateModes.Simple;
+        public int TemplateWeekCount { get; set; } = 1;
     }
 
     public class CreateWorkoutPlanExerciseDto
@@ -122,6 +133,12 @@ namespace GymManagement.Core.DTOs
     public class SaveProgramStructureDto
     {
         public List<ProgramWeekWriteDto> Weeks { get; set; } = new();
+        public string? TemplateMode { get; set; }
+        public int? TemplateWeekCount { get; set; }
+        public bool? RepeatTemplate { get; set; }
+        public int? WorkoutCategoryId { get; set; }
+        public bool? UseDefaultWarmups { get; set; }
+        public bool? UseDefaultStretches { get; set; }
     }
 
     public class ProgramWeekWriteDto
@@ -141,6 +158,8 @@ namespace GymManagement.Core.DTOs
         public bool IsRestDay { get; set; }
         public int OrderIndex { get; set; }
         public List<ProgramExerciseWriteDto> Exercises { get; set; } = new();
+        public List<PlanWarmupWriteDto> Warmups { get; set; } = new();
+        public List<PlanStretchWriteDto> Stretches { get; set; } = new();
     }
 
     public class ProgramExerciseWriteDto

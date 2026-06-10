@@ -19,7 +19,7 @@ public class WorkoutPlanAuditController : ControllerBase
     public WorkoutPlanAuditController(IWorkoutPlanAuditService service) => _service = service;
 
     [HttpGet]
-    [HasPermissionOrAdmin(PermissionCodes.ViewWorkoutPlanAudit)]
+    [HasPermission(PermissionCodes.ViewWorkoutPlanAudit)]
     public async Task<IActionResult> List(
         [FromQuery] int? memberUserId,
         [FromQuery] DateTime? fromUtc,

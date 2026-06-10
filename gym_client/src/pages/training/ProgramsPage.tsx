@@ -371,7 +371,7 @@ export function ProgramsPage() {
         titleGradient="programs"
         subtitle="Program management · week-based templates, assignments, and progression-ready structure."
         showExport={false}
-        primaryAction={{ label: '+ New program', onClick: handleOpenCreate }}
+        primaryAction={{ label: '+ New program', onClick: () => navigate('/dashboard/training/programs/new') }}
       >
         <DashboardMetricsGrid cols={4}>
           <MetricCard

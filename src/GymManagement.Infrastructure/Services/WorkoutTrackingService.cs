@@ -10,10 +10,12 @@ namespace GymManagement.Infrastructure.Services;
 public sealed class WorkoutTrackingService : IWorkoutTrackingService
 {
     private readonly ApplicationDbContext _db;
+    private readonly WorkoutPlanScheduleResolver _scheduleResolver;
 
-    public WorkoutTrackingService(ApplicationDbContext db)
+    public WorkoutTrackingService(ApplicationDbContext db, WorkoutPlanScheduleResolver scheduleResolver)
     {
         _db = db;
+        _scheduleResolver = scheduleResolver;
     }
 
     public async Task<int?> ResolveMemberIdForUserAsync(int userId, CancellationToken ct = default)
@@ -632,29 +634,25 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
     private async Task<List<WorkoutPlanExercise>> LoadPlanExercisesForTodayAsync(
         int planId, int userId, int? utcOffsetMinutes, CancellationToken ct)
     {
-        var allLines = await _db.WorkoutPlanExercises.AsNoTracking()
+        var offset = utcOffsetMinutes ?? 0;
+        var (resolved, _, _) = await _scheduleResolver.ResolveForUserAsync(
+            planId, userId, DateTime.UtcNow, offset, ct);
+        if (resolved.IsRestDay) return new List<WorkoutPlanExercise>();
+
+        if (resolved.Exercises.Count > 0)
+        {
+            return await _db.WorkoutPlanExercises.AsNoTracking()
+                .Where(e => resolved.Exercises.Select(x => x.Id).Contains(e.Id))
+                .Include(e => e.Exercise)
+                .OrderBy(e => e.Order)
+                .ToListAsync(ct);
+        }
+
+        return await _db.WorkoutPlanExercises.AsNoTracking()
             .Where(e => e.WorkoutPlanId == planId && !e.IsDeleted)
             .Include(e => e.Exercise)
             .OrderBy(e => e.Order)
             .ToListAsync(ct);
-
-        var planDays = await _db.WorkoutPlanDays.AsNoTracking()
-            .Where(d => d.WorkoutPlanId == planId)
-            .ToListAsync(ct);
-
-        var localDow = DateTime.UtcNow.AddMinutes(utcOffsetMinutes ?? 0).DayOfWeek;
-        var isoWeekday = localDow == DayOfWeek.Sunday ? 7 : (int)localDow;
-        var targetPlanDay = planDays.FirstOrDefault(d => d.DayNumber == isoWeekday);
-        var hasDayAssigned = allLines.Any(e => e.WorkoutPlanDayId != null);
-
-        if (hasDayAssigned && targetPlanDay != null)
-        {
-            if (targetPlanDay.IsRestDay) return new List<WorkoutPlanExercise>();
-            var forDay = allLines.Where(e => e.WorkoutPlanDayId == targetPlanDay.Id).OrderBy(e => e.Order).ToList();
-            if (forDay.Count > 0) return forDay;
-        }
-
-        return allLines;
     }
 
     private async Task<(Member member, int userId)> ResolveMemberAsync(int memberOrUserId, CancellationToken ct)

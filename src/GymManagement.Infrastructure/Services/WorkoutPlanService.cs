@@ -3,6 +3,8 @@ using GymManagement.Core.Interfaces;
 using GymManagement.Core.Mobility;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 namespace GymManagement.Infrastructure.Services
@@ -11,15 +13,18 @@ namespace GymManagement.Infrastructure.Services
     {
         private const string WorkoutPlanMetaPrefix = "[WPMETA]";
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ApplicationDbContext _db;
         private readonly IWorkoutPlanAuditService? _workoutPlanAudit;
         private readonly IPersonalWorkoutPlanAccessService? _personalPlanAccess;
 
         public WorkoutPlanService(
             IUnitOfWork unitOfWork,
+            ApplicationDbContext db,
             IWorkoutPlanAuditService? workoutPlanAudit = null,
             IPersonalWorkoutPlanAccessService? personalPlanAccess = null)
         {
             _unitOfWork = unitOfWork;
+            _db = db;
             _workoutPlanAudit = workoutPlanAudit;
             _personalPlanAccess = personalPlanAccess;
         }
@@ -147,6 +152,10 @@ namespace GymManagement.Infrastructure.Services
                 WorkoutCategoryId = createWorkoutPlanDto.WorkoutCategoryId,
                 UseDefaultWarmups = hasCustomWarmups ? false : createWorkoutPlanDto.UseDefaultWarmups,
                 UseDefaultStretches = hasCustomStretches ? false : createWorkoutPlanDto.UseDefaultStretches,
+                RepeatTemplate = createWorkoutPlanDto.RepeatTemplate,
+                TemplateMode = WorkoutPlanTemplateModes.Normalize(createWorkoutPlanDto.TemplateMode),
+                TemplateWeekCount = Math.Max(1, createWorkoutPlanDto.TemplateWeekCount),
+                Version = 1,
                 IsActive = true
             };
 
@@ -352,10 +361,30 @@ namespace GymManagement.Infrastructure.Services
             var plan = await _unitOfWork.WorkoutPlans.GetByIdAsync(id);
             if (plan == null) return null;
 
+            ApplyTemplateFieldsFromDto(plan, dto);
+            var mode = WorkoutPlanTemplateModes.Normalize(plan.TemplateMode);
+            var maxWeeks = mode switch
+            {
+                var m when m == WorkoutPlanTemplateModes.Simple => 1,
+                var m when m == WorkoutPlanTemplateModes.Advanced => Math.Clamp(plan.TemplateWeekCount, 1, 4),
+                _ => int.MaxValue
+            };
+            if (dto.Weeks.Count > maxWeeks)
+                throw new InvalidOperationException($"Template mode {mode} allows at most {maxWeeks} week(s).");
+
             var isPersonal = string.Equals(plan.PlanType, WorkoutPlanTypes.Personal, StringComparison.OrdinalIgnoreCase);
             var oldExerciseRows = isPersonal
                 ? await LoadStructureExerciseRowsAsync(id)
                 : null;
+
+            var dayMobilityWarmups = await _db.WorkoutPlanWarmups
+                .Where(pw => pw.WorkoutPlanId == id && pw.WorkoutPlanDayId != null)
+                .ToListAsync(ct);
+            _db.WorkoutPlanWarmups.RemoveRange(dayMobilityWarmups);
+            var dayMobilityStretches = await _db.WorkoutPlanStretches
+                .Where(ps => ps.WorkoutPlanId == id && ps.WorkoutPlanDayId != null)
+                .ToListAsync(ct);
+            _db.WorkoutPlanStretches.RemoveRange(dayMobilityStretches);
 
             var orphanExercises = await _unitOfWork.WorkoutPlanExercises.FindAsync(e => e.WorkoutPlanId == id && !e.IsDeleted);
             foreach (var e in orphanExercises)
@@ -399,28 +428,79 @@ namespace GymManagement.Infrastructure.Services
                     await _unitOfWork.WorkoutPlanDays.AddAsync(day);
                     await _unitOfWork.SaveChangesAsync();
 
-                    if (dayDto.IsRestDay) continue;
-                    foreach (var ex in dayDto.Exercises.OrderBy(x => x.Order))
+                    if (!dayDto.IsRestDay)
                     {
-                        await _unitOfWork.WorkoutPlanExercises.AddAsync(new WorkoutPlanExercise
+                        foreach (var ex in dayDto.Exercises.OrderBy(x => x.Order))
                         {
-                            WorkoutPlanId = id,
-                            WorkoutPlanDayId = day.Id,
-                            ExerciseId = ex.ExerciseId,
-                            Sets = ex.Sets,
-                            Reps = ex.Reps,
-                            RestBetweenSets = ex.RestBetweenSets,
-                            Order = ex.Order,
-                            Weight = ex.Weight,
-                            Tempo = ex.Tempo,
-                            Intensity = ex.Intensity,
-                            Notes = ex.Notes
-                        });
+                            await _unitOfWork.WorkoutPlanExercises.AddAsync(new WorkoutPlanExercise
+                            {
+                                WorkoutPlanId = id,
+                                WorkoutPlanDayId = day.Id,
+                                ExerciseId = ex.ExerciseId,
+                                Sets = ex.Sets,
+                                Reps = ex.Reps,
+                                RestBetweenSets = ex.RestBetweenSets,
+                                Order = ex.Order,
+                                Weight = ex.Weight,
+                                Tempo = ex.Tempo,
+                                Intensity = ex.Intensity,
+                                Notes = ex.Notes
+                            });
+                        }
+
+                        foreach (var wu in dayDto.Warmups.OrderBy(x => x.DisplayOrder))
+                        {
+                            await _db.WorkoutPlanWarmups.AddAsync(new WorkoutPlanWarmup
+                            {
+                                WorkoutPlanId = id,
+                                WorkoutPlanDayId = day.Id,
+                                WarmupId = wu.WarmupId,
+                                DisplayOrder = wu.DisplayOrder,
+                            }, ct);
+                        }
+
+                        foreach (var st in dayDto.Stretches.OrderBy(x => x.DisplayOrder))
+                        {
+                            await _db.WorkoutPlanStretches.AddAsync(new WorkoutPlanStretch
+                            {
+                                WorkoutPlanId = id,
+                                WorkoutPlanDayId = day.Id,
+                                StretchId = st.StretchId,
+                                DisplayOrder = st.DisplayOrder,
+                            }, ct);
+                        }
                     }
                 }
             }
 
+            plan.Version += 1;
+            plan.UpdatedDate = DateTime.UtcNow;
+            _unitOfWork.WorkoutPlans.Update(plan);
+
+            await _db.WorkoutPlanVersions.AddAsync(new WorkoutPlanVersion
+            {
+                WorkoutPlanId = id,
+                VersionNumber = plan.Version,
+                SnapshotJson = JsonSerializer.Serialize(dto),
+                ChangeSummary = "Program structure saved",
+                CreatedByUserId = performedByUserId,
+                CreatedByUserName = performedByUserName,
+            }, ct);
+
             await _unitOfWork.SaveChangesAsync();
+
+            if (_workoutPlanAudit != null && performedByUserId is > 0 && !isPersonal)
+            {
+                await _workoutPlanAudit.LogAsync(
+                    WorkoutPlanAuditAction.VersionCreated,
+                    plan.Id,
+                    plan.Name,
+                    plan.AssignedToUserId,
+                    performedByUserId.Value,
+                    performedByUserName ?? "User",
+                    changeDetails: $"Version {plan.Version} created.",
+                    ct: ct);
+            }
 
             if (isPersonal && _workoutPlanAudit != null && performedByUserId is > 0)
             {
@@ -528,6 +608,12 @@ namespace GymManagement.Infrastructure.Services
                 EstimatedCaloriesBurn = source.EstimatedCaloriesBurn,
                 Tags = source.Tags.Count > 0 ? source.Tags : null,
                 Status = "Draft",
+                WorkoutCategoryId = source.WorkoutCategoryId,
+                UseDefaultWarmups = source.UseDefaultWarmups,
+                UseDefaultStretches = source.UseDefaultStretches,
+                RepeatTemplate = source.RepeatTemplate,
+                TemplateMode = source.TemplateMode,
+                TemplateWeekCount = source.TemplateWeekCount,
                 Exercises = new List<CreateWorkoutPlanExerciseDto>()
             };
 
@@ -555,9 +641,22 @@ namespace GymManagement.Infrastructure.Services
                         Tempo = e.Tempo,
                         Intensity = e.Intensity,
                         Notes = e.Notes
-                    }).ToList()
+                    }).ToList(),
+                    Warmups = d.Warmups.Select(w => new PlanWarmupWriteDto { WarmupId = w.WarmupId, DisplayOrder = w.DisplayOrder }).ToList(),
+                    Stretches = d.Stretches.Select(s => new PlanStretchWriteDto { StretchId = s.StretchId, DisplayOrder = s.DisplayOrder }).ToList(),
                 }).ToList()
             }).ToList();
+
+            var structurePayload = new SaveProgramStructureDto
+            {
+                Weeks = structureWeeks,
+                TemplateMode = source.TemplateMode,
+                TemplateWeekCount = source.TemplateWeekCount,
+                RepeatTemplate = source.RepeatTemplate,
+                WorkoutCategoryId = source.WorkoutCategoryId,
+                UseDefaultWarmups = source.UseDefaultWarmups,
+                UseDefaultStretches = source.UseDefaultStretches,
+            };
 
             if (structureWeeks.Count == 0 && source.Exercises.Count > 0)
             {
@@ -588,7 +687,7 @@ namespace GymManagement.Infrastructure.Services
 
             var created = await CreateWorkoutPlanAsync(create);
             if (structureWeeks.Count > 0)
-                return await SaveProgramStructureAsync(created.Id, new SaveProgramStructureDto { Weeks = structureWeeks });
+                return await SaveProgramStructureAsync(created.Id, structurePayload);
 
             return await GetWorkoutPlanByIdAsync(created.Id);
         }
@@ -603,6 +702,19 @@ namespace GymManagement.Infrastructure.Services
             var days = (await _unitOfWork.WorkoutPlanDays.FindAsync(d => d.WorkoutPlanId == planId && !d.IsDeleted))
                 .OrderBy(d => d.OrderIndex)
                 .ToList();
+
+            var dayWarmups = await _db.WorkoutPlanWarmups.AsNoTracking()
+                .Where(pw => pw.WorkoutPlanId == planId && pw.WorkoutPlanDayId != null && !pw.IsDeleted)
+                .ToListAsync();
+            var dayStretches = await _db.WorkoutPlanStretches.AsNoTracking()
+                .Where(ps => ps.WorkoutPlanId == planId && ps.WorkoutPlanDayId != null && !ps.IsDeleted)
+                .ToListAsync();
+            var warmupCatalog = await _db.Warmups.AsNoTracking()
+                .Where(w => dayWarmups.Select(pw => pw.WarmupId).Contains(w.Id))
+                .ToDictionaryAsync(w => w.Id);
+            var stretchCatalog = await _db.Stretches.AsNoTracking()
+                .Where(s => dayStretches.Select(ps => ps.StretchId).Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id);
 
             var byWeek = days
                 .Where(d => d.WorkoutPlanWeekId.HasValue)
@@ -632,7 +744,22 @@ namespace GymManagement.Infrastructure.Services
                         Notes = day.Notes,
                         IsRestDay = day.IsRestDay,
                         OrderIndex = day.OrderIndex,
-                        Exercises = allExerciseDtos.Where(e => e.WorkoutPlanDayId == day.Id).OrderBy(e => e.Order).ToList()
+                        Exercises = allExerciseDtos.Where(e => e.WorkoutPlanDayId == day.Id).OrderBy(e => e.Order).ToList(),
+                        Warmups = dayWarmups.Where(pw => pw.WorkoutPlanDayId == day.Id).OrderBy(pw => pw.DisplayOrder)
+                            .Select(pw => warmupCatalog.TryGetValue(pw.WarmupId, out var w) ? new WorkoutPlanWarmupDto
+                            {
+                                Id = pw.Id, WarmupId = w.Id, Name = w.Name, Description = w.Description,
+                                VideoUrl = w.VideoUrl, DurationSeconds = w.DurationSeconds,
+                                DifficultyLevel = w.DifficultyLevel, BodyPart = w.BodyPart,
+                                CaloriesBurn = w.CaloriesBurn, DisplayOrder = pw.DisplayOrder,
+                            } : null).Where(x => x != null).Cast<WorkoutPlanWarmupDto>().ToList(),
+                        Stretches = dayStretches.Where(ps => ps.WorkoutPlanDayId == day.Id).OrderBy(ps => ps.DisplayOrder)
+                            .Select(ps => stretchCatalog.TryGetValue(ps.StretchId, out var s) ? new WorkoutPlanStretchDto
+                            {
+                                Id = ps.Id, StretchId = s.Id, Name = s.Name, Description = s.Description,
+                                VideoUrl = s.VideoUrl, DurationSeconds = s.DurationSeconds,
+                                DifficultyLevel = s.DifficultyLevel, BodyPart = s.BodyPart, DisplayOrder = ps.DisplayOrder,
+                            } : null).Where(x => x != null).Cast<WorkoutPlanStretchDto>().ToList(),
                     };
                     weekDto.Days.Add(dayDto);
                 }
@@ -828,7 +955,8 @@ namespace GymManagement.Infrastructure.Services
 
         private async Task<List<WorkoutPlanWarmupDto>> MapPlanWarmupsAsync(int planId)
         {
-            var links = (await _unitOfWork.WorkoutPlanWarmups.FindAsync(l => l.WorkoutPlanId == planId && !l.IsDeleted))
+            var links = (await _unitOfWork.WorkoutPlanWarmups.FindAsync(l =>
+                    l.WorkoutPlanId == planId && l.WorkoutPlanDayId == null && !l.IsDeleted))
                 .OrderBy(l => l.DisplayOrder)
                 .ToList();
             var result = new List<WorkoutPlanWarmupDto>();
@@ -856,7 +984,8 @@ namespace GymManagement.Infrastructure.Services
 
         private async Task<List<WorkoutPlanStretchDto>> MapPlanStretchesAsync(int planId)
         {
-            var links = (await _unitOfWork.WorkoutPlanStretches.FindAsync(l => l.WorkoutPlanId == planId && !l.IsDeleted))
+            var links = (await _unitOfWork.WorkoutPlanStretches.FindAsync(l =>
+                    l.WorkoutPlanId == planId && l.WorkoutPlanDayId == null && !l.IsDeleted))
                 .OrderBy(l => l.DisplayOrder)
                 .ToList();
             var result = new List<WorkoutPlanStretchDto>();
@@ -1061,8 +1190,28 @@ namespace GymManagement.Infrastructure.Services
                 UseDefaultWarmups = workoutPlan.UseDefaultWarmups,
                 UseDefaultStretches = workoutPlan.UseDefaultStretches,
                 EstimatedDurationSeconds = ComputeEstimatedDurationSeconds(warmups, exercises, stretches),
+                RepeatTemplate = workoutPlan.RepeatTemplate,
+                TemplateMode = WorkoutPlanTemplateModes.Normalize(workoutPlan.TemplateMode),
+                TemplateWeekCount = workoutPlan.TemplateWeekCount,
+                Version = workoutPlan.Version,
                 Weeks = includeWeeks ? new List<ProgramWeekDto>() : new List<ProgramWeekDto>()
             };
+        }
+
+        private static void ApplyTemplateFieldsFromDto(WorkoutPlan plan, SaveProgramStructureDto dto)
+        {
+            if (!string.IsNullOrWhiteSpace(dto.TemplateMode))
+                plan.TemplateMode = WorkoutPlanTemplateModes.Normalize(dto.TemplateMode);
+            if (dto.TemplateWeekCount.HasValue)
+                plan.TemplateWeekCount = Math.Max(1, dto.TemplateWeekCount.Value);
+            if (dto.RepeatTemplate.HasValue)
+                plan.RepeatTemplate = dto.RepeatTemplate.Value;
+            if (dto.WorkoutCategoryId.HasValue)
+                plan.WorkoutCategoryId = dto.WorkoutCategoryId;
+            if (dto.UseDefaultWarmups.HasValue)
+                plan.UseDefaultWarmups = dto.UseDefaultWarmups.Value;
+            if (dto.UseDefaultStretches.HasValue)
+                plan.UseDefaultStretches = dto.UseDefaultStretches.Value;
         }
     }
 }

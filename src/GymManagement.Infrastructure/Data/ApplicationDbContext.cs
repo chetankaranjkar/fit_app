@@ -65,6 +65,7 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<WorkoutCategory> WorkoutCategories { get; set; }
         public DbSet<WorkoutCategoryWarmup> WorkoutCategoryWarmups { get; set; }
         public DbSet<WorkoutCategoryStretch> WorkoutCategoryStretches { get; set; }
+        public DbSet<WorkoutPlanVersion> WorkoutPlanVersions { get; set; }
         public DbSet<UserSchedule> UserSchedules { get; set; }
         public DbSet<WorkoutSession> WorkoutSessions { get; set; }
         public DbSet<WorkoutSessionExercise> WorkoutSessionExercises { get; set; }
@@ -458,6 +459,10 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.PlanType).HasMaxLength(32).HasDefaultValue(WorkoutPlanTypes.Program);
                 entity.Property(e => e.UseDefaultWarmups).HasDefaultValue(true);
                 entity.Property(e => e.UseDefaultStretches).HasDefaultValue(true);
+                entity.Property(e => e.TemplateMode).HasMaxLength(50).HasDefaultValue(WorkoutPlanTemplateModes.Legacy);
+                entity.Property(e => e.RepeatTemplate).HasDefaultValue(true);
+                entity.Property(e => e.TemplateWeekCount).HasDefaultValue(1);
+                entity.Property(e => e.Version).HasDefaultValue(1);
                 entity.HasOne(e => e.WorkoutCategory)
                     .WithMany(c => c.WorkoutPlans)
                     .HasForeignKey(e => e.WorkoutCategoryId)
@@ -564,11 +569,16 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany(wp => wp.WorkoutPlanWarmups)
                     .HasForeignKey(e => e.WorkoutPlanId)
                     .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.WorkoutPlanDay)
+                    .WithMany()
+                    .HasForeignKey(e => e.WorkoutPlanDayId)
+                    .OnDelete(DeleteBehavior.NoAction);
                 entity.HasOne(e => e.Warmup)
                     .WithMany(w => w.WorkoutPlanWarmups)
                     .HasForeignKey(e => e.WarmupId)
                     .OnDelete(DeleteBehavior.Restrict);
                 entity.HasIndex(e => new { e.WorkoutPlanId, e.DisplayOrder });
+                entity.HasIndex(e => e.WorkoutPlanDayId);
             });
 
             modelBuilder.Entity<WorkoutPlanStretch>(entity =>
@@ -579,11 +589,30 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany(wp => wp.WorkoutPlanStretches)
                     .HasForeignKey(e => e.WorkoutPlanId)
                     .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.WorkoutPlanDay)
+                    .WithMany()
+                    .HasForeignKey(e => e.WorkoutPlanDayId)
+                    .OnDelete(DeleteBehavior.NoAction);
                 entity.HasOne(e => e.Stretch)
                     .WithMany(s => s.WorkoutPlanStretches)
                     .HasForeignKey(e => e.StretchId)
                     .OnDelete(DeleteBehavior.Restrict);
                 entity.HasIndex(e => new { e.WorkoutPlanId, e.DisplayOrder });
+                entity.HasIndex(e => e.WorkoutPlanDayId);
+            });
+
+            modelBuilder.Entity<WorkoutPlanVersion>(entity =>
+            {
+                entity.ToTable("WorkoutPlanVersions");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.SnapshotJson).IsRequired();
+                entity.Property(e => e.ChangeSummary).HasMaxLength(500);
+                entity.Property(e => e.CreatedByUserName).HasMaxLength(200);
+                entity.HasIndex(e => new { e.WorkoutPlanId, e.VersionNumber }).IsUnique();
+                entity.HasOne(e => e.WorkoutPlan)
+                    .WithMany(p => p.PlanVersions)
+                    .HasForeignKey(e => e.WorkoutPlanId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<WorkoutCategory>(entity =>
@@ -1591,6 +1620,7 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<WorkoutCategory>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<WorkoutCategoryWarmup>().HasQueryFilter(e => !e.IsDeleted && e.Warmup != null && !e.Warmup.IsDeleted);
             modelBuilder.Entity<WorkoutCategoryStretch>().HasQueryFilter(e => !e.IsDeleted && e.Stretch != null && !e.Stretch.IsDeleted);
+            modelBuilder.Entity<WorkoutPlanVersion>().HasQueryFilter(e => !e.IsDeleted);
             // Matching filters for dependents of User/Exercise so 10622 warnings are resolved
             modelBuilder.Entity<UserDetail>().HasQueryFilter(ud => ud.User != null && !ud.User.IsDeleted);
             modelBuilder.Entity<UserSchedule>().HasQueryFilter(us => !us.IsDeleted && us.User != null && !us.User.IsDeleted);

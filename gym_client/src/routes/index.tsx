@@ -177,21 +177,6 @@ const WorkoutCategoryDetailPage = lazy(() =>
     default: m.WorkoutCategoryDetailPage,
   })),
 )
-const ExerciseManagementPage = lazy(() =>
-  import('../modules/exercise-management').then((m) => ({
-    default: m.ExerciseManagementPage,
-  })),
-)
-const WorkoutStudioPage = lazy(() =>
-  import('../modules/workout-studio').then((m) => ({
-    default: m.WorkoutStudioPage,
-  })),
-)
-const WorkoutPlanBuilderPage = lazy(() =>
-  import('../modules/workout-plan-builder').then((m) => ({
-    default: m.WorkoutPlanBuilderPage,
-  })),
-)
 const ProgramsPage = lazy(() =>
   import('../pages/training/ProgramsPage').then((m) => ({
     default: m.ProgramsPage,
@@ -395,12 +380,15 @@ const router = createBrowserRouter([
               },
               {
                 path: '/dashboard/training/exercises-premium',
-                element: withSuspense(<ExerciseManagementPage />),
+                element: <Navigate to="/dashboard/training/exercises" replace />,
               },
-              { path: '/dashboard/training/workout-studio', element: withSuspense(<WorkoutStudioPage />) },
+              {
+                path: '/dashboard/training/workout-studio',
+                element: <Navigate to="/dashboard/training/programs" replace />,
+              },
               {
                 path: '/dashboard/training/workout-plan-builder',
-                element: withSuspense(<WorkoutPlanBuilderPage />),
+                element: <Navigate to="/dashboard/training/programs" replace />,
               },
               { path: '/dashboard/training/programs', element: withSuspense(<ProgramsPage />) },
               {

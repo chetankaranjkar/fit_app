@@ -12,20 +12,22 @@ import { DashboardMetricsGrid } from '../../components/layout/DashboardMetricsGr
 import { MetricCard } from '../../components/dashboard/MetricCard'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
-import { Modal } from '../../components/ui/Modal'
+import { ConfirmDialog, useConfirm } from '../../components/ui/ConfirmDialog'
+import { Skeleton } from '../../components/ui/Skeleton'
+import {
+  PROGRAM_GOALS,
+  ProgramWizard,
+  defaultProgramForm,
+  planToProgramForm,
+  programFormToPayload,
+  type ProgramFormState,
+} from './program/ProgramWizard'
 import { exercisesService } from '../../services/exercises.service'
 import { trainersService } from '../../services/trainers.service'
 import { programsService } from '../../services/workoutPlans.service'
 import { workoutCategoriesService } from '../../services/workoutCategories.service'
-import type { Exercise } from '../../types/exercise'
 import type { Trainer } from '../../types/trainer'
-import type {
-  CreateWorkoutPlanDto,
-  CreateWorkoutPlanExerciseDto,
-  ProgramGoal,
-  WorkoutPlan,
-  WorkoutType,
-} from '../../types/workoutPlan'
+import type { CreateWorkoutPlanDto, WorkoutPlan } from '../../types/workoutPlan'
 
 function getDashboardUser() {
   try {
@@ -38,87 +40,8 @@ function getDashboardUser() {
   }
 }
 
-const PROGRAM_GOALS: ProgramGoal[] = [
-  'Muscle Gain',
-  'Fat Loss',
-  'Strength',
-  'Mobility',
-  'Endurance',
-  'HIIT',
-  'Athletic Performance',
-  'Beginner Fitness',
-]
-
-const DURATION_OPTIONS = [30, 60, 90, 120] as const
-const FREQ_OPTIONS = [3, 4, 5, 6] as const
-
-type FormState = {
-  name: string
-  description: string
-  goal: string
-  workoutType: WorkoutType
-  duration: number
-  durationDays: number
-  workoutsPerWeek: number
-  difficultyLevel: string
-  trainerId: number
-  thumbnail: string
-  tags: string
-  status: string
-  isPublic: boolean
-  workoutCategoryId: number
-  exercises: CreateWorkoutPlanExerciseDto[]
-}
-
-const defaultForm: FormState = {
-  name: '',
-  description: '',
-  goal: 'Muscle Gain',
-  workoutType: 'Strength',
-  duration: 50,
-  durationDays: 90,
-  workoutsPerWeek: 4,
-  difficultyLevel: 'Beginner',
-  trainerId: 0,
-  thumbnail: '',
-  tags: '',
-  status: 'Active',
-  isPublic: false,
-  workoutCategoryId: 0,
-  exercises: [{ exerciseId: 0, sets: 3, reps: 12, restBetweenSets: 60, order: 1, weight: null }],
-}
-
-const workoutTypes: WorkoutType[] = ['Warmup', 'ShortHIIT', 'LongHIIT', 'Strength', 'Cardio']
 const selectClass =
   'w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20'
-
-function buildPayload(form: FormState): CreateWorkoutPlanDto {
-  const tags = form.tags
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean)
-  return {
-    name: form.name.trim(),
-    description: form.description.trim() || null,
-    goal: form.goal.trim() || null,
-    workoutType: form.workoutType,
-    duration: form.duration,
-    durationDays: form.durationDays,
-    workoutsPerWeek: form.workoutsPerWeek,
-    difficultyLevel: form.difficultyLevel,
-    trainerId: form.trainerId > 0 ? form.trainerId : null,
-    thumbnail: form.thumbnail.trim() || null,
-    tags: tags.length ? tags : null,
-    status: form.status.trim() || 'Active',
-    isPublic: form.isPublic,
-    workoutCategoryId: form.workoutCategoryId > 0 ? form.workoutCategoryId : null,
-    useDefaultWarmups: true,
-    useDefaultStretches: true,
-    exercises: form.exercises
-      .filter((exercise) => exercise.exerciseId > 0)
-      .map((exercise, index) => ({ ...exercise, order: index + 1 })),
-  }
-}
 
 export function ProgramsPage() {
   const { userName } = getDashboardUser()
@@ -130,7 +53,9 @@ export function ProgramsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<WorkoutPlan | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
-  const [form, setForm] = useState<FormState>(defaultForm)
+  const [pageError, setPageError] = useState<string | null>(null)
+  const deleteConfirm = useConfirm<WorkoutPlan>()
+  const [wizardInitialForm, setWizardInitialForm] = useState<ProgramFormState>(defaultProgramForm)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
 
@@ -154,7 +79,7 @@ export function ProgramsPage() {
     queryKey: ['workout-categories'],
     queryFn: async () => {
       const { data } = await workoutCategoriesService.getAll()
-      return Array.isArray(data) ? data.filter((c) => c.isActive) : []
+      return Array.isArray(data) ? data.filter((c) => c.isActive !== false) : []
     },
   })
 
@@ -165,13 +90,13 @@ export function ProgramsPage() {
       return Array.isArray(data) ? (data as Trainer[]) : []
     },
   })
-  const maxExercisesPerPlan = Math.max(1, exercises.length || 1)
 
   const createMutation = useMutation({
-    mutationFn: (payload: CreateWorkoutPlanDto) => programsService.create(payload),
-    onSuccess: () => {
+    mutationFn: (payload: CreateWorkoutPlanDto) => programsService.create(payload).then((r) => r.data),
+    onSuccess: (created) => {
       void queryClient.invalidateQueries({ queryKey: ['programs'] })
       handleCloseModal()
+      navigate(`/dashboard/training/programs/${created.id}`)
     },
     onError: (error: Error) => setFormError(error.message || 'Failed to create program'),
   })
@@ -188,7 +113,15 @@ export function ProgramsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => programsService.delete(id),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['programs'] }),
+    onSuccess: () => {
+      setPageError(null)
+      deleteConfirm.close()
+      void queryClient.invalidateQueries({ queryKey: ['programs'] })
+    },
+    onError: (error: Error) => {
+      deleteConfirm.close()
+      setPageError(error.message || 'Failed to delete program. It may be assigned to members.')
+    },
   })
 
   const filtered = useMemo(() => {
@@ -240,45 +173,14 @@ export function ProgramsPage() {
 
   function handleOpenCreate() {
     setEditing(null)
-    setForm(defaultForm)
+    setWizardInitialForm(defaultProgramForm)
     setFormError(null)
     setModalOpen(true)
   }
 
   function handleOpenEdit(plan: WorkoutPlan) {
     setEditing(plan)
-    setForm({
-      name: plan.name,
-      description: plan.description ?? '',
-      goal: plan.goal ?? 'Muscle Gain',
-      workoutType: plan.workoutType,
-      duration: plan.duration,
-      durationDays: plan.durationDays ?? 90,
-      workoutsPerWeek: plan.workoutsPerWeek ?? 4,
-      difficultyLevel: plan.difficultyLevel,
-      trainerId: plan.trainerId ?? 0,
-      thumbnail: plan.thumbnail ?? '',
-      tags: (plan.tags ?? []).join(', '),
-      status: plan.status ?? 'Active',
-      isPublic: plan.isPublic,
-      workoutCategoryId: plan.workoutCategoryId ?? 0,
-      exercises:
-        plan.exercises.length > 0
-          ? plan.exercises
-              .sort((a, b) => a.order - b.order)
-              .map((exercise) => ({
-                exerciseId: exercise.exerciseId,
-                sets: exercise.sets,
-                reps: exercise.reps,
-                restBetweenSets: exercise.restBetweenSets,
-                order: exercise.order,
-                weight: exercise.weight ?? null,
-                tempo: exercise.tempo ?? null,
-                intensity: exercise.intensity ?? null,
-                notes: exercise.notes ?? null,
-              }))
-          : defaultForm.exercises,
-    })
+    setWizardInitialForm(planToProgramForm(plan))
     setFormError(null)
     setModalOpen(true)
   }
@@ -286,83 +188,24 @@ export function ProgramsPage() {
   function handleCloseModal() {
     setModalOpen(false)
     setEditing(null)
-    setForm(defaultForm)
+    setWizardInitialForm(defaultProgramForm)
     setFormError(null)
   }
 
-  function updateExerciseRow(index: number, field: keyof CreateWorkoutPlanExerciseDto, value: number | null) {
-    setForm((current) => ({
-      ...current,
-      exercises: current.exercises.map((exercise, i) =>
-        i === index ? { ...exercise, [field]: value } : exercise,
-      ),
-    }))
-  }
-
-  function addExerciseRow() {
+  function handleWizardSubmit(form: ProgramFormState) {
     setFormError(null)
-    setForm((current) => ({
-      ...current,
-      exercises:
-        current.exercises.length >= maxExercisesPerPlan
-          ? current.exercises
-          : [
-              ...current.exercises,
-              {
-                exerciseId: 0,
-                sets: 3,
-                reps: 10,
-                restBetweenSets: 60,
-                order: current.exercises.length + 1,
-                weight: null,
-              },
-            ],
-    }))
-  }
-
-  function removeExerciseRow(index: number) {
-    setFormError(null)
-    setForm((current) => ({
-      ...current,
-      exercises: current.exercises
-        .filter((_, i) => i !== index)
-        .map((exercise, i) => ({ ...exercise, order: i + 1 })),
-    }))
-  }
-
-  function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    setFormError(null)
-
-    if (!form.name.trim()) {
-      setFormError('Program name is required.')
-      return
-    }
-    if (form.exercises.every((exercise) => exercise.exerciseId <= 0)) {
-      setFormError('Add at least one exercise, or open Program Details to build week/day structure after create.')
-      return
-    }
-    if (!editing && form.workoutCategoryId <= 0) {
-      setFormError('Workout category is required.')
-      return
-    }
-
+    const payload: CreateWorkoutPlanDto = programFormToPayload(form)
     if (editing) {
-      updateMutation.mutate({ id: editing.id, payload: buildPayload(form) })
+      updateMutation.mutate({ id: editing.id, payload })
       return
     }
-    createMutation.mutate(buildPayload(form))
+    createMutation.mutate(payload)
   }
 
   function handleDelete(plan: WorkoutPlan) {
-    if (!window.confirm(`Delete program "${plan.name}"?`)) return
-    deleteMutation.mutate(plan.id)
+    deleteConfirm.request(plan)
   }
 
-  function trainerLabel(trainer: Trainer) {
-    const name = `${trainer.firstName ?? ''} ${trainer.lastName ?? ''}`.trim()
-    return name || `Trainer #${trainer.id}`
-  }
 
   return (
     <DashboardLayout userName={userName}>
@@ -373,6 +216,21 @@ export function ProgramsPage() {
         showExport={false}
         primaryAction={{ label: '+ New program', onClick: handleOpenCreate }}
       >
+        {pageError && (
+          <div
+            role="alert"
+            className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
+          >
+            <span>{pageError}</span>
+            <button
+              type="button"
+              onClick={() => setPageError(null)}
+              className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-rose-300 transition hover:bg-rose-500/15"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <DashboardMetricsGrid cols={4}>
           <MetricCard
             title="Total programs"
@@ -405,6 +263,17 @@ export function ProgramsPage() {
         </DashboardMetricsGrid>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {isLoading &&
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                <Skeleton className="size-24 shrink-0" variant="rectangular" />
+                <div className="flex-1 space-y-2 py-1">
+                  <Skeleton className="h-4 w-1/2" variant="text" />
+                  <Skeleton className="h-3 w-3/4" variant="text" />
+                  <Skeleton className="h-3 w-2/3" variant="text" />
+                </div>
+              </div>
+            ))}
           {filtered.slice(0, 4).map((plan) => (
             <button
               key={plan.id}
@@ -478,7 +347,18 @@ export function ProgramsPage() {
           }
         >
           {isLoading ? (
-            <p className="px-6 py-8 text-sm text-slate-400">Loading programs…</p>
+            <div className="space-y-3 px-6 py-6" aria-busy="true" aria-label="Loading programs">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="size-12 shrink-0" variant="rectangular" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-1/3" variant="text" />
+                    <Skeleton className="h-3 w-2/3" variant="text" />
+                  </div>
+                  <Skeleton className="h-8 w-40 shrink-0" variant="rectangular" />
+                </div>
+              ))}
+            </div>
           ) : filtered.length === 0 ? (
             <p className="px-6 py-8 text-sm text-slate-400">No programs match the filters.</p>
           ) : (
@@ -580,295 +460,39 @@ export function ProgramsPage() {
         </DashboardTablePanel>
       </DashboardSubpageShell>
 
-      <Modal
+      <ProgramWizard
+        key={`${editing?.id ?? 'new'}-${modalOpen}`}
         open={modalOpen}
+        editing={Boolean(editing)}
+        initialForm={wizardInitialForm}
+        exercises={exercises}
+        categories={categories}
+        trainers={trainers}
+        error={formError}
+        isSaving={createMutation.isPending || updateMutation.isPending}
         onClose={handleCloseModal}
-        title={editing ? 'Quick edit program' : 'Create program'}
-        size="wide"
-        scrollable
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {formError && (
-            <div
-              role="alert"
-              className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
-            >
-              {formError}
-            </div>
-          )}
+        onSubmit={handleWizardSubmit}
+      />
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input
-              label="Program name"
-              value={form.name}
-              onChange={(event) => setForm((c) => ({ ...c, name: event.target.value }))}
-              required
-            />
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Goal
-              </label>
-              <select
-                value={form.goal}
-                onChange={(event) => setForm((c) => ({ ...c, goal: event.target.value }))}
-                className={selectClass}
-              >
-                {PROGRAM_GOALS.map((g) => (
-                  <option key={g} value={g} className="bg-slate-900">
-                    {g}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Workout category {!editing ? '*' : ''}
-              </label>
-              <select
-                value={form.workoutCategoryId}
-                onChange={(event) =>
-                  setForm((c) => ({ ...c, workoutCategoryId: Number(event.target.value) }))
-                }
-                className={selectClass}
-                required={!editing}
-              >
-                <option value={0} className="bg-slate-900">
-                  Select category…
-                </option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id} className="bg-slate-900">
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-slate-500">
-                Default warmups and stretches load from the selected category.
-              </p>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Workout type
-              </label>
-              <select
-                value={form.workoutType}
-                onChange={(event) =>
-                  setForm((c) => ({ ...c, workoutType: event.target.value as WorkoutType }))
-                }
-                className={selectClass}
-              >
-                {workoutTypes.map((type) => (
-                  <option key={type} value={type} className="bg-slate-900">
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Program length (days)
-              </label>
-              <select
-                value={form.durationDays}
-                onChange={(event) => setForm((c) => ({ ...c, durationDays: Number(event.target.value) }))}
-                className={selectClass}
-              >
-                {DURATION_OPTIONS.map((d) => (
-                  <option key={d} value={d} className="bg-slate-900">
-                    {d} days
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Workouts / week
-              </label>
-              <select
-                value={form.workoutsPerWeek}
-                onChange={(event) => setForm((c) => ({ ...c, workoutsPerWeek: Number(event.target.value) }))}
-                className={selectClass}
-              >
-                {FREQ_OPTIONS.map((d) => (
-                  <option key={d} value={d} className="bg-slate-900">
-                    {d} days
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Input
-              label="Avg session (minutes)"
-              type="number"
-              min={5}
-              value={String(form.duration)}
-              onChange={(event) => setForm((c) => ({ ...c, duration: Number(event.target.value) || 0 }))}
-            />
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Difficulty
-              </label>
-              <select
-                value={form.difficultyLevel}
-                onChange={(event) => setForm((c) => ({ ...c, difficultyLevel: event.target.value }))}
-                className={selectClass}
-              >
-                {['Beginner', 'Intermediate', 'Advanced'].map((d) => (
-                  <option key={d} value={d} className="bg-slate-900">
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Input
-              label="Thumbnail URL"
-              value={form.thumbnail}
-              onChange={(event) => setForm((c) => ({ ...c, thumbnail: event.target.value }))}
-              placeholder="https://..."
-            />
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Status
-              </label>
-              <select
-                value={form.status}
-                onChange={(event) => setForm((c) => ({ ...c, status: event.target.value }))}
-                className={selectClass}
-              >
-                {['Draft', 'Active', 'Archived'].map((s) => (
-                  <option key={s} value={s} className="bg-slate-900">
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Trainer
-              </label>
-              <select
-                value={form.trainerId}
-                onChange={(event) => setForm((c) => ({ ...c, trainerId: Number(event.target.value) }))}
-                className={selectClass}
-              >
-                <option value={0} className="bg-slate-900">
-                  Unassigned
-                </option>
-                {trainers.map((trainer) => (
-                  <option key={trainer.id} value={trainer.id} className="bg-slate-900">
-                    {trainerLabel(trainer)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:col-span-2">
-              <input
-                type="checkbox"
-                checked={form.isPublic}
-                onChange={(event) => setForm((c) => ({ ...c, isPublic: event.target.checked }))}
-                className="h-4 w-4 rounded border-white/20 bg-white/5"
-              />
-              <span className="text-sm text-slate-200">Visible to members (public catalog)</span>
-            </label>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-              Tags (comma separated)
-            </label>
-            <Input value={form.tags} onChange={(event) => setForm((c) => ({ ...c, tags: event.target.value }))} />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-              Description
-            </label>
-            <textarea
-              value={form.description}
-              onChange={(event) => setForm((c) => ({ ...c, description: event.target.value }))}
-              rows={3}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
-            />
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Baseline exercises (flat list)
-              </label>
-              <Button variant="ghost" size="sm" onClick={addExerciseRow} disabled={form.exercises.length >= maxExercisesPerPlan}>
-                + Add exercise
-              </Button>
-            </div>
-            <p className="mb-3 text-xs text-slate-500">
-              For week/day scheduling and drag-drop, open the program after save. This list seeds legacy flat assignments.
-            </p>
-            <div className="space-y-3">
-              {form.exercises.map((row, index) => (
-                <div key={`${index}-${row.order}`} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-medium text-white">Exercise {index + 1}</p>
-                    {form.exercises.length > 1 && (
-                      <Button variant="ghost" size="sm" onClick={() => removeExerciseRow(index)}>
-                        Remove
-                      </Button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-                    <div className="md:col-span-2">
-                      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                        Exercise
-                      </label>
-                      <select
-                        value={row.exerciseId}
-                        onChange={(event) => updateExerciseRow(index, 'exerciseId', Number(event.target.value))}
-                        className={selectClass}
-                      >
-                        <option value={0} className="bg-slate-900">
-                          Select exercise
-                        </option>
-                        {exercises.map((exercise: Exercise) => (
-                          <option key={exercise.id} value={exercise.id} className="bg-slate-900">
-                            {exercise.name} ({exercise.bodyPartName})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <Input
-                      label="Sets"
-                      type="number"
-                      min={1}
-                      value={String(row.sets)}
-                      onChange={(event) => updateExerciseRow(index, 'sets', Number(event.target.value) || 0)}
-                    />
-                    <Input
-                      label="Reps"
-                      type="number"
-                      min={1}
-                      value={String(row.reps)}
-                      onChange={(event) => updateExerciseRow(index, 'reps', Number(event.target.value) || 0)}
-                    />
-                    <Input
-                      label="Rest (sec)"
-                      type="number"
-                      min={0}
-                      value={String(row.restBetweenSets)}
-                      onChange={(event) => updateExerciseRow(index, 'restBetweenSets', Number(event.target.value) || 0)}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={handleCloseModal}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={createMutation.isPending || updateMutation.isPending}>
-              {editing ? 'Update program' : 'Create program'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        title="Delete program"
+        message={
+          <>
+            Delete <span className="font-semibold text-white">{deleteConfirm.target?.name}</span>?
+            {(deleteConfirm.target?.assignedMembersCount ?? 0) > 0 && (
+              <span className="mt-2 block text-rose-300/90">
+                {deleteConfirm.target?.assignedMembersCount} member assignment(s) reference this program.
+              </span>
+            )}
+            <span className="mt-2 block text-slate-500">This action cannot be undone.</span>
+          </>
+        }
+        confirmLabel="Delete program"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() => deleteConfirm.target && deleteMutation.mutate(deleteConfirm.target.id)}
+        onCancel={deleteConfirm.close}
+      />
     </DashboardLayout>
   )
 }

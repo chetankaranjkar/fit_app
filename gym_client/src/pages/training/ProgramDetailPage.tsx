@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../../components/layout/DashboardSubpageShell'
 import { Button } from '../../components/ui/Button'
+import { exercisesService } from '../../services/exercises.service'
 import { programsService } from '../../services/workoutPlans.service'
 import type { CreateWorkoutPlanDto, ProgramWeekDto } from '../../types/workoutPlan'
 import { PlanWarmupStretchTab } from './program/PlanWarmupStretchTab'
@@ -58,6 +59,14 @@ export function ProgramDetailPage() {
     enabled: Number.isInteger(id) && id > 0,
   })
 
+  const { data: exerciseLibrary = [] } = useQuery({
+    queryKey: ['exercises-picker'],
+    queryFn: async () => {
+      const { data } = await exercisesService.getPaged({ page: 1, pageSize: 200 })
+      return data.items ?? []
+    },
+  })
+
   const [localWeeks, setLocalWeeks] = useState<ProgramWeekDto[] | null>(null)
   const [localWarmups, setLocalWarmups] = useState<WorkoutPlanWarmup[] | null>(null)
   const [localStretches, setLocalStretches] = useState<WorkoutPlanStretch[] | null>(null)
@@ -70,19 +79,33 @@ export function ProgramDetailPage() {
   const stretches = localStretches ?? program?.stretches ?? []
   const setWeeks = useCallback((w: ProgramWeekDto[]) => setLocalWeeks(w), [])
 
-  useEffect(() => {
-    if (program?.weeks?.length) setLocalWeeks(program.weeks)
-  }, [program?.id, program?.weeks])
+  const orphanExercises = useMemo(() => {
+    if (!program) return []
+    if (!program.weeks?.length) return program.exercises
+    const onDay = new Set(
+      program.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((e) => e.exerciseId))),
+    )
+    return program.exercises.filter((e) => !e.workoutPlanDayId && !onDay.has(e.exerciseId))
+  }, [program])
 
+  // Hydrate local editing state only when a different program loads.
+  // Re-running on every refetch would clobber unsaved local edits.
+  const hydratedProgramId = useRef<number | null>(null)
   useEffect(() => {
-    if (program) {
-      setLocalWarmups(program.warmups ?? [])
-      setLocalStretches(program.stretches ?? [])
-      setLocalCategoryId(program.workoutCategoryId ?? null)
-      setUseDefaultWarmups(program.useDefaultWarmups ?? true)
-      setUseDefaultStretches(program.useDefaultStretches ?? true)
-    }
-  }, [program?.id, program?.warmups, program?.stretches, program?.workoutCategoryId])
+    if (!program || hydratedProgramId.current === program.id) return
+    hydratedProgramId.current = program.id
+    setLocalWeeks(program.weeks?.length ? program.weeks : null)
+    setLocalWarmups(program.warmups ?? [])
+    setLocalStretches(program.stretches ?? [])
+    setLocalCategoryId(program.workoutCategoryId ?? null)
+    setUseDefaultWarmups(program.useDefaultWarmups ?? true)
+    setUseDefaultStretches(program.useDefaultStretches ?? true)
+  }, [program])
+
+  /** Discard local overrides so freshly refetched server data flows through. */
+  const resyncFromServer = useCallback(() => {
+    hydratedProgramId.current = null
+  }, [])
 
   function buildUpdatePayload(overrides?: Partial<CreateWorkoutPlanDto>): CreateWorkoutPlanDto | null {
     if (!program) return null
@@ -127,13 +150,17 @@ export function ProgramDetailPage() {
       if (!payload) throw new Error('Program not loaded')
       return programsService.update(id, payload).then((r) => r.data)
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['program', id] }),
+    onSuccess: () => {
+      resyncFromServer()
+      void queryClient.invalidateQueries({ queryKey: ['program', id] })
+    },
   })
 
   const saveStructureMutation = useMutation({
     mutationFn: (payload: ReturnType<typeof toStructurePayload>) =>
       programsService.saveStructure(id, payload).then((r) => r.data),
     onSuccess: () => {
+      resyncFromServer()
       void queryClient.invalidateQueries({ queryKey: ['program', id] })
       void queryClient.invalidateQueries({ queryKey: ['programs'] })
     },
@@ -143,6 +170,7 @@ export function ProgramDetailPage() {
     mutationFn: (payload: { warmups: { warmupId: number; displayOrder: number }[]; stretches: { stretchId: number; displayOrder: number }[] }) =>
       programsService.saveWarmupStretch(id, payload).then((r) => r.data),
     onSuccess: () => {
+      resyncFromServer()
       void queryClient.invalidateQueries({ queryKey: ['program', id] })
     },
   })
@@ -223,12 +251,6 @@ export function ProgramDetailPage() {
             className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition hover:bg-violet-500/15"
           >
             Assign members
-          </Link>
-          <Link
-            to={`/dashboard/training/workout-plan-builder`}
-            className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5"
-          >
-            Open Program Builder
           </Link>
         </div>
 
@@ -380,6 +402,9 @@ export function ProgramDetailPage() {
                     }}
                     isSaving={saveStructureMutation.isPending}
                     aiSuggest={aiSuggest}
+                    exerciseLibrary={exerciseLibrary}
+                    workoutsPerWeek={program.workoutsPerWeek ?? 4}
+                    orphanExercises={orphanExercises}
                   />
                 )}
 

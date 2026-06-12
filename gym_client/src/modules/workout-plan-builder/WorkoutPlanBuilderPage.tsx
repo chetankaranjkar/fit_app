@@ -17,6 +17,7 @@ import { DayBuilder } from './components/DayBuilder'
 import { DayTabs } from './components/DayTabs'
 import { ExerciseDropZone } from './components/ExerciseDropZone'
 import { PlanForm } from './components/PlanForm'
+import { ConfirmDialog, useConfirm } from '../../components/ui/ConfirmDialog'
 import { useExerciseLibrary, useWorkoutPlan, useWorkoutPlanMutations } from './hooks'
 import { useWorkoutPlanBuilderStore } from './store'
 import type { BuilderDay, BuilderExercise } from './types'
@@ -97,6 +98,7 @@ export function WorkoutPlanBuilderPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [editingPlan, setEditingPlan] = useState(false)
+  const deleteExerciseConfirm = useConfirm<BuilderExercise>()
   const {
     planId,
     planForm,
@@ -260,13 +262,20 @@ export function WorkoutPlanBuilderPage() {
     }
   }
 
-  async function handleDeleteExercise(item: BuilderExercise) {
-    if (!window.confirm(`Delete "${item.name}" from this day?`)) return
+  function handleDeleteExercise(item: BuilderExercise) {
+    deleteExerciseConfirm.request(item)
+  }
+
+  async function confirmDeleteExercise() {
+    const item = deleteExerciseConfirm.target
+    if (!item) return
     try {
       await deleteWorkoutExercise.mutateAsync(item.id)
       toast.success('Exercise deleted')
     } catch {
       toast.error('Failed to delete exercise')
+    } finally {
+      deleteExerciseConfirm.close()
     }
   }
 
@@ -514,6 +523,21 @@ export function WorkoutPlanBuilderPage() {
           </div>
         )}
       </motion.div>
+
+      <ConfirmDialog
+        open={deleteExerciseConfirm.open}
+        title="Remove exercise"
+        message={
+          <>
+            Remove <span className="font-semibold text-white">{deleteExerciseConfirm.target?.name}</span> from
+            this day?
+          </>
+        }
+        confirmLabel="Remove"
+        isLoading={deleteWorkoutExercise.isPending}
+        onConfirm={() => void confirmDeleteExercise()}
+        onCancel={deleteExerciseConfirm.close}
+      />
     </div>
   )
 }

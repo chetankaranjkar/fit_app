@@ -38,7 +38,6 @@ const trainingSubItems = [
   { path: '/dashboard/training/warmups', label: 'Warmups' },
   { path: '/dashboard/training/stretches', label: 'Stretches' },
   { path: '/dashboard/training/workout-categories', label: 'Workout categories' },
-  { path: '/dashboard/training/workout-plan-builder', label: 'Program Builder' },
   { path: '/dashboard/training/programs', label: 'Programs' },
   { path: '/dashboard/training/workout-assignments', label: 'Workout Assignments' },
   {

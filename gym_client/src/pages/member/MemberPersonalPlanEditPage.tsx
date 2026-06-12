@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { ArrowLeft } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../../components/layout/DataPageShell'
-import { Button } from '../../components/ui/Button'
 import { getDashboardUser } from '../../lib/dashboardUser'
+import { exercisesService } from '../../services/exercises.service'
 import { personalWorkoutPlansService } from '../../services/personalWorkoutPlans.service'
 import type { ProgramWeekDto, SaveProgramStructureDto } from '../../types/workoutPlan'
 import { WeekScheduleTab } from '../training/program/WeekScheduleTab'
@@ -26,9 +26,26 @@ export function MemberPersonalPlanEditPage() {
     enabled: Number.isInteger(id) && id > 0,
   })
 
+  const { data: exerciseLibrary = [] } = useQuery({
+    queryKey: ['exercises-picker'],
+    queryFn: async () => {
+      const { data } = await exercisesService.getPaged({ page: 1, pageSize: 200 })
+      return data.items ?? []
+    },
+  })
+
   const [localWeeks, setLocalWeeks] = useState<ProgramWeekDto[] | null>(null)
   const weeks = localWeeks ?? plan?.weeks ?? []
   const setWeeks = useCallback((w: ProgramWeekDto[]) => setLocalWeeks(w), [])
+
+  const orphanExercises = useMemo(() => {
+    if (!plan) return []
+    if (!plan.weeks?.length) return plan.exercises
+    const onDay = new Set(
+      plan.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((e) => e.exerciseId))),
+    )
+    return plan.exercises.filter((e) => !e.workoutPlanDayId && !onDay.has(e.exerciseId))
+  }, [plan])
 
   useEffect(() => {
     if (plan?.weeks?.length) setLocalWeeks(plan.weeks)
@@ -74,36 +91,6 @@ export function MemberPersonalPlanEditPage() {
 
         {isLoading ? (
           <div className="h-64 animate-pulse rounded-2xl bg-white/[0.04]" />
-        ) : weeks.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center">
-            <p className="text-sm text-slate-400">No weekly template yet.</p>
-            <Button
-              type="button"
-              className="mt-4"
-              onClick={() =>
-                setWeeks([
-                  {
-                    id: 0,
-                    weekNumber: 1,
-                    name: 'Week 1',
-                    days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(
-                      (dayName, i) => ({
-                        id: 0,
-                        weekId: 0,
-                        dayNumber: i + 1,
-                        dayName,
-                        isRestDay: i === 6,
-                        orderIndex: i,
-                        exercises: [],
-                      }),
-                    ),
-                  },
-                ])
-              }
-            >
-              Add week 1
-            </Button>
-          </div>
         ) : (
           <WeekScheduleTab
             weeks={weeks}
@@ -114,6 +101,9 @@ export function MemberPersonalPlanEditPage() {
             }}
             isSaving={saveMutation.isPending}
             aiSuggest={() => undefined}
+            exerciseLibrary={exerciseLibrary}
+            workoutsPerWeek={plan?.workoutsPerWeek ?? 4}
+            orphanExercises={orphanExercises}
           />
         )}
       </DashboardPageContent>

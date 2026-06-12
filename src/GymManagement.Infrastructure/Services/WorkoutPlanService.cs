@@ -386,19 +386,9 @@ namespace GymManagement.Infrastructure.Services
                 .ToListAsync(ct);
             _db.WorkoutPlanStretches.RemoveRange(dayMobilityStretches);
 
-            var orphanExercises = await _unitOfWork.WorkoutPlanExercises.FindAsync(e => e.WorkoutPlanId == id && !e.IsDeleted);
-            foreach (var e in orphanExercises)
-                _unitOfWork.WorkoutPlanExercises.Delete(e);
-
-            var existingDays = await _unitOfWork.WorkoutPlanDays.FindAsync(d => d.WorkoutPlanId == id);
-            foreach (var d in existingDays)
-                _unitOfWork.WorkoutPlanDays.Delete(d);
-
-            var existingWeeks = await _unitOfWork.WorkoutPlanWeeks.FindAsync(w => w.WorkoutPlanId == id);
-            foreach (var w in existingWeeks)
-                _unitOfWork.WorkoutPlanWeeks.Delete(w);
-
-            await _unitOfWork.SaveChangesAsync();
+            // Structure rows must be physically removed: soft-delete leaves (WorkoutPlanId, WeekNumber)
+            // rows that block re-insert under IX_WorkoutPlanWeeks_WorkoutPlanId_WeekNumber.
+            await RemoveProgramStructureRowsAsync(id, ct);
 
             foreach (var weekDto in dto.Weeks.OrderBy(w => w.WeekNumber))
             {
@@ -515,6 +505,24 @@ namespace GymManagement.Infrastructure.Services
             }
 
             return await GetWorkoutPlanByIdAsync(id);
+        }
+
+        private async Task RemoveProgramStructureRowsAsync(int planId, CancellationToken ct)
+        {
+            await _db.WorkoutPlanExercises
+                .IgnoreQueryFilters()
+                .Where(e => e.WorkoutPlanId == planId)
+                .ExecuteDeleteAsync(ct);
+
+            await _db.WorkoutPlanDays
+                .IgnoreQueryFilters()
+                .Where(d => d.WorkoutPlanId == planId)
+                .ExecuteDeleteAsync(ct);
+
+            await _db.WorkoutPlanWeeks
+                .IgnoreQueryFilters()
+                .Where(w => w.WorkoutPlanId == planId)
+                .ExecuteDeleteAsync(ct);
         }
 
         private sealed record StructureExerciseRow(int ExerciseId, int? WorkoutPlanDayId, int? Sets, int? Reps, int Order);

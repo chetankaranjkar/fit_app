@@ -72,7 +72,6 @@ export const ROLE_NAV_GROUPS: Record<DashboardRole, NavGroup[]> = {
         { path: '/dashboard/training/workout-categories', label: 'Workout categories' },
         { path: '/dashboard/training/programs', label: 'Programs' },
         { path: '/dashboard/training/workout-assignments', label: 'Assignments' },
-        { path: '/dashboard/training/workout-plan-builder', label: 'Program builder' },
       ],
     },
     {

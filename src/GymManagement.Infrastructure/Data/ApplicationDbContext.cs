@@ -494,7 +494,9 @@ namespace GymManagement.Infrastructure.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).HasMaxLength(120);
-                entity.HasIndex(e => new { e.WorkoutPlanId, e.WeekNumber }).IsUnique();
+                entity.HasIndex(e => new { e.WorkoutPlanId, e.WeekNumber })
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
             });
 
             // Configure WorkoutPlanExercise

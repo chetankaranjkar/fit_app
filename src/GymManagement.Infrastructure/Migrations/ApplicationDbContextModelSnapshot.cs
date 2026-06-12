@@ -5963,7 +5963,8 @@ namespace GymManagement.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("WorkoutPlanId", "WeekNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("WorkoutPlanWeeks");
                 });

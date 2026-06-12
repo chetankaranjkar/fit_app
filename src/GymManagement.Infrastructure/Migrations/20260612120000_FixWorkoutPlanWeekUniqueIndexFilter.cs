@@ -1,10 +1,13 @@
+using GymManagement.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace GymManagement.Infrastructure.Migrations
 {
-    /// <inheritdoc />
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20260612120000_FixWorkoutPlanWeekUniqueIndexFilter")]
     public partial class FixWorkoutPlanWeekUniqueIndexFilter : Migration
     {
         /// <inheritdoc />

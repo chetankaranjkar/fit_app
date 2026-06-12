@@ -332,9 +332,9 @@ export function HealthProfileStepper({ userId, initial, mode = 'staff', onSaved 
                     }
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-100"
                   >
-                    <option value="">Select…</option>
+                    <option className="bg-slate-900 text-slate-100" value="">Select…</option>
                     {BODY_PARTS.map((p) => (
-                      <option key={p} value={p}>
+                      <option className="bg-slate-900 text-slate-100" key={p} value={p}>
                         {p}
                       </option>
                     ))}
@@ -353,9 +353,9 @@ export function HealthProfileStepper({ userId, initial, mode = 'staff', onSaved 
                     }
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-100"
                   >
-                    <option value="">Select…</option>
+                    <option className="bg-slate-900 text-slate-100" value="">Select…</option>
                     {INJURY_TYPES.map((t) => (
-                      <option key={t} value={t}>
+                      <option className="bg-slate-900 text-slate-100" key={t} value={t}>
                         {t}
                       </option>
                     ))}

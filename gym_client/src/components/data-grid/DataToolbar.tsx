@@ -1,11 +1,9 @@
 import type { ReactNode } from 'react'
 import { Loader2, Search } from 'lucide-react'
+import { formSelectClassCompact, formSelectOptionClass } from '../../lib/formControls'
 
 const inputClass =
   'w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 transition-colors focus:border-blue-400/50 focus:bg-white/[0.07] focus:outline-none focus:ring-1 focus:ring-blue-400/20'
-
-const selectClass =
-  'rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors focus:border-blue-400/50 focus:bg-white/[0.07] focus:outline-none sm:min-w-[8.5rem]'
 
 export function DataToolbar({
   searchValue,
@@ -73,10 +71,10 @@ export function DataFilterSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-label={ariaLabel}
-      className={`${selectClass} ${className}`}
+      className={`${formSelectClassCompact} ${className}`}
     >
       {options.map((o) => (
-        <option key={o.value} value={o.value} className="bg-slate-900">
+        <option key={o.value} value={o.value} className={formSelectOptionClass}>
           {o.label}
         </option>
       ))}

@@ -131,10 +131,10 @@ export function MembershipPaymentHistoryPage() {
               onChange={(e) => setStatus(e.target.value as MembershipPaymentTransactionStatus | '')}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-100"
             >
-              <option value="">All</option>
-              <option value="Completed">Completed</option>
-              <option value="Voided">Voided</option>
-              <option value="Refunded">Refunded</option>
+              <option className="bg-slate-900 text-slate-100" value="">All</option>
+              <option className="bg-slate-900 text-slate-100" value="Completed">Completed</option>
+              <option className="bg-slate-900 text-slate-100" value="Voided">Voided</option>
+              <option className="bg-slate-900 text-slate-100" value="Refunded">Refunded</option>
             </select>
           </div>
           <div>
@@ -144,10 +144,10 @@ export function MembershipPaymentHistoryPage() {
               onChange={(e) => setMethod(e.target.value as MembershipPaymentMethod | '')}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-100"
             >
-              <option value="">All</option>
-              <option value="Cash">Cash</option>
-              <option value="Upi">UPI</option>
-              <option value="Card">Card</option>
+              <option className="bg-slate-900 text-slate-100" value="">All</option>
+              <option className="bg-slate-900 text-slate-100" value="Cash">Cash</option>
+              <option className="bg-slate-900 text-slate-100" value="Upi">UPI</option>
+              <option className="bg-slate-900 text-slate-100" value="Card">Card</option>
             </select>
           </div>
           <Input label="Member user ID" value={memberId} onChange={(e) => setMemberId(e.target.value)} />
@@ -267,7 +267,7 @@ export function MembershipPaymentHistoryPage() {
           className="mb-4 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100"
         >
           {VOID_REASONS.map((r) => (
-            <option key={r} value={r}>
+            <option className="bg-slate-900 text-slate-100" key={r} value={r}>
               {r}
             </option>
           ))}

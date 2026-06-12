@@ -62,27 +62,27 @@ export function PtAssignPackagePage() {
           <label className="block text-sm text-slate-300">
             Member
             <select value={userId} onChange={(e) => setUserId(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white">
-              <option value="">Select member</option>
+              <option className="bg-slate-900 text-slate-100" value="">Select member</option>
               {users.map((u: { id: number; firstName: string; lastName: string }) => (
-                <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+                <option className="bg-slate-900 text-slate-100" key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
               ))}
             </select>
           </label>
           <label className="block text-sm text-slate-300">
             Trainer
             <select value={trainerId} onChange={(e) => setTrainerId(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white">
-              <option value="">Select trainer</option>
+              <option className="bg-slate-900 text-slate-100" value="">Select trainer</option>
               {trainers.map((t: { id: number; user?: { firstName: string; lastName: string } }) => (
-                <option key={t.id} value={t.id}>{t.user ? `${t.user.firstName} ${t.user.lastName}` : `Trainer #${t.id}`}</option>
+                <option className="bg-slate-900 text-slate-100" key={t.id} value={t.id}>{t.user ? `${t.user.firstName} ${t.user.lastName}` : `Trainer #${t.id}`}</option>
               ))}
             </select>
           </label>
           <label className="block text-sm text-slate-300">
             Package
             <select value={packageId} onChange={(e) => setPackageId(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white">
-              <option value="">Select package</option>
+              <option className="bg-slate-900 text-slate-100" value="">Select package</option>
               {(packages?.items ?? []).map((p) => (
-                <option key={p.id} value={p.id}>{p.packageName}</option>
+                <option className="bg-slate-900 text-slate-100" key={p.id} value={p.id}>{p.packageName}</option>
               ))}
             </select>
           </label>

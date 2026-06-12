@@ -325,9 +325,9 @@ function DeviceAnalyticsPanel({
             onChange={(e) => onFilterChange(e.target.value)}
             className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200"
           >
-            <option value="">All active devices</option>
-            <option value="multiple">Multiple device users</option>
-            <option value="suspicious">Suspicious accounts</option>
+            <option className="bg-slate-900 text-slate-100" value="">All active devices</option>
+            <option className="bg-slate-900 text-slate-100" value="multiple">Multiple device users</option>
+            <option className="bg-slate-900 text-slate-100" value="suspicious">Suspicious accounts</option>
           </select>
           <Button variant="secondary" onClick={onRefresh} isLoading={loading}>
             Refresh

@@ -175,7 +175,7 @@ export function SupplementMasterPage() {
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
               >
                 {SUPPLEMENT_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
+                  <option className="bg-slate-900 text-slate-100" key={c} value={c}>
                     {c}
                   </option>
                 ))}
@@ -204,9 +204,9 @@ export function SupplementMasterPage() {
                   setForm((f) => ({ ...f, productId: e.target.value ? Number(e.target.value) : null }))
                 }
               >
-                <option value="">None</option>
+                <option className="bg-slate-900 text-slate-100" value="">None</option>
                 {products.map((p) => (
-                  <option key={p.id} value={p.id}>
+                  <option className="bg-slate-900 text-slate-100" key={p.id} value={p.id}>
                     {p.name}
                   </option>
                 ))}

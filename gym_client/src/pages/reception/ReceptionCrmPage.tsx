@@ -1083,7 +1083,7 @@ function TrialModal({
           onChange={(e) => setTrainerIdPick(Number(e.target.value))}
         >
           {trainers.map((t) => (
-            <option key={t.id} value={t.id}>
+            <option className="bg-slate-900 text-slate-100" key={t.id} value={t.id}>
               {t.name}
             </option>
           ))}
@@ -1174,7 +1174,7 @@ function ConvertModal({
           onChange={(e) => setPlanIdPick(Number(e.target.value))}
         >
           {plans.map((p) => (
-            <option key={p.id} value={p.id}>
+            <option className="bg-slate-900 text-slate-100" key={p.id} value={p.id}>
               {p.planName} · {p.durationDays}d · {formatInr(p.price)}
             </option>
           ))}

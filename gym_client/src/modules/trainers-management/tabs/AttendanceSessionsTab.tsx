@@ -94,7 +94,7 @@ export function TrainersAttendanceSessionsTab() {
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
             >
               {trainers.map((trainer) => (
-                <option key={trainer.id} value={trainer.id}>{trainer.name}</option>
+                <option className="bg-slate-900 text-slate-100" key={trainer.id} value={trainer.id}>{trainer.name}</option>
               ))}
             </select>
           </div>

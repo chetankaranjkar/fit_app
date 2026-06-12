@@ -207,8 +207,8 @@ export function TrainersManagementTab() {
               onChange={(e) => setForm((prev) => ({ ...prev, salaryType: e.target.value as TrainerSalaryType }))}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
             >
-              <option value="fixed">Fixed</option>
-              <option value="per_session">Per Session</option>
+              <option className="bg-slate-900 text-slate-100" value="fixed">Fixed</option>
+              <option className="bg-slate-900 text-slate-100" value="per_session">Per Session</option>
             </select>
           </div>
           <Input

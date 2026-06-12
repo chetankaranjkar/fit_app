@@ -167,10 +167,10 @@ export function StretchesPage() {
             className="max-w-xs"
           />
           <select className={selectClass + ' max-w-[160px]'} value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-            <option value="All">All difficulties</option>
-            <option value="Beginner">Beginner</option>
-            <option value="Intermediate">Intermediate</option>
-            <option value="Advanced">Advanced</option>
+            <option className="bg-slate-900 text-slate-100" value="All">All difficulties</option>
+            <option className="bg-slate-900 text-slate-100" value="Beginner">Beginner</option>
+            <option className="bg-slate-900 text-slate-100" value="Intermediate">Intermediate</option>
+            <option className="bg-slate-900 text-slate-100" value="Advanced">Advanced</option>
           </select>
         </div>
 
@@ -257,9 +257,9 @@ export function StretchesPage() {
           <div>
             <label className="mb-1 block text-xs text-slate-400">Difficulty</label>
             <select className={selectClass} value={form.difficultyLevel} onChange={(e) => setForm({ ...form, difficultyLevel: e.target.value })}>
-              <option value="Beginner">Beginner</option>
-              <option value="Intermediate">Intermediate</option>
-              <option value="Advanced">Advanced</option>
+              <option className="bg-slate-900 text-slate-100" value="Beginner">Beginner</option>
+              <option className="bg-slate-900 text-slate-100" value="Intermediate">Intermediate</option>
+              <option className="bg-slate-900 text-slate-100" value="Advanced">Advanced</option>
             </select>
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-300">

@@ -121,11 +121,11 @@ export function BillingReportsPage() {
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-100"
             >
               {REPORT_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>
+                <option className="bg-slate-900 text-slate-100" key={o.id} value={o.id}>
                   {o.label}
                 </option>
               ))}
-              <option value="member-ledger">Member ledger</option>
+              <option className="bg-slate-900 text-slate-100" value="member-ledger">Member ledger</option>
             </select>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

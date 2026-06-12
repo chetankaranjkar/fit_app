@@ -45,7 +45,7 @@ export function TrainersPayrollTab() {
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">Trainer</label>
             <select value={trainerId} onChange={(e) => setTrainerId(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
               {trainers.map((trainer) => (
-                <option key={trainer.id} value={trainer.id}>{trainer.name}</option>
+                <option className="bg-slate-900 text-slate-100" key={trainer.id} value={trainer.id}>{trainer.name}</option>
               ))}
             </select>
           </div>
@@ -70,8 +70,8 @@ export function TrainersPayrollTab() {
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">Type</label>
             <select value={adjustmentType} onChange={(e) => setAdjustmentType(e.target.value as 'bonus' | 'deduction')} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
-              <option value="bonus">Bonus</option>
-              <option value="deduction">Deduction</option>
+              <option className="bg-slate-900 text-slate-100" value="bonus">Bonus</option>
+              <option className="bg-slate-900 text-slate-100" value="deduction">Deduction</option>
             </select>
           </div>
           <Input type="number" label="Amount" value={String(amount)} onChange={(e) => setAmount(Number(e.target.value))} />

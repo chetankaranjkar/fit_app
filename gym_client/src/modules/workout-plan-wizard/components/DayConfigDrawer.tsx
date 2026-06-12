@@ -122,9 +122,11 @@ export function DayConfigDrawer({ day, exercises, warmups, stretches, onClose, o
               }}
               className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
             >
-              <option value="">Select focus</option>
+              <option value="" className="bg-slate-900 text-slate-100">
+                Select focus
+              </option>
               {FOCUS_AREAS.map((f) => (
-                <option key={f} value={f}>
+                <option key={f} value={f} className="bg-slate-900 text-slate-100">
                   {f}
                 </option>
               ))}

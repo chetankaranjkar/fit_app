@@ -293,14 +293,14 @@ export function OwnerQrDashboard() {
                       setBranchId(Number.isFinite(n) && n > 0 ? n : null)
                     }}
                   >
-                    {branchesQuery.isPending && <option value="">Loading…</option>}
+                    {branchesQuery.isPending && <option className="bg-slate-900 text-slate-100" value="">Loading…</option>}
                     {!branchesQuery.isPending && (
                       <option value="" className="bg-slate-900">
                         Select branch…
                       </option>
                     )}
                     {(branchesQuery.data ?? []).map((b) => (
-                      <option key={b.id} value={b.id}>
+                      <option className="bg-slate-900 text-slate-100" key={b.id} value={b.id}>
                         {b.branchName}
                       </option>
                     ))}

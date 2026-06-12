@@ -85,7 +85,7 @@ export function WorkoutPlanAuditPage() {
                 className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white"
               >
                 {actionOptions.map((o) => (
-                  <option key={o.value || 'all'} value={o.value}>
+                  <option className="bg-slate-900 text-slate-100" key={o.value || 'all'} value={o.value}>
                     {o.label}
                   </option>
                 ))}

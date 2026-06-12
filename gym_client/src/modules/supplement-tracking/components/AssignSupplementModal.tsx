@@ -81,9 +81,9 @@ export function AssignSupplementModal({ open, onClose, userId, memberName, onAss
             onChange={(e) => setSupplementMasterId(e.target.value ? Number(e.target.value) : '')}
             required
           >
-            <option value="">Select supplement…</option>
+            <option className="bg-slate-900 text-slate-100" value="">Select supplement…</option>
             {masters.map((m) => (
-              <option key={m.id} value={m.id}>
+              <option className="bg-slate-900 text-slate-100" key={m.id} value={m.id}>
                 {m.name} ({m.category})
               </option>
             ))}
@@ -100,7 +100,7 @@ export function AssignSupplementModal({ open, onClose, userId, memberName, onAss
             onChange={(e) => setTiming(e.target.value)}
           >
             {SUPPLEMENT_TIMINGS.map((t) => (
-              <option key={t.value} value={t.value}>
+              <option className="bg-slate-900 text-slate-100" key={t.value} value={t.value}>
                 {t.label}
               </option>
             ))}
@@ -119,9 +119,9 @@ export function AssignSupplementModal({ open, onClose, userId, memberName, onAss
             value={productId}
             onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : '')}
           >
-            <option value="">None</option>
+            <option className="bg-slate-900 text-slate-100" value="">None</option>
             {products.map((p) => (
-              <option key={p.id} value={p.id}>
+              <option className="bg-slate-900 text-slate-100" key={p.id} value={p.id}>
                 {p.name} ({p.sku})
               </option>
             ))}

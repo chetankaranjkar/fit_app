@@ -24,11 +24,11 @@ export function FilterBar({
         onChange={(event) => onChange({ ...value, category: event.target.value })}
         aria-label="Filter by exercise category"
       >
-        <option value="">All categories</option>
-        <option value="Strength">Strength</option>
-        <option value="Cardio">Cardio</option>
-        <option value="Mobility">Mobility</option>
-        <option value="Rehab">Rehab</option>
+        <option className="bg-slate-900 text-slate-100" value="">All categories</option>
+        <option className="bg-slate-900 text-slate-100" value="Strength">Strength</option>
+        <option className="bg-slate-900 text-slate-100" value="Cardio">Cardio</option>
+        <option className="bg-slate-900 text-slate-100" value="Mobility">Mobility</option>
+        <option className="bg-slate-900 text-slate-100" value="Rehab">Rehab</option>
       </select>
       <select
         className={selectClass}
@@ -36,10 +36,10 @@ export function FilterBar({
         onChange={(event) => onChange({ ...value, difficulty: event.target.value })}
         aria-label="Filter by difficulty"
       >
-        <option value="">All difficulty</option>
-        <option value="Beginner">Beginner</option>
-        <option value="Intermediate">Intermediate</option>
-        <option value="Advanced">Advanced</option>
+        <option className="bg-slate-900 text-slate-100" value="">All difficulty</option>
+        <option className="bg-slate-900 text-slate-100" value="Beginner">Beginner</option>
+        <option className="bg-slate-900 text-slate-100" value="Intermediate">Intermediate</option>
+        <option className="bg-slate-900 text-slate-100" value="Advanced">Advanced</option>
       </select>
       <Input
         value={value.equipment}

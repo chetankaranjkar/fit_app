@@ -42,7 +42,7 @@ export function ListPagination({
             aria-label="Rows per page"
           >
             {pageSizeOptions.map((size) => (
-              <option key={size} value={size}>
+              <option className="bg-slate-900 text-slate-100" key={size} value={size}>
                 {size} / page
               </option>
             ))}

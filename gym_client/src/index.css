@@ -68,6 +68,24 @@ body.dashboard-app {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Native <select> lists: avoid white dropdown + inherited light text */
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+select option:checked,
+select option:hover,
+select option:focus {
+  background-color: #1e293b;
+  color: #f8fafc;
+}
+
 .data-grid-scroll {
   scrollbar-gutter: stable;
 }

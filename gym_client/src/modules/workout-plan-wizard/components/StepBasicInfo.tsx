@@ -40,7 +40,7 @@ export function StepBasicInfo({ value, categories, onChange }: Props) {
           Goal
           <select value={value.goal} onChange={(e) => onChange({ goal: e.target.value })} className={`mt-1 ${selectClass}`}>
             {GOALS.map((g) => (
-              <option key={g} value={g}>
+              <option key={g} value={g} className="bg-slate-900 text-slate-100">
                 {g}
               </option>
             ))}
@@ -54,7 +54,7 @@ export function StepBasicInfo({ value, categories, onChange }: Props) {
             className={`mt-1 ${selectClass}`}
           >
             {DIFFICULTIES.map((d) => (
-              <option key={d} value={d}>
+              <option key={d} value={d} className="bg-slate-900 text-slate-100">
                 {d}
               </option>
             ))}
@@ -144,9 +144,11 @@ export function StepBasicInfo({ value, categories, onChange }: Props) {
             onChange={(e) => onChange({ workoutCategoryId: Number(e.target.value) })}
             className={`mt-1 ${selectClass}`}
           >
-            <option value={0}>None</option>
+            <option value={0} className="bg-slate-900 text-slate-100">
+              None
+            </option>
             {categories.map((c) => (
-              <option key={c.id} value={c.id}>
+              <option key={c.id} value={c.id} className="bg-slate-900 text-slate-100">
                 {c.name}
               </option>
             ))}

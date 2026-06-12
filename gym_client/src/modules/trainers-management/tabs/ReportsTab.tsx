@@ -81,8 +81,8 @@ export function TrainersReportsTab() {
           <div className="sm:col-span-2">
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-slate-400">Trainer</label>
             <select className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm" value={filters.trainerId} onChange={(e) => setFilters((prev) => ({ ...prev, trainerId: e.target.value }))}>
-              <option value="all">All trainers</option>
-              {trainers.map((trainer) => <option key={trainer.id} value={trainer.id}>{trainer.name}</option>)}
+              <option className="bg-slate-900 text-slate-100" value="all">All trainers</option>
+              {trainers.map((trainer) => <option className="bg-slate-900 text-slate-100" key={trainer.id} value={trainer.id}>{trainer.name}</option>)}
             </select>
           </div>
         </div>

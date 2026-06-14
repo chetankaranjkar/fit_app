@@ -6,6 +6,7 @@ import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { HeroStat } from '../../components/dashboard/premium/HeroStat'
 import { QuickAction } from '../../components/dashboard/premium/QuickAction'
 import { getDashboardUser } from '../../lib/dashboardUser'
+import { trainerClientsReturnPath, memberWorkoutTimelineUrl, trainerWorkoutsReviewUrl, workoutAssignmentUrl } from '../../lib/workoutAssignmentLinks'
 import { authService } from '../../services/auth.service'
 import { usersService } from '../../services/users.service'
 import { userSchedulesService } from '../../services/userSchedules.service'
@@ -32,15 +33,13 @@ export function TrainerDashboardPage() {
     queryFn: async () => {
       const todayStr = new Date().toISOString().slice(0, 10)
       const [usersRes, schedulesRes, attendanceRes] = await Promise.all([
-        usersService.getAll(),
+        usersService.getAll({ assignedToCoachOnly: true }),
         userSchedulesService.getAll(),
         attendanceService.getByDateRange(todayStr, todayStr),
       ])
       const users = (usersRes.data ?? []) as User[]
       const schedules = (schedulesRes.data ?? []) as UserScheduleDto[]
-      const clients = trainerId
-        ? users.filter((u) => u.trainerId === trainerId && u.isActive !== false)
-        : users.filter((u) => u.isActive !== false).slice(0, 20)
+      const clients = users.filter((u) => u.isActive !== false)
 
       const todayDow = new Date().getDay()
       const todaySessions = schedules.filter(
@@ -70,6 +69,20 @@ export function TrainerDashboardPage() {
         <header className="relative overflow-hidden rounded-3xl border border-orange-500/20 bg-gradient-to-br from-orange-600/20 via-red-600/10 to-transparent p-6 sm:p-8">
           <p className="text-sm text-orange-200/80">Coach workspace</p>
           <h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">Hey {userName.split(' ')[0]} — let&apos;s train</h1>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              to="/dashboard/training/programs/new"
+              className="inline-flex items-center justify-center rounded-xl border border-orange-400/50 bg-orange-500/20 px-4 py-2.5 text-sm font-semibold text-orange-50 shadow-md shadow-orange-900/25 transition hover:bg-orange-500/30"
+            >
+              New program
+            </Link>
+            <Link
+              to="/dashboard/training/workout-assignments"
+              className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/10"
+            >
+              Assign program
+            </Link>
+          </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <HeroStat role="trainer" label="Today's sessions" numericValue={isLoading ? 0 : data?.todaySessions.length ?? 0} />
             <HeroStat role="trainer" label="Active clients" numericValue={isLoading ? 0 : data?.clients.length ?? 0} />
@@ -127,26 +140,51 @@ export function TrainerDashboardPage() {
           <GlassPanel role="trainer" title="Assigned clients">
             <ul className="divide-y divide-white/5">
               {(data?.clients ?? []).slice(0, 6).map((c) => (
-                <li key={c.id} className="flex items-center justify-between py-3 text-sm">
-                  <Link to={`/dashboard/users/${c.id}`} className="font-medium text-white hover:text-orange-300">
+                <li key={c.id} className="flex items-center justify-between gap-2 py-3 text-sm">
+                  <Link to={`/dashboard/users/${c.id}`} className="min-w-0 font-medium text-white hover:text-orange-300">
                     {c.firstName} {c.lastName}
                   </Link>
-                  <span className="text-slate-500">{c.phone ?? c.email}</span>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {trainerId ? (
+                      <Link
+                        to={workoutAssignmentUrl({
+                          userId: c.id,
+                          trainerId,
+                          returnTo: trainerClientsReturnPath(trainerId),
+                        })}
+                        className="text-xs font-semibold text-orange-300 hover:underline"
+                      >
+                        Assign program
+                      </Link>
+                    ) : null}
+                    <span className="hidden text-slate-500 sm:inline">{c.phone ?? c.email}</span>
+                  </div>
                 </li>
               ))}
             </ul>
-            <Link to="/dashboard/users" className="mt-2 inline-block text-xs text-orange-400 hover:underline">
-              All clients →
+            <Link
+              to={
+                trainerId
+                  ? `/dashboard/trainers/${trainerId}?tab=clients`
+                  : '/dashboard/users'
+              }
+              className="mt-2 inline-block text-xs text-orange-400 hover:underline"
+            >
+              All members →
             </Link>
           </GlassPanel>
 
-          <GlassPanel role="trainer" title="Recent client workouts" subtitle="Live tracking">
+          <GlassPanel role="trainer" title="Workouts to review" subtitle="Live tracking">
             <ul className="divide-y divide-white/5">
               {(memberWorkouts ?? []).slice(0, 6).map((w) => (
                 <li key={w.sessionId} className="flex items-center justify-between py-3 text-sm">
                   <div>
                     <Link
-                      to={`/dashboard/training/member-workouts/${w.memberId}`}
+                      to={memberWorkoutTimelineUrl({
+                        memberId: w.userId || w.memberId,
+                        trainerId: trainerId ?? undefined,
+                        returnTo: trainerWorkoutsReviewUrl(),
+                      })}
                       className="font-medium text-white hover:text-orange-300"
                     >
                       {w.memberName}
@@ -162,6 +200,12 @@ export function TrainerDashboardPage() {
                 <li className="py-6 text-center text-sm text-slate-500">No tracked workouts yet.</li>
               ) : null}
             </ul>
+            <Link
+              to={trainerWorkoutsReviewUrl()}
+              className="mt-2 inline-block text-xs text-orange-400 hover:underline"
+            >
+              Review all client workouts →
+            </Link>
           </GlassPanel>
 
           <GlassPanel role="trainer" title="Client progress" subtitle="Focus list">
@@ -187,16 +231,41 @@ export function TrainerDashboardPage() {
         <section>
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-orange-300/80">Quick actions</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <QuickAction role="trainer" to="/dashboard/access/scan" label="Start session" icon={<span>▶</span>} />
-            <QuickAction role="trainer" to="/dashboard/attendance" label="Mark attendance" icon={<span>✓</span>} />
+            <QuickAction
+              role="trainer"
+              to="/dashboard/training/programs/new"
+              label="New program"
+              icon={<span>+</span>}
+            />
             <QuickAction
               role="trainer"
               to="/dashboard/training/workout-assignments"
-              label="Upload workout"
+              label="Assign program"
               icon={<span>⚡</span>}
             />
-            <QuickAction role="trainer" to="/dashboard/diet-plans" label="Upload diet" icon={<span>◆</span>} />
-            <QuickAction role="trainer" to="/dashboard/users" label="Message client" icon={<span>💬</span>} />
+            <QuickAction
+              role="trainer"
+              to="/dashboard/diet-plans/assign"
+              label="Assign diet"
+              icon={<span>◆</span>}
+            />
+            <QuickAction
+              role="trainer"
+              to={
+                trainerId
+                  ? `/dashboard/trainers/${trainerId}?tab=clients`
+                  : '/dashboard/users'
+              }
+              label="My clients"
+              icon={<span>👥</span>}
+            />
+            <QuickAction
+              role="trainer"
+              to={trainerWorkoutsReviewUrl()}
+              label="Review workouts"
+              icon={<span>◎</span>}
+            />
+            <QuickAction role="trainer" to="/dashboard/attendance" label="Attendance" icon={<span>✓</span>} />
           </div>
         </section>
       </DashboardPageContent>

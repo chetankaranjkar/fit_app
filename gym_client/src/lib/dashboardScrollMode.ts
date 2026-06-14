@@ -1,11 +1,8 @@
 /**
  * Routes where the main shell stays fixed and only the data grid panel scrolls.
- * Keep this list aligned with pages that use EnterpriseDataGrid inside
- * DataPageSection + DashboardTablePanel (flex-1) layout.
+ * `/dashboard/users` uses soft scroll (taller layout + light page scroll) — see UsersPage.
  */
 const EXACT_LOCK_ROUTES = new Set([
-  '/dashboard/users',
-  '/dashboard/trainers',
   '/dashboard/payments',
   '/dashboard/user-memberships',
   '/dashboard/membership-plans',

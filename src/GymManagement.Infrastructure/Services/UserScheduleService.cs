@@ -38,6 +38,8 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<UserScheduleDto> CreateScheduleAsync(CreateUserScheduleDto createScheduleDto)
         {
+            await MemberTrainingEligibilityGuard.EnsureCanAssignWorkoutOrDietAsync(_unitOfWork, createScheduleDto.UserId);
+
             // One active workout plan per member — deactivate slots tied to a different plan.
             var conflicting = await _unitOfWork.UserSchedules
                 .FindAsync(s =>
@@ -74,6 +76,8 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<UserScheduleDto> AssignWorkoutPlanAsync(AssignWorkoutPlanDto assignWorkoutPlanDto)
         {
+            await MemberTrainingEligibilityGuard.EnsureCanAssignWorkoutOrDietAsync(_unitOfWork, assignWorkoutPlanDto.UserId);
+
             if (assignWorkoutPlanDto.DeactivateExistingAssignments)
             {
                 var existingActiveSchedules = await _unitOfWork.UserSchedules
@@ -114,6 +118,8 @@ namespace GymManagement.Infrastructure.Services
         {
             var user = await _unitOfWork.Users.GetByIdAsync(generateScheduleDto.UserId);
             if (user == null) return false;
+
+            await MemberTrainingEligibilityGuard.EnsureCanAssignWorkoutOrDietAsync(_unitOfWork, generateScheduleDto.UserId);
 
             // Check if user already has schedules
             var existingSchedules = await _unitOfWork.UserSchedules

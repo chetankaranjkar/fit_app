@@ -3,14 +3,15 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/app_config.dart';
 import '../../providers/auth_providers.dart';
+import '../../services/biometric_prefs.dart';
+import '../../services/biometric_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
-import '../media/onboarding_profile_photo_screen.dart';
 import '../../widgets/tiger_fitness_logo.dart';
+import '../auth/post_auth_navigation.dart';
 
 /// Splash: navigate quickly; no Hive/network on this screen.
 class SplashScreen extends ConsumerStatefulWidget {
@@ -54,6 +55,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     if (!mounted || _leftSplash) return;
 
     if (hasCache) {
+      final biometricOn = await BiometricPrefs.isEnabled();
+      if (biometricOn && await BiometricService.instance.canAuthenticate()) {
+        if (!mounted || _leftSplash) return;
+        _leftSplash = true;
+        debugPrint('Splash → biometric unlock');
+        context.go('/biometric-unlock');
+        return;
+      }
       await _openHome();
     } else {
       _openLogin(reason: 'signed-out');
@@ -71,20 +80,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     if (!mounted || _leftSplash) return;
     _leftSplash = true;
     debugPrint('Splash → home');
-
-    try {
-      final prefs = await SharedPreferences.getInstance()
-          .timeout(const Duration(seconds: 2));
-      final dismissed = prefs.getBool(kProfilePhotoPromptDismissedKey) ?? false;
-      if (!mounted) return;
-      if (!dismissed) {
-        context.go('/onboarding/photo');
-        return;
-      }
-    } catch (_) {}
-
-    if (!mounted) return;
-    context.go('/home');
+    await navigateAfterAuthenticatedSession(context);
   }
 
   @override

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
@@ -34,11 +34,40 @@ const tabs = [
   'Progress',
 ] as const
 
-function tabClass(active: boolean) {
+type ProgramTab = (typeof tabs)[number]
+
+const TAB_FROM_SLUG: Record<string, ProgramTab> = {
+  overview: 'Overview',
+  warmup: 'Warmup & Stretch',
+  schedule: 'Weekly Schedule',
+  exercises: 'Exercises',
+  members: 'Assigned Members',
+  analytics: 'Analytics',
+  progress: 'Progress',
+}
+
+const TAB_TO_SLUG: Record<ProgramTab, string> = {
+  Overview: 'overview',
+  'Warmup & Stretch': 'warmup',
+  'Weekly Schedule': 'schedule',
+  Exercises: 'exercises',
+  'Assigned Members': 'members',
+  Analytics: 'analytics',
+  Progress: 'progress',
+}
+
+function tabFromSearchParam(raw: string | null): ProgramTab {
+  if (raw && TAB_FROM_SLUG[raw]) return TAB_FROM_SLUG[raw]
+  return 'Overview'
+}
+
+function tabClass(active: boolean, needsAttention?: boolean) {
   return `rounded-xl px-4 py-2 text-sm font-medium transition ${
     active
       ? 'bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] text-white shadow-lg shadow-purple-500/20'
-      : 'border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.07]'
+      : needsAttention
+        ? 'border border-amber-400/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15'
+        : 'border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.07]'
   }`
 }
 
@@ -48,7 +77,29 @@ export function ProgramDetailPage() {
   const id = Number(programId)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<(typeof tabs)[number]>('Overview')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tab, setTab] = useState<ProgramTab>(() => tabFromSearchParam(searchParams.get('tab')))
+
+  useEffect(() => {
+    setTab(tabFromSearchParam(searchParams.get('tab')))
+  }, [searchParams])
+
+  const selectTab = useCallback(
+    (next: ProgramTab) => {
+      setTab(next)
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev)
+          const slug = TAB_TO_SLUG[next]
+          if (slug === 'overview') params.delete('tab')
+          else params.set('tab', slug)
+          return params
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
 
   const { data: program, isLoading } = useQuery({
     queryKey: ['program', id],
@@ -75,6 +126,7 @@ export function ProgramDetailPage() {
   const [useDefaultStretches, setUseDefaultStretches] = useState(true)
 
   const weeks = localWeeks ?? program?.weeks ?? []
+  const scheduleNeedsSetup = !weeks.length
   const warmups = localWarmups ?? program?.warmups ?? []
   const stretches = localStretches ?? program?.stretches ?? []
   const setWeeks = useCallback((w: ProgramWeekDto[]) => setLocalWeeks(w), [])
@@ -260,11 +312,29 @@ export function ProgramDetailPage() {
           <>
             <div className="mb-6 flex flex-wrap gap-2 print:hidden">
               {tabs.map((t) => (
-                <button key={t} type="button" className={tabClass(tab === t)} onClick={() => setTab(t)}>
+                <button
+                  key={t}
+                  type="button"
+                  className={tabClass(tab === t, t === 'Weekly Schedule' && scheduleNeedsSetup && tab !== t)}
+                  onClick={() => selectTab(t)}
+                >
                   {t}
+                  {t === 'Weekly Schedule' && scheduleNeedsSetup ? ' •' : ''}
                 </button>
               ))}
             </div>
+
+            {scheduleNeedsSetup && tab !== 'Weekly Schedule' ? (
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 print:hidden">
+                <p className="text-sm text-amber-100">
+                  Add exercises per day on the <strong className="font-semibold">Weekly Schedule</strong> tab — members
+                  see each day&apos;s workout in the mobile app.
+                </p>
+                <Button type="button" size="sm" onClick={() => selectTab('Weekly Schedule')}>
+                  Open weekly schedule
+                </Button>
+              </div>
+            ) : null}
 
             <AnimatePresence mode="wait">
               <motion.div
@@ -316,6 +386,17 @@ export function ProgramDetailPage() {
                               ~{Math.round(program.estimatedDurationSeconds / 60)} min est.
                             </span>
                           )}
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          <Button type="button" size="sm" onClick={() => selectTab('Weekly Schedule')}>
+                            Edit schedule &amp; exercises
+                          </Button>
+                          <Link
+                            to={`/dashboard/training/workout-assignments?highlightProgram=${id}`}
+                            className="inline-flex items-center rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition hover:bg-violet-500/15"
+                          >
+                            Assign members
+                          </Link>
                         </div>
                       </div>
                     </div>
@@ -410,6 +491,15 @@ export function ProgramDetailPage() {
 
                 {tab === 'Exercises' && (
                   <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                      <p className="text-sm text-slate-400">
+                        Read-only summary by day. Add or change sets and exercises on{' '}
+                        <span className="text-slate-200">Weekly Schedule</span>.
+                      </p>
+                      <Button type="button" variant="soft" size="sm" onClick={() => selectTab('Weekly Schedule')}>
+                        Edit weekly schedule
+                      </Button>
+                    </div>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                         <p className="text-xs text-slate-400">Total sets</p>

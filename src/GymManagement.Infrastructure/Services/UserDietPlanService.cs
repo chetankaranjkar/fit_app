@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
+using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
 
@@ -72,6 +73,8 @@ namespace GymManagement.Infrastructure.Services
                 if (!trainerExists)
                     throw new BadRequestException("Assigned trainer was not found.");
             }
+
+            await MemberTrainingEligibilityGuard.EnsureCanAssignWorkoutOrDietAsync(_context, dto.UserId).ConfigureAwait(false);
 
             // One active diet assignment per member — replace any existing active row.
             if (dto.IsActive)

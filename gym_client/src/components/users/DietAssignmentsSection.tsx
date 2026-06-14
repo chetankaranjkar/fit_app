@@ -13,6 +13,8 @@ export function DietAssignmentsSection({
   dietLoading,
   viewMode,
   dietActionPending,
+  canAssignTrainingServices = true,
+  trainingBlockedMessage,
   onAssignDiet,
   onChangeDiet,
   onRemoveDiet,
@@ -21,11 +23,14 @@ export function DietAssignmentsSection({
   dietLoading: boolean
   viewMode: boolean
   dietActionPending: boolean
+  canAssignTrainingServices?: boolean
+  trainingBlockedMessage?: string
   onAssignDiet: () => void
   onChangeDiet: () => void
   onRemoveDiet: (assignment: UserDietPlanDto) => void
 }) {
   const hasActiveDiet = memberHasDietAssignment(assignments)
+  const assignDisabled = dietActionPending || !canAssignTrainingServices
 
   return (
     <section className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.55)]">
@@ -43,7 +48,7 @@ export function DietAssignmentsSection({
             <Button
               size="sm"
               onClick={hasActiveDiet ? onChangeDiet : onAssignDiet}
-              disabled={dietActionPending}
+              disabled={assignDisabled}
             >
               {hasActiveDiet ? 'Change plan' : '+ Assign diet plan'}
             </Button>
@@ -51,6 +56,11 @@ export function DietAssignmentsSection({
         </div>
       </div>
       <div className="px-6 py-5">
+        {!canAssignTrainingServices && !viewMode && trainingBlockedMessage ? (
+          <p className="mb-4 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            {trainingBlockedMessage}
+          </p>
+        ) : null}
         {dietLoading ? (
           <p className="text-sm text-slate-400">Loading diet assignments…</p>
         ) : assignments.length === 0 ? (
@@ -59,7 +69,7 @@ export function DietAssignmentsSection({
               No diet plan assigned. Assign one so the member sees meals in the mobile app.
             </p>
             {!viewMode && (
-              <Button size="sm" className="mt-3" onClick={onAssignDiet}>
+              <Button size="sm" className="mt-3" onClick={onAssignDiet} disabled={assignDisabled}>
                 Assign diet plan
               </Button>
             )}

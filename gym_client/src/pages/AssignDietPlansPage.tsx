@@ -15,6 +15,7 @@ import { Modal } from '../components/ui/Modal'
 import { usersService } from '../services/users.service'
 import { dietPlansService } from '../services/dietPlans.service'
 import { userDietPlansService } from '../services/userDietPlans.service'
+import { MEMBER_ACTIVE_MEMBERSHIP_REQUIRED } from '../lib/memberTrainingEligibility'
 import type { User } from '../types/user'
 import type { DietPlanDto } from '../types/dietPlan'
 import type { UserDietPlanDto, CreateUserDietPlanDto } from '../types/dietPlan'
@@ -131,6 +132,13 @@ export function AssignDietPlansPage() {
       const { data } = await userDietPlansService.getAssignments()
       return data
     },
+  })
+
+  const selectedAssignUserId = modalOpen && form.userId > 0 ? form.userId : null
+  const { data: assignTargetSummary } = useQuery({
+    queryKey: ['userProfileSummary', selectedAssignUserId],
+    queryFn: () => usersService.getProfileSummary(selectedAssignUserId!).then((r) => r.data),
+    enabled: selectedAssignUserId != null && !bulkAssignMode,
   })
 
   useEffect(() => {
@@ -250,6 +258,10 @@ export function AssignDietPlansPage() {
 
     if (!form.userId || !form.dietPlanId) {
       setFormError('Please select a user and a diet plan.')
+      return
+    }
+    if (assignTargetSummary && !assignTargetSummary.hasActiveMembership) {
+      setFormError(MEMBER_ACTIVE_MEMBERSHIP_REQUIRED)
       return
     }
     const existingForUser = assignments.filter(

@@ -101,5 +101,26 @@ public static class UserMembershipRules
         return GymCheckInAllowedStatuses.Contains(status);
     }
 
+    public const string TrainingAssignmentRequiresActiveMembershipMessage =
+        "An active membership is required before assigning workout or diet plans.";
+
+    public const string TrainingAssignmentRequiresActiveMembershipCode = "ACTIVE_MEMBERSHIP_REQUIRED";
+
+    /// <summary>
+    /// Workout and diet assignments require a paid <see cref="MembershipStatus.Active"/> row
+    /// whose end date has not passed (expired or pending-payment rows are blocked).
+    /// In-memory only — use <c>MemberTrainingEligibilityQueries</c> for EF queries.
+    /// </summary>
+    public static bool AllowsWorkoutAndDietAssignment(
+        MembershipStatus status,
+        DateTime endDate,
+        DateTime? asOfUtc = null)
+    {
+        var today = (asOfUtc ?? DateTime.UtcNow).Date;
+        if (endDate.Date < today)
+            return false;
+        return status == MembershipStatus.Active;
+    }
+
 }
 

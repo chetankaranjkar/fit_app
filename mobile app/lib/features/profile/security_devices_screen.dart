@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,8 @@ import '../../animations/app_motion.dart';
 import '../../models/device_security_models.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/device_security_providers.dart';
+import '../../services/biometric_prefs.dart';
+import '../../services/biometric_service.dart';
 import '../../services/device_security_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
@@ -52,6 +55,8 @@ class SecurityDevicesScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
+                      const _BiometricUnlockTile(),
+                      const SizedBox(height: AppSpacing.lg),
                       devices.when(
                         loading: () => const SkeletonBlock(height: 220),
                         error: (e, _) => ErrorStateView(
@@ -333,6 +338,128 @@ class LoginHistoryScreen extends ConsumerWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BiometricUnlockTile extends StatefulWidget {
+  const _BiometricUnlockTile();
+
+  @override
+  State<_BiometricUnlockTile> createState() => _BiometricUnlockTileState();
+}
+
+class _BiometricUnlockTileState extends State<_BiometricUnlockTile> {
+  bool? _enabled;
+  bool _available = false;
+  String _label = 'Biometric unlock';
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    final available = await BiometricService.instance.canAuthenticate();
+    final enabled = await BiometricPrefs.isEnabled();
+    final label = await BiometricService.instance.unlockLabel();
+    if (!mounted) return;
+    setState(() {
+      _available = available;
+      _enabled = enabled;
+      _label = label;
+    });
+  }
+
+  Future<void> _onChanged(bool next) async {
+    if (_busy) return;
+
+    if (!next) {
+      await BiometricPrefs.setEnabled(false);
+      if (mounted) setState(() => _enabled = false);
+      return;
+    }
+
+    if (!_available) return;
+
+    setState(() => _busy = true);
+    final ok = await BiometricService.instance.authenticate(
+      reason: 'Enable $_label for Tiger Fitness',
+    );
+    if (!mounted) return;
+
+    if (ok) {
+      await BiometricPrefs.setEnabled(true);
+      setState(() {
+        _enabled = true;
+        _busy = false;
+      });
+      return;
+    }
+
+    setState(() => _busy = false);
+    if (!mounted) return;
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('Could not enable $_label'),
+        content: const Text('Try again from this screen after verifying your device biometrics.'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_available) {
+      return GlassCard(
+        child: Text(
+          'Biometric unlock is not available on this device.',
+          style: AppType.subhead.copyWith(color: AppColors.resolveTextSecondary(context)),
+        ),
+      );
+    }
+
+    return GlassCard(
+      child: Row(
+        children: [
+          Icon(CupertinoIcons.lock_shield, color: AppColors.accent, size: 20),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Unlock with $_label',
+                  style: AppType.body.copyWith(color: AppColors.resolveText(context)),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Open the app faster when you are already signed in.',
+                  style: AppType.footnote.copyWith(
+                    color: AppColors.resolveTextSecondary(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_busy)
+            const CupertinoActivityIndicator()
+          else
+            CupertinoSwitch(
+              value: _enabled ?? false,
+              onChanged: _onChanged,
+              activeTrackColor: AppColors.accent,
+            ),
         ],
       ),
     );

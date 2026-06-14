@@ -420,6 +420,7 @@ namespace GymManagement.Infrastructure.Data
             await LinkAsync("STAFF", PermissionCodes.CREATE_MEMBER);
             await LinkAsync("STAFF", PermissionCodes.UsersAccess);
             await LinkAsync("STAFF", PermissionCodes.VIEW_ATTENDANCE);
+            await LinkAsync("TRAINER", PermissionCodes.TrainerAccess);
             await LinkAsync("TRAINER", PermissionCodes.LeadsTrainer);
             await LinkAsync("ADMIN", PermissionCodes.RetailPos);
             await LinkAsync("STAFF", PermissionCodes.RetailPos);

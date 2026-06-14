@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.DTOs.Common;
@@ -49,10 +50,26 @@ namespace GymManagement.Infrastructure.Services
             _usernameAvailability = usernameAvailability;
         }
 
-        public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
+        public async Task<IEnumerable<UserDto>> GetAllUsersAsync(int? assignedToTrainerProfileId = null)
         {
-            var users = (await _unitOfWork.Users.GetAllAsync()).ToList();
-            var userIds = users.Select(u => u.Id).ToHashSet();
+            IEnumerable<User> users;
+            if (assignedToTrainerProfileId.HasValue)
+            {
+                users = await _db.Users.AsNoTracking()
+                    .Where(u => !u.IsDeleted)
+                    .ApplyAssignedToTrainerFilter(_db.UserInstructors, assignedToTrainerProfileId.Value)
+                    .OrderByDescending(u => u.RegistrationDate)
+                    .ThenByDescending(u => u.Id)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                users = await _unitOfWork.Users.GetAllAsync();
+            }
+
+            var userList = users.ToList();
+            var userIds = userList.Select(u => u.Id).ToHashSet();
             var allAuth = (await _unitOfWork.AuthUsers.GetAllAsync()).ToList();
             var trainersByUserId = (await _unitOfWork.Trainers.GetAllAsync()).ToDictionary(t => t.UserId, t => t);
             var authByUserId = allAuth
@@ -64,7 +81,7 @@ namespace GymManagement.Infrastructure.Services
             var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(userIds);
             var billingByUserId = await GetBillingSummariesByUserIdsAsync(userIds);
             var trainerAssignmentByUserId = await GetActiveTrainerAssignmentByUserIdsAsync(userIds);
-            return users.Select(u =>
+            return userList.Select(u =>
             {
                 var dto = MapToDto(u, authByUserId.GetValueOrDefault(u.Id), trainerUserIds.Contains(u.Id), userTypesByUserId.GetValueOrDefault(u.Id), appRoleNamesByUserId.GetValueOrDefault(u.Id));
                 EnrichWithBillingSummary(dto, billingByUserId.GetValueOrDefault(u.Id));
@@ -80,7 +97,8 @@ namespace GymManagement.Infrastructure.Services
             bool membersOnly = false,
             bool? isActive = null,
             bool includeBillingSummary = true,
-            string? preferredGymTime = null)
+            string? preferredGymTime = null,
+            int? assignedToTrainerProfileId = null)
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
@@ -99,6 +117,9 @@ namespace GymManagement.Infrastructure.Services
                 else
                     query = query.ApplyMembersOnlyFilter(_db.UserUserTypes, memberTypeId.Value);
             }
+
+            if (assignedToTrainerProfileId.HasValue)
+                query = query.ApplyAssignedToTrainerFilter(_db.UserInstructors, assignedToTrainerProfileId.Value);
 
             query = query.ApplyUserSearchFilter(_db.AuthUsers, search);
 
@@ -161,14 +182,19 @@ namespace GymManagement.Infrastructure.Services
         {
             var user = await _unitOfWork.Users.GetByIdAsync(id);
             if (user == null) return null;
-            var allAuth = (await _unitOfWork.AuthUsers.GetAllAsync()).ToList();
-            var trainer = (await _unitOfWork.Trainers.GetAllAsync()).FirstOrDefault(i => i.UserId == user.Id);
-            var authUser = allAuth.FirstOrDefault(a => a.UserId == user.Id);
-            var userTypes = await GetUserTypeDtosForUserAsync(id);
-            var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(new HashSet<int> { id });
-            var dto = MapToDto(user, authUser, trainer != null, userTypes, appRoleNamesByUserId.GetValueOrDefault(id));
-            await EnrichUserProfileForEditPrefillAsync(dto, id);
-            await EnrichProfileIdsAsync(dto, id);
+
+            var authUser = await _db.AuthUsers.AsNoTracking()
+                .Where(a => !a.IsDeleted && a.UserId == id)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+            var hasTrainerProfile = await _db.Trainers.AsNoTracking()
+                .AnyAsync(t => !t.IsDeleted && t.UserId == id)
+                .ConfigureAwait(false);
+            var userTypes = await GetUserTypeDtosForUserAsync(id).ConfigureAwait(false);
+            var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(new HashSet<int> { id }).ConfigureAwait(false);
+            var dto = MapToDto(user, authUser, hasTrainerProfile, userTypes, appRoleNamesByUserId.GetValueOrDefault(id));
+            await EnrichUserProfileForEditPrefillAsync(dto, id).ConfigureAwait(false);
+            await EnrichProfileIdsAsync(dto, id).ConfigureAwait(false);
             return dto;
         }
 
@@ -189,6 +215,81 @@ namespace GymManagement.Infrastructure.Services
                 MemberProfile = member,
                 StaffProfile = staff,
                 TrainerProfile = trainer,
+            };
+        }
+
+        public async Task<UserProfileSummaryDto?> GetUserProfileSummaryAsync(int userId)
+        {
+            var userExists = await _db.Users.AsNoTracking().AnyAsync(u => u.Id == userId && !u.IsDeleted);
+            if (!userExists)
+                return null;
+
+            var latestDetail = await _db.UserDetails.AsNoTracking()
+                .Where(d => d.UserId == userId && !d.IsDeleted)
+                .OrderByDescending(d => d.MeasurementDate)
+                .ThenByDescending(d => d.Id)
+                .Select(d => new { d.Height, d.Weight, d.BMI })
+                .FirstOrDefaultAsync();
+
+            var latestMetrics = await _db.BodyMetricsLogs.AsNoTracking()
+                .Where(b => b.UserId == userId && !b.IsDeleted)
+                .OrderByDescending(b => b.MeasurementDate)
+                .ThenByDescending(b => b.CreatedDate)
+                .Select(b => new { b.HeightCm, b.WeightKg })
+                .FirstOrDefaultAsync();
+
+            decimal? latestWeight = latestDetail?.Weight ?? latestMetrics?.WeightKg;
+            decimal? latestHeight = latestDetail?.Height ?? latestMetrics?.HeightCm;
+            decimal? bmi = latestDetail?.BMI;
+            if ((!bmi.HasValue || bmi.Value <= 0)
+                && latestHeight.HasValue && latestWeight.HasValue
+                && latestHeight.Value > 0 && latestWeight.Value > 0)
+            {
+                bmi = CalculateBMI(latestHeight.Value, latestWeight.Value);
+            }
+
+            var attendanceDates = await _db.AttendanceLogs.AsNoTracking()
+                .Where(a => a.UserId == userId && !a.IsDeleted)
+                .Select(a => a.AttendanceDate)
+                .Distinct()
+                .ToListAsync();
+
+            var (streak, visitsThisMonth, totalVisits) = ComputeAttendanceStats(attendanceDates);
+
+            var todayUtc = DateTime.UtcNow.Date;
+            var hasActiveMembership = await MemberTrainingEligibilityQueries.HasEligibleMembershipAsync(_db, userId);
+
+            var hasWorkoutAssignment = await _db.UserSchedules.AsNoTracking()
+                .AnyAsync(s => s.UserId == userId && !s.IsDeleted && s.IsActive);
+
+            var dietRows = await (
+                from udp in _db.UserDietPlans.AsNoTracking()
+                join dp in _db.DietPlans.AsNoTracking() on udp.DietPlanId equals dp.Id
+                where udp.UserId == userId && !udp.IsDeleted
+                orderby udp.StartDate descending
+                select new DietAssignmentSnapshot(
+                    udp.IsActive,
+                    udp.StartDate,
+                    udp.EndDate,
+                    dp.PlanName))
+                .ToListAsync();
+
+            var hasAnyDietAssignment = dietRows.Count > 0;
+            var primaryDiet = ResolvePrimaryDietAssignment(dietRows, todayUtc);
+
+            return new UserProfileSummaryDto
+            {
+                LatestWeightKg = latestWeight,
+                LatestHeightCm = latestHeight,
+                Bmi = bmi,
+                Streak = streak,
+                VisitsThisMonth = visitsThisMonth,
+                TotalVisits = totalVisits,
+                HasActiveMembership = hasActiveMembership,
+                HasWorkoutAssignment = hasWorkoutAssignment,
+                HasDietAssignment = dietRows.Any(row => DietAssignmentCountsAsActive(row, todayUtc)),
+                HasAnyDietAssignment = hasAnyDietAssignment,
+                PrimaryDietPlanName = primaryDiet?.DietPlanName,
             };
         }
 
@@ -1277,6 +1378,85 @@ namespace GymManagement.Infrastructure.Services
             var heightInMeters = height / 100;
             return weight / (heightInMeters * heightInMeters);
         }
+
+        private static (int Streak, int VisitsThisMonth, int TotalVisits) ComputeAttendanceStats(
+            IReadOnlyList<DateTime> attendanceDates)
+        {
+            var uniqueDayKeys = attendanceDates
+                .Select(d => d.Date)
+                .Distinct()
+                .Select(d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+                .OrderByDescending(d => d, StringComparer.Ordinal)
+                .ToList();
+
+            var totalVisits = uniqueDayKeys.Count;
+            if (totalVisits == 0)
+                return (0, 0, 0);
+
+            var monthKey = DateTime.UtcNow.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            var visitsThisMonth = uniqueDayKeys.Count(d => d.StartsWith(monthKey, StringComparison.Ordinal));
+
+            var today = DateTime.UtcNow.Date;
+            var topDay = DateTime.Parse(uniqueDayKeys[0], CultureInfo.InvariantCulture).Date;
+            var dayDiff = (today - topDay).Days;
+            if (dayDiff > 1)
+                return (0, visitsThisMonth, totalVisits);
+
+            var streak = 0;
+            var iter = today;
+            for (var i = 0; i < uniqueDayKeys.Count; i++)
+            {
+                var cur = DateTime.Parse(uniqueDayKeys[i], CultureInfo.InvariantCulture).Date;
+                var gap = (iter - cur).Days;
+                if (gap == 0)
+                {
+                    streak++;
+                    iter = iter.AddDays(-1);
+                }
+                else if (gap == 1 && i == 0)
+                {
+                    streak++;
+                    iter = iter.AddDays(-2);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return (streak, visitsThisMonth, totalVisits);
+        }
+
+        private static DietAssignmentSnapshot? ResolvePrimaryDietAssignment(
+            IReadOnlyList<DietAssignmentSnapshot> rows,
+            DateTime todayUtc)
+        {
+            if (rows.Count == 0)
+                return null;
+
+            var active = rows.FirstOrDefault(row => DietAssignmentCountsAsActive(row, todayUtc));
+            return active ?? rows[0];
+        }
+
+        private static bool DietAssignmentCountsAsActive(DietAssignmentSnapshot row, DateTime todayUtc)
+        {
+            if (!row.IsActive)
+                return false;
+
+            if (row.StartDate.Date > todayUtc)
+                return false;
+
+            if (row.EndDate.HasValue && row.EndDate.Value.Date < todayUtc)
+                return false;
+
+            return true;
+        }
+
+        private sealed record DietAssignmentSnapshot(
+            bool IsActive,
+            DateTime StartDate,
+            DateTime? EndDate,
+            string DietPlanName);
 
         private static decimal CalculateBMR(decimal weight, decimal height, DateTime dateOfBirth, string gender)
         {

@@ -5,9 +5,15 @@ import type { UsernameAvailability } from '../types/usernameAvailability'
 import { parseMobileAvailability, parseUsernameAvailability } from '../lib/parseAvailability'
 import { PHONE_MESSAGES } from '../lib/phone'
 import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
+import type { UserProfileSummary } from '../types/userProfileSummary'
 
 export const usersService = {
-  getAll: () => api.get<User[]>('/Users'),
+  getAll: (params?: { assignedToCoachOnly?: boolean }) => {
+    const query = new URLSearchParams()
+    if (params?.assignedToCoachOnly) query.set('assignedToCoachOnly', 'true')
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return api.get<User[]>(`/Users${suffix}`)
+  },
   getPaged: (
     params: {
       page: number
@@ -19,6 +25,8 @@ export const usersService = {
       preferredGymTime?: string
       /** Skip payment summary joins for faster typeahead search. */
       includeBilling?: boolean
+      /** Limit to members assigned to the signed-in coach (trainer persona / coach-only access). */
+      assignedToCoachOnly?: boolean
     },
     options?: { signal?: AbortSignal },
   ) => {
@@ -30,9 +38,11 @@ export const usersService = {
     if (typeof params.isActive === 'boolean') query.set('isActive', String(params.isActive))
     if (params.preferredGymTime?.trim()) query.set('preferredGymTime', params.preferredGymTime.trim())
     if (params.includeBilling === false) query.set('includeBilling', 'false')
+    if (params.assignedToCoachOnly) query.set('assignedToCoachOnly', 'true')
     return api.get<PagedUsersResponse>(`/Users/paged?${query.toString()}`, { signal: options?.signal })
   },
   getById: (id: number) => api.get<User>(`/Users/${id}`),
+  getProfileSummary: (id: number) => api.get<UserProfileSummary>(`/Users/${id}/profile-summary`),
   checkMobileAvailability: async (mobile: string, excludeUserId?: number): Promise<MobileNumberAvailability> => {
     const query = new URLSearchParams()
     query.set('mobile', mobile.trim())

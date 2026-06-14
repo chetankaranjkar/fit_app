@@ -91,16 +91,6 @@ export function ProgramsPage() {
     },
   })
 
-  const createMutation = useMutation({
-    mutationFn: (payload: CreateWorkoutPlanDto) => programsService.create(payload).then((r) => r.data),
-    onSuccess: (created) => {
-      void queryClient.invalidateQueries({ queryKey: ['programs'] })
-      handleCloseModal()
-      navigate(`/dashboard/training/programs/${created.id}`)
-    },
-    onError: (error: Error) => setFormError(error.message || 'Failed to create program'),
-  })
-
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: CreateWorkoutPlanDto }) =>
       programsService.update(id, payload),
@@ -171,13 +161,6 @@ export function ProgramsPage() {
     }
   }, [programs])
 
-  function handleOpenCreate() {
-    setEditing(null)
-    setWizardInitialForm(defaultProgramForm)
-    setFormError(null)
-    setModalOpen(true)
-  }
-
   function handleOpenEdit(plan: WorkoutPlan) {
     setEditing(plan)
     setWizardInitialForm(planToProgramForm(plan))
@@ -193,13 +176,10 @@ export function ProgramsPage() {
   }
 
   function handleWizardSubmit(form: ProgramFormState) {
+    if (!editing) return
     setFormError(null)
     const payload: CreateWorkoutPlanDto = programFormToPayload(form)
-    if (editing) {
-      updateMutation.mutate({ id: editing.id, payload })
-      return
-    }
-    createMutation.mutate(payload)
+    updateMutation.mutate({ id: editing.id, payload })
   }
 
   function handleDelete(plan: WorkoutPlan) {
@@ -360,7 +340,22 @@ export function ProgramsPage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-slate-400">No programs match the filters.</p>
+            <div className="px-6 py-8 text-sm text-slate-400">
+              {programs.length === 0 ? (
+                <>
+                  <p>No programs yet.</p>
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    onClick={() => navigate('/dashboard/training/programs/new')}
+                  >
+                    Create your first program
+                  </Button>
+                </>
+              ) : (
+                <p>No programs match the filters.</p>
+              )}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1100px] text-left text-sm">
@@ -425,7 +420,7 @@ export function ProgramsPage() {
                             Open
                           </Button>
                           <Button variant="soft" size="sm" onClick={() => handleOpenEdit(plan)}>
-                            Quick edit
+                            Edit basics
                           </Button>
                           <Button
                             variant="soft"
@@ -460,19 +455,21 @@ export function ProgramsPage() {
         </DashboardTablePanel>
       </DashboardSubpageShell>
 
-      <ProgramWizard
-        key={`${editing?.id ?? 'new'}-${modalOpen}`}
-        open={modalOpen}
-        editing={Boolean(editing)}
-        initialForm={wizardInitialForm}
-        exercises={exercises}
-        categories={categories}
-        trainers={trainers}
-        error={formError}
-        isSaving={createMutation.isPending || updateMutation.isPending}
-        onClose={handleCloseModal}
-        onSubmit={handleWizardSubmit}
-      />
+      {editing ? (
+        <ProgramWizard
+          key={`edit-${editing.id}-${modalOpen}`}
+          open={modalOpen}
+          editing
+          initialForm={wizardInitialForm}
+          exercises={exercises}
+          categories={categories}
+          trainers={trainers}
+          error={formError}
+          isSaving={updateMutation.isPending}
+          onClose={handleCloseModal}
+          onSubmit={handleWizardSubmit}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={deleteConfirm.open}

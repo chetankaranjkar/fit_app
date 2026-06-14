@@ -17,6 +17,12 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import {
+  bulkWorkoutAssignmentUrl,
+  memberWorkoutTimelineUrl,
+  trainerClientsReturnPath,
+  workoutAssignmentUrl,
+} from '../lib/workoutAssignmentLinks'
 import { displayAadhaar, validateAadhaarNumber } from '../lib/aadhaar'
 import {
   digitsOnlyPhoneInput,
@@ -91,6 +97,24 @@ function availabilityPillClass(raw?: string | null) {
 /* ------------------------------------------------------------------ */
 
 type TabId = 'Overview' | 'Clients' | 'Schedule' | 'Reviews' | 'Performance' | 'Settings'
+
+const TAB_FROM_SEARCH_PARAM: Record<string, TabId> = {
+  overview: 'Overview',
+  clients: 'Clients',
+  schedule: 'Schedule',
+  reviews: 'Reviews',
+  performance: 'Performance',
+  settings: 'Settings',
+}
+
+const TAB_TO_SEARCH_PARAM: Partial<Record<TabId, string>> = {
+  Overview: 'overview',
+  Clients: 'clients',
+  Schedule: 'schedule',
+  Reviews: 'reviews',
+  Performance: 'performance',
+  Settings: 'settings',
+}
 
 const TAB_META: { id: TabId; icon: ReactNode }[] = [
   {
@@ -167,11 +191,32 @@ export function TrainerDetailPage() {
   const id = trainerId ? parseInt(trainerId, 10) : NaN
   const { userName } = getDashboardUser()
   const queryClient = useQueryClient()
-  const initialTab = searchParams.get('tab') as TabId | null
-  const [activeTab, setActiveTab] = useState<TabId>(
-    TAB_META.some((t) => t.id === initialTab) ? (initialTab as TabId) : 'Overview'
-  )
+  const tabFromUrl = searchParams.get('tab')
+  const initialTabKey = tabFromUrl?.trim().toLowerCase() ?? ''
+  const initialTab = TAB_FROM_SEARCH_PARAM[initialTabKey]
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'Overview')
   const [editOpen, setEditOpen] = useState(searchParams.get('mode') === 'edit')
+
+  useEffect(() => {
+    const key = tabFromUrl?.trim().toLowerCase() ?? ''
+    const next = TAB_FROM_SEARCH_PARAM[key]
+    if (next) setActiveTab(next)
+  }, [tabFromUrl])
+
+  const handleSelectTab = (tab: TabId) => {
+    setActiveTab(tab)
+    const tabParam = TAB_TO_SEARCH_PARAM[tab]
+    const params = new URLSearchParams(searchParams)
+    if (searchParams.get('mode') === 'edit') params.set('mode', 'edit')
+    else params.delete('mode')
+    if (tabParam && tabParam !== 'overview') params.set('tab', tabParam)
+    else params.delete('tab')
+    const search = params.toString()
+    navigate(
+      { pathname: `/dashboard/trainers/${trainerId}`, search: search ? `?${search}` : '' },
+      { replace: true },
+    )
+  }
 
   const {
     data: trainer,
@@ -181,6 +226,7 @@ export function TrainerDetailPage() {
     queryKey: ['trainer', id],
     queryFn: async () => (await trainersService.getById(id)).data,
     enabled: !Number.isNaN(id),
+    staleTime: 30_000,
   })
 
   const updateMutation = useMutation({
@@ -198,20 +244,22 @@ export function TrainerDetailPage() {
       </DashboardLayout>
     )
   }
-  if (isLoading) {
-    return (
-      <DashboardLayout userName={userName}>
-        <FallbackMessage title="Loading trainer…" message="Fetching the trainer profile." loading />
-      </DashboardLayout>
-    )
-  }
-  if (error || !trainer) {
+  if (error && !isLoading && !trainer) {
     return (
       <DashboardLayout userName={userName}>
         <FallbackMessage
           title="Trainer not found"
           message="We couldn't load this trainer. They may have been removed."
         />
+      </DashboardLayout>
+    )
+  }
+  if (isLoading || !trainer) {
+    return (
+      <DashboardLayout userName={userName}>
+        <DashboardPageContent className="max-w-[1600px]">
+          <TrainerDetailPageSkeleton activeTab={activeTab} />
+        </DashboardPageContent>
       </DashboardLayout>
     )
   }
@@ -255,7 +303,7 @@ export function TrainerDetailPage() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleSelectTab(tab.id)}
                 aria-selected={on}
                 role="tab"
                 className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
@@ -700,16 +748,16 @@ function Row({ label, value }: { label: string; value: string }) {
 
 function ClientsTab({ trainerId }: { trainerId: number }) {
   const navigate = useNavigate()
-  const { data: clients = [], isLoading, isError, error, refetch, isFetching } = useQuery({
+  const { data: clients = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['trainer-clients', trainerId],
     queryFn: async () => {
       const { data } = await trainersService.getAssignedClients(trainerId)
       return Array.isArray(data) ? data : []
     },
-    staleTime: 0,
+    staleTime: 60_000,
   })
 
-  if (isLoading || isFetching) {
+  if (isLoading) {
     return (
       <div className="glass-card rounded-2xl p-10 text-center text-sm text-slate-400">
         Loading clients…
@@ -736,15 +784,38 @@ function ClientsTab({ trainerId }: { trainerId: number }) {
     )
   }
 
+  const clientsReturnTo = trainerClientsReturnPath(trainerId)
+  const bulkAssignHref = bulkWorkoutAssignmentUrl({
+    userIds: clients.map((c) => c.userId),
+    trainerId,
+    returnTo: clientsReturnTo,
+  })
+
   return (
-    <div className="glass-card overflow-hidden rounded-2xl">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <p className="text-xs text-slate-400">
+          Assign a workout program per client. Membership plan is shown for reference only.
+        </p>
+        {bulkAssignHref ? (
+          <Button
+            variant="soft"
+            size="sm"
+            onClick={() => navigate(bulkAssignHref)}
+          >
+            Assign to all clients
+          </Button>
+        ) : null}
+      </div>
+      <div className="glass-card overflow-hidden rounded-2xl">
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-white/10 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <th className="px-4 py-3">Client</th>
             <th className="px-4 py-3">Email</th>
-            <th className="px-4 py-3">Plan</th>
+            <th className="px-4 py-3">Membership</th>
             <th className="px-4 py-3">Assigned</th>
+            <th className="px-4 py-3">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -769,10 +840,47 @@ function ClientsTab({ trainerId }: { trainerId: number }) {
               <td className="px-4 py-2.5 text-slate-300">
                 {formatDate(c.assignedOn)}
               </td>
+              <td className="px-4 py-2.5">
+                <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant="soft"
+                    size="sm"
+                    className="!px-2 !py-1 text-[11px]"
+                    onClick={() =>
+                      navigate(
+                        workoutAssignmentUrl({
+                          userId: c.userId,
+                          trainerId,
+                          returnTo: clientsReturnTo,
+                        }),
+                      )
+                    }
+                  >
+                    Assign program
+                  </Button>
+                  <Button
+                    variant="soft"
+                    size="sm"
+                    className="!px-2 !py-1 text-[11px]"
+                    onClick={() =>
+                      navigate(
+                        memberWorkoutTimelineUrl({
+                          memberId: c.userId,
+                          trainerId,
+                          returnTo: clientsReturnTo,
+                        }),
+                      )
+                    }
+                  >
+                    Workouts
+                  </Button>
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
@@ -792,6 +900,7 @@ function ScheduleTab({ trainerId, trainer }: { trainerId: number; trainer: Train
         return []
       }
     },
+    staleTime: 60_000,
   })
 
   const workingDays = parseCsv(trainer.workingDays)
@@ -902,6 +1011,7 @@ function ReviewsTab({ trainer }: { trainer: Trainer }) {
         return []
       }
     },
+    staleTime: 60_000,
   })
 
   const distribution = useMemo(() => {
@@ -1014,6 +1124,7 @@ function PerformanceTab({ trainerId }: { trainerId: number }) {
         return null
       }
     },
+    staleTime: 60_000,
   })
 
   if (isLoading) {
@@ -1731,6 +1842,29 @@ function EditTrainerModal({
 /* ------------------------------------------------------------------ */
 /*                             Fallbacks                                */
 /* ------------------------------------------------------------------ */
+
+function TrainerDetailPageSkeleton({ activeTab }: { activeTab: TabId }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-6">
+      <div className="h-4 w-48 animate-pulse rounded bg-white/[0.05]" />
+      <div className="h-44 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-20 animate-pulse rounded-2xl bg-white/[0.04]" />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-1">
+        {TAB_META.map((tab) => (
+          <div
+            key={tab.id}
+            className={`h-10 rounded-xl ${tab.id === activeTab ? 'w-32 bg-white/10' : 'w-24 bg-white/[0.05]'}`}
+          />
+        ))}
+      </div>
+      <div className="min-h-[280px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.02]" />
+    </div>
+  )
+}
 
 function FallbackMessage({
   title,

@@ -96,6 +96,17 @@ export function canAccessUsersNav(): boolean {
   return canAccessNavSection(NavPermission.users)
 }
 
+/** Trainer coach hub: assigned clients list (trainers) or full directory (staff/admin). */
+export function canAccessClientsNav(): boolean {
+  return canAccessUsersNav() || authService.canTrainerAccess()
+}
+
+export function shouldScopeUsersToAssignedCoach(activePersona: 'admin' | 'trainer' | 'member' | 'other'): boolean {
+  if (!authService.canTrainerAccess()) return false
+  if (!authService.canUsersAccess()) return true
+  return activePersona === 'trainer'
+}
+
 export function canAccessTrainingNav(): boolean {
   return canAccessNavSection(NavPermission.trainer)
 }

@@ -1,8 +1,8 @@
 import type { DashboardRole } from '../../features/auth/roleRouting'
 import {
   canAccessAttendanceNav,
+  canAccessClientsNav,
   canAccessTrainingNav,
-  canAccessUsersNav,
   getStaffFrontDeskNavLinks,
 } from '../../features/auth/navPermissions'
 
@@ -40,7 +40,7 @@ export const ROLE_NAV: Record<DashboardRole, NavItem[]> = {
   admin: [],
   trainer: [
     { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { path: '/dashboard/users', label: 'Clients', icon: 'users' },
+    { path: '/dashboard/users', label: 'Members', icon: 'users' },
     { path: '/dashboard/attendance', label: 'Attendance', icon: 'attendance' },
     { path: '/dashboard/access/scan', label: 'Check-in', icon: 'scan' },
   ],
@@ -119,7 +119,7 @@ export function getOtherNavItems(): NavItem[] {
 
 export function getTrainerNavItems(): NavItem[] {
   return ROLE_NAV.trainer.filter((item) => {
-    if (item.path === '/dashboard/users') return canAccessUsersNav()
+    if (item.path === '/dashboard/users') return canAccessClientsNav()
     if (item.path === '/dashboard/attendance') return canAccessAttendanceNav()
     return true
   })

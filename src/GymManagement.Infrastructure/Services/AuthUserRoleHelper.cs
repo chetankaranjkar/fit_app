@@ -55,17 +55,7 @@ namespace GymManagement.Infrastructure.Services
             if (appRole == null)
                 return;
 
-            var exists = await unitOfWork.UserRoles.ExistsAsync(ur =>
-                ur.UserId == userId && ur.RoleId == appRole.Id);
-            if (exists)
-                return;
-
-            await unitOfWork.UserRoles.AddAsync(new UserRole
-            {
-                UserId = userId,
-                RoleId = appRole.Id,
-                CreatedDate = DateTime.UtcNow
-            });
+            await unitOfWork.EnsureUserRoleAsync(userId, appRole.Id);
         }
 
         /// <summary>Profile <see cref="User.Id"/> for RBAC: <see cref="AuthUser.UserId"/>.</summary>

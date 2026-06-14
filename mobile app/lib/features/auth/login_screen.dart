@@ -2,14 +2,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../core/api_exception.dart';
 import '../../core/app_config.dart';
 import '../../core/api_exception.dart';
 import '../../providers/auth_providers.dart';
 import '../../services/auth_service.dart';
+import 'biometric_offer.dart';
 import 'device_limit_sheet.dart';
+import 'post_auth_navigation.dart';
 import '../../animations/app_motion.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_button.dart';
@@ -76,7 +76,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
 
       if (!mounted) return;
-      context.go('/home');
+      await offerBiometricUnlockIfAvailable(context);
+      if (!mounted) return;
+      await navigateAfterAuthenticatedSession(context);
     } on ApiException catch (e) {
       final limit = AuthService.instance.parseDeviceLimit(e);
       if (limit != null && mounted) {
@@ -88,7 +90,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: pwd,
           ),
         );
-        if (resolved == true && mounted) context.go('/home');
+        if (resolved == true && mounted) {
+          await offerBiometricUnlockIfAvailable(context);
+          if (mounted) await navigateAfterAuthenticatedSession(context);
+        }
         return;
       }
       HapticFeedback.heavyImpact();

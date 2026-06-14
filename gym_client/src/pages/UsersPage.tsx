@@ -10,17 +10,16 @@ import {
   type DataGridColumnDef,
 } from '../components/data-grid'
 import { formatInr } from '../lib/formatInr'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
-import { MetricCard } from '../components/dashboard/MetricCard'
-import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { MemberMembershipsModal } from '../components/users/MemberMembershipsModal'
 import { useWalkthrough } from '../modules/help/hooks/useWalkthrough'
+import { useDashboardRoleOrCurrent } from '../features/auth/DashboardRoleContext'
+import { shouldScopeUsersToAssignedCoach } from '../features/auth/navPermissions'
+import { authService } from '../services/auth.service'
 import { usersService } from '../services/users.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
 import { trainersService } from '../services/trainers.service'
@@ -62,6 +61,17 @@ import {
   MEMBER_SEARCH_DEBOUNCE_MS,
   MEMBER_SEARCH_MIN_CHARS,
 } from '../lib/userSearch'
+import {
+  ADMIN_SHIFT_FILTER_OPTIONS,
+  MEMBER_SHIFT_FILTER_OPTIONS,
+  memberBatchDotClass,
+  memberBatchLabel,
+  type MemberShiftFilter,
+} from '../lib/memberBatches'
+import { useMemberDirectoryStats, useTrainerMemberStats } from '../hooks/useTrainerMemberStats'
+import { MembersPageHeader } from '../components/users/MembersPageHeader'
+import { MembersSummaryStrip } from '../components/users/MembersSummaryStrip'
+import { TrainerMemberActionsMenu } from '../components/users/TrainerMemberActionsMenu'
 
 function getDashboardUser() {
   try {
@@ -74,29 +84,6 @@ function getDashboardUser() {
   }
 }
 
-const metricIcons = {
-  users: (
-    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-    </svg>
-  ),
-  active: (
-    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  sun: (
-    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-    </svg>
-  ),
-  moon: (
-    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-    </svg>
-  ),
-}
-
 function getAge(dateOfBirth: string): number | null {
   if (!dateOfBirth) return null
   const d = new Date(dateOfBirth)
@@ -106,6 +93,13 @@ function getAge(dateOfBirth: string): number | null {
   const m = today.getMonth() - d.getMonth()
   if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--
   return age
+}
+
+function formatJoinDate(iso?: string | null) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function formatDueDate(iso?: string | null) {
@@ -238,124 +232,6 @@ function MemberAvatar({
   )
 }
 
-function UserCard({
-  user,
-  onView,
-  onViewMemberships,
-  onEdit,
-  onDeactivate,
-  onActivate,
-  onCollectPayment,
-}: {
-  user: User
-  onView: (u: User) => void
-  onViewMemberships: (u: User) => void
-  onEdit: (u: User) => void
-  onDeactivate: (u: User) => void
-  onActivate: (u: User) => void
-  onCollectPayment?: (u: User) => void
-}) {
-  const name = memberDisplayName(user)
-  const age = getAge(user.dateOfBirth)
-  return (
-    <div className="group relative overflow-visible rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.06] hover:shadow-lg hover:shadow-black/20">
-      {/* Top: avatar + name + status */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <MemberAvatar user={user} onClick={() => onView(user)} />
-          <div className="min-w-0">
-            <button
-              type="button"
-              onClick={() => onView(user)}
-              className="block max-w-full truncate text-left text-sm font-semibold leading-tight text-white transition hover:text-blue-200 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 rounded-sm"
-            >
-              {name}
-            </button>
-            {age != null && <p className="text-[11px] text-slate-500">Age {age}</p>}
-          </div>
-        </div>
-        <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-          user.isActive
-            ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/25'
-            : 'bg-slate-500/15 text-slate-400 ring-1 ring-white/10'
-        }`}>
-          {user.isActive ? 'Active' : 'Inactive'}
-        </span>
-      </div>
-
-      {/* Meta row */}
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-        {user.email && (
-          <a href={`mailto:${user.email}`} className="truncate text-[11px] text-blue-400/80 hover:text-blue-300 transition-colors">
-            {user.email}
-          </a>
-        )}
-        {user.phone && (
-          <span className="text-[11px] text-slate-400">{user.phone}</span>
-        )}
-        {user.preferredGymTime && (
-          <span className="text-[11px] text-slate-400">⏰ {user.preferredGymTime}</span>
-        )}
-        {user.assignedTrainerName && (
-          <span className="text-[11px] text-violet-300/90">Coach: {user.assignedTrainerName}</span>
-        )}
-      </div>
-
-      <div className="mt-3">
-        <PaymentDueCell user={user} onCollect={onCollectPayment} />
-      </div>
-
-      {/* Divider */}
-      <div className="my-3 h-px bg-white/5" />
-
-      {/* Actions */}
-      <div className="grid grid-cols-3 gap-1.5">
-        <button
-          type="button"
-          onClick={() => onViewMemberships(user)}
-          className="rounded-lg bg-violet-500/10 py-2 text-[11px] font-semibold text-violet-200 transition hover:bg-violet-500/20"
-        >
-          Memberships
-        </button>
-        <button
-          type="button"
-          onClick={() => onEdit(user)}
-          className="rounded-lg bg-blue-500/10 py-2 text-[11px] font-semibold text-blue-300 transition hover:bg-blue-500/20"
-        >
-          Edit
-        </button>
-        {user.isActive ? (
-          <button
-            type="button"
-            onClick={() => onDeactivate(user)}
-            className="rounded-lg bg-amber-500/10 py-2 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20"
-          >
-            Off
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => onActivate(user)}
-            className="rounded-lg bg-emerald-500/10 py-2 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
-          >
-            On
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-type MemberShiftFilter = 'all' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'
-
-const MEMBER_SHIFT_FILTER_OPTIONS: { value: MemberShiftFilter; label: string }[] = [
-  { value: 'all', label: 'All shifts' },
-  { value: 'Morning', label: 'Morning' },
-  { value: 'Afternoon', label: 'Afternoon' },
-  { value: 'Evening', label: 'Evening' },
-  { value: 'Night', label: 'Night' },
-]
-
 const defaultCreateForm: CreateUserDto = {
   firstName: '',
   lastName: '',
@@ -386,6 +262,12 @@ export function UsersPage() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const { userName } = getDashboardUser()
+  const dashboardRole = useDashboardRoleOrCurrent()
+  const coachClientsOnly = shouldScopeUsersToAssignedCoach(dashboardRole)
+  const canManageMembers = authService.hasPermission('CREATE_MEMBER')
+  const trainerStats = useTrainerMemberStats(coachClientsOnly)
+  const adminDirectoryStats = useMemberDirectoryStats(!coachClientsOnly, { assignedToCoachOnly: false })
+  const directoryStats = coachClientsOnly ? trainerStats : adminDirectoryStats
   const queryClient = useQueryClient()
   const [isAdding, setIsAdding] = useState(false)
   const [form, setForm] = useState<CreateUserDto>(defaultCreateForm)
@@ -418,24 +300,6 @@ export function UsersPage() {
 
   const BULK_IMPORT_BATCH_SIZE = 250
   const [membershipModalUser, setMembershipModalUser] = useState<User | null>(null)
-  const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true
-  )
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const media = window.matchMedia('(min-width: 768px)')
-    const update = (event: MediaQueryListEvent | MediaQueryList) => {
-      setIsDesktopLayout(event.matches)
-    }
-    update(media)
-    if (typeof media.addEventListener === 'function') {
-      media.addEventListener('change', update)
-      return () => media.removeEventListener('change', update)
-    }
-    media.addListener(update)
-    return () => media.removeListener(update)
-  }, [])
 
   useEffect(() => {
     setSearchQuery(searchParams.get('q') ?? '')
@@ -459,7 +323,7 @@ export function UsersPage() {
   const listPreferredGymTimeFilter = shiftFilter === 'all' ? undefined : shiftFilter
 
   const { data: directoryTotalCount } = useQuery({
-    queryKey: ['users-directory-total', statusFilter, shiftFilter],
+    queryKey: ['users-directory-total', statusFilter, shiftFilter, coachClientsOnly],
     queryFn: async () => {
       const { data } = await usersService.getPaged({
         page: 1,
@@ -468,6 +332,7 @@ export function UsersPage() {
         isActive: listIsActiveFilter,
         preferredGymTime: listPreferredGymTimeFilter,
         includeBilling: false,
+        assignedToCoachOnly: coachClientsOnly,
       })
       return data.totalCount ?? 0
     },
@@ -475,7 +340,7 @@ export function UsersPage() {
   })
 
   const { data: usersPage, isLoading, error, isFetching } = useQuery({
-    queryKey: ['users-paged', page, pageSize, effectiveSearch, statusFilter, shiftFilter],
+    queryKey: ['users-paged', page, pageSize, effectiveSearch, statusFilter, shiftFilter, coachClientsOnly],
     queryFn: async ({ signal }) => {
       const { data } = await usersService.getPaged(
         {
@@ -485,6 +350,7 @@ export function UsersPage() {
           membersOnly: true,
           isActive: listIsActiveFilter,
           preferredGymTime: listPreferredGymTimeFilter,
+          assignedToCoachOnly: coachClientsOnly,
         },
         { signal },
       )
@@ -520,18 +386,6 @@ export function UsersPage() {
   const filteredMemberCount = usersPage?.totalCount ?? 0
   /** Full directory size for the current status filter — unchanged by search. */
   const directoryMemberCount = directoryTotalCount ?? filteredMemberCount
-  const isSearchActive = Boolean(effectiveSearch)
-
-  const userStats = useMemo(() => {
-    const total = directoryMemberCount
-    const active = users.filter((u) => u.isActive).length
-    const inactive = users.filter((u) => !u.isActive).length
-    const morning = users.filter((u) => u.preferredGymTime === 'Morning').length
-    const afternoon = users.filter((u) => u.preferredGymTime === 'Afternoon').length
-    const evening = users.filter((u) => u.preferredGymTime === 'Evening').length
-    const night = users.filter((u) => u.preferredGymTime === 'Night').length
-    return { total, active, inactive, morning, afternoon, evening, night }
-  }, [directoryMemberCount, users])
 
   const { data: membershipPlans = [] } = useQuery({
     queryKey: ['membershipPlans'],
@@ -602,6 +456,7 @@ export function UsersPage() {
       setPage(1)
       void queryClient.invalidateQueries({ queryKey: ['users-paged'] })
       void queryClient.invalidateQueries({ queryKey: ['users-directory-total'] })
+      void queryClient.invalidateQueries({ queryKey: ['trainer-member-stats'] })
       setIsAdding(false)
       setForm(defaultCreateForm)
       setFormError(null)
@@ -627,6 +482,7 @@ export function UsersPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['users-paged'] })
       void queryClient.invalidateQueries({ queryKey: ['users-directory-total'] })
+      void queryClient.invalidateQueries({ queryKey: ['trainer-member-stats'] })
     },
   })
 
@@ -996,8 +852,8 @@ export function UsersPage() {
         id: 'member',
         header: 'Member',
         sticky: true,
-        minWidth: 250,
-        width: 280,
+        minWidth: 200,
+        width: 240,
         sortable: true,
         overflowVisible: true,
         accessorFn: (u) => `${u.firstName} ${u.lastName}`.trim(),
@@ -1059,8 +915,9 @@ export function UsersPage() {
       {
         id: 'payment',
         header: 'Payment due',
-        minWidth: 150,
-        width: 160,
+        minWidth: 140,
+        width: 150,
+        hideBelow: 'xl',
         cell: ({ row }) => <PaymentDueCell user={row} onCollect={handleCollectPayment} />,
       },
       {
@@ -1081,49 +938,181 @@ export function UsersPage() {
       },
       {
         id: 'actions',
-        header: 'Actions',
-        width: 300,
-        minWidth: 300,
-        align: 'left',
+        header: '',
+        width: 56,
+        minWidth: 56,
+        align: 'center',
         overflowVisible: true,
         cell: ({ row }) => (
-          <div className="flex flex-nowrap items-center justify-start gap-1 whitespace-nowrap">
-            <button
-              type="button"
-              onClick={() => handleViewMemberships(row)}
-              className="shrink-0 rounded-lg bg-violet-500/10 px-2 py-1 text-[11px] font-semibold text-violet-200 transition hover:bg-violet-500/20"
-            >
-              Memberships
-            </button>
-            <button
-              type="button"
-              onClick={() => handleEdit(row)}
-              className="shrink-0 rounded-lg bg-blue-500/10 px-2 py-1 text-[11px] font-semibold text-blue-300 transition hover:bg-blue-500/20"
-            >
-              Edit
-            </button>
-            {row.isActive ? (
-              <button
-                type="button"
-                onClick={() => handleDeactivate(row)}
-                className="shrink-0 rounded-lg bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20"
-              >
-                Deactivate
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => handleActivate(row)}
-                className="shrink-0 rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
-              >
-                Activate
-              </button>
-            )}
-          </div>
+          <TrainerMemberActionsMenu
+            user={row}
+            onView={handleViewUser}
+            onViewMemberships={handleViewMemberships}
+            onEdit={handleEdit}
+            onDeactivate={handleDeactivate}
+            onActivate={handleActivate}
+          />
         ),
       },
     ],
-    [handleActivate, handleDeactivate, handleEdit, handleViewMemberships],
+    [handleActivate, handleDeactivate, handleEdit, handleViewMemberships, handleViewUser],
+  )
+
+  const trainerMemberColumns = useMemo<DataGridColumnDef<User>[]>(
+    () => [
+      {
+        id: 'member',
+        header: 'Member',
+        sticky: true,
+        minWidth: 260,
+        width: 300,
+        sortable: true,
+        overflowVisible: true,
+        accessorFn: (u) => `${u.firstName} ${u.lastName}`.trim(),
+        cell: ({ row }) => {
+          const name = memberDisplayName(row)
+          return (
+            <div className="flex items-center gap-3">
+              <MemberAvatar user={row} size="sm" onClick={() => handleViewUser(row)} />
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => handleViewUser(row)}
+                  className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-violet-200 hover:underline"
+                >
+                  {name}
+                </button>
+                <p className="truncate text-[11px] text-slate-500">{row.email || '—'}</p>
+              </div>
+            </div>
+          )
+        },
+      },
+      {
+        id: 'phone',
+        header: 'Phone',
+        minWidth: 125,
+        width: 140,
+        hideBelow: 'md',
+        sortable: true,
+        accessorFn: (u) => u.phone ?? '',
+        cell: ({ row }) => <span className="text-sm text-slate-300">{row.phone || '—'}</span>,
+      },
+      {
+        id: 'aadhaar',
+        header: 'Aadhaar',
+        minWidth: 150,
+        width: 160,
+        hideBelow: 'lg',
+        accessorFn: (u) => u.aadhaarNumber ?? u.aadhaarNumberMasked ?? '',
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-slate-300">{displayAadhaar(row)}</span>
+        ),
+      },
+      {
+        id: 'batch',
+        header: 'Batch',
+        minWidth: 150,
+        width: 170,
+        sortable: true,
+        accessorFn: (u) => memberBatchLabel(u.preferredGymTime),
+        cell: ({ row }) => (
+          <span className="inline-flex items-center gap-2 text-xs text-slate-300">
+            <span className={`size-2 shrink-0 rounded-full ${memberBatchDotClass(row.preferredGymTime)}`} />
+            {memberBatchLabel(row.preferredGymTime)}
+          </span>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        minWidth: 110,
+        width: 120,
+        sortable: true,
+        accessorFn: (u) => (u.isActive ? 'Active' : 'Inactive'),
+        cell: ({ row }) => (
+          <StatusBadge variant={row.isActive ? 'success' : 'neutral'} dot>
+            {row.isActive ? 'Active' : 'Inactive'}
+          </StatusBadge>
+        ),
+      },
+      {
+        id: 'payment',
+        header: 'Payment Due',
+        minWidth: 140,
+        width: 150,
+        hideBelow: 'lg',
+        cell: ({ row }) => <PaymentDueCell user={row} onCollect={handleCollectPayment} />,
+      },
+      {
+        id: 'joined',
+        header: 'Join Date',
+        minWidth: 120,
+        width: 130,
+        hideBelow: 'lg',
+        sortable: true,
+        accessorFn: (u) => u.registrationDate ?? '',
+        cell: ({ row }) => (
+          <span className="text-xs text-slate-400">{formatJoinDate(row.registrationDate)}</span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Actions',
+        width: 72,
+        minWidth: 72,
+        align: 'center',
+        overflowVisible: true,
+        cell: ({ row }) => (
+          <TrainerMemberActionsMenu
+            user={row}
+            onView={handleViewUser}
+            onViewMemberships={handleViewMemberships}
+            onEdit={handleEdit}
+            onDeactivate={handleDeactivate}
+            onActivate={handleActivate}
+          />
+        ),
+      },
+    ],
+    [handleActivate, handleDeactivate, handleEdit, handleViewMemberships, handleViewUser, handleCollectPayment],
+  )
+
+  const gridColumns = coachClientsOnly ? trainerMemberColumns : memberColumns
+
+  const membersToolbar = (
+    <DataToolbar
+      className="min-w-0"
+      searchValue={searchQuery}
+      onSearchChange={setSearchQuery}
+      searchPlaceholder={
+        coachClientsOnly
+          ? 'Search by name, mobile, Aadhaar, or email…'
+          : `Search name, email, phone, Aadhaar (min. ${MEMBER_SEARCH_MIN_CHARS} chars)…`
+      }
+      searchAriaLabel="Search members"
+      searchLoading={isSearchPending || isFetching}
+      filters={
+        <>
+          <DataFilterSelect
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v as 'all' | 'active' | 'inactive')}
+            ariaLabel="Filter by status"
+            options={[
+              { value: 'all', label: coachClientsOnly ? 'All Status' : 'All status' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' },
+            ]}
+          />
+          <DataFilterSelect
+            value={shiftFilter}
+            onChange={(v) => setShiftFilter(v as MemberShiftFilter)}
+            ariaLabel={coachClientsOnly ? 'Filter by batch' : 'Filter by shift'}
+            options={coachClientsOnly ? MEMBER_SHIFT_FILTER_OPTIONS : ADMIN_SHIFT_FILTER_OPTIONS}
+          />
+        </>
+      }
+    />
   )
 
   const handleExportFiltered = () => {
@@ -1255,209 +1244,86 @@ export function UsersPage() {
     }
   }
 
-  const contentRef = useRef<HTMLDivElement>(null)
-  const cardsRowRef = useRef<HTMLDivElement>(null)
   const tableSectionRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    gsap.registerPlugin(ScrollTrigger)
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        '.users-dashboard-header',
-        { opacity: 0, y: -20 },
-        { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out' }
-      )
-      const cards = cardsRowRef.current?.querySelectorAll('.metric-card')
-      if (cards && cards.length) {
-        gsap.fromTo(
-          cards,
-          { opacity: 0, y: 40, scale: 0.96 },
-          {
-            opacity: 1,
-            y: 0,
-            scale: 1,
-            duration: 0.6,
-            stagger: 0.08,
-            ease: 'back.out(1.2)',
-            scrollTrigger: { trigger: cardsRowRef.current, start: 'top 85%' },
-          }
-        )
-      }
-      if (tableSectionRef.current) {
-        gsap.fromTo(
-          tableSectionRef.current,
-          { opacity: 0, y: 32 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.75,
-            ease: 'power2.out',
-            scrollTrigger: { trigger: tableSectionRef.current, start: 'top 88%' },
-          }
-        )
-      }
-    }, contentRef)
-    return () => ctx.revert()
-  }, [])
 
   return (
     <DashboardLayout userName={userName}>
-      <DataPageShell>
-      <div ref={contentRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-hidden">
-        {/* Match DashboardPage header: eyebrow, gradient title, actions */}
-        <div
-          className="users-dashboard-header"
-          data-walkthrough="members-header"
-        >
-          {/* Title row */}
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Members</p>
-              <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                All{' '}
-                <span className="bg-[linear-gradient(135deg,#60a5fa,#c084fc)] bg-clip-text text-transparent">
-                  Users
-                </span>
-              </h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => startMembersTour()}
-                className="rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-500/20"
-              >
-                Tour
-              </button>
-              <button
-                type="button"
-                onClick={handleExportFiltered}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
-              >
-                Export CSV
-              </button>
-              <button
-                type="button"
-                onClick={() => {
+      <DataPageShell lockViewport={false} className="gap-3 bg-[#070B14] pb-2">
+        <MembersPageHeader
+          title="All Members"
+          subtitle={
+            coachClientsOnly
+              ? 'Manage members assigned to you'
+              : 'Manage gym member directory'
+          }
+          onExport={handleExportFiltered}
+          onImport={
+            canManageMembers && !coachClientsOnly
+              ? () => {
                   setImportLog([])
                   setImportOpen(true)
-                }}
-                className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
-              >
-                Import CSV
-              </button>
-              <button
-                type="button"
-                onClick={handleStartAdd}
-                data-walkthrough="members-add"
-                className="rounded-xl bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_100%)] px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-500/20 transition hover:brightness-110"
-              >
-                + Add Member
-              </button>
-            </div>
-          </div>
-        </div>
+                }
+              : undefined
+          }
+          onAdd={canManageMembers ? handleStartAdd : undefined}
+          onTour={coachClientsOnly ? undefined : () => startMembersTour()}
+          addWalkthroughId="members-add"
+        />
 
         <DataPageSection>
-        {/* KPI metrics — same MetricCard pattern as dashboard */}
-        <DashboardMetricsGrid cols={6} innerRef={cardsRowRef}>
-          <MetricCard
-            className="metric-card"
-            title="Total members"
-            value={userStats.total}
-            gradient="from-blue-500 to-indigo-500"
-            icon={metricIcons.users}
-            caption="In directory"
+          <MembersSummaryStrip
+            variant={coachClientsOnly ? 'coach' : 'admin'}
+            total={directoryStats.total}
+            active={directoryStats.active}
+            inactive={directoryStats.inactive}
+            batches={directoryStats.batches}
+            maxBatchCount={directoryStats.maxBatchCount}
+            loading={directoryStats.isLoading}
           />
-          <MetricCard
-            className="metric-card"
-            title="Active"
-            value={userStats.active}
-            gradient="from-emerald-400 to-teal-500"
-            icon={metricIcons.active}
-            caption={userStats.inactive > 0 ? `${userStats.inactive} inactive` : 'All accounts enabled'}
-          />
-          <MetricCard
-            className="metric-card"
-            title="Morning"
-            value={userStats.morning}
-            gradient="from-amber-400 to-orange-500"
-            icon={metricIcons.sun}
-            caption="Preferred time"
-          />
-          <MetricCard
-            className="metric-card"
-            title="Afternoon"
-            value={userStats.afternoon}
-            gradient="from-sky-400 to-blue-500"
-            icon={metricIcons.sun}
-            caption="Preferred time"
-          />
-          <MetricCard
-            className="metric-card"
-            title="Evening"
-            value={userStats.evening}
-            gradient="from-violet-500 to-fuchsia-500"
-            icon={metricIcons.moon}
-            caption="Preferred time"
-          />
-          <MetricCard
-            className="metric-card"
-            title="Night"
-            value={userStats.night}
-            gradient="from-slate-500 to-slate-700"
-            icon={metricIcons.moon}
-            caption="Preferred time"
-          />
-        </DashboardMetricsGrid>
         </DataPageSection>
 
-        {/* Members table — glass card like dashboard widgets */}
         <section
           ref={tableSectionRef}
           data-walkthrough="members-table"
-          className="glass-card dashboard-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl"
+          className="flex min-h-[28rem] flex-col overflow-hidden rounded-xl border border-white/[0.1] bg-[#0a101c]/75 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.07),0_8px_40px_-16px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.06] backdrop-blur-xl sm:min-h-[32rem] lg:min-h-[calc(100dvh-15.5rem)]"
         >
-          <div className="shrink-0 border-b border-white/[0.06] px-4 py-4 sm:px-6 sm:py-5">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-white sm:text-base">Member List</h2>
-                <span className="rounded-full bg-white/5 px-2.5 py-0.5 text-xs font-medium text-slate-400">
-                  {isSearchActive
-                    ? `${filteredMemberCount.toLocaleString()} of ${directoryMemberCount.toLocaleString()} members`
-                    : `${directoryMemberCount.toLocaleString()} ${directoryMemberCount === 1 ? 'member' : 'members'}`}
-                </span>
-              </div>
-              <DataToolbar
-                searchValue={searchQuery}
-                onSearchChange={setSearchQuery}
-                searchPlaceholder={`Search name, email, phone, Aadhaar (min. ${MEMBER_SEARCH_MIN_CHARS} characters)…`}
-                searchAriaLabel="Search members"
-                searchLoading={isSearchPending || isFetching}
-                filters={
-                  <>
-                    <DataFilterSelect
-                      value={statusFilter}
-                      onChange={(v) => setStatusFilter(v as 'all' | 'active' | 'inactive')}
-                      ariaLabel="Filter by status"
-                      options={[
-                        { value: 'all', label: 'All status' },
-                        { value: 'active', label: 'Active' },
-                        { value: 'inactive', label: 'Inactive' },
-                      ]}
-                    />
-                    <DataFilterSelect
-                      value={shiftFilter}
-                      onChange={(v) => setShiftFilter(v as MemberShiftFilter)}
-                      ariaLabel="Filter by shift"
-                      options={MEMBER_SHIFT_FILTER_OPTIONS}
-                    />
-                  </>
-                }
-              />
-            </div>
-          </div>
+          <div className="shrink-0 border-b border-white/[0.06] px-3 py-2.5 sm:px-4">{membersToolbar}</div>
 
-          {/* Add User Modal */}
+          {error ? (
+            <p className="shrink-0 px-4 py-2 text-sm text-rose-300">
+              {error instanceof Error ? error.message : 'Failed to load users'}
+            </p>
+          ) : null}
+
+          <EnterpriseDataGrid
+            data={users}
+            columns={gridColumns}
+            getRowId={(u) => u.id}
+            loading={isLoading}
+            virtualize
+            estimateRowHeight={52}
+            className="min-h-[22rem] flex-1 lg:min-h-0"
+            chainScrollToParent
+            emptyMessage={
+              directoryMemberCount === 0 ? 'No members yet.' : 'No members match your filter.'
+            }
+            pagination={{
+              page,
+              pageSize,
+              totalCount: filteredMemberCount,
+              isFetching,
+              pageSizeOptions: coachClientsOnly ? [25, 50, 100, 200] : [25, 50, 100],
+              onPageChange: setPage,
+              onPageSizeChange: (size) => {
+                setPageSize(size)
+                setPage(1)
+              },
+            }}
+          />
+        </section>
+      </DataPageShell>
+
+      {/* Add User Modal */}
           <Modal
             open={isAdding}
             onClose={handleCancelAdd}
@@ -1916,90 +1782,6 @@ export function UsersPage() {
               ) : null}
             </div>
           </Modal>
-
-          {error && (
-            <p className="px-6 py-4 text-rose-300">{error instanceof Error ? error.message : 'Failed to load users'}</p>
-          )}
-          {isLoading ? (
-            <div className="flex h-64 items-center justify-center">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-blue-400" />
-                <p className="text-sm text-slate-500">Loading members…</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Render only one layout branch to avoid double-rendering thousands of members. */}
-              {!isDesktopLayout ? (
-              <div className="min-h-0 flex-1 overflow-auto p-4">
-                {users.length === 0 ? (
-                  <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
-                      <svg className="h-7 w-7 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-slate-400">
-                      {directoryMemberCount === 0 ? 'No members yet.' : 'No members match your filter.'}
-                    </p>
-                    {directoryMemberCount === 0 && (
-                      <button
-                        type="button"
-                        onClick={handleStartAdd}
-                        className="mt-1 rounded-xl bg-[linear-gradient(135deg,#3b82f6,#a855f7)] px-4 py-2 text-xs font-semibold text-white"
-                      >
-                        + Add First Member
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
-                    {users.map((u) => (
-                      <UserCard
-                        key={u.id}
-                        user={u}
-                        onView={handleViewUser}
-                        onViewMemberships={handleViewMemberships}
-                        onEdit={handleEdit}
-                        onDeactivate={handleDeactivate}
-                        onActivate={handleActivate}
-                        onCollectPayment={handleCollectPayment}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-              ) : null}
-
-              {isDesktopLayout ? (
-                <EnterpriseDataGrid
-                  data={users}
-                  columns={memberColumns}
-                  getRowId={(u) => u.id}
-                  loading={isLoading}
-                  virtualize={users.length > 40}
-                  emptyMessage={
-                    directoryMemberCount === 0 ? 'No members yet.' : 'No members match your filter.'
-                  }
-                  pagination={{
-                    page,
-                    pageSize,
-                    totalCount: filteredMemberCount,
-                    isFetching,
-                    pageSizeOptions: [25, 50, 100],
-                    onPageChange: setPage,
-                    onPageSizeChange: (size) => {
-                      setPageSize(size)
-                      setPage(1)
-                    },
-                  }}
-                />
-              ) : null}
-            </>
-          )}
-        </section>
-      </div>
-      </DataPageShell>
 
       <MemberMembershipsModal
         user={membershipModalUser}

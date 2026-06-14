@@ -25,9 +25,9 @@ export function DataToolbar({
   className?: string
 }) {
   return (
-    <div className={`flex flex-col gap-2 sm:flex-row sm:items-center ${className}`}>
+    <div className={`flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center ${className}`}>
       {onSearchChange != null ? (
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1 lg:max-w-md xl:max-w-lg">
           {searchLoading ? (
             <Loader2
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-blue-400"
@@ -47,7 +47,11 @@ export function DataToolbar({
           />
         </div>
       ) : null}
-      {filters ? <div className="flex flex-wrap items-center gap-2">{filters}</div> : null}
+      {filters ? (
+        <div className="flex min-w-0 w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-1 lg:justify-end">
+          {filters}
+        </div>
+      ) : null}
       {actions ? <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{actions}</div> : null}
     </div>
   )

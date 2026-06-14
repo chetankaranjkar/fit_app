@@ -378,6 +378,7 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         return new MemberWorkoutTimelineDto
         {
             MemberId = member.Id,
+            UserId = userId,
             MemberName = memberName,
             Sessions = summaries,
             AdherencePercent = adherence,
@@ -519,6 +520,7 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
                 {
                     SessionId = latest.Id,
                     MemberId = m.Id,
+                    UserId = m.UserId,
                     MemberName = name ?? $"Member #{m.Id}",
                     PlanName = latest.WorkoutPlanId.HasValue && planNames.TryGetValue(latest.WorkoutPlanId.Value, out var pn) ? pn : null,
                     SessionDateUtc = latest.SessionDate,
@@ -745,6 +747,7 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
                 {
                     SessionId = s.Id,
                     MemberId = m.Id,
+                    UserId = m.UserId,
                     MemberName = name ?? $"Member #{m.Id}",
                     PlanName = s.WorkoutPlanId.HasValue && planNames.TryGetValue(s.WorkoutPlanId.Value, out var pn) ? pn : null,
                     SessionDateUtc = s.SessionDate,

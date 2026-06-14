@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/auth/biometric_unlock_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/media/onboarding_profile_photo_screen.dart';
 import '../features/media/transformation_tracker_screen.dart';
@@ -62,6 +63,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/login',
       pageBuilder: (_, __) => _plainPage(const LoginScreen()),
+    ),
+    GoRoute(
+      path: '/biometric-unlock',
+      pageBuilder: (_, __) => _plainPage(const BiometricUnlockScreen()),
     ),
     GoRoute(
       path: '/onboarding/photo',

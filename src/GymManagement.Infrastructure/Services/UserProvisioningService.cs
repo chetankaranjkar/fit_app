@@ -87,25 +87,32 @@ namespace GymManagement.Infrastructure.Services
             IEnumerable<int>? userTypeIds,
             CancellationToken cancellationToken = default)
         {
-            if (userTypeIds == null)
-                return;
+            var typeIds = userTypeIds?.Where(id => id > 0).Distinct().ToList() ?? new List<int>();
 
-            var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var typeId in userTypeIds.Where(id => id > 0).Distinct())
+            var desiredCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var typeId in typeIds)
             {
                 var userType = await _unitOfWork.UserTypes.GetByIdAsync(typeId);
                 if (userType == null)
                     continue;
                 if (UserTypeNameToRoleCode.TryGetValue(userType.Name.Trim(), out var code))
-                    codes.Add(code);
+                    desiredCodes.Add(code);
             }
 
-            foreach (var code in codes)
+            var managedRoleCodes = new HashSet<string>(UserTypeNameToRoleCode.Values, StringComparer.OrdinalIgnoreCase);
+            var currentRoleNames = await GetActiveRoleNamesForUserAsync(userId);
+            foreach (var current in currentRoleNames)
             {
-                await AuthUserRoleHelper.EnsureUserHasAppRoleAsync(_unitOfWork, userId, code);
+                if (!managedRoleCodes.Contains(current))
+                    continue;
+                if (!desiredCodes.Contains(current))
+                    await RevokeRoleAsync(userId, current, cancellationToken);
             }
 
-            if (codes.Count > 0)
+            foreach (var code in desiredCodes)
+                await AuthUserRoleHelper.EnsureUserHasAppRoleAsync(_unitOfWork, userId, code);
+
+            if (desiredCodes.Count > 0)
                 await _unitOfWork.SaveChangesAsync();
 
             await EnsureProfilesForUserAsync(userId, cancellationToken);
@@ -120,6 +127,13 @@ namespace GymManagement.Infrastructure.Services
             var existing = await _unitOfWork.Members.FirstOrDefaultAsync(m => m.UserId == userId);
             if (existing != null)
             {
+                if (!existing.IsActive)
+                {
+                    existing.IsActive = true;
+                    existing.UpdatedDate = DateTime.UtcNow;
+                    _unitOfWork.Members.Update(existing);
+                    await _unitOfWork.SaveChangesAsync();
+                }
                 await SyncMemberProfileFromUserAsync(userId, cancellationToken);
                 return;
             }
@@ -158,7 +172,16 @@ namespace GymManagement.Infrastructure.Services
 
             var existing = await _unitOfWork.Trainers.FirstOrDefaultAsync(t => t.UserId == userId);
             if (existing != null)
+            {
+                if (!existing.IsActive)
+                {
+                    existing.IsActive = true;
+                    existing.UpdatedDate = DateTime.UtcNow;
+                    _unitOfWork.Trainers.Update(existing);
+                    await _unitOfWork.SaveChangesAsync();
+                }
                 return;
+            }
 
             var employeeCode = await TrainerEmployeeCodeGenerator.GenerateNextAsync(_unitOfWork, cancellationToken);
             var trainer = new Trainer
@@ -192,8 +215,14 @@ namespace GymManagement.Infrastructure.Services
                 {
                     existing.Department = department.Trim();
                     _unitOfWork.Staff.Update(existing);
-                    await _unitOfWork.SaveChangesAsync();
                 }
+                if (!existing.IsActive)
+                {
+                    existing.IsActive = true;
+                    existing.UpdatedDate = DateTime.UtcNow;
+                    _unitOfWork.Staff.Update(existing);
+                }
+                await _unitOfWork.SaveChangesAsync();
                 return;
             }
 

@@ -59,7 +59,7 @@ namespace GymManagement.Infrastructure.Services
                     .Count();
                 var planSessions = sessions.Where(s => s.WorkoutPlanId == plan.Id).ToList();
                 dto.CompletionRatePercent = planSessions.Count == 0
-                    ? EstimateDemoCompletionPercent(plan.Id)
+                    ? 0
                     : (int)Math.Round(100.0 * planSessions.Count(s => s.IsCompleted) / planSessions.Count);
                 result.Add(dto);
             }
@@ -91,7 +91,7 @@ namespace GymManagement.Infrastructure.Services
             var sessions = await _unitOfWork.WorkoutSessions.FindAsync(s => s.WorkoutPlanId == id);
             var sessionList = sessions.ToList();
             dto.CompletionRatePercent = sessionList.Count == 0
-                ? EstimateDemoCompletionPercent(id)
+                ? 0
                 : (int)Math.Round(100.0 * sessionList.Count(s => s.IsCompleted) / sessionList.Count);
             dto.Weeks = await BuildWeeksAsync(id, exerciseDtos);
             return dto;
@@ -776,9 +776,6 @@ namespace GymManagement.Infrastructure.Services
 
             return result;
         }
-
-        private static int EstimateDemoCompletionPercent(int planId) =>
-            58 + Math.Abs(planId * 13 % 37);
 
         private static string? SerializeTags(IEnumerable<string>? tags)
         {

@@ -5,6 +5,9 @@ using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
+using GymManagement.Infrastructure.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace GymManagement.API.Controllers
 {
@@ -14,17 +17,21 @@ namespace GymManagement.API.Controllers
     public class StaffController : ControllerBase
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ApplicationDbContext _db;
 
-        public StaffController(IUnitOfWork unitOfWork)
+        public StaffController(IUnitOfWork unitOfWork, ApplicationDbContext db)
         {
             _unitOfWork = unitOfWork;
+            _db = db;
         }
 
         [HttpGet]
         [HasPermission(PermissionCodes.UsersAccess)]
         public async Task<ActionResult<IEnumerable<StaffProfileDto>>> GetAll()
         {
-            var staffRows = (await _unitOfWork.Staff.FindAsync(_ => true)).ToList();
+            var staffRows = await _db.Staff.AsNoTracking()
+                .WhereUserHasStaffLikeRole(_db)
+                .ToListAsync();
             var userIds = staffRows.Select(s => s.UserId).ToList();
             var users = userIds.Count == 0
                 ? new Dictionary<int, User>()

@@ -39,7 +39,8 @@ namespace GymManagement.Infrastructure.Services
             var trimmedSearch = search?.Trim();
             var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
 
-            IQueryable<Trainer> query = _context.Trainers.AsNoTracking();
+            IQueryable<Trainer> query = _context.Trainers.AsNoTracking()
+                .WhereUserHasTrainerRole(_context);
 
             if (isActive.HasValue)
                 query = query.Where(t => t.IsActive == isActive.Value);
@@ -95,7 +96,9 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<TrainerStatsDto> GetTrainerStatsAsync()
         {
-            var trainers = (await _unitOfWork.Trainers.FindAsync(_ => true)).ToList();
+            var trainers = await _context.Trainers.AsNoTracking()
+                .WhereUserHasTrainerRole(_context)
+                .ToListAsync();
             var total = trainers.Count;
             var active = trainers.Count(i => i.IsActive);
             var onLeave = trainers.Count(i =>
@@ -119,7 +122,9 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<IEnumerable<TrainerDto>> GetAllTrainersAsync()
         {
-            var trainers = (await _unitOfWork.Trainers.FindAsync(_ => true)).ToList();
+            var trainers = await _context.Trainers.AsNoTracking()
+                .WhereUserHasTrainerRole(_context)
+                .ToListAsync();
             var userIds = trainers.Select(i => i.UserId).Distinct().ToList();
             var users = userIds.Count > 0
                 ? (await _unitOfWork.Users.FindAsync(u => userIds.Contains(u.Id))).ToDictionary(u => u.Id)

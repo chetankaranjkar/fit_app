@@ -42,7 +42,8 @@ import { TrainerHealthAlertPanel } from '../modules/health-profile/components/Tr
 import { healthProfileService } from '../modules/health-profile/services/healthProfile.service'
 import { MemberSupplementsPanel } from '../modules/supplement-tracking/components/MemberSupplementsPanel'
 import { MemberPaymentHistoryTab } from '../components/users/MemberPaymentHistoryTab'
-import { MemberMembershipHistoryTab } from '../components/users/MemberMembershipHistoryTab'
+import { MemberMembershipsModal } from '../components/users/MemberMembershipsModal'
+import { MemberMembershipManagePanel } from '../components/users/MemberMembershipManagePanel'
 import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
 import { formatInr } from '../lib/formatInr'
 import { displayAadhaar, validateAadhaarNumber } from '../lib/aadhaar'
@@ -54,6 +55,12 @@ import {
 } from '../lib/phone'
 import { useMobileNumberAvailability } from '../hooks/useMobileNumberAvailability'
 import { useUsernameAvailability } from '../hooks/useUsernameAvailability'
+import { useDeferredLoad } from '../hooks/useDeferredLoad'
+import {
+  MEMBER_ACTIVE_MEMBERSHIP_REQUIRED,
+  memberCanReceiveTrainingServices,
+  membershipAllowsTrainingAssignment,
+} from '../lib/memberTrainingEligibility'
 import { MobileNumberAvailabilityHint } from '../components/users/MobileNumberAvailabilityHint'
 import type { User, UpdateUserDto } from '../types/user'
 import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
@@ -243,6 +250,15 @@ const TAB_FROM_SEARCH_PARAM: Record<string, TabId> = {
   'in-action': 'In Action',
 }
 
+const TAB_TO_SEARCH_PARAM: Partial<Record<TabId, string>> = {
+  Details: 'details',
+  'Body Metrics': 'body-metrics',
+  Graph: 'graph',
+  'Payment History': 'payment-history',
+  'Membership History': 'membership-history',
+  'In Action': 'in-action',
+}
+
 const selectClass =
   'w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20'
 
@@ -278,9 +294,27 @@ export function UserDetailPage() {
     if (next) setActiveTab(next)
   }, [tabFromUrl])
 
+  const userIdReady = Number.isInteger(id) && id > 0
+
+  const handleSelectTab = (tab: TabId) => {
+    setActiveTab(tab)
+    const tabParam = TAB_TO_SEARCH_PARAM[tab]
+    const params = new URLSearchParams(searchParams)
+    if (viewMode) params.set('mode', 'view')
+    else params.delete('mode')
+    if (tabParam && tabParam !== 'details') params.set('tab', tabParam)
+    else params.delete('tab')
+    const search = params.toString()
+    navigate(
+      { pathname: `/dashboard/users/${userId}`, search: search ? `?${search}` : '' },
+      { replace: true },
+    )
+  }
+
   const [addDetailOpen, setAddDetailOpen] = useState(false)
   const [addMetricsOpen, setAddMetricsOpen] = useState(false)
   const [editProfileOpen, setEditProfileOpen] = useState(false)
+  const [membershipModalOpen, setMembershipModalOpen] = useState(false)
   const [profileForm, setProfileForm] = useState<UpdateUserDto>({})
   const [editProfileBaseline, setEditProfileBaseline] = useState<{
     planId?: number
@@ -354,7 +388,27 @@ export function UserDetailPage() {
   const { data: user, isLoading: userLoading, error: userError } = useQuery({
     queryKey: ['user', id],
     queryFn: () => usersService.getById(id).then((r) => r.data),
-    enabled: Number.isInteger(id) && id > 0,
+    enabled: userIdReady,
+    staleTime: 30_000,
+  })
+
+  const loadSecondary = useDeferredLoad(Boolean(user))
+
+  const needsDetailsData = activeTab === 'Details'
+  const needsMetricsList =
+    activeTab === 'Details' || activeTab === 'Body Metrics' || activeTab === 'In Action'
+  const needsMetricsCurrent = activeTab === 'Body Metrics' || activeTab === 'In Action'
+  const needsAttendanceData = activeTab === 'In Action'
+  const needsMembershipList = activeTab === 'Membership History' || editProfileOpen
+  const needsDetailsAssignments = activeTab === 'Details'
+  const needsAttendanceForHero =
+    activeTab !== 'Membership History' && activeTab !== 'Payment History'
+
+  const { data: profileSummary, isFetching: profileSummaryFetching } = useQuery({
+    queryKey: ['userProfileSummary', id],
+    queryFn: () => usersService.getProfileSummary(id!).then((r) => r.data),
+    enabled: userIdReady && loadSecondary,
+    staleTime: 30_000,
   })
 
   const { data: details = [], isLoading: detailsLoading } = useQuery({
@@ -363,16 +417,18 @@ export function UserDetailPage() {
       const { data } = await usersService.getDetails(id!)
       return Array.isArray(data) ? data : []
     },
-    enabled: Number.isInteger(id) && id > 0 && (activeTab === 'Details' || viewMode),
+    enabled: userIdReady && loadSecondary && needsDetailsData,
+    staleTime: 30_000,
   })
 
-  const { data: currentMetrics } = useQuery({
+  const { data: currentMetrics, isFetching: currentMetricsFetching } = useQuery({
     queryKey: ['bodyMetricsCurrent', id],
     queryFn: async () => {
       const { data } = await bodyMetricsService.getCurrentByUser(id!)
       return (data as BodyMetricsDto) ?? null
     },
-    enabled: Number.isInteger(id) && id > 0,
+    enabled: userIdReady && loadSecondary && needsMetricsCurrent,
+    staleTime: 30_000,
   })
 
   const { data: metricsList = [] } = useQuery({
@@ -381,7 +437,8 @@ export function UserDetailPage() {
       const { data } = await bodyMetricsService.getByUserId(id!)
       return Array.isArray(data) ? data : []
     },
-    enabled: Number.isInteger(id) && id > 0 && (activeTab === 'Body Metrics' || viewMode),
+    enabled: userIdReady && loadSecondary && needsMetricsList,
+    staleTime: 30_000,
   })
 
   const { data: logs = [] } = useQuery({
@@ -390,16 +447,18 @@ export function UserDetailPage() {
       const { data } = await bodyMetricsService.getLogsByUser(id!)
       return Array.isArray(data) ? data : []
     },
-    enabled: Number.isInteger(id) && id > 0 && (activeTab === 'Graph' || viewMode),
+    enabled: userIdReady && activeTab === 'Graph',
+    staleTime: 30_000,
   })
 
-  const { data: attendanceLogs = [] } = useQuery({
+  const { data: attendanceLogs = [], isFetching: attendanceFetching } = useQuery({
     queryKey: ['attendanceLogs', id],
     queryFn: async () => {
       const { data } = await attendanceService.getByUserId(id!)
       return Array.isArray(data) ? data : []
     },
-    enabled: Number.isInteger(id) && id > 0,
+    enabled: userIdReady && loadSecondary && needsAttendanceData,
+    staleTime: 30_000,
   })
 
   const { data: membershipPlans = [] } = useQuery({
@@ -432,9 +491,8 @@ export function UserDetailPage() {
   const { data: userMemberships = [], isLoading: membershipsLoading } = useQuery({
     queryKey: userMembershipsByUserQueryKey(id),
     queryFn: () => listMembershipsForUser(id),
-    enabled: Number.isInteger(id) && id > 0,
-    staleTime: 0,
-    refetchOnMount: 'always',
+    enabled: userIdReady && loadSecondary && needsMembershipList,
+    staleTime: 60_000,
   })
 
   const { data: userDietAssignments = [], isLoading: dietAssignmentsLoading } = useQuery({
@@ -443,9 +501,8 @@ export function UserDetailPage() {
       const { data } = await userDietPlansService.getAssignments({ userId: id })
       return data
     },
-    enabled: Number.isInteger(id) && id > 0,
-    staleTime: 0,
-    refetchOnMount: 'always',
+    enabled: userIdReady && loadSecondary && needsDetailsAssignments,
+    staleTime: 60_000,
   })
 
   const { data: userSchedules = [] } = useQuery({
@@ -454,7 +511,8 @@ export function UserDetailPage() {
       const { data } = await userSchedulesService.getByUserId(id)
       return Array.isArray(data) ? (data as UserScheduleDto[]) : []
     },
-    enabled: Number.isInteger(id) && id > 0 && (activeTab === 'Details' || viewMode),
+    enabled: userIdReady && loadSecondary && needsDetailsAssignments,
+    staleTime: 30_000,
   })
 
   const {
@@ -479,6 +537,7 @@ export function UserDetailPage() {
     mutationFn: (dto: CreateUserDetailDto) => usersService.addDetail(dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userDetails', id] })
+      queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       setAddDetailOpen(false)
       setDetailForm((f) => ({
         ...f,
@@ -500,6 +559,7 @@ export function UserDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['bodyMetricsCurrent', id] })
       queryClient.invalidateQueries({ queryKey: ['bodyMetricsList', id] })
       queryClient.invalidateQueries({ queryKey: ['bodyMetricsLogs', id] })
+      queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       setAddMetricsOpen(false)
       setMetricsForm((f) => ({
         ...f,
@@ -534,6 +594,7 @@ export function UserDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['bodyMetricsCurrent', id] })
       queryClient.invalidateQueries({ queryKey: ['bodyMetricsList', id] })
       queryClient.invalidateQueries({ queryKey: ['bodyMetricsLogs', id] })
+      queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       setAddMetricsOpen(false)
       setMetricsError(null)
       setEditingMetricsId(null)
@@ -549,6 +610,7 @@ export function UserDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['bodyMetricsCurrent', id] })
       queryClient.invalidateQueries({ queryKey: ['bodyMetricsList', id] })
       queryClient.invalidateQueries({ queryKey: ['bodyMetricsLogs', id] })
+      queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       setMetricsError(null)
     },
     onError: (err: Error) => {
@@ -565,6 +627,7 @@ export function UserDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['trainer-clients', updated.assignedTrainerId] })
       }
       queryClient.invalidateQueries({ queryKey: ['trainer-clients'] })
+      queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       setEditProfileOpen(false)
       setProfileForm({})
       setLoginPassword('')
@@ -584,6 +647,7 @@ export function UserDetailPage() {
     mutationFn: (dto: CreateUserScheduleDto) => userSchedulesService.create(dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userSchedules', id] })
+      queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       setAssignWorkoutOpen(false)
       setAssignWorkoutError(null)
       setScheduleForm({
@@ -604,6 +668,7 @@ export function UserDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userSchedules', id] })
       void queryClient.invalidateQueries({ queryKey: ['user-schedules'] })
+      queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       toast.success('Workout assignment removed.')
     },
     onError: () => toast.error('Could not remove workout assignment.'),
@@ -614,6 +679,7 @@ export function UserDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userDietPlans', id] })
       queryClient.invalidateQueries({ queryKey: ['user-diet-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       toast.success('Diet plan removed.')
     },
     onError: () => toast.error('Could not remove diet plan.'),
@@ -626,6 +692,7 @@ export function UserDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userDietPlans', id] })
       queryClient.invalidateQueries({ queryKey: ['user-diet-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       if (dietPlansAssignQuery) {
         navigate(`/dashboard/diet-plans/assign?${dietPlansAssignQuery}`)
       } else {
@@ -635,15 +702,27 @@ export function UserDetailPage() {
     onError: () => toast.error('Could not remove the current diet plan.'),
   })
 
-  // Computed stats for hero strip — depends on user/details/attendanceLogs
+  // Hero strip stats — prefer lightweight profile summary; fall back if summary unavailable
   const heroStats = useMemo(() => {
+    const age = user ? getAge(user.dateOfBirth) : null
+
+    if (profileSummary) {
+      return {
+        age,
+        bmi: profileSummary.bmi,
+        latestWeight: profileSummary.latestWeightKg,
+        latestHeight: profileSummary.latestHeightCm,
+        streak: profileSummary.streak,
+        visitsThisMonth: profileSummary.visitsThisMonth,
+        totalVisits: profileSummary.totalVisits,
+      }
+    }
+
     const latestDetail = details.length > 0 ? details[0] : null
     const latestWeight = latestDetail?.weight ?? currentMetrics?.weightKg ?? null
     const latestHeight = latestDetail?.height ?? currentMetrics?.heightCm ?? null
     const bmi = latestDetail?.bmi ?? calculateBmi(latestWeight, latestHeight)
-    const age = user ? getAge(user.dateOfBirth) : null
 
-    // attendance streak and totals
     const uniqueDays = new Set<string>()
     attendanceLogs.forEach((l) => {
       const d = new Date(l.attendanceDate)
@@ -654,7 +733,6 @@ export function UserDetailPage() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const iter = new Date(today)
-    // allow today or yesterday as the start to count streak
     if (sortedDays.length > 0) {
       const topDay = new Date(sortedDays[0])
       topDay.setHours(0, 0, 0, 0)
@@ -662,7 +740,6 @@ export function UserDetailPage() {
       if (dayDiff > 1) {
         streak = 0
       } else {
-        // count consecutive days back
         for (let i = 0; i < sortedDays.length; i++) {
           const cur = new Date(sortedDays[i])
           cur.setHours(0, 0, 0, 0)
@@ -671,7 +748,6 @@ export function UserDetailPage() {
             streak++
             iter.setDate(iter.getDate() - 1)
           } else if (gap === 1 && i === 0) {
-            // started with yesterday
             streak++
             iter.setDate(iter.getDate() - 2)
           } else {
@@ -693,7 +769,7 @@ export function UserDetailPage() {
       visitsThisMonth,
       totalVisits: uniqueDays.size,
     }
-  }, [details, attendanceLogs, user, currentMetrics])
+  }, [profileSummary, details, attendanceLogs, user, currentMetrics])
 
   if (!Number.isInteger(id) || id <= 0) {
     return (
@@ -708,19 +784,13 @@ export function UserDetailPage() {
     )
   }
 
-  if (userLoading || userError || !user) {
+  if (userError && !userLoading && !user) {
     return (
       <DashboardLayout userName={userName}>
         <div className="min-w-0 max-w-full space-y-4">
-          {userLoading && (
-            <div className="h-56 animate-pulse rounded-3xl border border-white/10 bg-white/[0.03]" />
-          )}
-          {userError && (
-            <p className="text-rose-300">
-              {userError instanceof Error ? userError.message : 'Failed to load user'}
-            </p>
-          )}
-          {!user && !userLoading && <p className="text-slate-400">User not found.</p>}
+          <p className="text-rose-300">
+            {userError instanceof Error ? userError.message : 'Failed to load user'}
+          </p>
           <Button variant="secondary" size="sm" onClick={() => navigate('/dashboard/users')}>
             Back to Users
           </Button>
@@ -728,6 +798,25 @@ export function UserDetailPage() {
       </DashboardLayout>
     )
   }
+
+  if (userLoading || !user) {
+    return (
+      <DashboardLayout userName={userName}>
+        <DashboardPageContent className="max-w-[1800px]">
+          <UserDetailPageSkeleton activeTab={activeTab} />
+        </DashboardPageContent>
+      </DashboardLayout>
+    )
+  }
+
+  const heroStatsLoading =
+    loadSecondary &&
+    needsAttendanceForHero &&
+    profileSummaryFetching &&
+    !profileSummary
+
+  const onboardingLoading =
+    loadSecondary && profileSummaryFetching && !profileSummary
 
   const userDisplayName = `${user.firstName} ${user.lastName}`.trim() || user.email || 'User'
   const initials = userDisplayName
@@ -783,6 +872,7 @@ export function UserDetailPage() {
   }
 
   const handleOpenAssignWorkout = () => {
+    if (!guardTrainingAssignment()) return
     setAssignWorkoutError(null)
     setScheduleForm({
       userId: id,
@@ -831,6 +921,7 @@ export function UserDetailPage() {
   }
 
   const handleChangeDiet = () => {
+    if (!guardTrainingAssignment()) return
     const current = primaryDietAssignment(userDietAssignments)
     if (current) {
       if (
@@ -851,6 +942,7 @@ export function UserDetailPage() {
   }
 
   const handleAssignDiet = () => {
+    if (!guardTrainingAssignment()) return
     if (dietPlansAssignQuery) {
       navigate(`/dashboard/diet-plans/assign?${dietPlansAssignQuery}`)
     } else {
@@ -859,6 +951,7 @@ export function UserDetailPage() {
   }
 
   const handleOpenWorkoutAssignmentsHub = () => {
+    if (!guardTrainingAssignment()) return
     if (workoutAssignmentsQuery) {
       navigate(`/dashboard/training/workout-assignments?${workoutAssignmentsQuery}`)
     }
@@ -1120,11 +1213,43 @@ export function UserDetailPage() {
       user?.email?.trim() &&
       user?.phone?.trim(),
   )
-  const hasActiveMembership = userMemberships.some((m) => m.status === 'Active')
+  const hasActiveMembership =
+    profileSummary?.hasActiveMembership ??
+    userMemberships.some((m) => membershipAllowsTrainingAssignment(m))
+  const canAssignTrainingServices = memberCanReceiveTrainingServices({
+    hasActiveMembership: profileSummary?.hasActiveMembership,
+    memberships: userMemberships,
+  })
   const activeWorkoutSchedules = userSchedules.filter((s) => s.isActive)
-  const hasWorkoutAssignment = activeWorkoutSchedules.length > 0
-  const dietAssignment = primaryDietAssignment(userDietAssignments)
-  const hasDietAssignment = memberHasDietAssignment(userDietAssignments)
+  const hasWorkoutAssignment =
+    profileSummary?.hasWorkoutAssignment ?? activeWorkoutSchedules.length > 0
+  const dietAssignment =
+    userDietAssignments.length > 0 ? primaryDietAssignment(userDietAssignments) : null
+  const hasDietAssignment =
+    profileSummary?.hasDietAssignment ?? memberHasDietAssignment(userDietAssignments)
+  const hasAnyDietAssignment =
+    profileSummary?.hasAnyDietAssignment ?? userDietAssignments.length > 0
+  const primaryDietPlanName =
+    dietAssignment?.dietPlanName ?? profileSummary?.primaryDietPlanName ?? null
+
+  const handleOpenManageMemberships = () => setMembershipModalOpen(true)
+
+  const handleMembershipChanged = () => {
+    queryClient.invalidateQueries({ queryKey: userMembershipsByUserQueryKey(id) })
+    queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
+    queryClient.invalidateQueries({ queryKey: ['user', id] })
+  }
+
+  const guardTrainingAssignment = (): boolean => {
+    if (canAssignTrainingServices) return true
+    toast.error(MEMBER_ACTIVE_MEMBERSHIP_REQUIRED)
+    return false
+  }
+
+  const handleOpenManageMembershipsForTraining = () => {
+    toast.error(MEMBER_ACTIVE_MEMBERSHIP_REQUIRED)
+    handleOpenManageMemberships()
+  }
 
   const onboardingSteps: OnboardingStep[] = [
     {
@@ -1140,17 +1265,24 @@ export function UserDetailPage() {
       done: hasActiveMembership,
       hint: 'Active gym membership plan.',
       action: !hasActiveMembership
-        ? { label: 'Manage memberships', to: '/dashboard/user-memberships' }
+        ? {
+            label: 'Manage memberships',
+            onClick: handleOpenManageMemberships,
+          }
         : undefined,
     },
     {
       id: 'workout',
       label: 'Workout',
       done: hasWorkoutAssignment,
-      hint: 'Assigned workout plan from a trainer.',
+      hint: canAssignTrainingServices
+        ? 'Assigned workout plan from a trainer.'
+        : 'Requires an active membership before assigning a workout plan.',
       action:
         !hasWorkoutAssignment && !viewMode
-          ? { label: 'Assign workout', onClick: handleOpenAssignWorkout }
+          ? !canAssignTrainingServices
+            ? { label: 'Manage memberships', onClick: handleOpenManageMembershipsForTraining }
+            : { label: 'Assign workout', onClick: handleOpenAssignWorkout }
           : undefined,
     },
     {
@@ -1158,19 +1290,18 @@ export function UserDetailPage() {
       label: 'Diet',
       done: hasDietAssignment,
       hint: hasDietAssignment
-        ? dietAssignment?.dietPlanName
-          ? `Assigned: ${dietAssignment.dietPlanName}`
+        ? primaryDietPlanName
+          ? `Assigned: ${primaryDietPlanName}`
           : 'Nutrition plan assigned to this member.'
-        : userDietAssignments.length > 0
+        : hasAnyDietAssignment
           ? 'Diet assignment exists but is inactive or outside its date range.'
-          : 'Nutrition plan assigned to this member.',
+          : canAssignTrainingServices
+            ? 'Nutrition plan assigned to this member.'
+            : 'Requires an active membership before assigning a diet plan.',
       action: !hasDietAssignment
-        ? {
-            label: 'Assign diet plan',
-            to: dietPlansAssignQuery
-              ? `/dashboard/diet-plans/assign?${dietPlansAssignQuery}`
-              : `/dashboard/diet-plans/assign?userId=${id}`,
-          }
+        ? !canAssignTrainingServices
+          ? { label: 'Manage memberships', onClick: handleOpenManageMembershipsForTraining }
+          : { label: 'Assign diet plan', onClick: handleAssignDiet }
         : undefined,
     },
   ]
@@ -1203,11 +1334,13 @@ export function UserDetailPage() {
             Back to Members
           </button>
           {user ? (
-            <MemberReportExports
-              user={user}
-              attendanceLogs={attendanceLogs}
-              metricsList={metricsList}
-            />
+            needsMetricsList ? (
+              <MemberReportExports
+                user={user}
+                attendanceLogs={attendanceLogs}
+                metricsList={metricsList}
+              />
+            ) : null
           ) : null}
         </div>
 
@@ -1218,15 +1351,15 @@ export function UserDetailPage() {
           initials={initials}
           viewMode={viewMode}
           heroStats={heroStats}
+          heroStatsLoading={heroStatsLoading}
           onEditProfile={handleOpenEditProfile}
           onSwitchToEdit={() => navigate(`/dashboard/users/${id}`)}
         />
 
-        {user && (
-          <UserOnboardingChecklist
-            steps={onboardingSteps}
-            loading={membershipsLoading || dietAssignmentsLoading}
-          />
+        {loadSecondary ? (
+          <UserOnboardingChecklist steps={onboardingSteps} loading={onboardingLoading} />
+        ) : (
+          <div className="glass-card h-28 animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.03]" />
         )}
 
         {/* TAB BAR */}
@@ -1237,7 +1370,7 @@ export function UserDetailPage() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleSelectTab(tab.id)}
                 className={`group inline-flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
                   active
                     ? 'border-transparent bg-[linear-gradient(135deg,#3b82f6_0%,#8b5cf6_50%,#a855f7_100%)] text-white shadow-lg shadow-blue-500/20'
@@ -1277,6 +1410,8 @@ export function UserDetailPage() {
             onChangeDiet={handleChangeDiet}
             onRemoveDiet={handleRemoveDiet}
             dietActionPending={unassignDietMutation.isPending || replaceDietMutation.isPending}
+            canAssignTrainingServices={canAssignTrainingServices}
+            trainingBlockedMessage={MEMBER_ACTIVE_MEMBERSHIP_REQUIRED}
           />
         )}
         {activeTab === 'Body Metrics' && (
@@ -1296,8 +1431,8 @@ export function UserDetailPage() {
             memberPhotoUrl={user.profilePictureUrl}
           />
         )}
-        {activeTab === 'Membership History' && Number.isFinite(id) && id > 0 && (
-          <MemberMembershipHistoryTab userId={id} />
+        {activeTab === 'Membership History' && Number.isFinite(id) && id > 0 && user && (
+          <MemberMembershipManagePanel user={user} onMembershipChanged={handleMembershipChanged} />
         )}
         {activeTab === 'In Action' && (
           <InActionTab
@@ -2104,6 +2239,13 @@ export function UserDetailPage() {
           </div>
         </form>
       </Modal>
+
+      <MemberMembershipsModal
+        user={user}
+        open={membershipModalOpen}
+        onClose={() => setMembershipModalOpen(false)}
+        onMembershipChanged={handleMembershipChanged}
+      />
     </DashboardLayout>
   )
 }
@@ -2126,6 +2268,7 @@ function ProfileHero({
   initials,
   viewMode,
   heroStats,
+  heroStatsLoading = false,
   onEditProfile,
   onSwitchToEdit,
 }: {
@@ -2134,6 +2277,7 @@ function ProfileHero({
   initials: string
   viewMode: boolean
   heroStats: HeroStats
+  heroStatsLoading?: boolean
   onEditProfile: () => void
   onSwitchToEdit: () => void
 }) {
@@ -2289,30 +2433,35 @@ function ProfileHero({
               value={heroStats.latestWeight != null ? `${heroStats.latestWeight}` : '—'}
               sublabel="kg"
               gradient="from-rose-400 to-pink-500"
+              loading={heroStatsLoading}
             />
             <HeroVital
               label="Height"
               value={heroStats.latestHeight != null ? `${heroStats.latestHeight}` : '—'}
               sublabel="cm"
               gradient="from-indigo-400 to-violet-500"
+              loading={heroStatsLoading}
             />
             <HeroVital
               label="BMI"
               value={bmi != null ? bmi.toFixed(1) : '—'}
               sublabel={bmiCat?.label ?? 'not set'}
               gradient={bmiCat ? bmiCat.gradient : 'from-slate-400 to-slate-600'}
+              loading={heroStatsLoading}
             />
             <HeroVital
               label="Streak"
               value={`${heroStats.streak}`}
               sublabel={heroStats.streak === 1 ? 'day' : 'days'}
               gradient="from-amber-400 to-orange-500"
+              loading={heroStatsLoading}
             />
             <HeroVital
               label="Visits"
               value={`${heroStats.totalVisits}`}
               sublabel={`${heroStats.visitsThisMonth} this month`}
               gradient="from-emerald-400 to-teal-500"
+              loading={heroStatsLoading}
             />
           </DashboardMetricsGrid>
         </div>
@@ -2326,11 +2475,13 @@ function HeroVital({
   value,
   sublabel,
   gradient,
+  loading = false,
 }: {
   label: string
   value: string
   sublabel: string
   gradient: string
+  loading?: boolean
 }) {
   return (
     <div className="group relative h-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur transition sm:hover:border-white/20">
@@ -2339,8 +2490,31 @@ function HeroVital({
         className={`pointer-events-none absolute -right-4 -top-4 size-14 rounded-full bg-gradient-to-br ${gradient} opacity-20 blur-xl transition-opacity group-hover:opacity-30`}
       />
       <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-1 text-xl font-bold text-white sm:text-2xl">{value}</p>
-      <p className="mt-0.5 truncate text-[11px] text-slate-500">{sublabel}</p>
+      <p className={`mt-1 text-xl font-bold text-white sm:text-2xl ${loading ? 'animate-pulse text-slate-500' : ''}`}>
+        {loading ? '…' : value}
+      </p>
+      <p className={`mt-0.5 truncate text-[11px] text-slate-500 ${loading ? 'animate-pulse' : ''}`}>
+        {loading ? 'Loading' : sublabel}
+      </p>
+    </div>
+  )
+}
+
+function UserDetailPageSkeleton({ activeTab }: { activeTab: TabId }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-6">
+      <div className="h-9 w-36 animate-pulse rounded-lg bg-white/[0.05]" />
+      <div className="h-56 animate-pulse rounded-3xl border border-white/10 bg-white/[0.03]" />
+      <div className="h-28 animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.03]" />
+      <div className="flex flex-wrap gap-2">
+        {TAB_IDS.map((tab) => (
+          <div
+            key={tab}
+            className={`h-10 rounded-xl px-4 ${tab === activeTab ? 'w-40 bg-white/10' : 'w-28 bg-white/[0.05]'}`}
+          />
+        ))}
+      </div>
+      <div className="min-h-[240px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.02]" />
     </div>
   )
 }
@@ -2367,6 +2541,8 @@ function DetailsTab({
   onChangeDiet,
   onRemoveDiet,
   dietActionPending,
+  canAssignTrainingServices,
+  trainingBlockedMessage,
 }: {
   user: User
   details: UserDetailDto[]
@@ -2387,6 +2563,8 @@ function DetailsTab({
   onChangeDiet: () => void
   onRemoveDiet: (assignment: UserDietPlanDto) => void
   dietActionPending: boolean
+  canAssignTrainingServices: boolean
+  trainingBlockedMessage: string
 }) {
   const activeWorkoutSchedules = userSchedules.filter((s) => s.isActive)
   const activeWorkoutPlanIds = new Set(activeWorkoutSchedules.map((s) => s.workoutPlanId))
@@ -2567,6 +2745,8 @@ function DetailsTab({
         dietLoading={dietLoading}
         viewMode={viewMode}
         dietActionPending={dietActionPending}
+        canAssignTrainingServices={canAssignTrainingServices}
+        trainingBlockedMessage={trainingBlockedMessage}
         onAssignDiet={onAssignDiet}
         onChangeDiet={onChangeDiet}
         onRemoveDiet={onRemoveDiet}
@@ -2595,13 +2775,18 @@ function DetailsTab({
               </Button>
             )}
             {!viewMode && (
-              <Button size="sm" onClick={onAssignWorkout}>
+              <Button size="sm" onClick={onAssignWorkout} disabled={!canAssignTrainingServices}>
                 {hasWorkoutAssignment ? 'Change workout plan' : '+ Assign workout plan'}
               </Button>
             )}
           </div>
         </div>
         <div className="px-6 py-5">
+          {!canAssignTrainingServices && !viewMode ? (
+            <p className="mb-4 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              {trainingBlockedMessage}
+            </p>
+          ) : null}
           {userSchedules.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
               <p className="text-sm text-slate-400">

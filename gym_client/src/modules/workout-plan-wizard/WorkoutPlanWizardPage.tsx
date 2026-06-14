@@ -88,6 +88,11 @@ export function WorkoutPlanWizardPage() {
     setWeeks(buildTemplateWeeks(basic.templateMode, basic.templateWeekCount))
   }, [basic.templateMode, basic.templateWeekCount])
 
+  useEffect(() => {
+    if (categories.length === 0) return
+    setBasic((b) => (b.workoutCategoryId > 0 ? b : { ...b, workoutCategoryId: categories[0].id }))
+  }, [categories])
+
   const summary = useMemo(() => computeSummary(basic, weeks), [basic, weeks])
   const categoryName = categories.find((c) => c.id === basic.workoutCategoryId)?.name
 
@@ -119,7 +124,7 @@ export function WorkoutPlanWizardPage() {
     onSuccess: (plan) => {
       void queryClient.invalidateQueries({ queryKey: ['programs'] })
       toast.success('Workout plan created')
-      navigate(`/dashboard/training/programs/${plan.id}`)
+      navigate(`/dashboard/training/programs/${plan.id}?tab=schedule`)
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to create plan'),
   })

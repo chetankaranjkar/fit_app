@@ -30,6 +30,7 @@ export type ActiveWorkoutActiveResponse = {
 
 export type MemberWorkoutTimeline = {
   memberId: number
+  userId: number
   memberName: string
   sessions: MemberWorkoutSummary[]
   adherencePercent: number
@@ -99,6 +100,7 @@ export type WorkoutDashboard = {
 export type MemberWorkoutSummary = {
   sessionId: number
   memberId: number
+  userId: number
   memberName: string
   planName?: string | null
   sessionDateUtc: string

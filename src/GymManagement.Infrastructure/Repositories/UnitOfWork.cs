@@ -292,6 +292,30 @@ namespace GymManagement.Infrastructure.Repositories
             }
         }
 
+        public async Task EnsureUserRoleAsync(int userId, int roleId)
+        {
+            var existing = await _context.UserRoles
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(ur => ur.UserId == userId && ur.RoleId == roleId);
+
+            var now = DateTime.UtcNow;
+            if (existing == null)
+            {
+                await _context.UserRoles.AddAsync(new UserRole
+                {
+                    UserId = userId,
+                    RoleId = roleId,
+                    CreatedDate = now,
+                });
+            }
+            else if (existing.IsDeleted)
+            {
+                existing.IsDeleted = false;
+                existing.UpdatedDate = now;
+                _context.UserRoles.Update(existing);
+            }
+        }
+
         public async Task BeginTransactionAsync()
         {
             _transaction = await _context.Database.BeginTransactionAsync();

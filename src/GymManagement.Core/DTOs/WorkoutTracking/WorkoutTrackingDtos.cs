@@ -110,6 +110,8 @@ public sealed class WorkoutDashboardDto
 public sealed class MemberWorkoutTimelineDto
 {
     public int MemberId { get; set; }
+    /// <summary>Users.Id for assignment links and member profile.</summary>
+    public int UserId { get; set; }
     public string MemberName { get; set; } = string.Empty;
     public IReadOnlyList<MemberWorkoutSummaryDto> Sessions { get; set; } = Array.Empty<MemberWorkoutSummaryDto>();
     public decimal AdherencePercent { get; set; }
@@ -137,6 +139,8 @@ public sealed class MemberWorkoutSummaryDto
 {
     public int SessionId { get; set; }
     public int MemberId { get; set; }
+    /// <summary>Users.Id for assignment links and member profile.</summary>
+    public int UserId { get; set; }
     public string MemberName { get; set; } = string.Empty;
     public string? PlanName { get; set; }
     public DateTime SessionDateUtc { get; set; }

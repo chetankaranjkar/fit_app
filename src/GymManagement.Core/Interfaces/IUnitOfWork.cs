@@ -68,6 +68,11 @@ namespace GymManagement.Core.Interfaces
         /// </summary>
         Task SyncRolePermissionsAsync(int roleId, IReadOnlyCollection<int> permissionIds);
 
+        /// <summary>
+        /// Ensures an active <see cref="UserRole"/> row exists (revives soft-deleted row if present).
+        /// </summary>
+        Task EnsureUserRoleAsync(int userId, int roleId);
+
         Task BeginTransactionAsync();
         Task CommitTransactionAsync();
         Task RollbackTransactionAsync();

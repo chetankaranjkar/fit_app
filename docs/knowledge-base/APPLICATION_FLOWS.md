@@ -94,8 +94,8 @@ One **person** = one row in `Users`. Login = `AuthUsers` (email, password) → `
 
 | Route | Page | Primary API |
 |-------|------|-------------|
-| `/dashboard/users` | Members list | `GET /api/Users` (filter `userTypes` includes Member) |
-| `/dashboard/users/:id` | Member detail | `GET /api/Users/{id}`, memberships, schedules |
+| `/dashboard/users` | **Grid-first** members directory with compact header + summary strip; light page scroll + tall grid panel (`min-height` ~viewport) | `GET /api/Users/paged?membersOnly=true` (+ `assignedToCoachOnly=true` when coach-scoped) |
+| `/dashboard/users/:id` | Member detail | `GET /api/Users/{id}` + deferred `GET /api/Users/{id}/profile-summary` (hero stats & onboarding flags; coach scope enforced via `UserInstructors` when applicable) |
 | `/dashboard/trainers` | Trainers list | `GET /api/Trainers` |
 | `/dashboard/trainers/:id` | Trainer detail | `GET /api/Trainers/{id}`, tabs: Clients, Schedule, … |
 | `/dashboard/trainers/:id?mode=edit` | Opens edit modal | |
@@ -294,7 +294,7 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 | Complete | `POST /api/workout/complete/{sessionId}` | Live page Complete |
 | History | `GET /api/workout/exercise-history/{memberId}/{exerciseId}` | History modal on live page |
 | Dashboard stats | `GET /api/workout/dashboard/{memberId}` | `WorkoutDashboardWidget` on member dashboard |
-| Trainer visibility | `GET /api/workout/trainer/members` | Trainer dashboard panel |
+| Trainer visibility | `GET /api/workout/trainer/members` | Trainer dashboard panel + `/dashboard/training/workouts-to-review` |
 
 **Rules:** one `InProgress` session per member; completion % = completed sets / total sets; volume = Σ(weight × reps). On complete, rows sync into `WorkoutLogs` for backward-compatible history.
 
@@ -304,7 +304,9 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 
 | Role | API | Web route |
 |------|-----|-----------|
+| Trainer review hub | `GET /api/workout/trainer/members` | `/dashboard/training/workouts-to-review` |
 | Trainer timeline | `GET /api/workout/trainer/members/{memberId}/timeline` | `/dashboard/training/member-workouts/:memberId` |
+| Session detail (review sets) | `GET /api/workout/session/{sessionId}/detail` | Modal on review + timeline pages |
 | Admin monitoring | `GET /api/workout/admin/monitoring` | `/dashboard/training/workout-monitoring` |
 
 **Active API** `GET /api/workout/active/{memberId}` returns envelope (`session`, `lastSyncedAt`, `serverTimeUtc`). Unique index: one `InProgress` session per member.
@@ -373,9 +375,11 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 | Expired history only | **Renew Membership** (prefills last plan, `intent: renew`) + **+ New Membership** |
 | Inactive history only (voided/cancelled) | **+ Add Membership** |
 
-Both entry points use shared **`AddUserMembershipModal`** → `POST /api/UserMemberships` (optional `creationSource`, `intent`, `priorMembershipId` for audit). Permission: **`Payments`** (`authService.canPaymentsAccess()`). Member is locked in the list modal; `/dashboard/user-memberships` opens the same modal with member picker.
+Both entry points use shared **`AddUserMembershipModal`** → `POST /api/UserMemberships` (optional `creationSource`, `intent`, `priorMembershipId` for audit). Permission: **`Payments`** (`authService.canPaymentsAccess()`). Member is locked in the list modal; `/dashboard/user-memberships` opens the same modal with member picker. **Member profile:** onboarding **Manage memberships** opens the same `MemberMembershipsModal`; **Membership History** tab uses shared `MemberMembershipManagePanel` (add / renew buttons identical to the grid modal).
 
 **Existing duplicates** (e.g. two `ActivePendingPayment` rows for Rajesh Yadav) must be fixed manually: void/cancel or expire one row, then use the remaining membership for payment or upgrade.
+
+**Workout & diet assignment:** Requires **`MembershipStatus.Active`** with a valid end date (not expired). Enforced in API (`MemberTrainingEligibilityGuard` on `POST` user schedules / diet assignments) and UI (member profile onboarding, Details tab, assign pages). Pending-payment or expired members must renew or activate membership first.
 
 ---
 

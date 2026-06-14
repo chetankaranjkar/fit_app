@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
+using GymManagement.Infrastructure.Services;
 
 namespace GymManagement.Infrastructure.Services
 {
@@ -11,10 +14,12 @@ namespace GymManagement.Infrastructure.Services
     {
         private const int DefaultMaxActiveClients = 30;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ApplicationDbContext _db;
 
-        public UserInstructorService(IUnitOfWork unitOfWork)
+        public UserInstructorService(IUnitOfWork unitOfWork, ApplicationDbContext db)
         {
             _unitOfWork = unitOfWork;
+            _db = db;
         }
 
         public async Task<IEnumerable<UserInstructorDto>> GetAllAssignmentsAsync()
@@ -225,13 +230,16 @@ namespace GymManagement.Infrastructure.Services
             if (user == null)
                 throw new NotFoundException("User not found.");
 
-            var trainers = (await _unitOfWork.Trainers.FindAsync(t => t.IsActive)).ToList();
+            var trainerUserIds = await RoleLinkedProfileQuery.GetUserIdsWithRoleAsync(
+                _db,
+                ApplicationRoleCodes.Trainer);
+            var trainers = (await _unitOfWork.Trainers.FindAsync(t => t.IsActive && trainerUserIds.Contains(t.UserId))).ToList();
             var allAssignments = (await _unitOfWork.UserInstructors.FindAsync(a => a.IsActive && !a.EndDate.HasValue)).ToList();
             var schedules = (await _unitOfWork.UserSchedules.FindAsync(s => s.IsActive)).ToList();
 
             var userSchedules = schedules.Where(s => s.UserId == userId).ToList();
-            var trainerUserIds = trainers.Select(t => t.UserId).Distinct().ToList();
-            var trainerUsers = (await _unitOfWork.Users.FindAsync(u => trainerUserIds.Contains(u.Id)))
+            var profileUserIds = trainers.Select(t => t.UserId).Distinct().ToList();
+            var trainerUsers = (await _unitOfWork.Users.FindAsync(u => profileUserIds.Contains(u.Id)))
                 .ToDictionary(u => u.Id);
 
             var recommendations = trainers.Select(trainer =>

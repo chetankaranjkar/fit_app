@@ -107,7 +107,9 @@ namespace GymManagement.Infrastructure.Services
                 .Where(x => !voidedMembershipIds.Contains(x.MembershipId))
                 .SumAsync(x => (decimal?)x.TransactionAmount, cancellationToken) ?? 0m;
 
-            var trainerCount = await _context.Trainers.AsNoTracking().CountAsync(cancellationToken);
+            var trainerCount = await _context.Trainers.AsNoTracking()
+                .WhereUserHasTrainerRole(_context)
+                .CountAsync(cancellationToken);
 
             var summary = new DashboardSummaryDto
             {
@@ -130,11 +132,13 @@ namespace GymManagement.Infrastructure.Services
         public async Task<DashboardStatisticsDto> GetStatisticsAsync()
         {
             var totalUsers = await _context.Users.AsNoTracking().CountAsync();
-            var totalTrainers = await _context.Trainers.AsNoTracking().CountAsync();
+            var totalTrainers = await _context.Trainers.AsNoTracking()
+                .WhereUserHasTrainerRole(_context)
+                .CountAsync();
 
             // Aggregate client counts per trainer in SQL (avoids loading all schedules).
             var trainersWithUserCount = await (
-                from t in _context.Trainers.AsNoTracking()
+                from t in _context.Trainers.AsNoTracking().WhereUserHasTrainerRole(_context)
                 join u in _context.Users.AsNoTracking() on t.UserId equals u.Id
                 join au in _context.AuthUsers.AsNoTracking() on u.Id equals au.UserId into authJoin
                 from au in authJoin.DefaultIfEmpty()

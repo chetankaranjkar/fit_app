@@ -10,6 +10,7 @@ using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
 using GymManagement.Core.Validation;
+using GymManagement.Infrastructure.Data;
 using GymManagement.Infrastructure.Services;
 
 namespace GymManagement.API.Controllers
@@ -24,19 +25,22 @@ namespace GymManagement.API.Controllers
         private readonly IUsernameAvailabilityService _usernameAvailability;
         private readonly IRbacService _rbacService;
         private readonly WebRootImageStorage _imageStorage;
+        private readonly ApplicationDbContext _db;
 
         public UsersController(
             IUserService userService,
             IMobileNumberAvailabilityService mobileAvailability,
             IUsernameAvailabilityService usernameAvailability,
             IRbacService rbacService,
-            WebRootImageStorage imageStorage)
+            WebRootImageStorage imageStorage,
+            ApplicationDbContext db)
         {
             _userService = userService;
             _mobileAvailability = mobileAvailability;
             _usernameAvailability = usernameAvailability;
             _rbacService = rbacService;
             _imageStorage = imageStorage;
+            _db = db;
         }
 
         /// <summary>Real-time check: is this Indian mobile available globally (Option A — includes soft-deleted users).</summary>
@@ -62,15 +66,19 @@ namespace GymManagement.API.Controllers
         }
 
         [HttpGet]
-        [HasPermission(PermissionCodes.UsersAccess)]
-        public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsers()
+        [HasAnyPermission(PermissionCodes.UsersAccess, PermissionCodes.TrainerAccess)]
+        public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsers(CancellationToken cancellationToken)
         {
-            var users = await _userService.GetAllUsersAsync();
+            var assignedTrainerProfileId = await ResolveAssignedTrainerProfileIdAsync(cancellationToken);
+            if (assignedTrainerProfileId == CoachScopeMissingTrainerProfile)
+                return Ok(Array.Empty<UserDto>());
+
+            var users = await _userService.GetAllUsersAsync(assignedTrainerProfileId);
             return Ok(users);
         }
 
         [HttpGet("paged")]
-        [HasPermission(PermissionCodes.UsersAccess)]
+        [HasAnyPermission(PermissionCodes.UsersAccess, PermissionCodes.TrainerAccess)]
         public async Task<ActionResult<PagedResultDto<UserDto>>> GetPagedUsers(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50,
@@ -78,10 +86,23 @@ namespace GymManagement.API.Controllers
             [FromQuery] bool membersOnly = false,
             [FromQuery] bool? isActive = null,
             [FromQuery] bool includeBilling = true,
-            [FromQuery] string? preferredGymTime = null)
+            [FromQuery] string? preferredGymTime = null,
+            CancellationToken cancellationToken = default)
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
+            var assignedTrainerProfileId = await ResolveAssignedTrainerProfileIdAsync(cancellationToken);
+            if (assignedTrainerProfileId == CoachScopeMissingTrainerProfile)
+            {
+                return Ok(new PagedResultDto<UserDto>
+                {
+                    Items = Array.Empty<UserDto>(),
+                    TotalCount = 0,
+                    Page = safePage,
+                    PageSize = safePageSize,
+                });
+            }
+
             var result = await _userService.GetUsersPagedAsync(
                 safePage,
                 safePageSize,
@@ -89,14 +110,18 @@ namespace GymManagement.API.Controllers
                 membersOnly,
                 isActive,
                 includeBilling,
-                preferredGymTime);
+                preferredGymTime,
+                assignedTrainerProfileId);
             return Ok(result);
         }
 
         [HttpGet("{id}")]
-        [HasPermission(PermissionCodes.UsersAccess)]
-        public async Task<ActionResult<UserDto>> GetUser(int id)
+        [HasAnyPermission(PermissionCodes.UsersAccess, PermissionCodes.TrainerAccess)]
+        public async Task<ActionResult<UserDto>> GetUser(int id, CancellationToken cancellationToken)
         {
+            if (!await UserDirectoryScope.CanAccessMemberAsync(HttpContext, _db, id, cancellationToken))
+                return Forbid();
+
             var user = await _userService.GetUserByIdAsync(id);
             if (user == null)
                 return NotFound();
@@ -105,13 +130,30 @@ namespace GymManagement.API.Controllers
 
         /// <summary>User identity + RBAC roles + member/trainer/staff profiles.</summary>
         [HttpGet("{id}/aggregate")]
-        [HasPermission(PermissionCodes.UsersAccess)]
-        public async Task<ActionResult<UserAggregateDto>> GetUserAggregate(int id)
+        [HasAnyPermission(PermissionCodes.UsersAccess, PermissionCodes.TrainerAccess)]
+        public async Task<ActionResult<UserAggregateDto>> GetUserAggregate(int id, CancellationToken cancellationToken)
         {
+            if (!await UserDirectoryScope.CanAccessMemberAsync(HttpContext, _db, id, cancellationToken))
+                return Forbid();
+
             var aggregate = await _userService.GetUserAggregateAsync(id);
             if (aggregate == null)
                 return NotFound();
             return Ok(aggregate);
+        }
+
+        /// <summary>Hero stats + onboarding flags for member profile (single lightweight call).</summary>
+        [HttpGet("{id}/profile-summary")]
+        [HasAnyPermission(PermissionCodes.UsersAccess, PermissionCodes.TrainerAccess)]
+        public async Task<ActionResult<UserProfileSummaryDto>> GetUserProfileSummary(int id, CancellationToken cancellationToken)
+        {
+            if (!await UserDirectoryScope.CanAccessMemberAsync(HttpContext, _db, id, cancellationToken))
+                return Forbid();
+
+            var summary = await _userService.GetUserProfileSummaryAsync(id);
+            if (summary == null)
+                return NotFound();
+            return Ok(summary);
         }
 
         [HttpPost]
@@ -375,6 +417,18 @@ namespace GymManagement.API.Controllers
         {
             var detail = await _userService.AddUserDetailAsync(createUserDetailDto);
             return CreatedAtAction(nameof(GetUserDetails), new { id = createUserDetailDto.UserId }, detail);
+        }
+
+        /// <summary>Sentinel: coach scope requested but the actor has no trainer profile row.</summary>
+        private const int CoachScopeMissingTrainerProfile = -1;
+
+        private async Task<int?> ResolveAssignedTrainerProfileIdAsync(CancellationToken cancellationToken)
+        {
+            if (!UserDirectoryScope.ShouldApplyCoachFilter(HttpContext))
+                return null;
+
+            var trainerProfileId = await UserDirectoryScope.ResolveTrainerProfileIdAsync(HttpContext, _db, cancellationToken);
+            return trainerProfileId ?? CoachScopeMissingTrainerProfile;
         }
     }
 }

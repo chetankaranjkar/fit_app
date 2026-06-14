@@ -58,6 +58,23 @@ internal static class UserSearchQueryExtensions
         return query.Where(u => memberUserIds.Contains(u.Id));
     }
 
+    /// <summary>Limit directory rows to members with an active coach assignment for the given trainer profile id.</summary>
+    public static IQueryable<User> ApplyAssignedToTrainerFilter(
+        this IQueryable<User> query,
+        IQueryable<UserInstructor> userInstructors,
+        int trainerProfileId)
+    {
+        var assignedUserIds = userInstructors.AsNoTracking()
+            .Where(ui =>
+                !ui.IsDeleted
+                && ui.IsActive
+                && !ui.EndDate.HasValue
+                && ui.TrainerId == trainerProfileId)
+            .Select(ui => ui.UserId);
+
+        return query.Where(u => assignedUserIds.Contains(u.Id));
+    }
+
     private static IQueryable<User> ApplyEmailPrefixFilter(
         IQueryable<User> query,
         IQueryable<AuthUser> authUsers,

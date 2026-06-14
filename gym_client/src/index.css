@@ -134,6 +134,44 @@ select option:focus {
   animation: shimmer 2s infinite linear;
 }
 
+/* Members summary strip — bar grow on card hover */
+@keyframes member-bar-grow {
+  from {
+    transform: scaleX(0);
+    opacity: 0.55;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes member-bar-shimmer {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+
+.group\/batch:hover .member-bar-fill,
+.group\/batch.member-bar-intro .member-bar-fill {
+  animation-name: member-bar-grow;
+  animation-duration: 0.75s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: forwards;
+}
+
+.group\/batch:hover .member-bar-shimmer,
+.group\/batch.member-bar-intro .member-bar-shimmer {
+  opacity: 1;
+  animation-name: member-bar-shimmer;
+  animation-duration: 0.85s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}
+
 /* Floating orbs for ambient background */
 @keyframes float-slow {
   0%, 100% { transform: translate(0, 0); }

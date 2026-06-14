@@ -24,7 +24,7 @@ export function DataPageShell({
     return (
       <div
         className={[
-          'flex h-full min-h-0 w-full min-w-0 max-w-full flex-col gap-6 overflow-hidden',
+          'flex h-full min-h-0 w-full min-w-0 max-w-full flex-col gap-2 overflow-hidden',
           className,
         ].join(' ')}
       >

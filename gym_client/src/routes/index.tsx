@@ -202,6 +202,11 @@ const TrainerMemberWorkoutTimelinePage = lazy(() =>
     default: m.TrainerMemberWorkoutTimelinePage,
   })),
 )
+const TrainerWorkoutsReviewPage = lazy(() =>
+  import('../pages/training/TrainerWorkoutsReviewPage').then((m) => ({
+    default: m.TrainerWorkoutsReviewPage,
+  })),
+)
 const WorkoutAdminMonitoringPage = lazy(() =>
   import('../pages/training/WorkoutAdminMonitoringPage').then((m) => ({
     default: m.WorkoutAdminMonitoringPage,
@@ -415,6 +420,10 @@ const router = createBrowserRouter([
               {
                 path: '/dashboard/training/member-workouts/:memberId',
                 element: withSuspense(<TrainerMemberWorkoutTimelinePage />),
+              },
+              {
+                path: '/dashboard/training/workouts-to-review',
+                element: withSuspense(<TrainerWorkoutsReviewPage />),
               },
               {
                 path: '/dashboard/training/workout-monitoring',

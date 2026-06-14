@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { getSafeDashboardReturnPath, parseMemberIdsQuery } from '../../lib/safeReturnPath'
+import { workoutAssignmentReturnLabel } from '../../lib/workoutAssignmentLinks'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import {
   DashboardSubpageShell,
@@ -17,6 +18,7 @@ import { userSchedulesService } from '../../services/userSchedules.service'
 import { usersService } from '../../services/users.service'
 import { workoutPlansService } from '../../services/workoutPlans.service'
 import { trainersService } from '../../services/trainers.service'
+import { MEMBER_ACTIVE_MEMBERSHIP_REQUIRED } from '../../lib/memberTrainingEligibility'
 import { TrainerHealthAlertPanel } from '../../modules/health-profile/components/TrainerHealthAlertPanel'
 import { healthProfileService } from '../../modules/health-profile/services/healthProfile.service'
 import type { AssignWorkoutPlanDto, ScheduleType, UserScheduleDto } from '../../types/userSchedule'
@@ -50,6 +52,7 @@ export function WorkoutAssignmentsPage() {
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const presetUserId = Number.parseInt(searchParams.get('userId') ?? '', 10)
+  const presetTrainerId = Number.parseInt(searchParams.get('trainerId') ?? '', 10)
   const memberIdsQuery = searchParams.get('memberIds') ?? ''
   const returnToSafe = useMemo(
     () => getSafeDashboardReturnPath(searchParams.get('returnTo')),
@@ -112,22 +115,39 @@ export function WorkoutAssignmentsPage() {
     enabled: modalOpen && selectedMemberId > 0,
   })
 
+  const { data: assignTargetSummary } = useQuery({
+    queryKey: ['userProfileSummary', selectedMemberId],
+    queryFn: () => usersService.getProfileSummary(selectedMemberId).then((r) => r.data),
+    enabled: modalOpen && selectedMemberId > 0,
+  })
+
   useEffect(() => {
     const bulkPreset = parseMemberIdsQuery(memberIdsQuery)
+    const presetCoachId =
+      Number.isInteger(presetTrainerId) && presetTrainerId > 0 ? presetTrainerId : null
+
     if (bulkPreset.length > 1) {
       setBulkAssignMembers(true)
       setBulkMemberIds(bulkPreset)
-      setForm((f) => ({ ...f, userId: 0 }))
+      setForm((f) => ({
+        ...f,
+        userId: 0,
+        trainerId: presetCoachId ?? f.trainerId,
+      }))
       setModalOpen(true)
       return
     }
     if (Number.isInteger(presetUserId) && presetUserId > 0) {
       setBulkAssignMembers(false)
       setBulkMemberIds([])
-      setForm((f) => ({ ...f, userId: presetUserId }))
+      setForm((f) => ({
+        ...f,
+        userId: presetUserId,
+        trainerId: presetCoachId ?? f.trainerId,
+      }))
       setModalOpen(true)
     }
-  }, [presetUserId, memberIdsQuery])
+  }, [presetUserId, presetTrainerId, memberIdsQuery])
 
   const toggleBulkMemberId = (userId: number) => {
     setBulkMemberIds((prev) =>
@@ -255,6 +275,10 @@ export function WorkoutAssignmentsPage() {
       setFormError('Member and workout plan are required.')
       return
     }
+    if (assignTargetSummary && !assignTargetSummary.hasActiveMembership) {
+      setFormError(MEMBER_ACTIVE_MEMBERSHIP_REQUIRED)
+      return
+    }
     assignMutation.mutate(form)
   }
 
@@ -270,7 +294,7 @@ export function WorkoutAssignmentsPage() {
             <svg className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
-            Back to member
+            {workoutAssignmentReturnLabel(returnToSafe)}
           </button>
         ) : null}
       </div>

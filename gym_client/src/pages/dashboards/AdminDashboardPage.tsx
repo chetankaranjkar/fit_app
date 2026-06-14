@@ -63,6 +63,20 @@ export function AdminDashboardPage() {
           <p className="mt-2 max-w-xl text-sm text-slate-400">
             Revenue, memberships, and operations at a glance — only what matters today.
           </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              to="/dashboard/training/programs/new"
+              className="inline-flex items-center justify-center rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-md shadow-cyan-900/20 transition hover:bg-cyan-500/25"
+            >
+              New program
+            </Link>
+            <Link
+              to="/dashboard/training/workout-assignments"
+              className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/10"
+            >
+              Assign workouts
+            </Link>
+          </div>
           <DashboardMetricsGrid cols={5} className="mt-6">
             <HeroStat
               role="admin"
@@ -237,7 +251,14 @@ export function AdminDashboardPage() {
 
         <section>
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-400">Quick actions</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            <QuickAction
+              role="admin"
+              to="/dashboard/training/programs/new"
+              label="New program"
+              description="Template workout wizard"
+              icon={<span className="text-lg">⚡</span>}
+            />
             <QuickAction
               role="admin"
               to="/dashboard/users"

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   flexRender,
   getCoreRowModel,
@@ -54,6 +54,7 @@ export function EnterpriseDataGrid<T>({
   enableColumnFilters = false,
   className = '',
   footer,
+  chainScrollToParent = false,
 }: {
   data: T[]
   columns: DataGridColumnDef<T>[]
@@ -68,6 +69,8 @@ export function EnterpriseDataGrid<T>({
   enableColumnFilters?: boolean
   className?: string
   footer?: ReactNode
+  /** When true, wheel at grid edges (or when grid has no overflow) scrolls the page shell */
+  chainScrollToParent?: boolean
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [sorting, setSorting] = useState<SortingState>([])
@@ -112,6 +115,36 @@ export function EnterpriseDataGrid<T>({
       return sum + w
     }, 0)
   }, [columns, columnWidths])
+
+  useEffect(() => {
+    if (!chainScrollToParent) return
+    const el = scrollRef.current
+    if (!el) return
+
+    const findScrollParent = () =>
+      el.closest('.dashboard-scroll-area') as HTMLElement | null
+
+    const onWheel = (e: WheelEvent) => {
+      const parent = findScrollParent()
+      if (!parent) return
+
+      const maxScroll = el.scrollHeight - el.clientHeight
+      const canScrollInside = maxScroll > 1
+      const atTop = el.scrollTop <= 0
+      const atBottom = el.scrollTop >= maxScroll - 1
+
+      const shouldChainUp = e.deltaY < 0 && (!canScrollInside || atTop)
+      const shouldChainDown = e.deltaY > 0 && (!canScrollInside || atBottom)
+
+      if (shouldChainUp || shouldChainDown) {
+        parent.scrollTop += e.deltaY
+        e.preventDefault()
+      }
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [chainScrollToParent, loading, rows.length])
 
   const startResize = useCallback(
     (columnId: string, startX: number) => {
@@ -174,7 +207,7 @@ export function EnterpriseDataGrid<T>({
           isSticky ? 'sticky z-20' : 'z-10',
         ].join(' ')}
       >
-        <div className="flex h-11 items-center gap-1 pr-2">
+        <div className="flex h-[50px] items-center gap-1 pr-2">
           <button
             type="button"
             className={[
@@ -254,7 +287,7 @@ export function EnterpriseDataGrid<T>({
     return (
       <tr
         key={row.id}
-        className="group border-b border-white/[0.04] transition-colors hover:bg-white/[0.03]"
+        className="group border-b border-white/[0.04] transition-colors hover:bg-violet-500/[0.05]"
       >
         {row.getVisibleCells().map((cell, colIndex) => {
           const meta = cell.column.columnDef.meta as DataGridColumnDef<T>
@@ -293,8 +326,11 @@ export function EnterpriseDataGrid<T>({
     <div className={`flex min-h-0 flex-1 flex-col ${className}`}>
       <div
         ref={scrollRef}
-        className="data-grid-scroll min-h-0 flex-1 overflow-auto overscroll-contain"
-        data-lenis-prevent
+        className={[
+          'data-grid-scroll min-h-0 flex-1 overflow-auto',
+          chainScrollToParent ? 'overscroll-y-auto' : 'overscroll-contain',
+        ].join(' ')}
+        {...(chainScrollToParent ? {} : { 'data-lenis-prevent': true })}
       >
         {loading ? (
           <div className="flex items-center justify-center px-6 py-16 text-sm text-slate-400">

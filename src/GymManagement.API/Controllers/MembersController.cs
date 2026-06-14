@@ -2,9 +2,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
 using GymManagement.Core.Authorization;
-using GymManagement.Core.Interfaces;
 using GymManagement.Core.DTOs;
+using GymManagement.Core.Interfaces;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
+using GymManagement.Infrastructure.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace GymManagement.API.Controllers
 {
@@ -14,17 +17,21 @@ namespace GymManagement.API.Controllers
     public class MembersController : ControllerBase
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ApplicationDbContext _db;
 
-        public MembersController(IUnitOfWork unitOfWork)
+        public MembersController(IUnitOfWork unitOfWork, ApplicationDbContext db)
         {
             _unitOfWork = unitOfWork;
+            _db = db;
         }
 
         [HttpGet]
         [HasPermission(PermissionCodes.UsersAccess)]
         public async Task<ActionResult<IEnumerable<MemberProfileDto>>> GetAll()
         {
-            var members = (await _unitOfWork.Members.FindAsync(_ => true)).ToList();
+            var members = await _db.Members.AsNoTracking()
+                .WhereUserHasMemberRole(_db)
+                .ToListAsync();
             var userIds = members.Select(m => m.UserId).ToList();
             var users = userIds.Count == 0
                 ? new Dictionary<int, User>()

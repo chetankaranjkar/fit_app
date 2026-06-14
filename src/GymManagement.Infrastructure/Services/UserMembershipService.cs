@@ -352,6 +352,8 @@ namespace GymManagement.Infrastructure.Services
 
             var plan = await _unitOfWork.MembershipPlans.GetByIdAsync(m.PlanId);
 
+            await MemberAccountReactivation.EnsureActiveForNewMembershipAsync(_unitOfWork, m.UserId);
+
             if (user != null && plan != null)
 
                 await _membershipPaymentService.EnsureBillingForNewMembershipAsync(user, m, plan);

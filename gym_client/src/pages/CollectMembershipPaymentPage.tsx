@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../components/layout/DataPageShell'
@@ -16,7 +16,6 @@ import { invalidateDashboardQueries } from '../lib/dashboardQueryKeys'
 import { BillingSummaryCard } from '../components/billing/BillingSummaryCard'
 import { MembershipFinancialSummaryCard } from '../components/billing/MembershipFinancialSummaryCard'
 import { PaymentConfirmationModal } from '../components/billing/PaymentConfirmationModal'
-import { PaymentReceiptModal, type PaymentReceiptData } from '../components/billing/PaymentReceiptModal'
 import {
   MEMBERSHIP_PAYMENT_METHODS,
   computeNetPayable,
@@ -45,7 +44,9 @@ export function CollectMembershipPaymentPage() {
   const { userName } = getDashboardUser()
   const canPay = usePermission(authService.permissionCodes.payments)
   const [params] = useSearchParams()
+  const navigate = useNavigate()
   const membershipId = Number(params.get('membershipId') || '0')
+  const userIdFromUrl = Number(params.get('userId') || '0')
   const queryClient = useQueryClient()
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<MembershipPaymentMethod>('Upi')
@@ -56,8 +57,6 @@ export function CollectMembershipPaymentPage() {
   const [selectedCouponCode, setSelectedCouponCode] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [duplicateWarn, setDuplicateWarn] = useState<string | null>(null)
-  const [receipt, setReceipt] = useState<PaymentReceiptData | null>(null)
-  const [receiptOpen, setReceiptOpen] = useState(false)
   const [waiveOpen, setWaiveOpen] = useState(false)
   const [waiveAmount, setWaiveAmount] = useState('')
   const [waiveReason, setWaiveReason] = useState('')
@@ -211,6 +210,12 @@ export function CollectMembershipPaymentPage() {
       queryClient.invalidateQueries({ queryKey: ['membership-payment', membershipId] })
       queryClient.invalidateQueries({ queryKey: ['membership-financial-summary', membershipId] })
       invalidateDashboardQueries(queryClient)
+      const profileUserId = userIdFromUrl > 0 ? userIdFromUrl : res.userId
+      if (profileUserId > 0) {
+        queryClient.invalidateQueries({ queryKey: ['user', profileUserId] })
+        queryClient.invalidateQueries({ queryKey: ['users'] })
+        queryClient.invalidateQueries({ queryKey: ['user-memberships'] })
+      }
       const msg =
         res.paymentStatus === 'Paid' || res.isFullyPaid
           ? 'Full payment recorded. Membership is now active.'
@@ -218,23 +223,6 @@ export function CollectMembershipPaymentPage() {
             ? `Partial payment recorded. Pending ${formatInr(res.pendingAmount)}.`
             : 'Payment recorded.'
       toast.success(msg)
-      const lastTx = [...(res.transactions ?? [])].sort(
-        (a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime(),
-      )[0]
-      if (lastTx) {
-        setReceipt({
-          receiptNumber: lastTx.receiptNumber ?? `TX-${lastTx.id}`,
-          memberName: financialSummary?.memberName ?? 'Member',
-          memberId: financialSummary?.memberCode ?? `M-${res.userId}`,
-          memberPhotoUrl: financialSummary?.memberPhotoUrl,
-          planName: res.planName,
-          amountPaid: lastTx.transactionAmount,
-          paymentMethod: lastTx.transactionMethod,
-          remainingBalance: res.pendingAmount,
-          paymentDate: lastTx.transactionDate,
-        })
-        setReceiptOpen(true)
-      }
       setConfirmOpen(false)
       setAmount('')
       setNextDue('')
@@ -242,6 +230,9 @@ export function CollectMembershipPaymentPage() {
       setAppliedCoupon(null)
       setSelectedCouponCode('')
       setDuplicateWarn(null)
+      if (profileUserId > 0) {
+        navigate(`/dashboard/users/${profileUserId}`)
+      }
     },
     onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Failed to record payment')),
   })
@@ -565,26 +556,6 @@ export function CollectMembershipPaymentPage() {
             </Button>
           </div>
         </Modal>
-
-        <PaymentReceiptModal
-          open={receiptOpen}
-          onClose={() => setReceiptOpen(false)}
-          receipt={receipt}
-          onDownloadPdf={
-            data
-              ? () => {
-                  membershipPaymentsService.invoicePdf(data.id).then(({ data: blob }) => {
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `receipt-${receipt?.receiptNumber ?? data.id}.pdf`
-                    a.click()
-                    URL.revokeObjectURL(url)
-                  })
-                }
-              : undefined
-          }
-        />
       </DashboardPageContent>
     </DashboardLayout>
   )

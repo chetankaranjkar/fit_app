@@ -188,6 +188,9 @@ export function AddUserMembershipModal({
   const invalidateAfterCreate = async (userId: number) => {
     await queryClient.invalidateQueries({ queryKey: ['user-memberships'] })
     await queryClient.invalidateQueries({ queryKey: ['user-memberships', 'by-user', userId] })
+    await queryClient.invalidateQueries({ queryKey: ['users-paged'] })
+    await queryClient.invalidateQueries({ queryKey: ['users-directory-total'] })
+    await queryClient.invalidateQueries({ queryKey: ['user', userId] })
     invalidateDashboardQueries(queryClient)
     for (const key of extraInvalidateQueryKeys) {
       await queryClient.invalidateQueries({ queryKey: key })

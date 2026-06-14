@@ -375,7 +375,7 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 | Expired history only | **Renew Membership** (prefills last plan, `intent: renew`) + **+ New Membership** |
 | Inactive history only (voided/cancelled) | **+ Add Membership** |
 
-Both entry points use shared **`AddUserMembershipModal`** → `POST /api/UserMemberships` (optional `creationSource`, `intent`, `priorMembershipId` for audit). Permission: **`Payments`** (`authService.canPaymentsAccess()`). Member is locked in the list modal; `/dashboard/user-memberships` opens the same modal with member picker. **Member profile:** onboarding **Manage memberships** opens the same `MemberMembershipsModal`; **Membership History** tab uses shared `MemberMembershipManagePanel` (add / renew buttons identical to the grid modal).
+Both entry points use shared **`AddUserMembershipModal`** → `POST /api/UserMemberships` (optional `creationSource`, `intent`, `priorMembershipId` for audit). Permission: **`Payments`** (`authService.canPaymentsAccess()`). Member is locked in the list modal; `/dashboard/user-memberships` opens the same modal with member picker. **Reactivation:** creating a new membership for an inactive member sets **`Users.IsActive = true`** automatically (`MemberAccountReactivation` in `UserMembershipService` / `UserService`). **Member profile:** onboarding **Manage memberships** opens the same `MemberMembershipsModal`; **Membership History** tab uses shared `MemberMembershipManagePanel` (add / renew buttons identical to the grid modal).
 
 **Existing duplicates** (e.g. two `ActivePendingPayment` rows for Rajesh Yadav) must be fixed manually: void/cancel or expire one row, then use the remaining membership for payment or upgrade.
 

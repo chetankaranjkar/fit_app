@@ -55,6 +55,7 @@ export function EnterpriseDataGrid<T>({
   className = '',
   footer,
   chainScrollToParent = false,
+  onRowClick,
 }: {
   data: T[]
   columns: DataGridColumnDef<T>[]
@@ -71,6 +72,7 @@ export function EnterpriseDataGrid<T>({
   footer?: ReactNode
   /** When true, wheel at grid edges (or when grid has no overflow) scrolls the page shell */
   chainScrollToParent?: boolean
+  onRowClick?: (row: T) => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [sorting, setSorting] = useState<SortingState>([])
@@ -287,7 +289,11 @@ export function EnterpriseDataGrid<T>({
     return (
       <tr
         key={row.id}
-        className="group border-b border-white/[0.04] transition-colors hover:bg-violet-500/[0.05]"
+        className={[
+          'group border-b border-white/[0.04] transition-colors hover:bg-violet-500/[0.05]',
+          onRowClick ? 'cursor-pointer' : '',
+        ].join(' ')}
+        onClick={onRowClick ? () => onRowClick(row.original) : undefined}
       >
         {row.getVisibleCells().map((cell, colIndex) => {
           const meta = cell.column.columnDef.meta as DataGridColumnDef<T>

@@ -429,6 +429,7 @@ namespace GymManagement.Infrastructure.Services
                     createdMembership = membership;
 
                     await _membershipPaymentService.EnsureBillingForNewMembershipAsync(user, membership, plan);
+                    await MemberAccountReactivation.EnsureActiveForNewMembershipAsync(_unitOfWork, user.Id);
                 }
             }
 
@@ -837,6 +838,7 @@ namespace GymManagement.Infrastructure.Services
                     }
 
                     await _membershipPaymentService.EnsureBillingForNewMembershipAsync(user, membership, plan);
+                    await MemberAccountReactivation.EnsureActiveForNewMembershipAsync(_unitOfWork, id);
                 }
             }
 

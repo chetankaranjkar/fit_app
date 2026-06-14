@@ -33,7 +33,6 @@ import {
 } from '../lib/membersCsv'
 import type { Trainer } from '../types/trainer'
 import {
-  displayAadhaar,
   formatAadhaarForExport,
   isValidAadhaarInput,
   normalizeAadhaarInput,
@@ -163,7 +162,10 @@ function PaymentDueCell({
       {onCollect && user.openMembershipId ? (
         <button
           type="button"
-          onClick={() => onCollect(user)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onCollect(user)
+          }}
           className="mt-0.5 w-fit rounded-md bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-blue-200 hover:bg-blue-500/25"
         >
           Collect
@@ -223,7 +225,10 @@ function MemberAvatar({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
       aria-label={`View ${name}`}
       className="group/avatar relative z-0 inline-flex shrink-0 rounded-xl transition-transform hover:z-20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
     >
@@ -832,10 +837,6 @@ export function UsersPage() {
     navigate(`/dashboard/payments/collect?membershipId=${user.openMembershipId}&userId=${user.id}`)
   }
 
-  const handleEdit = (user: User) => {
-    navigate(`/dashboard/users/${user.id}`)
-  }
-
   const handleDeactivate = (user: User) => {
     const name = `${user.firstName} ${user.lastName}`.trim() || 'User'
     if (!window.confirm(`Deactivate "${name}"? They will be marked inactive.`)) return
@@ -866,7 +867,10 @@ export function UsersPage() {
               <div className="min-w-0">
                 <button
                   type="button"
-                  onClick={() => handleViewUser(row)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleViewUser(row)
+                  }}
                   className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-blue-200 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 rounded-sm"
                 >
                   {name}
@@ -887,17 +891,6 @@ export function UsersPage() {
         width: 140,
         hideBelow: 'lg',
         accessorFn: (u) => u.phone ?? '',
-      },
-      {
-        id: 'aadhaar',
-        header: 'Aadhaar',
-        minWidth: 150,
-        width: 160,
-        hideBelow: 'md',
-        accessorFn: (u) => u.aadhaarNumber ?? u.aadhaarNumberMasked ?? '',
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-slate-300">{displayAadhaar(row)}</span>
-        ),
       },
       {
         id: 'status',
@@ -921,14 +914,6 @@ export function UsersPage() {
         cell: ({ row }) => <PaymentDueCell user={row} onCollect={handleCollectPayment} />,
       },
       {
-        id: 'prefTime',
-        header: 'Pref. time',
-        minWidth: 110,
-        width: 120,
-        hideBelow: 'lg',
-        accessorFn: (u) => u.preferredGymTime ?? '',
-      },
-      {
         id: 'type',
         header: 'Type',
         minWidth: 120,
@@ -938,24 +923,22 @@ export function UsersPage() {
       },
       {
         id: 'actions',
-        header: '',
-        width: 56,
-        minWidth: 56,
-        align: 'center',
+        header: 'Actions',
+        width: 200,
+        minWidth: 200,
+        align: 'right',
         overflowVisible: true,
         cell: ({ row }) => (
           <TrainerMemberActionsMenu
             user={row}
-            onView={handleViewUser}
             onViewMemberships={handleViewMemberships}
-            onEdit={handleEdit}
             onDeactivate={handleDeactivate}
             onActivate={handleActivate}
           />
         ),
       },
     ],
-    [handleActivate, handleDeactivate, handleEdit, handleViewMemberships, handleViewUser],
+    [handleActivate, handleDeactivate, handleViewMemberships, handleCollectPayment],
   )
 
   const trainerMemberColumns = useMemo<DataGridColumnDef<User>[]>(
@@ -977,7 +960,10 @@ export function UsersPage() {
               <div className="min-w-0">
                 <button
                   type="button"
-                  onClick={() => handleViewUser(row)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleViewUser(row)
+                  }}
                   className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-violet-200 hover:underline"
                 >
                   {name}
@@ -997,17 +983,6 @@ export function UsersPage() {
         sortable: true,
         accessorFn: (u) => u.phone ?? '',
         cell: ({ row }) => <span className="text-sm text-slate-300">{row.phone || '—'}</span>,
-      },
-      {
-        id: 'aadhaar',
-        header: 'Aadhaar',
-        minWidth: 150,
-        width: 160,
-        hideBelow: 'lg',
-        accessorFn: (u) => u.aadhaarNumber ?? u.aadhaarNumberMasked ?? '',
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-slate-300">{displayAadhaar(row)}</span>
-        ),
       },
       {
         id: 'batch',
@@ -1059,23 +1034,21 @@ export function UsersPage() {
       {
         id: 'actions',
         header: 'Actions',
-        width: 72,
-        minWidth: 72,
-        align: 'center',
+        width: 200,
+        minWidth: 200,
+        align: 'right',
         overflowVisible: true,
         cell: ({ row }) => (
           <TrainerMemberActionsMenu
             user={row}
-            onView={handleViewUser}
             onViewMemberships={handleViewMemberships}
-            onEdit={handleEdit}
             onDeactivate={handleDeactivate}
             onActivate={handleActivate}
           />
         ),
       },
     ],
-    [handleActivate, handleDeactivate, handleEdit, handleViewMemberships, handleViewUser, handleCollectPayment],
+    [handleActivate, handleDeactivate, handleViewMemberships, handleCollectPayment],
   )
 
   const gridColumns = coachClientsOnly ? trainerMemberColumns : memberColumns

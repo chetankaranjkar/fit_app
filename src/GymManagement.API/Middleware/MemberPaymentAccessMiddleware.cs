@@ -25,7 +25,7 @@ namespace GymManagement.API.Middleware
 
         public MemberPaymentAccessMiddleware(RequestDelegate next) => _next = next;
 
-        public async Task InvokeAsync(HttpContext context, IMembershipPaymentService billing)
+        public async Task InvokeAsync(HttpContext context)
         {
             if (context.Request.Method.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase))
             {
@@ -67,6 +67,7 @@ namespace GymManagement.API.Middleware
                 return;
             }
 
+            var billing = context.RequestServices.GetRequiredService<IMembershipPaymentService>();
             var access = await billing.GetMemberBillingAccessAsync(userId, context.RequestAborted);
             if (!access.AccessBlocked)
             {

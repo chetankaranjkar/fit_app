@@ -192,7 +192,36 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(o => o.AddAppAuthorizationPolicies());
 
-builder.Services.Configure<NotificationWebhookOptions>(builder.Configuration.GetSection(NotificationWebhookOptions.SectionName));
+builder.Services.AddOptions<NotificationWebhookOptions>()
+    .Configure<IConfiguration>((opts, config) =>
+    {
+        var section = config.GetSection(NotificationWebhookOptions.SectionName);
+        opts.EmailWebhookUrl = NullIfBlank(section[nameof(NotificationWebhookOptions.EmailWebhookUrl)]);
+        opts.WhatsAppWebhookUrl = NullIfBlank(section[nameof(NotificationWebhookOptions.WhatsAppWebhookUrl)]);
+        opts.MaxRetries = ParseConfigInt(section[nameof(NotificationWebhookOptions.MaxRetries)], opts.MaxRetries);
+        opts.TimeoutSeconds = ParseConfigInt(section[nameof(NotificationWebhookOptions.TimeoutSeconds)], opts.TimeoutSeconds);
+        opts.EnableScheduledReminders = ParseConfigBool(
+            section[nameof(NotificationWebhookOptions.EnableScheduledReminders)],
+            opts.EnableScheduledReminders);
+        opts.EnableInAppMembershipExpiryReminders = ParseConfigBool(
+            section[nameof(NotificationWebhookOptions.EnableInAppMembershipExpiryReminders)],
+            opts.EnableInAppMembershipExpiryReminders);
+        opts.ReminderIntervalHours = ParseConfigInt(
+            section[nameof(NotificationWebhookOptions.ReminderIntervalHours)],
+            opts.ReminderIntervalHours);
+        opts.MembershipExpiryReminderDays = ParseConfigInt(
+            section[nameof(NotificationWebhookOptions.MembershipExpiryReminderDays)],
+            opts.MembershipExpiryReminderDays);
+        opts.InAppMembershipExpiryReminderDays = ParseConfigInt(
+            section[nameof(NotificationWebhookOptions.InAppMembershipExpiryReminderDays)],
+            opts.InAppMembershipExpiryReminderDays);
+        opts.EnablePushNotifications = ParseConfigBool(
+            section[nameof(NotificationWebhookOptions.EnablePushNotifications)],
+            opts.EnablePushNotifications);
+        opts.EnableWorkoutDayReminders = ParseConfigBool(
+            section[nameof(NotificationWebhookOptions.EnableWorkoutDayReminders)],
+            opts.EnableWorkoutDayReminders);
+    });
 builder.Services.Configure<CommercialOptions>(builder.Configuration.GetSection(CommercialOptions.SectionName));
 builder.Services.Configure<DoorDeviceOptions>(builder.Configuration.GetSection(DoorDeviceOptions.SectionName));
 builder.Services.PostConfigure<NotificationWebhookOptions>(opts =>
@@ -913,5 +942,16 @@ else
         await DatabaseBootstrap.EnsurePtPermissionsAsync(app.Services, logger);
     }
 }
+
+static string? NullIfBlank(string? value) =>
+    string.IsNullOrWhiteSpace(value) ? null : value;
+
+static bool ParseConfigBool(string? value, bool defaultValue) =>
+    string.IsNullOrWhiteSpace(value)
+        ? defaultValue
+        : value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1";
+
+static int ParseConfigInt(string? value, int defaultValue) =>
+    string.IsNullOrWhiteSpace(value) || !int.TryParse(value, out var parsed) ? defaultValue : parsed;
 
 app.Run();

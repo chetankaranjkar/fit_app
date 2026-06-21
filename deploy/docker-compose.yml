@@ -96,7 +96,9 @@ services:
       DoorDevice__Esp32BaseUrl: ${DOOR_DEVICE_URL:-}
       Notifications__EmailWebhookUrl: ${NOTIFICATIONS_EMAIL_WEBHOOK:-}
       Notifications__WhatsAppWebhookUrl: ${NOTIFICATIONS_WHATSAPP_WEBHOOK:-}
-      Notifications__EnableScheduledReminders: ${NOTIFICATIONS_ENABLE_SCHEDULED_REMINDERS:-}
+      # Plain env var — PostConfigure in Program.cs parses this; do not use Notifications__ here
+      # (empty Notifications__EnableScheduledReminders breaks bool binding and /health/ready).
+      NOTIFICATIONS_ENABLE_SCHEDULED_REMINDERS: ${NOTIFICATIONS_ENABLE_SCHEDULED_REMINDERS:-false}
       Notifications__EnableInAppMembershipExpiryReminders: ${NOTIFICATIONS_ENABLE_IN_APP_REMINDERS:-true}
       Notifications__MembershipExpiryReminderDays: ${NOTIFICATIONS_EXPIRY_REMINDER_DAYS:-14}
       Notifications__InAppMembershipExpiryReminderDays: ${NOTIFICATIONS_IN_APP_EXPIRY_DAYS:-14}
@@ -117,11 +119,11 @@ services:
     networks:
       - gym_internal
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health/ready || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health/live || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 180s
+      start_period: 300s
     logging:
       driver: json-file
       options:

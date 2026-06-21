@@ -846,27 +846,7 @@ else
             using var scope = app.Services.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             logger.LogInformation("Applying production database migrations (Database:AutoMigrate=true)...");
-            await DatabaseBootstrap.EnsureSqlServerDatabaseExistsAsync(connectionString!, logger);
-            if (!await dbContext.Database.CanConnectAsync())
-            {
-                throw new InvalidOperationException(
-                    "Cannot connect to the configured SQL Server database after ensure-database. " +
-                    "Check MSSQL_DATABASE, MSSQL_SA_PASSWORD, and sys.databases state on the server.");
-            }
-
-            try
-            {
-                await dbContext.Database.MigrateAsync();
-            }
-            catch (SqlException ex) when (ex.Number == 1801)
-            {
-                // EF sometimes races CREATE DATABASE when the catalog already exists (UAT restarts).
-                logger.LogWarning(ex, "Database already exists; retrying migrations once.");
-                await dbContext.Database.MigrateAsync();
-            }
-
-            await DatabaseSchemaPatch.ApplyAsync(dbContext, logger);
-            logger.LogInformation("Production database migrations applied.");
+            await DatabaseBootstrap.ApplyProductionMigrationsAsync(dbContext, connectionString!, logger);
         }
         catch (Exception ex)
         {
@@ -902,11 +882,21 @@ else
         {
             using var scope = app.Services.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            logger.LogInformation("Seeding database (Database:SeedDefaults=true)...");
-            var seeder = new GymManagement.Infrastructure.Data.DatabaseSeeder(unitOfWork, dbContext);
-            await seeder.SeedAsync();
-            logger.LogInformation("Database seed completed successfully.");
+            var existingAccounts = await dbContext.AuthUsers.CountAsync();
+            if (existingAccounts > 0)
+            {
+                logger.LogInformation(
+                    "Database seed skipped (Database:SeedDefaults=true but {Count} auth account(s) already exist).",
+                    existingAccounts);
+            }
+            else
+            {
+                var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                logger.LogInformation("Seeding database (Database:SeedDefaults=true)...");
+                var seeder = new GymManagement.Infrastructure.Data.DatabaseSeeder(unitOfWork, dbContext);
+                await seeder.SeedAsync();
+                logger.LogInformation("Database seed completed successfully.");
+            }
         }
         catch (Exception ex)
         {

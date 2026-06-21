@@ -46,6 +46,74 @@ public static class DatabaseBootstrap
         logger.LogInformation("Ensured SQL Server database {Database} exists.", databaseName);
     }
 
+    /// <summary>Ensure catalog exists, wait for connectivity, apply EF migrations + schema patches.</summary>
+    public static async Task ApplyProductionMigrationsAsync(
+        ApplicationDbContext dbContext,
+        string connectionString,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        var catalog = new SqlConnectionStringBuilder(connectionString).InitialCatalog?.Trim();
+        logger.LogInformation(
+            "Preparing database migrations for catalog {Database}...",
+            string.IsNullOrEmpty(catalog) ? "(none)" : catalog);
+
+        await EnsureSqlServerDatabaseExistsAsync(connectionString, logger, cancellationToken)
+            .ConfigureAwait(false);
+
+        for (var connectAttempt = 1; connectAttempt <= 5; connectAttempt++)
+        {
+            if (await dbContext.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false))
+                break;
+
+            if (connectAttempt >= 5)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot connect to SQL catalog '{catalog}' after ensure-database. " +
+                    "Check MSSQL_DATABASE, MSSQL_SA_PASSWORD, and sys.databases state on the server.");
+            }
+
+            logger.LogWarning(
+                "Waiting for SQL catalog {Database} to accept connections ({Attempt}/5)...",
+                catalog,
+                connectAttempt);
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+        }
+
+        var pending = (await dbContext.Database.GetPendingMigrationsAsync(cancellationToken).ConfigureAwait(false))
+            .ToList();
+        if (pending.Count > 0)
+        {
+            logger.LogInformation(
+                "Applying {Count} pending migration(s): {Migrations}",
+                pending.Count,
+                string.Join(", ", pending));
+        }
+
+        for (var migrateAttempt = 1; migrateAttempt <= 3; migrateAttempt++)
+        {
+            try
+            {
+                await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+                break;
+            }
+            catch (SqlException ex) when (ex.Number == 1801)
+            {
+                if (migrateAttempt >= 3)
+                    throw;
+
+                logger.LogWarning(
+                    ex,
+                    "Database create race (SQL 1801); retrying migrate ({Attempt}/3)...",
+                    migrateAttempt);
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        await DatabaseSchemaPatch.ApplyAsync(dbContext, logger, cancellationToken).ConfigureAwait(false);
+        logger.LogInformation("Database migrations applied for {Database}.", catalog);
+    }
+
     public static async Task SeedIfNoAccountsAsync(
         IServiceProvider services,
         ILogger logger,

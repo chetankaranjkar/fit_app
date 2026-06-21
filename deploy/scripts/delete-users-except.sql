@@ -1,16 +1,19 @@
 /*
-  Delete all users on production EXCEPT accounts listed in @KeepEmails (default: admin + two staff emails).
+  Delete all users on production EXCEPT accounts listed below (default keep list).
 
-  Target database: GymManagementDb (production). Does NOT touch Roles, UserTypes, membership plans, org/branch catalog.
+  Target database: GymManagementDb (production).
 
-  ALWAYS take a backup first:
-    ./deploy/scripts/backup.sh
+  === SSMS ===
+  1. Connect: Server = your VPS IP (or localhost,1433 if SSH tunnel), Login = sa
+  2. Select database: GymManagementDb
+  3. Open this file, set @DryRun below:
+       @DryRun = 1  → preview only (run first)
+       @DryRun = 0  → DELETE (backup first!)
+  4. Execute (F5). Review Messages + result grids.
 
-  Preview (no changes):
-    ./deploy/scripts/delete-users-except.sh
-
-  Execute (requires typing YES):
-    ./deploy/scripts/delete-users-except.sh --execute
+  === VPS shell ===
+  ./deploy/scripts/delete-users-except.sh
+  ./deploy/scripts/delete-users-except.sh --execute
 */
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
@@ -94,7 +97,7 @@ SELECT (SELECT COUNT(*) FROM @DeleteUserIds) AS UsersToDelete,
 IF @DryRun = 1
 BEGIN
     PRINT N'';
-    PRINT N'DRY RUN — no rows deleted. Re-run: ./deploy/scripts/delete-users-except.sh --execute';
+    PRINT N'DRY RUN — no rows deleted. Set @DryRun = 0 and run again to delete.';
     RETURN;
 END;
 

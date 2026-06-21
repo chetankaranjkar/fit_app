@@ -40,12 +40,20 @@ if sqlcmd_uat -d "${DB_NAME}" -Q "SELECT DB_NAME() AS current_db, 1 AS ok"; then
   echo "OK: sa can connect to ${DB_NAME} from sqlserver container."
 else
   echo "FAIL: sa cannot connect to ${DB_NAME}."
-  echo ""
-  echo "If the database is MISSING, create it:"
-  echo "  sqlcmd ... -Q \"CREATE DATABASE [${DB_NAME}]\""
-  echo ""
-  echo "If MSSQL_SA_PASSWORD was changed after the volume was first created,"
-  echo "reset the password inside SQL or recreate the UAT SQL volume (data loss)."
+  state="$(sqlcmd_uat -h -1 -W -Q "SET NOCOUNT ON; SELECT state_desc FROM sys.databases WHERE name = N'${DB_NAME}'" 2>/dev/null | tr -d '\r' | head -1 | xargs || true)"
+  if [[ "${state}" == "RECOVERY_PENDING" ]]; then
+    echo ""
+    echo "Database is RECOVERY_PENDING (corrupt or incomplete recovery after unclean shutdown)."
+    echo "Run: ./deploy/scripts/fix-uat-db-recovery-pending.sh"
+    echo "  (or FORCE=1 ... to drop and recreate empty UAT catalog — gym UAT data only)"
+  else
+    echo ""
+    echo "If the database is MISSING, create it:"
+    echo "  sqlcmd ... -Q \"CREATE DATABASE [${DB_NAME}]\""
+    echo ""
+    echo "If MSSQL_SA_PASSWORD was changed after the volume was first created,"
+    echo "reset the password inside SQL or recreate the UAT SQL volume (data loss)."
+  fi
 fi
 
 echo ""

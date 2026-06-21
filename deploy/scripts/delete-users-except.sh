@@ -68,30 +68,32 @@ if [[ "${EXECUTE}" -eq 1 ]]; then
 fi
 
 TMP_SQL="$(mktemp)"
+trap 'rm -f "${TMP_SQL}"' EXIT
 if [[ "${EXECUTE}" -eq 1 ]]; then
   sed 's/DECLARE @DryRun BIT = 1;/DECLARE @DryRun BIT = 0;/' "${SQL_FILE}" > "${TMP_SQL}"
 else
   cp "${SQL_FILE}" "${TMP_SQL}"
 fi
 
-CONTAINER="gym-sqlserver"
-docker cp "${TMP_SQL}" "${CONTAINER}:/tmp/delete-users-except.sql"
-
 run_sqlcmd() {
-  compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${SA_PASS}" -C -d "${DB_NAME}" -i /tmp/delete-users-except.sql "$@" \
-    || compose exec -T sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "${SA_PASS}" -C -d "${DB_NAME}" -i /tmp/delete-users-except.sql "$@"
+  # Pipe script on stdin — avoids docker cp permission errors on /tmp inside the container.
+  if compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd \
+    -S localhost -U sa -P "${SA_PASS}" -C -d "${DB_NAME}" -b -i /dev/stdin < "${TMP_SQL}"; then
+    return 0
+  fi
+  if compose exec -T sqlserver test -x /opt/mssql-tools/bin/sqlcmd; then
+    compose exec -T sqlserver /opt/mssql-tools/bin/sqlcmd \
+      -S localhost -U sa -P "${SA_PASS}" -C -d "${DB_NAME}" -b -i /dev/stdin < "${TMP_SQL}"
+    return $?
+  fi
+  return 1
 }
 
 if run_sqlcmd; then
   :
 else
-  rm -f "${TMP_SQL}"
-  docker exec "${CONTAINER}" rm -f /tmp/delete-users-except.sql 2>/dev/null || true
-  echo "sqlcmd failed." >&2
+  echo "sqlcmd failed (check MSSQL_SA_PASSWORD in deploy/.env)." >&2
   exit 1
 fi
-
-rm -f "${TMP_SQL}"
-docker exec "${CONTAINER}" rm -f /tmp/delete-users-except.sql 2>/dev/null || true
 
 echo "==> Finished."

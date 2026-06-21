@@ -57,25 +57,29 @@ fi
 
 # Patch mode variables in a temp copy (avoid editing repo file on server)
 TMP_SQL="$(mktemp)"
+trap 'rm -f "${TMP_SQL}"' EXIT
 sed -e "s/DECLARE @Mode VARCHAR(10) = N'DEMO';/DECLARE @Mode VARCHAR(10) = N'${MODE}';/" \
     -e "s/DECLARE @AlsoRemoveTrainerUsers BIT = 0;/DECLARE @AlsoRemoveTrainerUsers BIT = ${ALSO_USERS};/" \
     "${SQL_FILE}" > "${TMP_SQL}"
 
-CONTAINER="gym-sqlserver"
-docker cp "${TMP_SQL}" "${CONTAINER}:/tmp/delete-trainers.sql"
+run_sqlcmd() {
+  if compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd \
+    -S localhost -U sa -P "${SA_PASS}" -C -d "${DB_NAME}" -b -i /dev/stdin < "${TMP_SQL}"; then
+    return 0
+  fi
+  if compose exec -T sqlserver test -x /opt/mssql-tools/bin/sqlcmd; then
+    compose exec -T sqlserver /opt/mssql-tools/bin/sqlcmd \
+      -S localhost -U sa -P "${SA_PASS}" -C -d "${DB_NAME}" -b -i /dev/stdin < "${TMP_SQL}"
+    return $?
+  fi
+  return 1
+}
 
-if compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${SA_PASS}" -C -d "${DB_NAME}" -i /tmp/delete-trainers.sql; then
-  :
-elif compose exec -T sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "${SA_PASS}" -C -d "${DB_NAME}" -i /tmp/delete-trainers.sql; then
+if run_sqlcmd; then
   :
 else
-  rm -f "${TMP_SQL}"
-  docker exec "${CONTAINER}" rm -f /tmp/delete-trainers.sql 2>/dev/null || true
   echo "sqlcmd failed." >&2
   exit 1
 fi
-
-rm -f "${TMP_SQL}"
-docker exec "${CONTAINER}" rm -f /tmp/delete-trainers.sql 2>/dev/null || true
 
 echo "==> Done."

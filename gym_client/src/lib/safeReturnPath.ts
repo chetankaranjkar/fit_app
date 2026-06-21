@@ -23,3 +23,14 @@ export function parseMemberIdsQuery(raw: string | null | undefined): number[] {
     .filter((n) => Number.isInteger(n) && n > 0)
   return Array.from(new Set(ids))
 }
+
+/** Post-assign redirect: prefer ?returnTo=, else member profile for the assigned user. */
+export function resolveAssignReturnPath(
+  returnToRaw: string | null | undefined,
+  userId: number,
+): string | null {
+  const safe = getSafeDashboardReturnPath(returnToRaw)
+  if (safe) return safe
+  if (Number.isInteger(userId) && userId > 0) return `/dashboard/users/${userId}`
+  return null
+}

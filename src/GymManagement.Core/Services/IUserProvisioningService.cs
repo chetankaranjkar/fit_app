@@ -12,6 +12,10 @@ namespace GymManagement.Core.Services
         Task EnsureProfilesForUserAsync(int userId, CancellationToken cancellationToken = default);
         /// <summary>Maps legacy <c>UserTypes</c> to <c>UserRoles</c> and ensures profiles (idempotent).</summary>
         Task SyncFromUserTypeIdsAsync(int userId, IEnumerable<int>? userTypeIds, CancellationToken cancellationToken = default);
+        /// <summary>Assign/revoke <c>UserRoles</c> from canonical role codes and ensure profiles.</summary>
+        Task SyncFromRoleCodesAsync(int userId, IEnumerable<string>? roleCodes, CancellationToken cancellationToken = default);
+        /// <summary>Mirrors active <c>UserRoles</c> onto legacy <c>UserUserTypes</c> for backward-compatible reads.</summary>
+        Task SyncUserTypesFromRolesAsync(int userId, CancellationToken cancellationToken = default);
         Task EnsureMemberProfileAsync(int userId, CancellationToken cancellationToken = default);
         Task EnsureTrainerProfileAsync(int userId, TrainerProfileSeedDto? seed = null, CancellationToken cancellationToken = default);
         Task EnsureStaffProfileAsync(int userId, string? department = null, CancellationToken cancellationToken = default);

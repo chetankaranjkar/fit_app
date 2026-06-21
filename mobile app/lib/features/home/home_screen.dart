@@ -115,6 +115,7 @@ class HomeScreen extends ConsumerWidget {
                         SectionHeader(
                           title: 'Recent activity',
                           action: data.recentNotifications.isEmpty ? null : 'View all',
+                          onActionTap: () => context.push('/notifications'),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         if (data.recentNotifications.isEmpty)

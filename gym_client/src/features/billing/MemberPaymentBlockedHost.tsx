@@ -1,15 +1,27 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '../../components/ui/Button'
 import { formatInr } from '../../lib/formatInr'
 import { subscribePaymentBlocked, type PaymentBlockedDetail } from '../../lib/paymentBlockedEvents'
 import { api } from '../../lib/api'
 import { authService } from '../../services/auth.service'
+import { commercialService } from '../../services/commercial.service'
+import { useRazorpayCheckout } from '../commercial/useRazorpayCheckout'
+import { getApiErrorMessage } from '../../lib/apiErrors'
 
 export function MemberPaymentBlockedHost() {
   const navigate = useNavigate()
+  const { payMembership } = useRazorpayCheckout()
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState<PaymentBlockedDetail | null>(null)
+  const [paying, setPaying] = useState(false)
+  const [payError, setPayError] = useState<string | null>(null)
+
+  const configQuery = useQuery({
+    queryKey: ['public-commercial-config'],
+    queryFn: async () => (await commercialService.getConfig()).data,
+  })
 
   useEffect(() => subscribePaymentBlocked((d) => {
     setDetail(d)
@@ -53,6 +65,21 @@ export function MemberPaymentBlockedHost() {
 
   const pending = detail?.pendingAmount
   const due = detail?.dueDate
+  const onlineEnabled = Boolean(configQuery.data?.enableOnlinePayments)
+
+  const handlePayOnline = async () => {
+    setPayError(null)
+    setPaying(true)
+    try {
+      await payMembership()
+      setOpen(false)
+      window.location.reload()
+    } catch (err) {
+      setPayError(getApiErrorMessage(err, 'Payment could not be completed.'))
+    } finally {
+      setPaying(false)
+    }
+  }
 
   const handleLogout = async () => {
     try {
@@ -87,10 +114,23 @@ export function MemberPaymentBlockedHost() {
           )}
         </div>
         <div className="mt-6 flex flex-wrap gap-2">
+          {onlineEnabled && pending != null && pending > 0 ? (
+            <Button type="button" onClick={handlePayOnline} disabled={paying}>
+              {paying ? 'Opening checkout…' : 'Pay online now'}
+            </Button>
+          ) : null}
+          <Button type="button" variant="secondary" onClick={() => navigate('/dashboard/member/pay')}>
+            Billing details
+          </Button>
           <Button type="button" variant="secondary" onClick={handleLogout}>
             Log out
           </Button>
         </div>
+        {payError ? (
+          <p className="mt-3 text-xs text-rose-300" role="alert">
+            {payError}
+          </p>
+        ) : null}
       </div>
     </div>
   )

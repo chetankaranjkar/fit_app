@@ -6,6 +6,7 @@ import { MemberMembershipsModal } from '../users/MemberMembershipsModal'
 import { userMembershipsService } from '../../services/userMemberships.service'
 import { usersService } from '../../services/users.service'
 import { RENEWAL_QUEUE_QUERY_KEY } from '../../lib/dashboardQueryKeys'
+import { collectPaymentPath, memberProfilePath } from '../../lib/membershipPaymentNavigation'
 import type { ExpiringMembershipQueueItem } from '../../types/userMembership'
 import type { User } from '../../types/user'
 
@@ -78,7 +79,7 @@ export function RenewalQueuePanel({ enabled }: { enabled: boolean }) {
 
   const collectPayment = useCallback(
     (item: ExpiringMembershipQueueItem) => {
-      navigate(`/dashboard/payments/collect?membershipId=${item.id}&userId=${item.userId}`)
+      navigate(collectPaymentPath(item.id, item.userId, memberProfilePath(item.userId)))
     },
     [navigate],
   )

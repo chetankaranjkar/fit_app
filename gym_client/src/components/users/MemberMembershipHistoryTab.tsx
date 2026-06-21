@@ -106,7 +106,7 @@ export function MemberMembershipHistoryTab({
   const canManageMemberships = canManageProp ?? authService.canPaymentsAccess()
 
   const handleCollectPayment = (m: UserMembership) => {
-    const path = getMembershipCollectPaymentPath(m)
+    const path = getMembershipCollectPaymentPath(m, `/dashboard/users/${userId}`)
     if (path) navigate(path)
   }
 

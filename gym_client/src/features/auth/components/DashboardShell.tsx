@@ -2,14 +2,18 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { MemberPaymentBlockedHost } from '../../billing/MemberPaymentBlockedHost'
 import { DashboardSessionProvider } from '../DashboardSessionContext'
 import { DashboardRoleProvider, usePersona } from '../DashboardRoleContext'
-import { isPathAllowedForRole } from '../roleRouting'
+import { getPersonaHomePath, isPathAllowedForRole } from '../roleRouting'
 
 function DashboardShellInner() {
   const location = useLocation()
   const { activePersona } = usePersona()
 
   if (!isPathAllowedForRole(location.pathname, activePersona)) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to={getPersonaHomePath(activePersona)} replace />
+  }
+
+  if (activePersona === 'member' && location.pathname === '/dashboard') {
+    return <Navigate to="/dashboard/member/portal" replace />
   }
 
   return (

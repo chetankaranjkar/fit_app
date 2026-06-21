@@ -170,6 +170,19 @@ class ApiClient {
     }
   }
 
+  Future<List<int>> downloadBytes(String path) async {
+    try {
+      final res = await _dio.get<List<int>>(
+        path,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      _ensureOk(res);
+      return res.data ?? const [];
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
   void _ensureOk(Response res) {
     final status = res.statusCode ?? 0;
     if (status >= 200 && status < 300) return;

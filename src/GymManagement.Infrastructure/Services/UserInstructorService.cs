@@ -3,6 +3,7 @@ using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
+using GymManagement.Core.Scheduling;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
@@ -84,6 +85,19 @@ namespace GymManagement.Infrastructure.Services
                         LastName = user?.LastName ?? string.Empty,
                         Email = authByUserId.GetValueOrDefault(a.UserId),
                         ProfilePicture = user?.ProfilePictureUrl,
+                        PreferredGymTime = user?.PreferredGymTime,
+                        TrainingScheduleType = user?.TrainingScheduleType,
+                        TrainingStartTime = user?.TrainingStartTime,
+                        TrainingEndTime = user?.TrainingEndTime,
+                        TrainingDaysOfWeek = user?.TrainingDaysOfWeek,
+                        TrainingScheduleLabel = user == null
+                            ? null
+                            : MemberTrainingScheduleRules.FormatScheduleLabel(
+                                user.TrainingScheduleType,
+                                user.PreferredGymTime,
+                                user.TrainingStartTime,
+                                user.TrainingEndTime,
+                                user.TrainingDaysOfWeek),
                         AssignedOn = a.AssignmentDate,
                         MembershipPlan = PlanNameForUser(a.UserId),
                     };

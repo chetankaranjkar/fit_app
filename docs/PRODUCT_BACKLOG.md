@@ -362,9 +362,9 @@ Work in this sequence for the fastest impact:
 
 **Checklist**
 
-- [ ] 11.1 Payment gateway
-- [ ] 11.2 Member invoices mobile
-- [ ] 11.3 Renew membership in app
+- [x] 11.1 Payment gateway (Razorpay — order + verify + record installment; enable via `Commercial:EnableOnlinePayments`)
+- [x] 11.2 Member invoices mobile
+- [x] 11.3 Renew membership in app (web `/dashboard/member/pay` + blocked-member pay modal; mobile billing card + front-desk / web portal guidance)
 
 ---
 
@@ -471,9 +471,9 @@ PHASE 10 — NOTIFICATIONS
 [ ] 10.4 Notification center mobile
 
 PHASE 11 — PAYMENTS
-[ ] 11.1 Payment gateway
-[ ] 11.2 Member invoices mobile
-[ ] 11.3 Renew membership in app
+[x] 11.1 Payment gateway
+[x] 11.2 Member invoices mobile
+[x] 11.3 Renew membership in app
 
 PHASE 12 — TESTING
 [ ] 12.1 Playwright E2E

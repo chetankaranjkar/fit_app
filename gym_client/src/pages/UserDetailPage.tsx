@@ -17,13 +17,14 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import { collectPaymentPath, memberProfilePath } from '../lib/membershipPaymentNavigation'
 import { usersService } from '../services/users.service'
 import { fileUploadService } from '../services/fileUpload.service'
 import { bodyMetricsService } from '../services/bodyMetrics.service'
 import { attendanceService } from '../services/attendance.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
 import { trainersService } from '../services/trainers.service'
-import { userTypesService } from '../services/userTypes.service'
+import { UserApplicationRolesEditor } from '../components/users/UserApplicationRolesEditor'
 import { workoutPlansService } from '../services/workoutPlans.service'
 import { userSchedulesService } from '../services/userSchedules.service'
 import {
@@ -45,6 +46,16 @@ import { MemberPaymentHistoryTab } from '../components/users/MemberPaymentHistor
 import { MemberMembershipsModal } from '../components/users/MemberMembershipsModal'
 import { MemberMembershipManagePanel } from '../components/users/MemberMembershipManagePanel'
 import { MemberLockerSection } from '../components/users/MemberLockerSection'
+import { MemberTrainingScheduleFields } from '../components/users/MemberTrainingScheduleFields'
+import { useDashboardRoleOrCurrent } from '../features/auth/DashboardRoleContext'
+import {
+  DEFAULT_TRAINING_SCHEDULE,
+  buildTrainingSchedulePayload,
+  formatTrainingScheduleLabel,
+  isTrainingScheduleValid,
+  trainingScheduleFromUser,
+  type MemberTrainingScheduleValue,
+} from '../lib/memberTrainingSchedule'
 import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
 import { formatInr } from '../lib/formatInr'
 import { displayAadhaar, validateAadhaarNumber } from '../lib/aadhaar'
@@ -139,28 +150,10 @@ function pickMembershipRowForPrefill(memberships: UserMembership[]) {
   return [...memberships].sort(byStartDesc)[0]
 }
 
-function userTypeIdsFromUser(user: User) {
-  const mixed = user as User & { UserTypes?: { id?: number; Id?: number }[] }
-  const rows = user.userTypes ?? mixed.UserTypes ?? []
-  return rows
-    .map((t) => (typeof t.id === 'number' ? t.id : t.Id))
-    .filter((id): id is number => typeof id === 'number' && Number.isFinite(id) && id > 0)
-}
-
-/** Keeps Member type when editing profile so members do not vanish from the Users list. */
-function mergeUserTypeIdsForSave(
-  selected: number[] | undefined,
-  user: User,
-  allTypes: { id: number; name: string }[],
-): number[] | undefined {
-  if (!selected || selected.length === 0) return undefined
-  const memberType = allTypes.find((t) => t.name === 'Member')
-  if (!memberType) return selected
-  const hadMember = user.userTypes?.some((t) => t.name === 'Member')
-  if (hadMember && !selected.includes(memberType.id)) {
-    return [...selected, memberType.id]
-  }
-  return selected
+function roleLabelsFromUser(user: User): string[] {
+  const fromRoles = (user.appRoles ?? []).map((r) => r.name).filter(Boolean)
+  if (fromRoles.length > 0) return fromRoles
+  return (user.userTypes ?? []).map((t) => t.name).filter(Boolean)
 }
 
 interface TabDef {
@@ -277,12 +270,9 @@ export function UserDetailPage() {
     const returnTo = encodeURIComponent(`/dashboard/users/${userId}`)
     return `userId=${id}&returnTo=${returnTo}`
   }, [id, userId])
-  const workoutAssignmentsQuery = useMemo(() => {
-    if (!Number.isFinite(id) || id <= 0) return ''
-    const returnTo = encodeURIComponent(`/dashboard/users/${userId}`)
-    return `userId=${id}&returnTo=${returnTo}`
-  }, [id, userId])
   const { userName } = getDashboardUser()
+  const dashboardRole = useDashboardRoleOrCurrent()
+  const isAdmin = dashboardRole === 'admin'
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const key = tabFromUrl?.trim().toLowerCase() ?? ''
@@ -317,6 +307,8 @@ export function UserDetailPage() {
   const [editProfileOpen, setEditProfileOpen] = useState(false)
   const [membershipModalOpen, setMembershipModalOpen] = useState(false)
   const [profileForm, setProfileForm] = useState<UpdateUserDto>({})
+  const [trainingSchedule, setTrainingSchedule] =
+    useState<MemberTrainingScheduleValue>(DEFAULT_TRAINING_SCHEDULE)
   const [editProfileBaseline, setEditProfileBaseline] = useState<{
     planId?: number
     membershipStartDate: string
@@ -516,24 +508,6 @@ export function UserDetailPage() {
     staleTime: 30_000,
   })
 
-  const {
-    data: userTypes = [],
-    isLoading: userTypesLoading,
-    isError: userTypesError,
-    refetch: refetchUserTypes,
-  } = useQuery({
-    queryKey: ['userTypes'],
-    queryFn: async () => {
-      const res = await userTypesService.getAll()
-      const raw = res?.data
-      if (Array.isArray(raw)) return raw
-      if (raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data))
-        return (raw as { data: { id: number; name: string }[] }).data
-      return []
-    },
-    enabled: editProfileOpen,
-  })
-
   const addDetailMutation = useMutation({
     mutationFn: (dto: CreateUserDetailDto) => usersService.addDetail(dto),
     onSuccess: () => {
@@ -638,7 +612,9 @@ export function UserDetailPage() {
       setProfileError(null)
       const p = updated?.pendingPaymentCollection
       if (p?.membershipId && p.membershipPaymentId) {
-        navigate(`/dashboard/payments/collect?membershipId=${p.membershipId}&userId=${p.userId}`)
+        navigate(collectPaymentPath(p.membershipId, p.userId, memberProfilePath(p.userId)), {
+          replace: true,
+        })
       }
     },
     onError: (err: unknown) => setProfileError(getApiErrorMessage(err, 'Failed to update profile')),
@@ -951,13 +927,6 @@ export function UserDetailPage() {
     }
   }
 
-  const handleOpenWorkoutAssignmentsHub = () => {
-    if (!guardTrainingAssignment()) return
-    if (workoutAssignmentsQuery) {
-      navigate(`/dashboard/training/workout-assignments?${workoutAssignmentsQuery}`)
-    }
-  }
-
   const handleSubmitMetrics = (e: React.FormEvent) => {
     e.preventDefault()
     const payload = {
@@ -1048,8 +1017,8 @@ export function UserDetailPage() {
       planId,
       membershipStartDate,
       trainerId,
-      userTypeIds: userTypeIdsFromUser(user),
     })
+    setTrainingSchedule(trainingScheduleFromUser(user))
     setProfileError(null)
     setAadhaarError(null)
     setPhoneError(null)
@@ -1072,6 +1041,7 @@ export function UserDetailPage() {
     setEmergencyPhoneError(null)
     setEditProfileOpen(false)
     setProfileForm({})
+    setTrainingSchedule(DEFAULT_TRAINING_SCHEDULE)
     setEditProfileBaseline(null)
     setProfileError(null)
   }
@@ -1180,6 +1150,11 @@ export function UserDetailPage() {
       setProfileError(msg)
       return
     }
+    if (!isTrainingScheduleValid(trainingSchedule)) {
+      setProfileError('Select a gym shift or enter a valid custom training time slot.')
+      return
+    }
+    const schedulePayload = buildTrainingSchedulePayload(trainingSchedule)
 
     const payload: UpdateUserDto = {
       firstName: profileForm.firstName?.trim(),
@@ -1191,7 +1166,12 @@ export function UserDetailPage() {
       address: profileForm.address?.trim() || null,
       emergencyContact: profileForm.emergencyContact?.trim() || null,
       emergencyPhone: emergencyPhoneDigits,
-      preferredGymTime: profileForm.preferredGymTime?.trim() || null,
+      preferredGymTime: schedulePayload.preferredGymTime,
+      trainingScheduleType: schedulePayload.trainingScheduleType,
+      trainingStartTime: schedulePayload.trainingStartTime ?? undefined,
+      trainingEndTime: schedulePayload.trainingEndTime ?? undefined,
+      trainingDaysOfWeek: schedulePayload.trainingDaysOfWeek ?? undefined,
+      overrideTrainingScheduleConflict: schedulePayload.overrideTrainingScheduleConflict,
       profilePictureUrl:
         profileForm.profilePictureUrl != null && profileForm.profilePictureUrl.trim() !== ''
           ? profileForm.profilePictureUrl.trim()
@@ -1201,7 +1181,6 @@ export function UserDetailPage() {
       membershipStartDate:
         !membershipUnchanged && formPlanId ? profileForm.membershipStartDate || undefined : undefined,
       trainerId: !trainerUnchanged ? (formTrainerId ?? 0) : undefined,
-      userTypeIds: mergeUserTypeIdsForSave(profileForm.userTypeIds, user, userTypes),
       password: pwd || undefined,
       email: emailChanged ? trimmedEmail : undefined,
     }
@@ -1403,9 +1382,6 @@ export function UserDetailPage() {
             onEditProfile={handleOpenEditProfile}
             onAddDetail={handleOpenAddDetail}
             onAssignWorkout={handleOpenAssignWorkout}
-            onOpenWorkoutAssignmentsHub={
-              workoutAssignmentsQuery ? handleOpenWorkoutAssignmentsHub : undefined
-            }
             onDeleteSchedule={handleDeleteSchedule}
             onAssignDiet={handleAssignDiet}
             onChangeDiet={handleChangeDiet}
@@ -1708,22 +1684,14 @@ export function UserDetailPage() {
                     <option value="Other" className="bg-slate-900">Other</option>
                   </select>
                 </div>
-                <div>
-                  <label className={labelClass}>Preferred gym time</label>
-                  <select
-                    aria-label="Preferred gym time"
-                    value={profileForm.preferredGymTime ?? ''}
-                    onChange={(e) =>
-                      setProfileForm((f) => ({ ...f, preferredGymTime: e.target.value }))
-                    }
-                    className={selectClass}
-                  >
-                    <option value="" className="bg-slate-900">Select</option>
-                    <option value="Morning" className="bg-slate-900">Morning</option>
-                    <option value="Afternoon" className="bg-slate-900">Afternoon</option>
-                    <option value="Evening" className="bg-slate-900">Evening</option>
-                    <option value="Night" className="bg-slate-900">Night</option>
-                  </select>
+                <div className="sm:col-span-2">
+                  <MemberTrainingScheduleFields
+                    value={trainingSchedule}
+                    onChange={setTrainingSchedule}
+                    trainerId={profileForm.trainerId ?? user?.assignedTrainerId ?? user?.trainerId}
+                    userId={user?.id}
+                    showAdminOverride={isAdmin}
+                  />
                 </div>
                 <Input
                   label="Address"
@@ -1832,53 +1800,14 @@ export function UserDetailPage() {
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>User types</label>
-                  <p className="mb-2 text-xs text-slate-500">
-                    Member = gym member list. Trainer = staff coach profile (Trainers page). Members should keep the
-                    Member type.
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    {userTypesLoading && <p className="text-sm text-slate-400">Loading user types…</p>}
-                    {userTypesError && (
-                      <p className="text-sm text-amber-300">
-                        Could not load user types.{' '}
-                        <button
-                          type="button"
-                          onClick={() => refetchUserTypes()}
-                          className="underline focus:outline-none"
-                        >
-                          Retry
-                        </button>
-                      </p>
-                    )}
-                    {!userTypesLoading &&
-                      !userTypesError &&
-                      userTypes.map((ut: { id: number; name: string }) => (
-                        <label
-                          key={ut.id}
-                          className="flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={profileForm.userTypeIds?.includes(ut.id) ?? false}
-                            onChange={(e) => {
-                              setProfileForm((f) => ({
-                                ...f,
-                                userTypeIds: e.target.checked
-                                  ? [...(f.userTypeIds ?? []), ut.id]
-                                  : (f.userTypeIds ?? []).filter((tid) => tid !== ut.id),
-                              }))
-                            }}
-                            className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-400/40"
-                          />
-                          <span className="text-sm text-slate-200">{ut.name}</span>
-                        </label>
-                      ))}
-                    {!userTypesLoading && !userTypesError && userTypes.length === 0 && (
-                      <p className="text-sm text-slate-500">
-                        No user types from API. Restart the API to run the seeder.
-                      </p>
-                    )}
+                  <label className={labelClass}>Application roles</label>
+                  <div className="mt-2">
+                    <UserApplicationRolesEditor
+                      userId={user.id}
+                      onChanged={() => {
+                        refetchUser()
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -2357,12 +2286,12 @@ function ProfileHero({
                     Inactive
                   </span>
                 )}
-                {user.userTypes?.map((t) => (
+                {roleLabelsFromUser(user).map((name) => (
                   <span
-                    key={t.id}
+                    key={name}
                     className="inline-flex items-center rounded-full bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 px-2.5 py-1 text-[11px] font-semibold text-violet-200 ring-1 ring-violet-400/30"
                   >
-                    {t.name}
+                    {name}
                   </span>
                 ))}
               </div>
@@ -2536,7 +2465,6 @@ function DetailsTab({
   onEditProfile,
   onAddDetail,
   onAssignWorkout,
-  onOpenWorkoutAssignmentsHub,
   onDeleteSchedule,
   onAssignDiet,
   onChangeDiet,
@@ -2558,7 +2486,6 @@ function DetailsTab({
   onEditProfile: () => void
   onAddDetail: () => void
   onAssignWorkout: () => void
-  onOpenWorkoutAssignmentsHub?: () => void
   onDeleteSchedule: (schedule: UserScheduleDto) => void
   onAssignDiet: () => void
   onChangeDiet: () => void
@@ -2655,7 +2582,7 @@ function DetailsTab({
           }
           accent="from-amber-400 to-orange-500"
         >
-          <InfoRow label="Preferred time" value={user.preferredGymTime ?? '—'} />
+          <InfoRow label="Training schedule" value={formatTrainingScheduleLabel(user)} />
           <InfoRow
             label="Personal coach"
             value={
@@ -2684,16 +2611,16 @@ function DetailsTab({
             }
           />
           <InfoRow
-            label="User types"
+            label="Application roles"
             value={
-              user.userTypes && user.userTypes.length > 0 ? (
+              roleLabelsFromUser(user).length > 0 ? (
                 <span className="flex flex-wrap gap-1">
-                  {user.userTypes.map((t) => (
+                  {roleLabelsFromUser(user).map((name) => (
                     <span
-                      key={t.id}
+                      key={name}
                       className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-200 ring-1 ring-violet-400/30"
                     >
-                      {t.name}
+                      {name}
                     </span>
                   ))}
                 </span>
@@ -2757,68 +2684,82 @@ function DetailsTab({
         onRemoveDiet={onRemoveDiet}
       />
 
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.55)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-              Workout assignments
-            </p>
-            <h2 className="text-base font-semibold text-white">Assigned plans & weekly schedule</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              One active workout plan per member (multiple days for the same plan are OK).
-            </p>
+      <section className="relative overflow-hidden rounded-3xl border border-blue-500/25 bg-gradient-to-br from-blue-950/45 via-[rgba(18,18,42,0.88)] to-indigo-950/35 shadow-lg shadow-blue-950/25">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-blue-400 via-indigo-400 to-violet-400 opacity-90"
+        />
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-blue-500/15 px-8 py-5">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-900/40">
+              <svg className="size-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-blue-300/90">
+                Workout assignments
+              </p>
+              <h2 className="text-lg font-semibold text-white">Assigned plans & weekly schedule</h2>
+              <p className="mt-1 text-sm text-blue-100/50">
+                One active workout plan per member (multiple days for the same plan are OK).
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-slate-400 ring-1 ring-white/10">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="rounded-full bg-blue-500/10 px-3 py-1.5 text-xs text-blue-100/90 ring-1 ring-blue-400/25">
               {activeWorkoutPlanIds.size > 0
                 ? `${activeWorkoutPlanIds.size} plan · ${activeWorkoutSchedules.length} slot${activeWorkoutSchedules.length !== 1 ? 's' : ''}`
                 : 'No active plan'}
             </span>
-            {!viewMode && onOpenWorkoutAssignmentsHub && (
-              <Button variant="secondary" size="sm" onClick={onOpenWorkoutAssignmentsHub}>
-                Bulk assign
-              </Button>
-            )}
             {!viewMode && (
-              <Button size="sm" onClick={onAssignWorkout} disabled={!canAssignTrainingServices}>
+              <Button
+                className="!bg-gradient-to-r !from-blue-500 !to-indigo-600 !px-4 !py-2.5 !text-sm !text-white hover:!brightness-110"
+                onClick={onAssignWorkout}
+                disabled={!canAssignTrainingServices}
+              >
                 {hasWorkoutAssignment ? 'Change workout plan' : '+ Assign workout plan'}
               </Button>
             )}
           </div>
         </div>
-        <div className="px-6 py-5">
+        <div className="px-8 py-7">
           {!canAssignTrainingServices && !viewMode ? (
-            <p className="mb-4 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <p className="mb-5 rounded-xl border border-amber-400/25 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
               {trainingBlockedMessage}
             </p>
           ) : null}
           {userSchedules.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
-              <p className="text-sm text-slate-400">
+            <div className="rounded-2xl border border-dashed border-blue-500/25 bg-blue-500/[0.04] p-10 text-center">
+              <p className="text-base text-blue-100/60">
                 No workout plans assigned yet. Assign one to start a structured member routine.
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {userSchedules.map((schedule) => (
                 <div
                   key={schedule.id}
-                  className="rounded-xl border border-white/10 bg-white/[0.03] p-4"
+                  className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-5"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-white">{schedule.workoutPlanName}</p>
-                        <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200 ring-1 ring-blue-400/30">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <p className="text-base font-semibold text-white">{schedule.workoutPlanName}</p>
+                        <span className="rounded-full bg-blue-500/15 px-2.5 py-1 text-xs font-semibold text-blue-200 ring-1 ring-blue-400/30">
                           {schedule.scheduleType}
                         </span>
                         {schedule.isActive && (
-                          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-200 ring-1 ring-emerald-400/30">
+                          <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-200 ring-1 ring-emerald-400/30">
                             Active
                           </span>
                         )}
                       </div>
-                      <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-400 sm:grid-cols-3">
+                      <div className="mt-3 grid grid-cols-1 gap-2.5 text-sm text-slate-400 sm:grid-cols-3">
                         <span>
                           Day:{' '}
                           <strong className="text-slate-200">
@@ -2852,21 +2793,24 @@ function DetailsTab({
               ))}
             </div>
           )}
-          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <QuickStatCard
               label="Available workout plans"
               value={workoutPlans.length.toString()}
               sublabel="Templates ready to assign"
+              tone="workout"
             />
             <QuickStatCard
               label="Trainers available"
               value={trainers.filter((trainer) => trainer.isActive).length.toString()}
               sublabel="Active coaches"
+              tone="workout"
             />
             <QuickStatCard
               label="Current assigned plans"
               value={userSchedules.filter((schedule) => schedule.isActive).length.toString()}
               sublabel="Live schedule entries"
+              tone="workout"
             />
           </div>
         </div>
@@ -2879,16 +2823,22 @@ function QuickStatCard({
   label,
   value,
   sublabel,
+  tone = 'default',
 }: {
   label: string
   value: string
   sublabel: string
+  tone?: 'default' | 'workout'
 }) {
+  const toneClass =
+    tone === 'workout'
+      ? 'border-blue-500/20 bg-blue-500/[0.06] [&_p:first-child]:text-blue-300/80'
+      : 'border-white/10 bg-white/[0.03]'
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
-      <p className="mt-0.5 text-[11px] text-slate-500">{sublabel}</p>
+    <div className={`rounded-2xl border p-5 ${toneClass}`}>
+      <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">{label}</p>
+      <p className="mt-1.5 text-3xl font-bold text-white">{value}</p>
+      <p className="mt-1 text-sm text-slate-500">{sublabel}</p>
     </div>
   )
 }

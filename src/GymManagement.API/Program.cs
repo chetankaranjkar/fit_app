@@ -193,6 +193,7 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization(o => o.AddAppAuthorizationPolicies());
 
 builder.Services.Configure<NotificationWebhookOptions>(builder.Configuration.GetSection(NotificationWebhookOptions.SectionName));
+builder.Services.Configure<CommercialOptions>(builder.Configuration.GetSection(CommercialOptions.SectionName));
 builder.Services.Configure<DoorDeviceOptions>(builder.Configuration.GetSection(DoorDeviceOptions.SectionName));
 builder.Services.PostConfigure<NotificationWebhookOptions>(opts =>
 {
@@ -226,6 +227,19 @@ builder.Services.AddHttpClient("notification-webhooks", (sp, client) =>
     var sec = o.TimeoutSeconds > 0 ? o.TimeoutSeconds : 15;
     client.Timeout = TimeSpan.FromSeconds(sec);
 });
+
+builder.Services.AddHttpClient("Razorpay", (sp, client) =>
+{
+    var commercial = sp.GetRequiredService<IOptions<CommercialOptions>>().Value;
+    client.BaseAddress = new Uri("https://api.razorpay.com/v1/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+    if (commercial.IsRazorpayConfigured)
+    {
+        var credentials = Convert.ToBase64String(
+            Encoding.UTF8.GetBytes($"{commercial.RazorpayKeyId!.Trim()}:{commercial.RazorpayKeySecret!.Trim()}"));
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
+    }
+});
 builder.Services.AddHttpClient("door-device", (sp, client) =>
 {
     var o = sp.GetRequiredService<IOptions<DoorDeviceOptions>>().Value;
@@ -236,6 +250,7 @@ builder.Services.AddScoped<INotificationWebhookDispatcher, NotificationWebhookDi
 builder.Services.AddHostedService<MembershipExpiryReminderHostedService>();
 builder.Services.AddHostedService<GymQrExpiryReminderHostedService>();
 builder.Services.AddHostedService<PaymentBillingReminderHostedService>();
+builder.Services.AddHostedService<WorkoutDayReminderHostedService>();
 
 // Register Unit of Work
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -246,6 +261,7 @@ builder.Services.AddScoped<ICurrentUserAccessContext, HttpCurrentUserAccessConte
 builder.Services.AddScoped<IMobileNumberAvailabilityService, MobileNumberAvailabilityService>();
 builder.Services.AddScoped<IUsernameAvailabilityService, UsernameAvailabilityService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IMemberTrainingScheduleService, MemberTrainingScheduleService>();
 builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<IExerciseService, ExerciseService>();
 builder.Services.AddScoped<IWarmupService, WarmupService>();
@@ -338,6 +354,10 @@ builder.Services.AddScoped<IDoorUnlockService, DoorUnlockService>();
 builder.Services.AddScoped<IQrExpiryReminderService, QrExpiryReminderService>();
 builder.Services.AddScoped<IMembershipExpiryInAppNotificationService, MembershipExpiryInAppNotificationService>();
 builder.Services.AddScoped<IMembershipExpiryWebhookReminderService, MembershipExpiryWebhookReminderService>();
+builder.Services.AddScoped<IWorkoutDayReminderService, WorkoutDayReminderService>();
+builder.Services.AddScoped<IMemberPushNotificationService, MemberPushNotificationService>();
+builder.Services.AddScoped<ICommercialSignupService, CommercialSignupService>();
+builder.Services.AddScoped<IOnlinePaymentService, RazorpayOnlinePaymentService>();
 
 builder.Services.AddScoped<IGymQrFloorWorkoutService, GymQrFloorWorkoutService>();
 builder.Services.AddScoped<IAttendanceScanOrchestrator, AttendanceScanOrchestrator>();

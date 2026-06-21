@@ -83,6 +83,7 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<Payment> Payments { get; set; }
         public DbSet<MembershipPayment> MembershipPayments { get; set; }
         public DbSet<MembershipPaymentTransaction> MembershipPaymentTransactions { get; set; }
+        public DbSet<OnlinePaymentOrder> OnlinePaymentOrders { get; set; }
         public DbSet<WaiveOffRequest> WaiveOffRequests { get; set; }
         public DbSet<MembershipApprovalRequest> MembershipApprovalRequests { get; set; }
         public DbSet<MembershipAuditLog> MembershipAuditLogs { get; set; }
@@ -197,6 +198,9 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.LastName).HasFilter("[IsDeleted] = 0");
                 entity.HasIndex(e => new { e.IsDeleted, e.RegistrationDate, e.Id })
                     .HasDatabaseName("IX_Users_IsDeleted_RegistrationDate_Id");
+                entity.Property(e => e.PreferredGymTime).HasMaxLength(20);
+                entity.Property(e => e.TrainingScheduleType).HasMaxLength(20);
+                entity.Property(e => e.TrainingDaysOfWeek).HasMaxLength(30);
                 entity.HasOne(e => e.Organization)
                     .WithMany(o => o.Users)
                     .HasForeignKey(e => e.OrganizationId)
@@ -231,6 +235,8 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.EmergencyContact).HasMaxLength(150);
                 entity.Property(e => e.EmergencyPhone).HasMaxLength(10);
                 entity.Property(e => e.PreferredGymTime).HasMaxLength(20);
+                entity.Property(e => e.TrainingScheduleType).HasMaxLength(20);
+                entity.Property(e => e.TrainingDaysOfWeek).HasMaxLength(30);
                 entity.Property(e => e.Gender).HasMaxLength(20);
                 entity.Property(e => e.HeightCm).HasPrecision(10, 2);
                 entity.Property(e => e.WeightKg).HasPrecision(10, 2);
@@ -1064,6 +1070,25 @@ namespace GymManagement.Infrastructure.Data
                 entity.ToTable("membership_payment_transactions");
             });
 
+            modelBuilder.Entity<OnlinePaymentOrder>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Gateway).IsRequired().HasMaxLength(40);
+                entity.Property(e => e.GatewayOrderId).IsRequired().HasMaxLength(80);
+                entity.Property(e => e.GatewayPaymentId).HasMaxLength(80);
+                entity.Property(e => e.Amount).HasPrecision(12, 2);
+                entity.Property(e => e.Currency).IsRequired().HasMaxLength(8);
+                entity.Property(e => e.Status).IsRequired().HasConversion<string>().HasMaxLength(20);
+                entity.HasIndex(e => e.GatewayOrderId).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.MembershipPaymentId);
+                entity.HasOne(e => e.MembershipPayment)
+                    .WithMany()
+                    .HasForeignKey(e => e.MembershipPaymentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.ToTable("online_payment_orders");
+            });
+
             modelBuilder.Entity<WaiveOffRequest>(entity =>
             {
                 entity.HasKey(e => e.Id);
@@ -1478,6 +1503,8 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.OsVersion).HasMaxLength(64);
                 entity.Property(e => e.AppVersion).HasMaxLength(32);
                 entity.Property(e => e.FirebaseUid).HasMaxLength(128);
+                entity.Property(e => e.FcmToken).HasMaxLength(512);
+                entity.Property(e => e.FcmTokenUpdatedAt);
                 entity.HasIndex(e => new { e.UserId, e.DeviceUniqueId }).IsUnique().HasFilter("[IsDeleted] = 0");
                 entity.HasIndex(e => e.UserId);
                 entity.HasOne(e => e.User)
@@ -1568,6 +1595,8 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.RefreshTokenCompromisedAt);
                 entity.Property(e => e.FailedLoginAttempts);
                 entity.Property(e => e.LockoutEnd);
+                entity.Property(e => e.PasswordResetTokenHash).HasMaxLength(128);
+                entity.Property(e => e.PasswordResetExpiry);
                 entity.HasOne(e => e.User)
                     .WithOne(u => u.AuthUser)
                     .HasForeignKey<AuthUser>(e => e.UserId)
@@ -1658,6 +1687,7 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<Payment>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<MembershipPayment>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<MembershipPaymentTransaction>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<OnlinePaymentOrder>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<WaiveOffRequest>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<MembershipApprovalRequest>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<MembershipAuditLog>().HasQueryFilter(e => !e.IsDeleted);

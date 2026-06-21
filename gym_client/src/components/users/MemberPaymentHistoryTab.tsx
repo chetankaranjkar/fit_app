@@ -14,6 +14,7 @@ import {
   getMembershipAmount,
   paymentStatusBadgeClass,
 } from '../billing/membershipPaymentUi'
+import { collectPaymentPath, memberProfilePath } from '../../lib/membershipPaymentNavigation'
 
 function statusClass(status: string) {
   const u = status.toLowerCase()
@@ -192,7 +193,7 @@ export function MemberPaymentHistoryTab({
                 type="button"
                 className="mt-3 !py-1.5 text-xs"
                 onClick={() =>
-                  navigate(`/dashboard/payments/collect?membershipId=${primary.membershipId}&userId=${userId}`)
+                  navigate(collectPaymentPath(primary.membershipId, userId, memberProfilePath(userId)))
                 }
               >
                 Collect payment
@@ -345,7 +346,9 @@ export function MemberPaymentHistoryTab({
                           variant="secondary"
                           className="!py-1.5 !text-xs"
                           onClick={() =>
-                            navigate(`/dashboard/payments/collect?membershipId=${row.membershipId}&userId=${userId}`)
+                            navigate(
+                              collectPaymentPath(row.membershipId, userId, memberProfilePath(userId)),
+                            )
                           }
                         >
                           Collect

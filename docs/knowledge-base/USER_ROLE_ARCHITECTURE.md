@@ -619,11 +619,13 @@ Map permissions (examples):
   - `GET /api/members`, `GET /api/staff`
 - **Roles seeded:** `RECEPTIONIST`, `ACCOUNTANT` (+ existing ADMIN, STAFF, TRAINER, MEMBER)
 
-### P2 — Next
+### P2 — Done (2026-06-20)
 
-1. React: role multi-select wired to `/users/{id}/roles` (reduce reliance on `UserTypes` only).  
-2. Profile forms bound to `MemberProfile` / `StaffProfile` sections.  
-3. Optional: migrate display fields off `Users` into `Members` only (read path).
+1. React: **UserApplicationRolesEditor** on user edit profile + **Roles** page tab (assign/revoke via `/api/Roles/users/{id}/roles`).  
+2. Members directory + dashboard counts filter **`UserRoles` (MEMBER)**, not legacy `UserTypes`.  
+3. **`SyncUserTypesFromRolesAsync`** keeps legacy `UserUserTypes` in sync for older reads; migration **`20260620120000_BackfillUserRolesFromUserTypes`** backfills missing role rows.
+
+**Optional next:** migrate display fields off `Users` into `Members` only (read path).
 
 **Do not** rewrite the backend in Node/Express unless building a new microservice—the current stack already meets this design with incremental refactoring.
 

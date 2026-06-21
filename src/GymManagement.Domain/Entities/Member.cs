@@ -13,6 +13,10 @@ namespace GymManagement.Domain.Entities
         public string? EmergencyContact { get; set; }
         public string? EmergencyPhone { get; set; }
         public string? PreferredGymTime { get; set; }
+        public string? TrainingScheduleType { get; set; }
+        public TimeSpan? TrainingStartTime { get; set; }
+        public TimeSpan? TrainingEndTime { get; set; }
+        public string? TrainingDaysOfWeek { get; set; }
         public DateTime? DateOfBirth { get; set; }
         public string? Gender { get; set; }
         public DateTime RegistrationDate { get; set; } = DateTime.UtcNow;

@@ -34,6 +34,12 @@ namespace GymManagement.Core.Options
         /// <summary>In-app member notifications window (milestones at 14, 7, 3, 1, 0 days).</summary>
         public int InAppMembershipExpiryReminderDays { get; set; } = 14;
 
+        /// <summary>When true, sends Firebase push for in-app notification events (requires Firebase Admin credentials).</summary>
+        public bool EnablePushNotifications { get; set; } = true;
+
+        /// <summary>When true, creates daily workout-day in-app notifications (and push when enabled).</summary>
+        public bool EnableWorkoutDayReminders { get; set; } = true;
+
         /// <summary>True when at least one outbound webhook URL is configured.</summary>
         public bool HasOutboundWebhook =>
             !string.IsNullOrWhiteSpace(EmailWebhookUrl) || !string.IsNullOrWhiteSpace(WhatsAppWebhookUrl);

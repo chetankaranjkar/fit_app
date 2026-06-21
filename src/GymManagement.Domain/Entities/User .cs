@@ -20,7 +20,13 @@ namespace GymManagement.Domain.Entities
         public string? EmergencyContact { get; set; }
         public string? EmergencyPhone { get; set; }
         public string? ProfilePictureUrl { get; set; }
-        public string? PreferredGymTime { get; set; } // Morning, Afternoon, Evening, Night
+        public string? PreferredGymTime { get; set; } // Morning, Afternoon, Evening, Night (batch mode)
+        /// <summary>Batch or Custom — custom uses <see cref="TrainingStartTime"/> / <see cref="TrainingEndTime"/>.</summary>
+        public string? TrainingScheduleType { get; set; }
+        public TimeSpan? TrainingStartTime { get; set; }
+        public TimeSpan? TrainingEndTime { get; set; }
+        /// <summary>CSV of .NET <see cref="DayOfWeek"/> ints (0=Sun … 6=Sat).</summary>
+        public string? TrainingDaysOfWeek { get; set; }
         public bool IsActive { get; set; } = true;
         public string? QrCode { get; set; }
         public string? MembershipStatus { get; set; }

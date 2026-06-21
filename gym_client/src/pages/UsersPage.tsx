@@ -23,7 +23,6 @@ import { authService } from '../services/auth.service'
 import { usersService } from '../services/users.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
 import { trainersService } from '../services/trainers.service'
-import { userTypesService } from '../services/userTypes.service'
 import type { User, CreateUserDto } from '../types/user'
 import {
   MEMBERS_CSV_TEMPLATE,
@@ -64,9 +63,17 @@ import {
   ADMIN_SHIFT_FILTER_OPTIONS,
   MEMBER_SHIFT_FILTER_OPTIONS,
   memberBatchDotClass,
-  memberBatchLabel,
   type MemberShiftFilter,
 } from '../lib/memberBatches'
+import {
+  DEFAULT_TRAINING_SCHEDULE,
+  buildTrainingSchedulePayload,
+  formatTrainingScheduleLabel,
+  isTrainingScheduleValid,
+  type MemberTrainingScheduleValue,
+} from '../lib/memberTrainingSchedule'
+import { MemberTrainingScheduleFields } from '../components/users/MemberTrainingScheduleFields'
+import { collectPaymentPath, memberProfilePath } from '../lib/membershipPaymentNavigation'
 import { useMemberDirectoryStats, useTrainerMemberStats } from '../hooks/useTrainerMemberStats'
 import { MembersPageHeader } from '../components/users/MembersPageHeader'
 import { MembersSummaryStrip } from '../components/users/MembersSummaryStrip'
@@ -81,6 +88,12 @@ function getDashboardUser() {
   } catch {
     return { userName: 'User' }
   }
+}
+
+function roleLabelsFromUser(user: User): string {
+  const fromRoles = (user.appRoles ?? []).map((r) => r.name).filter(Boolean)
+  if (fromRoles.length > 0) return fromRoles.join(', ')
+  return user.userTypes?.map((t) => t.name).join(', ') ?? ''
 }
 
 function getAge(dateOfBirth: string): number | null {
@@ -269,6 +282,7 @@ export function UsersPage() {
   const { userName } = getDashboardUser()
   const dashboardRole = useDashboardRoleOrCurrent()
   const coachClientsOnly = shouldScopeUsersToAssignedCoach(dashboardRole)
+  const isAdmin = dashboardRole === 'admin'
   const canManageMembers = authService.hasPermission('CREATE_MEMBER')
   const trainerStats = useTrainerMemberStats(coachClientsOnly)
   const adminDirectoryStats = useMemberDirectoryStats(!coachClientsOnly, { assignedToCoachOnly: false })
@@ -276,6 +290,8 @@ export function UsersPage() {
   const queryClient = useQueryClient()
   const [isAdding, setIsAdding] = useState(false)
   const [form, setForm] = useState<CreateUserDto>(defaultCreateForm)
+  const [trainingSchedule, setTrainingSchedule] =
+    useState<MemberTrainingScheduleValue>(DEFAULT_TRAINING_SCHEDULE)
   const mobileAvailability = useMobileNumberAvailability(form.phone ?? '', { enabled: isAdding })
   const loginEmailAvailability = useUsernameAvailability(form.email ?? '', {
     enabled: isAdding && Boolean(form.email?.trim()),
@@ -421,23 +437,6 @@ export function UsersPage() {
     },
   })
 
-  const {
-    data: userTypes = [],
-    isLoading: userTypesLoading,
-    isError: userTypesError,
-    refetch: refetchUserTypes,
-  } = useQuery({
-    queryKey: ['userTypes'],
-    queryFn: async () => {
-      const res = await userTypesService.getAll()
-      const raw = res?.data
-      if (Array.isArray(raw)) return raw
-      if (raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data))
-        return (raw as { data: { id: number; name: string }[] }).data
-      return []
-    },
-  })
-
   function getCreateUserErrorMessage(err: unknown): string {
     if (err && typeof err === 'object' && 'response' in err) {
       const res = (err as { response?: { data?: unknown } }).response
@@ -464,6 +463,7 @@ export function UsersPage() {
       void queryClient.invalidateQueries({ queryKey: ['trainer-member-stats'] })
       setIsAdding(false)
       setForm(defaultCreateForm)
+      setTrainingSchedule(DEFAULT_TRAINING_SCHEDULE)
       setFormError(null)
       setEmailError(null)
       setPhoneError(null)
@@ -475,7 +475,10 @@ export function UsersPage() {
       setMembershipStartDateError(null)
       const p = created?.pendingPaymentCollection
       if (p?.membershipId && p.membershipPaymentId) {
-        navigate(`/dashboard/payments/collect?membershipId=${p.membershipId}&userId=${p.userId}`)
+        const profilePath = memberProfilePath(p.userId)
+        if (location.pathname !== profilePath) {
+          navigate(collectPaymentPath(p.membershipId, p.userId, profilePath), { replace: true })
+        }
       }
     },
     onError: (err: unknown) => setFormError(getCreateUserErrorMessage(err)),
@@ -493,7 +496,7 @@ export function UsersPage() {
 
   const handleStartAdd = () => {
     setIsAdding(true)
-    setForm({ ...defaultCreateForm, role: 1, userTypeIds: [] })
+    setForm({ ...defaultCreateForm, role: 1 })
     setFormError(null)
     setEmailError(null)
     setPhoneError(null)
@@ -517,7 +520,7 @@ export function UsersPage() {
     }
     if (!shouldOpen) return
     setIsAdding(true)
-    setForm({ ...defaultCreateForm, role: 1, userTypeIds: [] })
+    setForm({ ...defaultCreateForm, role: 1 })
     setFormError(null)
     setEmailError(null)
     setPhoneError(null)
@@ -530,17 +533,10 @@ export function UsersPage() {
     }
   }, [location.state, location.pathname, navigate])
 
-  // When Add User modal is open, set user type to Member only (this page only adds members)
-  const memberUserType = useMemo(() => userTypes.find((ut: { name: string }) => ut.name === 'Member'), [userTypes])
-  useEffect(() => {
-    if (isAdding && memberUserType) {
-      setForm((f) => (f.userTypeIds?.length === 1 && f.userTypeIds[0] === memberUserType.id ? f : { ...f, userTypeIds: [memberUserType.id] }))
-    }
-  }, [isAdding, memberUserType])
-
   const handleCancelAdd = () => {
     setIsAdding(false)
     setForm(defaultCreateForm)
+    setTrainingSchedule(DEFAULT_TRAINING_SCHEDULE)
     setFormError(null)
     setEmailError(null)
     setPhoneError(null)
@@ -796,8 +792,11 @@ export function UsersPage() {
       setFormError('This Aadhaar number is already registered.')
       return
     }
-    // This page only adds members: force role = Member (1) and userTypeIds = Member only
-    const memberTypeId = memberUserType?.id
+    if (!isTrainingScheduleValid(trainingSchedule)) {
+      setFormError('Select a gym shift or enter a valid custom training time slot.')
+      return
+    }
+    const schedulePayload = buildTrainingSchedulePayload(trainingSchedule)
     const payload: CreateUserDto = {
       ...form,
       firstName: form.firstName.trim(),
@@ -810,7 +809,12 @@ export function UsersPage() {
       address: form.address?.trim() || undefined,
       emergencyContact: form.emergencyContact?.trim() || undefined,
       emergencyPhone: emergencyPhoneDigits,
-      preferredGymTime: form.preferredGymTime?.trim() || undefined,
+      preferredGymTime: schedulePayload.preferredGymTime ?? undefined,
+      trainingScheduleType: schedulePayload.trainingScheduleType,
+      trainingStartTime: schedulePayload.trainingStartTime ?? undefined,
+      trainingEndTime: schedulePayload.trainingEndTime ?? undefined,
+      trainingDaysOfWeek: schedulePayload.trainingDaysOfWeek ?? undefined,
+      overrideTrainingScheduleConflict: schedulePayload.overrideTrainingScheduleConflict,
       password,
       role: 1,
       planId: form.planId && form.planId > 0 ? form.planId : undefined,
@@ -819,7 +823,6 @@ export function UsersPage() {
       instructorSpecialization: undefined,
       instructorBio: undefined,
       instructorHireDate: undefined,
-      userTypeIds: memberTypeId ? [memberTypeId] : undefined,
     }
     createMutation.mutate(payload)
   }
@@ -834,7 +837,7 @@ export function UsersPage() {
 
   const handleCollectPayment = (user: User) => {
     if (!user.openMembershipId) return
-    navigate(`/dashboard/payments/collect?membershipId=${user.openMembershipId}&userId=${user.id}`)
+    navigate(collectPaymentPath(user.openMembershipId, user.id, memberProfilePath(user.id)))
   }
 
   const handleDeactivate = (user: User) => {
@@ -914,12 +917,12 @@ export function UsersPage() {
         cell: ({ row }) => <PaymentDueCell user={row} onCollect={handleCollectPayment} />,
       },
       {
-        id: 'type',
-        header: 'Type',
+        id: 'roles',
+        header: 'Roles',
         minWidth: 120,
         width: 140,
         hideBelow: 'xl',
-        accessorFn: (u) => u.userTypes?.map((t) => t.name).join(', ') ?? '',
+        accessorFn: (u) => roleLabelsFromUser(u),
       },
       {
         id: 'actions',
@@ -990,11 +993,11 @@ export function UsersPage() {
         minWidth: 150,
         width: 170,
         sortable: true,
-        accessorFn: (u) => memberBatchLabel(u.preferredGymTime),
+        accessorFn: (u) => formatTrainingScheduleLabel(u),
         cell: ({ row }) => (
           <span className="inline-flex items-center gap-2 text-xs text-slate-300">
             <span className={`size-2 shrink-0 rounded-full ${memberBatchDotClass(row.preferredGymTime)}`} />
-            {memberBatchLabel(row.preferredGymTime)}
+            {formatTrainingScheduleLabel(row)}
           </span>
         ),
       },
@@ -1131,11 +1134,6 @@ export function UsersPage() {
 
   const handleCsvImportFile = async (file: File | null) => {
     if (!file) return
-    const memberTypeId = memberUserType?.id
-    if (!memberTypeId) {
-      toast.error('Member user type not loaded. Cannot import.')
-      return
-    }
     setImporting(true)
     setImportLog([])
     setImportProgress(null)
@@ -1184,7 +1182,6 @@ export function UsersPage() {
           instructorSpecialization: undefined,
           instructorBio: undefined,
           instructorHireDate: undefined,
-          userTypeIds: [memberTypeId],
         })
       }
 
@@ -1327,48 +1324,14 @@ export function UsersPage() {
                 style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
               />
 
-              {/* Step 1: User type (Members only on this page) */}
+              {/* Step 1: Role */}
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                 <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500">Step 1</p>
-                <h3 className="mb-1 text-sm font-semibold text-white">User type</h3>
-                <p className="mb-2 text-xs text-slate-400">
-                  New users are added as members only.
+                <h3 className="mb-1 text-sm font-semibold text-white">Member account</h3>
+                <p className="text-xs text-slate-400">
+                  New users are created with the <span className="font-medium text-slate-200">MEMBER</span> application
+                  role (gym member list and mobile login).
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {userTypesLoading && (
-                    <p className="text-xs text-slate-400">Loading…</p>
-                  )}
-                  {userTypesError && (
-                    <p className="text-xs text-amber-300">
-                      Could not load user types.{' '}
-                      <button
-                        type="button"
-                        onClick={() => refetchUserTypes()}
-                        className="underline focus:outline-none"
-                      >
-                        Retry
-                      </button>
-                    </p>
-                  )}
-                  {!userTypesLoading && !userTypesError && memberUserType && (
-                    <label className="flex cursor-pointer items-center gap-1.5">
-                      <input
-                        type="checkbox"
-                        checked={form.userTypeIds?.includes(memberUserType.id) ?? false}
-                        readOnly
-                        tabIndex={-1}
-                        className="h-3.5 w-3.5 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500"
-                      />
-                      <span className="text-xs text-slate-300">Member</span>
-                    </label>
-                  )}
-                  {!userTypesLoading && !userTypesError && !memberUserType && userTypes.length > 0 && (
-                    <p className="text-xs text-amber-300">Member user type not found. Restart the API to run the seeder.</p>
-                  )}
-                  {!userTypesLoading && !userTypesError && userTypes.length === 0 && (
-                    <p className="text-xs text-slate-400">No user types from API. Restart the API to run the seeder.</p>
-                  )}
-                </div>
               </div>
 
               {/* Step 2: Personal info and rest of form */}
@@ -1597,19 +1560,12 @@ export function UsersPage() {
                     className="!rounded-lg !px-3 !py-2 text-sm"
                   />
                   <div className="sm:col-span-2">
-                    <label className="mb-1 block text-xs font-medium text-slate-400">Preferred gym time</label>
-                    <select
-                      aria-label="Preferred gym time"
-                      value={form.preferredGymTime ?? ''}
-                      onChange={(e) => setForm((f) => ({ ...f, preferredGymTime: e.target.value }))}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
-                    >
-                      <option value="" className="bg-slate-900">Select</option>
-                      <option value="Morning" className="bg-slate-900">Morning</option>
-                      <option value="Afternoon" className="bg-slate-900">Afternoon</option>
-                      <option value="Evening" className="bg-slate-900">Evening</option>
-                      <option value="Night" className="bg-slate-900">Night</option>
-                    </select>
+                    <MemberTrainingScheduleFields
+                      value={trainingSchedule}
+                      onChange={setTrainingSchedule}
+                      trainerId={form.trainerId}
+                      showAdminOverride={isAdmin}
+                    />
                   </div>
                 </div>
               </div>

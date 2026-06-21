@@ -24,6 +24,7 @@ import {
   paymentStatusBadgeClass,
   paymentStatusLabel,
 } from '../components/billing/membershipPaymentUi'
+import { resolvePostCollectPaymentPath } from '../lib/membershipPaymentNavigation'
 import type { MembershipPaymentMethod } from '../types/membershipPayment'
 import type { ValidateCouponResponse } from '../types/coupon'
 import { usePermission } from '../features/auth/hooks/usePermission'
@@ -47,6 +48,7 @@ export function CollectMembershipPaymentPage() {
   const navigate = useNavigate()
   const membershipId = Number(params.get('membershipId') || '0')
   const userIdFromUrl = Number(params.get('userId') || '0')
+  const returnToParam = params.get('returnTo')
   const queryClient = useQueryClient()
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<MembershipPaymentMethod>('Upi')
@@ -207,22 +209,10 @@ export function CollectMembershipPaymentPage() {
       return res
     },
     onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['membership-payment', membershipId] })
-      queryClient.invalidateQueries({ queryKey: ['membership-financial-summary', membershipId] })
-      invalidateDashboardQueries(queryClient)
-      const profileUserId = userIdFromUrl > 0 ? userIdFromUrl : res.userId
-      if (profileUserId > 0) {
-        queryClient.invalidateQueries({ queryKey: ['user', profileUserId] })
-        queryClient.invalidateQueries({ queryKey: ['users'] })
-        queryClient.invalidateQueries({ queryKey: ['user-memberships'] })
-      }
-      const msg =
-        res.paymentStatus === 'Paid' || res.isFullyPaid
-          ? 'Full payment recorded. Membership is now active.'
-          : res.paymentStatus === 'Partial' || res.isPartiallyPaid
-            ? `Partial payment recorded. Pending ${formatInr(res.pendingAmount)}.`
-            : 'Payment recorded.'
-      toast.success(msg)
+      const profileUserId =
+        userIdFromUrl > 0 ? userIdFromUrl : (res.userId ?? data?.userId ?? 0)
+      const redirectPath = resolvePostCollectPaymentPath(profileUserId, returnToParam)
+
       setConfirmOpen(false)
       setAmount('')
       setNextDue('')
@@ -230,8 +220,29 @@ export function CollectMembershipPaymentPage() {
       setAppliedCoupon(null)
       setSelectedCouponCode('')
       setDuplicateWarn(null)
+
+      const msg =
+        res.paymentStatus === 'Paid' || res.isFullyPaid
+          ? 'Full payment recorded. Membership is now active.'
+          : res.paymentStatus === 'Partial' || res.isPartiallyPaid
+            ? `Partial payment recorded. Pending ${formatInr(res.pendingAmount)}.`
+            : 'Payment recorded.'
+      toast.success(msg)
+
+      if (redirectPath) {
+        navigate(redirectPath, { replace: true })
+      } else {
+        toast.error('Payment recorded but member profile could not be opened (missing user id).')
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['membership-payment', membershipId] })
+      queryClient.invalidateQueries({ queryKey: ['membership-financial-summary', membershipId] })
+      invalidateDashboardQueries(queryClient)
       if (profileUserId > 0) {
-        navigate(`/dashboard/users/${profileUserId}`)
+        queryClient.invalidateQueries({ queryKey: ['membership-payments-user', profileUserId] })
+        queryClient.invalidateQueries({ queryKey: ['user', profileUserId] })
+        queryClient.invalidateQueries({ queryKey: ['users'] })
+        queryClient.invalidateQueries({ queryKey: ['user-memberships'] })
       }
     },
     onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Failed to record payment')),

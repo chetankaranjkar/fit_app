@@ -23,6 +23,15 @@ const LandingPage = lazy(() =>
 const LoginPage = lazy(() =>
   import('../pages/LoginPage').then((m) => ({ default: m.LoginPage })),
 )
+const ForgotPasswordPage = lazy(() =>
+  import('../pages/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })),
+)
+const ResetPasswordPage = lazy(() =>
+  import('../pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })),
+)
+const SignupPage = lazy(() =>
+  import('../pages/SignupPage').then((m) => ({ default: m.SignupPage })),
+)
 const DashboardHubPage = lazy(() =>
   import('../pages/dashboards/DashboardHubPage').then((m) => ({ default: m.DashboardHubPage })),
 )
@@ -54,6 +63,9 @@ const MemberHealthProfilePage = lazy(() =>
 )
 const MemberPortalPage = lazy(() =>
   import('../pages/member/MemberPortalPage').then((m) => ({ default: m.MemberPortalPage })),
+)
+const MemberPayPage = lazy(() =>
+  import('../pages/member/MemberPayPage').then((m) => ({ default: m.MemberPayPage })),
 )
 const UserHealthProfilePage = lazy(() =>
   import('../pages/health/UserHealthProfilePage').then((m) => ({ default: m.UserHealthProfilePage })),
@@ -320,6 +332,9 @@ const router = createBrowserRouter([
     children: [
       { path: '/', element: withSuspense(<LandingPage />) },
       { path: '/login', element: withSuspense(<LoginPage />) },
+      { path: '/login/forgot-password', element: withSuspense(<ForgotPasswordPage />) },
+      { path: '/login/reset-password', element: withSuspense(<ResetPasswordPage />) },
+      { path: '/signup', element: withSuspense(<SignupPage />) },
       { path: '/help', element: withSuspense(<HelpCenterPage />) },
       { path: '/help/category/:categoryId', element: withSuspense(<HelpCategoryPage />) },
       { path: '/help/article/:articleId', element: withSuspense(<HelpArticlePage />) },
@@ -375,6 +390,7 @@ const router = createBrowserRouter([
               { path: '/dashboard/member/diet', element: withSuspense(<MemberDietPage />) },
               { path: '/dashboard/member/progress', element: withSuspense(<MemberProgressPage />) },
               { path: '/dashboard/member/portal', element: withSuspense(<MemberPortalPage />) },
+              { path: '/dashboard/member/pay', element: withSuspense(<MemberPayPage />) },
               { path: '/dashboard/member/health-profile', element: withSuspense(<MemberHealthProfilePage />) },
               { path: '/dashboard/training/body-parts', element: withSuspense(<BodyPartsPage />) },
               { path: '/dashboard/training/exercises', element: withSuspense(<ExercisesPage />) },

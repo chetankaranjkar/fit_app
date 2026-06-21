@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/app_config.dart';
 import '../../core/api_exception.dart';
@@ -224,6 +225,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 autofillHints: const [AutofillHints.password],
                                 textInputAction: TextInputAction.done,
                                 onSubmitted: (_) => _signIn(),
+                              ),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: CupertinoButton(
+                                  padding: EdgeInsets.zero,
+                                  onPressed: () => context.push('/login/forgot-password'),
+                                  child: Text(
+                                    'Forgot password?',
+                                    style: AppType.caption.copyWith(
+                                      color: CupertinoColors.white.withValues(alpha: 0.72),
+                                    ),
+                                  ),
+                                ),
                               ),
                               if (_error != null) ...[
                                 const SizedBox(height: 12),

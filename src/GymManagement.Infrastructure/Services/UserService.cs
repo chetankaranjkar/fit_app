@@ -7,6 +7,7 @@ using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
 using GymManagement.Core.Security;
+using GymManagement.Core.Scheduling;
 using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
@@ -26,8 +27,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly ICurrentUserAccessContext _accessContext;
         private readonly IMobileNumberAvailabilityService _mobileAvailability;
         private readonly IUsernameAvailabilityService _usernameAvailability;
-        private int? _cachedMemberUserTypeId;
-
+        private readonly IMemberTrainingScheduleService _trainingScheduleService;
         public UserService(
             IUnitOfWork unitOfWork,
             IMembershipPaymentService membershipPaymentService,
@@ -37,7 +37,8 @@ namespace GymManagement.Infrastructure.Services
             ApplicationDbContext db,
             ICurrentUserAccessContext accessContext,
             IMobileNumberAvailabilityService mobileAvailability,
-            IUsernameAvailabilityService usernameAvailability)
+            IUsernameAvailabilityService usernameAvailability,
+            IMemberTrainingScheduleService trainingScheduleService)
         {
             _unitOfWork = unitOfWork;
             _membershipPaymentService = membershipPaymentService;
@@ -48,6 +49,7 @@ namespace GymManagement.Infrastructure.Services
             _accessContext = accessContext;
             _mobileAvailability = mobileAvailability;
             _usernameAvailability = usernameAvailability;
+            _trainingScheduleService = trainingScheduleService;
         }
 
         public async Task<IEnumerable<UserDto>> GetAllUsersAsync(int? assignedToTrainerProfileId = null)
@@ -110,13 +112,7 @@ namespace GymManagement.Infrastructure.Services
             query = query.ApplyPreferredGymTimeFilter(_db.Members, preferredGymTime);
 
             if (membersOnly)
-            {
-                var memberTypeId = await ResolveMemberUserTypeIdAsync().ConfigureAwait(false);
-                if (!memberTypeId.HasValue)
-                    query = query.Where(_ => false);
-                else
-                    query = query.ApplyMembersOnlyFilter(_db.UserUserTypes, memberTypeId.Value);
-            }
+                query = query.ApplyMembersOnlyFilter(_db.UserRoles, _db.AppRoles);
 
             if (assignedToTrainerProfileId.HasValue)
                 query = query.ApplyAssignedToTrainerFilter(_db.UserInstructors, assignedToTrainerProfileId.Value);
@@ -370,10 +366,23 @@ namespace GymManagement.Infrastructure.Services
                 EmergencyContact = createUserDto.EmergencyContact,
                 EmergencyPhone = PhoneNumberValidator.NormalizeOptionalPhone(createUserDto.EmergencyPhone),
                 ProfilePictureUrl = createUserDto.ProfilePictureUrl,
-                PreferredGymTime = createUserDto.PreferredGymTime,
                 IsActive = createUserDto.IsActive,
                 RegistrationDate = DateTime.UtcNow
             };
+            MemberTrainingScheduleApplicator.Apply(
+                user,
+                createUserDto.TrainingScheduleType,
+                createUserDto.PreferredGymTime,
+                createUserDto.TrainingStartTime,
+                createUserDto.TrainingEndTime,
+                createUserDto.TrainingDaysOfWeek);
+
+            if (createUserDto.TrainerId.HasValue && createUserDto.TrainerId.Value > 0)
+            {
+                await _trainingScheduleService.EnsureNoConflictsOrThrowAsync(
+                    BuildValidateDto(createUserDto.TrainerId.Value, null, user),
+                    createUserDto.OverrideTrainingScheduleConflict);
+            }
 
             await _unitOfWork.Users.AddAsync(user);
             await _unitOfWork.SaveChangesAsync();
@@ -436,22 +445,13 @@ namespace GymManagement.Infrastructure.Services
             if (createUserDto.TrainerId.HasValue)
                 await _userInstructorService.AssignOrReplaceMemberTrainerAsync(user.Id, createUserDto.TrainerId.Value);
 
-            // User types (many-to-many, legacy UI)
+            // Legacy UserTypes checkboxes still map to UserRoles via provisioning when provided.
             if (createUserDto.UserTypeIds != null && createUserDto.UserTypeIds.Count > 0)
-            {
-                foreach (var typeId in createUserDto.UserTypeIds.Where(tid => tid > 0))
-                {
-                    var userType = await _unitOfWork.UserTypes.GetByIdAsync(typeId);
-                    if (userType != null)
-                        await _unitOfWork.UserUserTypes.AddAsync(new UserUserType { UserId = user.Id, UserTypeId = typeId });
-                }
-                await _unitOfWork.SaveChangesAsync();
-            }
+                await _provisioning.SyncFromUserTypeIdsAsync(user.Id, createUserDto.UserTypeIds);
 
             await AuthUserRoleHelper.EnsureUserHasAppRoleAsync(_unitOfWork, user.Id, AuthUserRoleHelper.MapRoleEnumToAppRoleName(accountRole));
             await _unitOfWork.SaveChangesAsync();
 
-            await _provisioning.SyncFromUserTypeIdsAsync(user.Id, createUserDto.UserTypeIds);
             await _provisioning.EnsureProfilesForUserAsync(user.Id);
             if (accountRole == Role.Instructor)
             {
@@ -469,6 +469,7 @@ namespace GymManagement.Infrastructure.Services
             }
 
             await _provisioning.SyncMemberProfileFromUserAsync(user.Id);
+            await _provisioning.SyncUserTypesFromRolesAsync(user.Id);
 
             var authForNew = (await _unitOfWork.AuthUsers.GetAllAsync()).FirstOrDefault(a => a.UserId == user.Id);
             var trainerUserIds = (await _unitOfWork.Trainers.GetAllAsync()).Select(i => i.UserId).ToHashSet();
@@ -800,10 +801,34 @@ namespace GymManagement.Infrastructure.Services
                 user.EmergencyPhone = PhoneNumberValidator.NormalizeOptionalPhone(updateUserDto.EmergencyPhone);
             if (updateUserDto.ProfilePictureUrl != null)
                 user.ProfilePictureUrl = updateUserDto.ProfilePictureUrl;
-            if (updateUserDto.PreferredGymTime != null)
+            if (HasTrainingScheduleUpdate(updateUserDto))
+            {
+                MemberTrainingScheduleApplicator.Apply(
+                    user,
+                    updateUserDto.TrainingScheduleType ?? user.TrainingScheduleType,
+                    updateUserDto.PreferredGymTime ?? user.PreferredGymTime,
+                    updateUserDto.TrainingStartTime ?? user.TrainingStartTime,
+                    updateUserDto.TrainingEndTime ?? user.TrainingEndTime,
+                    updateUserDto.TrainingDaysOfWeek ?? user.TrainingDaysOfWeek);
+            }
+            else if (updateUserDto.PreferredGymTime != null)
+            {
                 user.PreferredGymTime = updateUserDto.PreferredGymTime;
+                user.TrainingScheduleType = MemberTrainingScheduleRules.Batch;
+                user.TrainingStartTime = null;
+                user.TrainingEndTime = null;
+                user.TrainingDaysOfWeek = null;
+            }
             if (updateUserDto.IsActive.HasValue)
                 user.IsActive = updateUserDto.IsActive.Value;
+
+            var trainerIdForValidation = await ResolveActiveTrainerIdForValidationAsync(id, updateUserDto.TrainerId);
+            if (trainerIdForValidation.HasValue)
+            {
+                await _trainingScheduleService.EnsureNoConflictsOrThrowAsync(
+                    BuildValidateDto(trainerIdForValidation.Value, id, user),
+                    updateUserDto.OverrideTrainingScheduleConflict);
+            }
 
             _unitOfWork.Users.Update(user);
             await _unitOfWork.SaveChangesAsync();
@@ -1095,10 +1120,23 @@ namespace GymManagement.Infrastructure.Services
                 EmergencyPhone = user.EmergencyPhone,
                 ProfilePictureUrl = user.ProfilePictureUrl,
                 PreferredGymTime = user.PreferredGymTime,
+                TrainingScheduleType = user.TrainingScheduleType,
+                TrainingStartTime = user.TrainingStartTime,
+                TrainingEndTime = user.TrainingEndTime,
+                TrainingDaysOfWeek = user.TrainingDaysOfWeek,
+                TrainingScheduleLabel = MemberTrainingScheduleRules.FormatScheduleLabel(
+                    user.TrainingScheduleType,
+                    user.PreferredGymTime,
+                    user.TrainingStartTime,
+                    user.TrainingEndTime,
+                    user.TrainingDaysOfWeek),
                 IsActive = user.IsActive,
                 Role = role,
                 Username = username,
-                UserTypes = userTypes ?? new List<UserTypeDto>()
+                UserTypes = userTypes ?? new List<UserTypeDto>(),
+                AppRoles = (appRoleNamesFromUserRoles ?? new List<string>())
+                    .Select(name => new AppRoleDto { Name = name, IsActive = true })
+                    .ToList(),
             };
             EnrichAadhaarFields(dto, user.AadhaarNumber);
             return dto;
@@ -1136,19 +1174,6 @@ namespace GymManagement.Infrastructure.Services
                 CreatedAt = DateTime.UtcNow,
             });
             await _db.SaveChangesAsync();
-        }
-
-        private async Task<int?> ResolveMemberUserTypeIdAsync()
-        {
-            if (_cachedMemberUserTypeId.HasValue)
-                return _cachedMemberUserTypeId;
-
-            _cachedMemberUserTypeId = await _db.UserTypes.AsNoTracking()
-                .Where(ut => !ut.IsDeleted && ut.Name == "Member")
-                .Select(ut => (int?)ut.Id)
-                .FirstOrDefaultAsync()
-                .ConfigureAwait(false);
-            return _cachedMemberUserTypeId;
         }
 
         private sealed class UserBillingListSummary
@@ -1475,6 +1500,34 @@ namespace GymManagement.Infrastructure.Services
                 return 10 * weight + 6.25m * height - 5 * age - 161;
             }
         }
+
+        private static bool HasTrainingScheduleUpdate(UpdateUserDto dto) =>
+            dto.PreferredGymTime != null
+            || dto.TrainingScheduleType != null
+            || dto.TrainingStartTime.HasValue
+            || dto.TrainingEndTime.HasValue
+            || dto.TrainingDaysOfWeek != null;
+
+        private async Task<int?> ResolveActiveTrainerIdForValidationAsync(int userId, int? trainerIdFromDto)
+        {
+            if (trainerIdFromDto.HasValue && trainerIdFromDto.Value > 0)
+                return trainerIdFromDto.Value;
+
+            var assignments = await _userInstructorService.GetAssignmentsByUserIdAsync(userId);
+            return assignments.FirstOrDefault(a => a.IsActive && !a.EndDate.HasValue)?.TrainerId;
+        }
+
+        private static ValidateMemberTrainingScheduleDto BuildValidateDto(int trainerId, int? userId, User user) =>
+            new()
+            {
+                TrainerId = trainerId,
+                UserId = userId,
+                TrainingScheduleType = user.TrainingScheduleType,
+                PreferredGymTime = user.PreferredGymTime,
+                TrainingStartTime = user.TrainingStartTime,
+                TrainingEndTime = user.TrainingEndTime,
+                TrainingDaysOfWeek = user.TrainingDaysOfWeek,
+            };
 
     }
 }

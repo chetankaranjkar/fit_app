@@ -16,6 +16,10 @@ public class UserDevice : BaseEntity
     public string? AppVersion { get; set; }
     public string? FirebaseUid { get; set; }
 
+    /// <summary>Firebase Cloud Messaging device token for push alerts.</summary>
+    public string? FcmToken { get; set; }
+    public DateTime? FcmTokenUpdatedAt { get; set; }
+
     public bool IsActive { get; set; } = true;
     /// <summary>First registered device for the user is marked trusted.</summary>
     public bool IsTrusted { get; set; }

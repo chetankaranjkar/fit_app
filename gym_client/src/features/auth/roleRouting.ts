@@ -160,7 +160,13 @@ export function getCurrentDashboardRole(): DashboardRole {
   return resolveDashboardRole(authService.getCurrentUser())
 }
 
-export function getPostLoginPath(_role: DashboardRole): string {
+export function getPostLoginPath(role: DashboardRole): string {
+  return getPersonaHomePath(role)
+}
+
+/** Default landing route after login or when a persona has no access to the current path. */
+export function getPersonaHomePath(role: DashboardRole): string {
+  if (role === 'member') return '/dashboard/member/portal'
   return '/dashboard'
 }
 

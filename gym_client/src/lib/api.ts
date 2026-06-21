@@ -117,7 +117,9 @@ api.interceptors.response.use(
       requestUrlLower.includes('/auth/login') ||
       requestUrlLower.includes('/auth/firebase-login') ||
       requestUrlLower.includes('/auth/refresh') ||
-      requestUrlLower.includes('/auth/logout')
+      requestUrlLower.includes('/auth/logout') ||
+      requestUrlLower.includes('/auth/forgot-password') ||
+      requestUrlLower.includes('/auth/reset-password')
 
     const requestMethod = String(error.config?.method ?? 'get').toLowerCase()
     const isBenignUnauthorizedGet =

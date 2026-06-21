@@ -60,6 +60,12 @@ export const trainersService = {
       profilePicture?: string | null
       assignedOn?: string | null
       membershipPlan?: string | null
+      preferredGymTime?: string | null
+      trainingScheduleType?: string | null
+      trainingStartTime?: string | null
+      trainingEndTime?: string | null
+      trainingDaysOfWeek?: string | null
+      trainingScheduleLabel?: string | null
     }>>(`/Trainers/${id}/clients`),
   assignClient: (trainerId: number, userId: number) =>
     api.post(`/Trainers/${trainerId}/clients`, { userId }),

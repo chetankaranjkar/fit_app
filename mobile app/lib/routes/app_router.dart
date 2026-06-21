@@ -2,12 +2,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/biometric_unlock_screen.dart';
+import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/reset_password_screen.dart';
 import '../features/media/onboarding_profile_photo_screen.dart';
 import '../features/media/transformation_tracker_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/diet/diet_screen.dart';
-import '../features/membership/membership_screen.dart';
+import '../features/notifications/notifications_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/change_password_screen.dart';
 import '../features/profile/security_devices_screen.dart';
@@ -65,6 +67,17 @@ final appRouter = GoRouter(
       pageBuilder: (_, __) => _plainPage(const LoginScreen()),
     ),
     GoRoute(
+      path: '/login/forgot-password',
+      pageBuilder: (_, __) => _slidePage(const ForgotPasswordScreen()),
+    ),
+    GoRoute(
+      path: '/login/reset-password',
+      pageBuilder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return _slidePage(ResetPasswordScreen(token: token));
+      },
+    ),
+    GoRoute(
       path: '/biometric-unlock',
       pageBuilder: (_, __) => _plainPage(const BiometricUnlockScreen()),
     ),
@@ -75,6 +88,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/scanner',
       pageBuilder: (_, __) => _slidePage(const QrScannerScreen()),
+    ),
+    GoRoute(
+      path: '/notifications',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const NotificationsScreen()),
     ),
     GoRoute(
       path: '/membership',

@@ -708,6 +708,89 @@ namespace GymManagement.Infrastructure.Services
             await _unitOfWork.SaveChangesAsync().ConfigureAwait(false);
         }
 
+        /// <inheritdoc />
+        public async Task<ForgotPasswordResponseDto> RequestPasswordResetAsync(
+            ForgotPasswordDto dto,
+            bool includeDevResetUrl = false)
+        {
+            ArgumentNullException.ThrowIfNull(dto);
+            var response = new ForgotPasswordResponseDto();
+
+            var email = (dto.Email ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(email))
+                return response;
+
+            var emailLower = email.ToLowerInvariant();
+            var authUser = await _db.AuthUsers
+                .FirstOrDefaultAsync(a => !a.IsDeleted && a.Email.ToLower() == emailLower)
+                .ConfigureAwait(false);
+            if (authUser == null || string.IsNullOrWhiteSpace(authUser.PasswordHash))
+                return response;
+
+            var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+            authUser.PasswordResetTokenHash = HashResetToken(rawToken);
+            authUser.PasswordResetExpiry = DateTime.UtcNow.AddHours(1);
+            _unitOfWork.AuthUsers.Update(authUser);
+            await _unitOfWork.SaveChangesAsync().ConfigureAwait(false);
+
+            var clientBase = (_configuration["ClientApp:PublicBaseUrl"] ?? "http://localhost:5173").TrimEnd('/');
+            var resetUrl = $"{clientBase}/login/reset-password?token={Uri.EscapeDataString(rawToken)}";
+            _logger.LogInformation(
+                "Password reset requested for {Email}. Reset link (valid 1h): {ResetUrl}",
+                authUser.Email,
+                resetUrl);
+
+            if (includeDevResetUrl)
+                response.DevResetUrl = resetUrl;
+
+            return response;
+        }
+
+        /// <inheritdoc />
+        public async Task ResetPasswordAsync(ResetPasswordDto dto)
+        {
+            ArgumentNullException.ThrowIfNull(dto);
+
+            var token = (dto.Token ?? string.Empty).Trim();
+            var newPassword = dto.NewPassword?.Trim() ?? string.Empty;
+            var confirm = dto.ConfirmPassword?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(token))
+                throw new ArgumentException("Reset token is required.");
+            if (newPassword.Length < 6)
+                throw new ArgumentException("Password must be at least 6 characters.");
+            if (!string.Equals(newPassword, confirm, StringComparison.Ordinal))
+                throw new ArgumentException("New password and confirmation do not match.");
+
+            var tokenHash = HashResetToken(token);
+            var authUser = await _db.AuthUsers
+                .FirstOrDefaultAsync(a =>
+                    !a.IsDeleted
+                    && a.PasswordResetTokenHash == tokenHash
+                    && a.PasswordResetExpiry != null)
+                .ConfigureAwait(false);
+            if (authUser == null || authUser.PasswordResetExpiry!.Value < DateTime.UtcNow)
+                throw new ArgumentException("This reset link is invalid or has expired. Request a new one.");
+
+            authUser.PasswordHash = PasswordHasher.Hash(newPassword);
+            authUser.PasswordResetTokenHash = null;
+            authUser.PasswordResetExpiry = null;
+            authUser.FailedLoginAttempts = 0;
+            authUser.LockoutEnd = null;
+            authUser.RefreshToken = null;
+            authUser.RefreshTokenExpiry = null;
+            _unitOfWork.AuthUsers.Update(authUser);
+            await _unitOfWork.SaveChangesAsync().ConfigureAwait(false);
+        }
+
+        private static string HashResetToken(string token)
+        {
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token.Trim()));
+            return Convert.ToHexString(bytes);
+        }
+
         public async Task<bool> RegisterAsync(RegisterDto registerDto)
         {
             var email = string.IsNullOrWhiteSpace(registerDto.Email)

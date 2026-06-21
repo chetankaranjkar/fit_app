@@ -1,3 +1,4 @@
+using GymManagement.Core.Authorization;
 using GymManagement.Core.Search;
 using GymManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -46,14 +47,17 @@ internal static class UserSearchQueryExtensions
             u.PreferredGymTime == shift || memberUserIdsForShift.Contains(u.Id));
     }
 
+    /// <summary>Members directory: users with active <c>MEMBER</c> application role (<c>UserRoles</c>).</summary>
     public static IQueryable<User> ApplyMembersOnlyFilter(
         this IQueryable<User> query,
-        IQueryable<UserUserType> userUserTypes,
-        int memberUserTypeId)
+        IQueryable<UserRole> userRoles,
+        IQueryable<AppRole> appRoles,
+        string memberRoleCode = ApplicationRoleCodes.Member)
     {
-        var memberUserIds = userUserTypes.AsNoTracking()
-            .Where(uut => !uut.IsDeleted && uut.UserTypeId == memberUserTypeId)
-            .Select(uut => uut.UserId);
+        var memberUserIds = from ur in userRoles.AsNoTracking()
+            join role in appRoles.AsNoTracking() on ur.RoleId equals role.Id
+            where !ur.IsDeleted && role.IsActive && role.Name == memberRoleCode
+            select ur.UserId;
 
         return query.Where(u => memberUserIds.Contains(u.Id));
     }

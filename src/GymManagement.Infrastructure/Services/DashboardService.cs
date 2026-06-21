@@ -2,6 +2,7 @@ using GymManagement.Core.Caching;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Interfaces.Caching;
+using GymManagement.Core.Authorization;
 using GymManagement.Core.Options;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
@@ -42,11 +43,17 @@ namespace GymManagement.Infrastructure.Services
             var monthStart = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
             var expiryWindowEnd = today.AddDays(14);
 
-            // EXPLAIN ANALYZE (recommended): member counts use User + UserUserTypes + UserTypes with IsDeleted/IsActive filters.
+            // Member counts: users with MEMBER application role (UserRoles), not legacy UserTypes.
             var membersQuery = _context.Users.AsNoTracking().Where(u =>
-                _context.UserUserTypes.Any(uut =>
-                    uut.UserId == u.Id
-                    && _context.UserTypes.Any(ut => ut.Id == uut.UserTypeId && ut.Name == "Member")));
+                !u.IsDeleted
+                && _context.UserRoles.Any(ur =>
+                    !ur.IsDeleted
+                    && ur.UserId == u.Id
+                    && _context.AppRoles.Any(r =>
+                        r.Id == ur.RoleId
+                        && !r.IsDeleted
+                        && r.IsActive
+                        && r.Name == ApplicationRoleCodes.Member)));
 
             var totalMembers = await membersQuery.CountAsync(cancellationToken);
             var activeMembers = await _context.UserMemberships.AsNoTracking()

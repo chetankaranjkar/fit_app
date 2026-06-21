@@ -28,20 +28,26 @@ namespace GymManagement.API.Controllers
     {
         private readonly ApplicationDbContext _db;
         private readonly IMembershipPaymentService _membershipPaymentService;
+        private readonly IOnlinePaymentService _onlinePaymentService;
         private readonly IMobileNumberAvailabilityService _mobileAvailability;
+        private readonly IBodyMetricsService _bodyMetricsService;
         private readonly WebRootImageStorage _imageStorage;
         private readonly WorkoutPlanScheduleResolver _scheduleResolver;
 
         public MeController(
             ApplicationDbContext db,
             IMembershipPaymentService membershipPaymentService,
+            IOnlinePaymentService onlinePaymentService,
             IMobileNumberAvailabilityService mobileAvailability,
+            IBodyMetricsService bodyMetricsService,
             WebRootImageStorage imageStorage,
             WorkoutPlanScheduleResolver scheduleResolver)
         {
             _db = db;
             _membershipPaymentService = membershipPaymentService;
+            _onlinePaymentService = onlinePaymentService;
             _mobileAvailability = mobileAvailability;
+            _bodyMetricsService = bodyMetricsService;
             _imageStorage = imageStorage;
             _scheduleResolver = scheduleResolver;
         }
@@ -53,6 +59,135 @@ namespace GymManagement.API.Controllers
             var userId = ResolveUserIdFromClaims();
             if (userId == null) return Unauthorized();
             return Ok(await _membershipPaymentService.GetMemberBillingAccessAsync(userId.Value));
+        }
+
+        /// <summary>Create a Razorpay order for the member's pending membership balance.</summary>
+        [HttpPost("payments/razorpay/order")]
+        public async Task<ActionResult<RazorpayOrderResponseDto>> CreateRazorpayOrder(
+            [FromBody] CreateRazorpayOrderRequestDto? request,
+            CancellationToken cancellationToken)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            try
+            {
+                var order = await _onlinePaymentService
+                    .CreateRazorpayOrderAsync(userId.Value, request ?? new CreateRazorpayOrderRequestDto(), cancellationToken)
+                    .ConfigureAwait(false);
+                return Ok(order);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>Verify Razorpay checkout and record membership payment.</summary>
+        [HttpPost("payments/razorpay/verify")]
+        public async Task<ActionResult<RazorpayVerifyResponseDto>> VerifyRazorpayPayment(
+            [FromBody] RazorpayVerifyRequestDto? request,
+            CancellationToken cancellationToken)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+            if (request == null)
+                return BadRequest(new { message = "Request body is required." });
+
+            try
+            {
+                var result = await _onlinePaymentService
+                    .VerifyRazorpayPaymentAsync(userId.Value, request, cancellationToken)
+                    .ConfigureAwait(false);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>Membership billing history and receipts for the authenticated member.</summary>
+        [HttpGet("invoices")]
+        public async Task<ActionResult<IReadOnlyList<MeInvoiceSummaryDto>>> GetInvoices()
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            var payments = await _membershipPaymentService.GetByUserIdAsync(userId.Value).ConfigureAwait(false);
+            return Ok(payments.Select(MapMeInvoice).ToList());
+        }
+
+        /// <summary>Download invoice PDF for the member's own membership payment.</summary>
+        [HttpGet("invoices/{membershipPaymentId:int}/pdf")]
+        public async Task<IActionResult> GetInvoicePdf(int membershipPaymentId)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            var owned = await _db.MembershipPayments.AsNoTracking()
+                .AnyAsync(p => p.Id == membershipPaymentId && p.UserId == userId.Value && !p.IsDeleted)
+                .ConfigureAwait(false);
+            if (!owned)
+                return NotFound();
+
+            var bytes = await _membershipPaymentService
+                .GetInvoicePdfForMembershipPaymentAsync(membershipPaymentId)
+                .ConfigureAwait(false);
+            if (bytes == null || bytes.Length == 0)
+                return NotFound(new { message = "Invoice PDF is not available yet." });
+
+            return File(bytes, "application/pdf", $"membership-invoice-{membershipPaymentId}.pdf");
+        }
+
+        /// <summary>Register or refresh Firebase Cloud Messaging token for this device.</summary>
+        [HttpPost("push-token")]
+        public async Task<IActionResult> RegisterPushToken([FromBody] RegisterMePushTokenDto? dto)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+            if (dto == null)
+                return BadRequest(new { message = "Request body is required." });
+
+            var token = (dto.Token ?? string.Empty).Trim();
+            var deviceId = (dto.DeviceUniqueId ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(deviceId))
+                return BadRequest(new { message = "Token and deviceUniqueId are required." });
+
+            var device = await _db.UserDevices
+                .FirstOrDefaultAsync(d =>
+                    d.UserId == userId.Value
+                    && d.DeviceUniqueId == deviceId
+                    && !d.IsDeleted)
+                .ConfigureAwait(false);
+            if (device == null)
+                return NotFound(new { message = "Device not registered. Sign in again from this device." });
+
+            device.FcmToken = token;
+            device.FcmTokenUpdatedAt = DateTime.UtcNow;
+            device.UpdatedDate = DateTime.UtcNow;
+            await _db.SaveChangesAsync().ConfigureAwait(false);
+            return Ok(new { message = "Push token registered." });
         }
 
         /// <summary>Aggregate dashboard for the home screen of the mobile app.</summary>
@@ -189,6 +324,36 @@ namespace GymManagement.API.Controllers
 
             var result = rows.Select(MapMetricLog).ToList();
             return Ok(result);
+        }
+
+        /// <summary>Log a body metric checkpoint for the authenticated member.</summary>
+        [HttpPost("body-metrics")]
+        public async Task<ActionResult<MeBodyMetricLogDto>> CreateBodyMetric([FromBody] CreateMeBodyMetricDto? dto)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+            if (dto == null)
+                return BadRequest(new { message = "Request body is required." });
+            if (dto.WeightKg <= 0)
+                return BadRequest(new { message = "Weight must be greater than zero." });
+
+            var measurementDate = dto.MeasurementDate?.Date ?? DateTime.UtcNow.Date;
+            var created = await _bodyMetricsService.CreateBodyMetricsLogAsync(new CreateBodyMetricsLogDto
+            {
+                UserId = userId.Value,
+                MeasurementDate = measurementDate,
+                WeightKg = dto.WeightKg,
+                BodyFatPct = dto.BodyFatPct,
+                Notes = dto.Notes?.Trim(),
+            }).ConfigureAwait(false);
+
+            var row = await _db.BodyMetricsLogs.AsNoTracking()
+                .FirstOrDefaultAsync(b => b.Id == created.Id && b.UserId == userId.Value)
+                .ConfigureAwait(false);
+            if (row == null)
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Could not load saved metric." });
+
+            return Ok(MapMetricLog(row));
         }
 
         /// <summary>Notifications for this user (latest first).</summary>
@@ -1095,6 +1260,38 @@ namespace GymManagement.API.Controllers
                 CreatedAt = n.CreatedDate,
                 IsRead = n.IsRead,
                 Type = n.NotificationType
+            };
+        }
+
+        private static MeInvoiceSummaryDto MapMeInvoice(MembershipPaymentDto payment)
+        {
+            return new MeInvoiceSummaryDto
+            {
+                MembershipPaymentId = payment.Id,
+                PaymentNumber = payment.PaymentNumber,
+                InvoiceNumber = payment.InvoiceNumber,
+                InvoiceId = payment.InvoiceId,
+                PlanName = payment.PlanName ?? "Membership",
+                TotalAmount = payment.FinalBillAmount > 0 ? payment.FinalBillAmount : payment.TotalAmount,
+                PaidAmount = payment.PaidAmount,
+                PendingAmount = payment.PendingAmount,
+                PaymentStatus = payment.PaymentStatus.ToString(),
+                PaymentDate = payment.PaymentDate,
+                NextDueDate = payment.NextDueDate,
+                HasPdf = payment.InvoiceId.HasValue,
+                Receipts = payment.Transactions
+                    .Where(t => t.Status == MembershipPaymentTransactionStatus.Completed)
+                    .Select(t => new MeInvoiceReceiptDto
+                    {
+                        TransactionId = t.Id,
+                        ReceiptNumber = t.ReceiptNumber,
+                        Amount = t.TransactionAmount,
+                        PaidAt = t.TransactionDate,
+                        Method = t.TransactionMethod.ToString(),
+                        Status = t.Status.ToString(),
+                    })
+                    .OrderByDescending(r => r.PaidAt)
+                    .ToList(),
             };
         }
     }

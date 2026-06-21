@@ -57,6 +57,9 @@ dependencies:
   # Network state for sync indicator
   connectivity_plus: ^6.1.0
 
+  # Open downloaded invoice PDFs
+  open_filex: ^4.5.0
+
   # Structured offline workout persistence
   hive: ^2.2.3
   hive_flutter: ^1.1.0

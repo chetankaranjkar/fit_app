@@ -23,13 +23,16 @@ public sealed class MembershipExpiryInAppNotificationService : IMembershipExpiry
 
     private readonly ApplicationDbContext _db;
     private readonly ILogger<MembershipExpiryInAppNotificationService> _logger;
+    private readonly IMemberPushNotificationService _push;
 
     public MembershipExpiryInAppNotificationService(
         ApplicationDbContext db,
-        ILogger<MembershipExpiryInAppNotificationService> logger)
+        ILogger<MembershipExpiryInAppNotificationService> logger,
+        IMemberPushNotificationService push)
     {
         _db = db;
         _logger = logger;
+        _push = push;
     }
 
     public async Task<int> CreateRemindersAsync(int withinDays, CancellationToken cancellationToken = default)
@@ -93,6 +96,14 @@ public sealed class MembershipExpiryInAppNotificationService : IMembershipExpiry
                 NotificationType = MembershipExpiryNotificationMessages.NotificationType,
                 CreatedDate = utcNow,
             }, cancellationToken).ConfigureAwait(false);
+
+            await _push.SendToUserAsync(
+                    m.UserId,
+                    title,
+                    body,
+                    MembershipExpiryNotificationMessages.NotificationType,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             existingSet.Add(marker);
             created++;

@@ -1,10 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
+import '../../core/api_exception.dart';
 import '../../core/formatters.dart';
 import '../../models/me_models.dart';
 import '../../providers/me_providers.dart';
+import '../../services/me_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -21,6 +27,8 @@ class MembershipScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final membership = ref.watch(membershipProvider);
+    final invoices = ref.watch(invoicesProvider);
+    final billingAccess = ref.watch(billingAccessProvider);
     return CupertinoPageScaffold(
       backgroundColor: AppColors.resolveBg(context),
       child: Stack(
@@ -36,7 +44,12 @@ class MembershipScreen extends ConsumerWidget {
               border: null,
             ),
             CupertinoSliverRefreshControl(
-              onRefresh: () async => ref.refresh(membershipProvider),
+              onRefresh: () async {
+                ref.invalidate(membershipProvider);
+                ref.invalidate(invoicesProvider);
+                ref.invalidate(billingAccessProvider);
+                await ref.read(membershipProvider.future);
+              },
             ),
             SliverPadding(
               padding: ShellLayoutMetrics.scrollPadding(context),
@@ -55,6 +68,20 @@ class MembershipScreen extends ConsumerWidget {
                             icon: CupertinoIcons.creditcard,
                           )
                         : _MembershipDetail(membership: data),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  billingAccess.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (access) => access.hasPendingBalance
+                        ? _PendingBillingCard(access: access)
+                        : const SizedBox.shrink(),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  invoices.when(
+                    loading: () => const SkeletonBlock(height: 140),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (rows) => _InvoicesSection(invoices: rows),
                   ),
                 ]),
               ),
@@ -84,7 +111,6 @@ class _MembershipDetail extends StatelessWidget {
 
     return Column(
       children: [
-        // ── Premium gold membership card ──────────────────────────────────
         ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.xl),
           child: Container(
@@ -108,7 +134,6 @@ class _MembershipDetail extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                // Gold shimmer overlay
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -117,32 +142,6 @@ class _MembershipDetail extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Decorative glows
-                Positioned(
-                  top: -32,
-                  right: -32,
-                  child: Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: goldColor.withValues(alpha: 0.10),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: -44,
-                  right: 30,
-                  child: Container(
-                    width: 160,
-                    height: 160,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: goldColor.withValues(alpha: 0.06),
-                    ),
-                  ),
-                ),
-                // Card content
                 Padding(
                   padding: const EdgeInsets.all(AppSpacing.xl),
                   child: Column(
@@ -158,35 +157,6 @@ class _MembershipDetail extends StatelessWidget {
                               color: goldColor,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.5,
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: goldColor.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(AppRadius.pill),
-                              border: Border.all(
-                                color: goldColor.withValues(alpha: 0.45),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(CupertinoIcons.star_fill,
-                                    size: 10, color: goldColor),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'PREMIUM',
-                                  style: AppType.caption.copyWith(
-                                    color: goldColor,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                              ],
                             ),
                           ),
                         ],
@@ -246,130 +216,31 @@ class _MembershipDetail extends StatelessWidget {
               ],
             ),
           ),
-        )
-            .animate()
-            .fadeIn(duration: 400.ms)
-            .slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
-        const SizedBox(height: AppSpacing.lg),
-        // ── Benefits / perks tiles ────────────────────────────────────────
-        const Row(
-          children: [
-            Expanded(
-              child: _PerkTile(
-                icon: CupertinoIcons.clock,
-                label: '24/7 Access',
-                color: AppColors.accent,
-              ),
-            ),
-            SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _PerkTile(
-                icon: CupertinoIcons.person_2_fill,
-                label: 'Trainer Support',
-                color: AppColors.purple,
-              ),
-            ),
-            SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _PerkTile(
-                icon: CupertinoIcons.drop_fill,
-                label: 'Locker Room',
-                color: AppColors.success,
-              ),
-            ),
-          ],
-        ).animate().fadeIn(delay: 120.ms, duration: 400.ms),
-        const SizedBox(height: AppSpacing.lg),
-        // ── Expiry warning ────────────────────────────────────────────────
-        if (isExpiring)
+        ),
+        if (isExpiring) ...[
+          const SizedBox(height: AppSpacing.lg),
           GlassCard(
             tint: AppColors.danger.withValues(alpha: 0.12),
             child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  child: const Icon(
-                    CupertinoIcons.exclamationmark_triangle_fill,
-                    color: AppColors.danger,
-                    size: 20,
-                  ),
+                const Icon(
+                  CupertinoIcons.exclamationmark_triangle_fill,
+                  color: AppColors.danger,
+                  size: 20,
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Membership Expiring Soon',
-                        style: AppType.headline.copyWith(
-                          color: AppColors.danger,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Please renew at the front desk to keep your access.',
-                        style: AppType.footnote.copyWith(
-                          color: AppColors.resolveTextSecondary(context),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'Renew at the front desk before check-in is blocked.',
+                    style: AppType.footnote.copyWith(
+                      color: AppColors.resolveTextSecondary(context),
+                    ),
                   ),
                 ),
               ],
             ),
-          ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
-        const SizedBox(height: AppSpacing.lg),
-        GlassCard(
-          tint: AppColors.neonPurple.withValues(alpha: 0.08),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Renew membership',
-                      style: AppType.headline.copyWith(
-                        color: AppColors.resolveText(context),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Keep uninterrupted access to workouts and attendance tracking.',
-                      style: AppType.footnote.copyWith(
-                        color: AppColors.resolveTextSecondary(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  boxShadow: AppColors.orangeGlow(opacity: 0.4, blur: 16),
-                ),
-                child: Text(
-                  'Renew',
-                  style: AppType.callout.copyWith(
-                    color: CupertinoColors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
           ),
-        ).animate().fadeIn(delay: 260.ms, duration: 380.ms),
+        ],
       ],
     );
   }
@@ -400,6 +271,240 @@ class _CardRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _InvoicesSection extends StatelessWidget {
+  const _InvoicesSection({required this.invoices});
+  final List<MeInvoiceSummary> invoices;
+
+  @override
+  Widget build(BuildContext context) {
+    if (invoices.isEmpty) {
+      return const EmptyState(
+        title: 'No billing history',
+        message: 'Receipts and invoices appear here after your first payment.',
+        icon: CupertinoIcons.doc_text,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Billing & receipts',
+          style: AppType.title3.copyWith(color: AppColors.resolveText(context)),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        for (final invoice in invoices)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: _InvoiceCard(invoice: invoice),
+          ),
+      ],
+    );
+  }
+}
+
+class _InvoiceCard extends StatefulWidget {
+  const _InvoiceCard({required this.invoice});
+  final MeInvoiceSummary invoice;
+
+  @override
+  State<_InvoiceCard> createState() => _InvoiceCardState();
+}
+
+class _InvoiceCardState extends State<_InvoiceCard> {
+  bool _downloading = false;
+
+  Future<void> _openPdf() async {
+    if (_downloading || !widget.invoice.hasPdf) return;
+    setState(() => _downloading = true);
+    try {
+      final bytes = await MeService.instance.downloadInvoicePdf(widget.invoice.membershipPaymentId);
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/invoice-${widget.invoice.membershipPaymentId}.pdf',
+      );
+      await file.writeAsBytes(bytes, flush: true);
+      await OpenFilex.open(file.path);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('Could not open invoice'),
+          content: Text(e.message),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final invoice = widget.invoice;
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      invoice.planName,
+                      style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
+                    ),
+                    Text(
+                      invoice.invoiceNumber ?? invoice.paymentNumber,
+                      style: AppType.caption.copyWith(
+                        color: AppColors.resolveTextSecondary(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                invoice.paymentStatus,
+                style: AppType.caption.copyWith(
+                  color: invoice.isPaid ? AppColors.success : AppColors.orange,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Text(
+                'Paid ${Fmt.currency(invoice.paidAmount)}',
+                style: AppType.body.copyWith(color: AppColors.resolveText(context)),
+              ),
+              if (invoice.pendingAmount > 0) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  '· Due ${Fmt.currency(invoice.pendingAmount)}',
+                  style: AppType.body.copyWith(color: AppColors.orange),
+                ),
+              ],
+            ],
+          ),
+          if (invoice.receipts.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Latest receipt ${invoice.receipts.first.receiptNumber}',
+              style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+            ),
+          ],
+          if (invoice.hasPdf) ...[
+            const SizedBox(height: AppSpacing.md),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _downloading ? null : _openPdf,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_downloading)
+                    const CupertinoActivityIndicator(radius: 8)
+                  else
+                    const Icon(CupertinoIcons.doc_on_doc, size: 16, color: AppColors.accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    _downloading ? 'Opening…' : 'View invoice PDF',
+                    style: AppType.callout.copyWith(color: AppColors.accent),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingBillingCard extends StatelessWidget {
+  const _PendingBillingCard({required this.access});
+
+  final MeBillingAccess access;
+
+  Future<void> _showPayInfo(BuildContext context) async {
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Pay membership'),
+        content: Text(
+          access.message ??
+              'Your balance is ${Fmt.currency(access.pendingAmount ?? 0)}. '
+              'Complete payment on the member web portal or at the front desk.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(CupertinoIcons.money_dollar_circle_fill, color: AppColors.orange, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Payment due',
+                style: AppType.headline.copyWith(
+                  color: AppColors.resolveText(context),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            Fmt.currency(access.pendingAmount ?? 0),
+            style: AppType.title2.copyWith(
+              color: AppColors.orange,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (access.nextDueDate != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Due ${Fmt.date(access.nextDueDate!)}',
+              style: AppType.caption.copyWith(color: AppColors.resolveMuted(context)),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoButton.filled(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              onPressed: () => _showPayInfo(context),
+              child: const Text('Renew / pay'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -74,6 +74,24 @@ class MeService {
         .toList();
   }
 
+  Future<MeBodyMetricLog> createBodyMetric({
+    required double weightKg,
+    double? bodyFatPct,
+    String? notes,
+    DateTime? measurementDate,
+  }) async {
+    final res = await ApiClient.instance.post<Map<String, dynamic>>(
+      '/me/body-metrics',
+      body: {
+        'weightKg': weightKg,
+        if (bodyFatPct != null) 'bodyFatPct': bodyFatPct,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (measurementDate != null) 'measurementDate': measurementDate.toUtc().toIso8601String(),
+      },
+    );
+    return MeBodyMetricLog.fromJson(res.data ?? {});
+  }
+
   Future<List<MeNotification>> getNotifications({int take = 30}) async {
     final res = await ApiClient.instance.get<List<dynamic>>(
       '/me/notifications',
@@ -83,6 +101,66 @@ class MeService {
         .whereType<Map<String, dynamic>>()
         .map(MeNotification.fromJson)
         .toList();
+  }
+
+  Future<void> markNotificationRead(int id) async {
+    await ApiClient.instance.post<void>('/me/notifications/$id/read');
+  }
+
+  Future<List<MeInvoiceSummary>> getInvoices() async {
+    final res = await ApiClient.instance.get<List<dynamic>>('/me/invoices');
+    return (res.data ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(MeInvoiceSummary.fromJson)
+        .toList();
+  }
+
+  Future<MeBillingAccess> getBillingAccess() async {
+    final res = await ApiClient.instance.get<Map<String, dynamic>>('/me/membership-billing/access');
+    return MeBillingAccess.fromJson(res.data ?? {});
+  }
+
+  Future<Map<String, dynamic>> createRazorpayOrder({int? membershipPaymentId}) async {
+    final res = await ApiClient.instance.post<Map<String, dynamic>>(
+      '/me/payments/razorpay/order',
+      body: {
+        if (membershipPaymentId != null) 'membershipPaymentId': membershipPaymentId,
+      },
+    );
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> verifyRazorpayPayment({
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    final res = await ApiClient.instance.post<Map<String, dynamic>>(
+      '/me/payments/razorpay/verify',
+      body: {
+        'razorpayOrderId': razorpayOrderId,
+        'razorpayPaymentId': razorpayPaymentId,
+        'razorpaySignature': razorpaySignature,
+      },
+    );
+    return res.data ?? {};
+  }
+
+  Future<List<int>> downloadInvoicePdf(int membershipPaymentId) async {
+    return ApiClient.instance.downloadBytes('/me/invoices/$membershipPaymentId/pdf');
+  }
+
+  Future<void> registerPushToken({
+    required String token,
+    required String deviceUniqueId,
+  }) async {
+    await ApiClient.instance.post(
+      '/me/push-token',
+      body: {
+        'token': token,
+        'deviceUniqueId': deviceUniqueId,
+      },
+    );
   }
 
   Future<List<MeWorkoutPlanSummary>> getWorkoutPlans() async {

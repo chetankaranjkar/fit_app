@@ -5,8 +5,10 @@ import type {
   ChangePasswordPayload,
   CompromisedSession,
   FirebasePublicConfig,
+  ForgotPasswordResponse,
   LoginCredentials,
   LoginResponse,
+  ResetPasswordPayload,
 } from '../types/auth'
 import { Role } from '../types/auth'
 
@@ -216,6 +218,23 @@ export const authService = {
   changePassword: (payload: ChangePasswordPayload) =>
     api.post('/Auth/change-password', {
       currentPassword: payload.currentPassword,
+      newPassword: payload.newPassword,
+      confirmPassword: payload.confirmPassword,
+    }),
+  forgotPassword: async (email: string): Promise<ForgotPasswordResponse> => {
+    const { data } = await api.post<Record<string, unknown>>('/Auth/forgot-password', { email })
+    const raw = (data ?? {}) as Record<string, unknown>
+    return {
+      message: String(raw.message ?? raw.Message ?? ''),
+      devResetUrl:
+        typeof (raw.devResetUrl ?? raw.DevResetUrl) === 'string'
+          ? String(raw.devResetUrl ?? raw.DevResetUrl)
+          : undefined,
+    }
+  },
+  resetPassword: (payload: ResetPasswordPayload) =>
+    api.post('/Auth/reset-password', {
+      token: payload.token,
       newPassword: payload.newPassword,
       confirmPassword: payload.confirmPassword,
     }),

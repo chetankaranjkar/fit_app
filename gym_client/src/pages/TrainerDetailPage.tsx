@@ -17,6 +17,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import { formatTrainingScheduleLabel } from '../lib/memberTrainingSchedule'
 import {
   bulkWorkoutAssignmentUrl,
   memberWorkoutTimelineUrl,
@@ -812,6 +813,7 @@ function ClientsTab({ trainerId }: { trainerId: number }) {
         <thead>
           <tr className="border-b border-white/10 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <th className="px-4 py-3">Client</th>
+            <th className="px-4 py-3">Training time</th>
             <th className="px-4 py-3">Email</th>
             <th className="px-4 py-3">Membership</th>
             <th className="px-4 py-3">Assigned</th>
@@ -834,6 +836,9 @@ function ClientsTab({ trainerId }: { trainerId: number }) {
                     {c.firstName} {c.lastName}
                   </p>
                 </div>
+              </td>
+              <td className="px-4 py-2.5 text-slate-300">
+                {c.trainingScheduleLabel ?? formatTrainingScheduleLabel(c)}
               </td>
               <td className="px-4 py-2.5 text-slate-300">{c.email ?? '—'}</td>
               <td className="px-4 py-2.5 text-slate-300">{c.membershipPlan ?? '—'}</td>
@@ -890,6 +895,16 @@ function ClientsTab({ trainerId }: { trainerId: number }) {
 /* ------------------------------------------------------------------ */
 
 function ScheduleTab({ trainerId, trainer }: { trainerId: number; trainer: Trainer }) {
+  const navigate = useNavigate()
+  const { data: clients = [] } = useQuery({
+    queryKey: ['trainer-clients', trainerId],
+    queryFn: async () => {
+      const { data } = await trainersService.getAssignedClients(trainerId)
+      return Array.isArray(data) ? data : []
+    },
+    staleTime: 60_000,
+  })
+
   const { data: slots = [], isLoading } = useQuery({
     queryKey: ['trainer-schedule', trainerId],
     queryFn: async () => {
@@ -935,6 +950,39 @@ function ScheduleTab({ trainerId, trainer }: { trainerId: number; trainer: Train
             )
           })}
         </div>
+      </div>
+
+      <div className="glass-card overflow-hidden rounded-2xl">
+        <div className="border-b border-white/10 px-6 py-4">
+          <h3 className="text-sm font-semibold text-white">Member training slots</h3>
+          <p className="text-xs text-slate-400">Custom and batch timings for your assigned clients.</p>
+        </div>
+        {clients.length === 0 ? (
+          <EmptyPanel title="No clients assigned" message="Assign members to see their training schedule here." flush />
+        ) : (
+          <div className="divide-y divide-white/5">
+            {clients.map((client) => (
+              <div key={client.userId} className="flex items-center justify-between gap-3 px-6 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-white">
+                    {client.firstName} {client.lastName}
+                  </p>
+                  <p className="truncate text-xs text-slate-400">
+                    {client.trainingScheduleLabel ?? formatTrainingScheduleLabel(client)}
+                  </p>
+                </div>
+                <Button
+                  variant="soft"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => navigate(`/dashboard/users/${client.userId}`)}
+                >
+                  View member
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="glass-card overflow-hidden rounded-2xl">

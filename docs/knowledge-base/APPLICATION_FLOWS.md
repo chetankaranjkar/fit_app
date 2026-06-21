@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-06-03 (Staff front-desk menu and dashboard).
+**Last updated:** 2026-06-19 (Commercial: self-signup + Razorpay online payments).
 
 ---
 
@@ -64,8 +64,8 @@ One **person** = one row in `Users`. Login = `AuthUsers` (email, password) → `
 
 | Concept | Table / API | UI label |
 |---------|-----------|----------|
-| **RBAC role** | `Roles` + `UserRoles` | Admin, Member, Trainer, Staff, … |
-| **Legacy label** | `UserTypes` + `UserUserTypes` | Checkboxes in edit profile — **syncing to roles via `UserProvisioningService`** |
+| **RBAC role** | `Roles` + `UserRoles` | **Source of truth** — edit via application role chips (`POST/DELETE /api/Roles/users/{id}/roles` or user edit profile) |
+| **Legacy label** | `UserTypes` + `UserUserTypes` | **Read-only mirror** of roles for older APIs; updated by `SyncUserTypesFromRolesAsync` |
 | **Member profile** | `Members` (1:1 `UserId`) | Gym member fields |
 | **Trainer profile** | `Trainer` (1:1 `UserId`) | Specialization, rates, employee code |
 | **Staff profile** | `Staff` (1:1 `UserId`) | Department, employee code |
@@ -76,7 +76,7 @@ One **person** = one row in `Users`. Login = `AuthUsers` (email, password) → `
 | User action | Wrong expectation | Correct behavior |
 |-------------|-----------------|------------------|
 | Check user type **Trainer** on a member | Shows on trainer **Clients** tab | Only creates staff trainer profile; assign coach via **Personal coach** dropdown |
-| Member only has type **Trainer** | Appears in **Users → Members** list | Members list filters `UserTypes` containing **Member** — keep Member type |
+| Member missing **MEMBER** role | Missing from **Users → Members** list | Members list filters `UserRoles` containing **MEMBER** (legacy `UserTypes` kept in sync automatically) |
 
 ### Provisioning entry point
 
@@ -84,7 +84,9 @@ One **person** = one row in `Users`. Login = `AuthUsers` (email, password) → `
 
 - `AssignRoleAsync` / `RevokeRoleAsync`
 - `EnsureMemberProfileAsync` / `EnsureTrainerProfileAsync` / `EnsureStaffProfileAsync`
-- `SyncFromUserTypeIdsAsync` — maps UserTypes → Roles + profiles
+- `SyncFromUserTypeIdsAsync` — legacy API path: maps UserTypes → Roles + profiles
+- `SyncFromRoleCodesAsync` — roles-first path
+- `SyncUserTypesFromRolesAsync` — mirrors active roles onto legacy UserTypes
 
 `UserService` create/update/delete should call provisioning — do not create `Trainer` rows in random controllers.
 
@@ -126,6 +128,8 @@ sequenceDiagram
 **Aadhaar (optional):** `Users.AadhaarNumber` — 12 digits, unique when set. Validated in `AadhaarNumberValidator`. API returns `aadhaarNumber` only for Admin / Super Admin; others get `aadhaarNumberMasked` (`XXXX XXXX 1234`). Search: name, email, phone, or full 12-digit Aadhaar on members and trainers lists + global search. Audit log actions `Aadhaar Created` / `Aadhaar Updated`.
 
 **Phone (required on create):** Indian mobile `^[6-9][0-9]{9}$` on `Users.Phone` (API `phone`). Normalized from `+91` / spaces / hyphens. Unique index `IX_Users_MobileNumber`. Emergency phone uses the same rules when provided. See [PHONE_VALIDATION_AUDIT.md](./PHONE_VALIDATION_AUDIT.md).
+
+**Training schedule:** Members can use **Batch** (`PreferredGymTime`: Morning/Afternoon/Evening/Night) or **Custom** (`TrainingStartTime`, `TrainingEndTime`, `TrainingDaysOfWeek` on `Users` + `Members`). UI: `MemberTrainingScheduleFields` on `UsersPage` add modal and `UserDetailPage` edit profile. When a coach is assigned, `MemberTrainingScheduleService` blocks overlapping slots unless admin sets `overrideTrainingScheduleConflict`. Preview: `POST /api/Users/training-schedule/validate`. Trainers see labels on dashboard + trainer detail Clients/Schedule tabs.
 
 ---
 
@@ -180,6 +184,12 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 **Web OTP (Firebase):** When `Firebase:Enabled` is true and Admin credentials + web config are set, login page shows **Password | OTP** tabs. Client loads public config from `GET /api/Auth/firebase-config`, sends SMS via Firebase Phone Auth, then exchanges the Firebase ID token at `POST /api/Auth/firebase-login`. Backend verifies token with Firebase Admin SDK and matches `AuthUsers` by `Users.Phone` (or email claim). Same JWT/session response as password login. Requires user phone on profile to match verified number.
 
 **Change password (self-service):** Any authenticated user with an `AuthUsers` row can update their own password. `GET /api/Auth/account` returns login email and whether `currentPassword` is required (false for OTP-only accounts with no password hash yet). `POST /api/Auth/change-password` validates current password when required, min length 6, BCrypt hash on `AuthUsers`. **Web:** `/dashboard/profile` → **Password** card (`ChangePasswordCard`). **Mobile:** Profile → **Security & devices** → **Change password** (`/profile/change-password`). Admins can still reset another user’s password via `PUT /api/Users/{id}` (admin only).
+
+**Forgot / reset password (unauthenticated):** `POST /api/Auth/forgot-password` with login email always returns a generic success message (no account enumeration). Server stores SHA-256 hash of opaque token + 1h expiry on `AuthUsers`, logs reset URL (email delivery TBD). `POST /api/Auth/reset-password` validates token + sets new password (clears refresh tokens). Link base URL: `ClientApp:PublicBaseUrl` (default `http://localhost:5173`). **Web:** `/login/forgot-password`, `/login/reset-password?token=…` (linked from login form). **Mobile:** `/login/forgot-password`, `/login/reset-password?token=…`.
+
+**Member web post-login routing:** When the active persona is **member**, successful login navigates to `/dashboard/member/portal` (not the admin hub). Visiting `/dashboard` as member redirects to the portal (`DashboardShell` + `getPostLoginPath` / `getPersonaHomePath` in `roleRouting.ts`).
+
+**Member self-log body metrics:** `POST /api/me/body-metrics` (authenticated member) accepts `weightKg`, optional `bodyFatPct`, `notes`, `measurementDate`. **Mobile:** Progress tab → **Log weight** sheet. Charts refresh from `GET /api/me/body-metrics`.
 
 ---
 
@@ -482,15 +492,42 @@ Only transactions with **Status = Completed** count toward paid/outstanding. **V
 
 **Staff renewal queue:** Dashboard → **Renewal queue** panel (`GET /api/UserMemberships/expiring-queue?withinDays=14`). Lists `Active`, `ActivePendingPayment`, and `PartialPayment` rows ending soon (sorted by end date). Actions: **Collect** → `/dashboard/payments/collect`, **Renew** → shared `MemberMembershipsModal`. Requires `Payments` permission. Refreshes with dashboard KPIs after payment or membership change.
 
-**Member in-app expiry reminders:** `MembershipExpiryReminderHostedService` → `MembershipExpiryInAppNotificationService` writes `Notifications` rows (`type: membership_expiring`) at **14 / 7 / 3 / 1 / 0** days before end. Enabled by `Notifications:EnableInAppMembershipExpiryReminders` (default **true**), window `InAppMembershipExpiryReminderDays` (default **14**). Independent of outbound webhooks (`EnableScheduledReminders`).
+**Member in-app expiry reminders:** `MembershipExpiryReminderHostedService` → `MembershipExpiryInAppNotificationService` writes `Notifications` rows (`type: membership_expiring`) at **14 / 7 / 3 / 1 / 0** days before end. Enabled by `Notifications:EnableInAppMembershipExpiryReminders` (default **true**), window `InAppMembershipExpiryReminderDays` (default **14**). Independent of outbound webhooks (`EnableScheduledReminders`). Optional FCM push when `Notifications:EnablePushNotifications` and Firebase Admin credentials are configured.
 
-**Outbound webhooks (email / WhatsApp):** Same milestones via `MembershipExpiryWebhookReminderService` → `INotificationWebhookDispatcher`. Set `Notifications:EmailWebhookUrl` / `WhatsAppWebhookUrl` (or env `NOTIFICATIONS_EMAIL_WEBHOOK`, `NOTIFICATIONS_WHATSAPP_WEBHOOK`). `EnableScheduledReminders` auto-enables when URLs are present; override with `NOTIFICATIONS_ENABLE_SCHEDULED_REMINDERS`. Ops guide: [NOTIFICATION_WEBHOOKS.md](../NOTIFICATION_WEBHOOKS.md). Dashboard **Outbound reminders** strip (`GET /api/Dashboard/notifications` → `hooks`) shows wired status.
+**Payment due reminders:** `PaymentBillingReminderHostedService` → `CreateDueDateNotificationsAsync` writes `payment_due` notifications (and push when enabled).
+
+**Workout day reminders:** `WorkoutDayReminderHostedService` → `WorkoutDayReminderService` creates `workout_today` notifications when the member has an active `UserSchedules` row matching today's weekday (IST). Toggle: `Notifications:EnableWorkoutDayReminders` (default **true**).
+
+**Outbound webhooks (email / WhatsApp):** Membership expiry milestones via `MembershipExpiryWebhookReminderService` → `INotificationWebhookDispatcher`. Set `Notifications:EmailWebhookUrl` / `WhatsAppWebhookUrl`. Ops guide: [NOTIFICATION_WEBHOOKS.md](../NOTIFICATION_WEBHOOKS.md).
+
+**Member billing in app:** `GET /api/me/invoices` lists membership payment headers + receipt lines; `GET /api/me/invoices/{membershipPaymentId}/pdf` downloads invoice PDF (own records only). **Mobile:** Membership tab → **Billing & receipts** + **Payment due** card when balance is pending.
+
+**Online payments (Razorpay):** Configure `Commercial:EnableOnlinePayments`, `RazorpayKeyId`, `RazorpayKeySecret`. Members pay via `POST /api/me/payments/razorpay/order` → Razorpay Checkout → `POST /api/me/payments/razorpay/verify` → `MembershipPaymentService.RecordInstallmentAsync` (`Method = Online`). Orders tracked in `online_payment_orders`. Payment-blocked members may still call `/api/me/payments/*`, `/api/me/invoices`, and `/api/me/membership-billing/*`.
+
+**Self-signup:** When `Commercial:EnableSelfSignup` is **true**:
+
+| Step | Surface | API / route |
+|------|---------|-------------|
+| 1 | Landing **Plans** CTA | `/signup` |
+| 2 | Choose plan + account form | `GET /api/public/membership-plans`, `GET /api/public/config` |
+| 3 | Create member + login | `POST /api/public/signup` → `UserService.CreateUserAsync` (MEMBER provisioning, plan, billing header) |
+| 4 | Pay online (optional) | Razorpay flow above; web signup page opens checkout when enabled |
+| 5 | Member home | Web → `/dashboard/member/portal`; mobile → existing login |
+
+**Web routes:** `/signup` (public), `/dashboard/member/pay` (authenticated pay page). **Login** links to signup when self-signup is enabled.
+
+**Config flags (`appsettings` → `Commercial`):** `EnableSelfSignup` (default **true** in dev template), `EnableOnlinePayments`, `RazorpayKeyId`, `RazorpayKeySecret`, `CheckoutBusinessName`.
+
+**Push tokens:** `POST /api/me/push-token` stores FCM token on `UserDevices` (`FcmToken`). Mobile `PushNotificationService.syncAfterLogin` registers after login when FCM is wired (requires `google-services.json` + `firebase_messaging`).
 
 | Surface | API / UI |
 |---------|----------|
-| Mobile home | `GET /api/me/dashboard` → `recentNotifications`; full list `GET /api/me/notifications` |
+| Mobile home | `GET /api/me/dashboard` → `recentNotifications`; full list `/notifications` → `GET /api/me/notifications` |
 | Member web dashboard | `MemberNotificationsPanel` on `/dashboard` |
 | Mark read | `POST /api/me/notifications/{id}/read` |
+| Invoices (mobile) | Membership tab → `GET /api/me/invoices` |
+| Pay online (web) | `/dashboard/member/pay` → Razorpay checkout |
+| Self-signup (web) | `/signup` → `POST /api/public/signup` |
 
 ---
 
@@ -546,7 +583,7 @@ Only transactions with **Status = Completed** count toward paid/outstanding. **V
 
 Track cross-cutting refactors here; move to PRODUCT_BACKLOG when scheduled.
 
-- [ ] **P2:** React role chips wired to `/users/{id}/roles`; reduce reliance on `UserTypes` only.
+- [x] **P2:** React role chips wired to `/users/{id}/roles`; User detail edit profile uses `UserApplicationRolesEditor`; members list filters `UserRoles` (MEMBER).
 - [ ] **P2:** Extract shared “edit person” form sections (personal fields) used by User + Trainer modals.
 - [ ] Deprecate `modules/trainers-management` mock Zustand UI or gate behind dev flag.
 - [ ] Move member-only fields from `Users` → `Members` read path (display from `Members` first).

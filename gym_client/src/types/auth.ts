@@ -58,6 +58,17 @@ export interface ChangePasswordPayload {
   confirmPassword: string
 }
 
+export interface ForgotPasswordResponse {
+  message: string
+  devResetUrl?: string
+}
+
+export interface ResetPasswordPayload {
+  token: string
+  newPassword: string
+  confirmPassword: string
+}
+
 /** Public Firebase web config from GET /Auth/firebase-config */
 export interface FirebasePublicConfig {
   enabled: boolean

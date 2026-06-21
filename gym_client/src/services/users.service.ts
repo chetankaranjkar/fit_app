@@ -123,6 +123,15 @@ export const usersService = {
       options?.timeoutMs != null ? { timeout: options.timeoutMs } : undefined,
     ),
   update: (id: number, data: UpdateUserDto) => api.put<User>(`/Users/${id}`, data),
+  validateTrainingSchedule: (data: {
+    trainerId: number
+    userId?: number
+    trainingScheduleType?: string
+    preferredGymTime?: string
+    trainingStartTime?: string | null
+    trainingEndTime?: string | null
+    trainingDaysOfWeek?: string
+  }) => api.post('/Users/training-schedule/validate', data),
   delete: (id: number) => api.delete(`/Users/${id}`),
   getDetails: (userId: number) => api.get<UserDetailDto[]>(`/Users/${userId}/details`),
   addDetail: (data: CreateUserDetailDto) => api.post<UserDetailDto>('/Users/details', data),

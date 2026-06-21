@@ -34,13 +34,20 @@ export interface User {
   emergencyPhone?: string | null
   profilePictureUrl?: string | null
   preferredGymTime?: string | null
+  trainingScheduleType?: string | null
+  trainingStartTime?: string | null
+  trainingEndTime?: string | null
+  trainingDaysOfWeek?: string | null
+  trainingScheduleLabel?: string | null
   isActive: boolean
   /** Login role when user has an account: 1/'User' = Member, 2/'Instructor', 3/'Admin' (API may send number or string) */
   role?: UserRole | UserRoleString | number | string | null
   /** Login username when user has an account */
   username?: string | null
-  /** User types (e.g. Admin, Trainer, Staff, Member) - a user can have many */
+  /** User types (legacy labels — mirrored from application roles). */
   userTypes?: { id: number; name: string; description?: string | null }[]
+  /** Application roles from UserRoles → Roles (authorization source of truth). */
+  appRoles?: { id?: number; name: string; description?: string | null; isActive?: boolean }[]
   /** Assigned trainer (when returned by API). */
   trainerId?: number | null
   /** Active trainer assignment for edit-form prefill (GET user by id). */
@@ -80,6 +87,11 @@ export interface CreateUserDto {
   emergencyPhone?: string | null
   profilePictureUrl?: string | null
   preferredGymTime?: string | null
+  trainingScheduleType?: string | null
+  trainingStartTime?: string | null
+  trainingEndTime?: string | null
+  trainingDaysOfWeek?: string | null
+  overrideTrainingScheduleConflict?: boolean
   isActive: boolean
   /** @deprecated Use email as login id. Optional legacy alias for AuthUsers.Email. */
   username?: string | null
@@ -114,6 +126,11 @@ export interface UpdateUserDto {
   emergencyPhone?: string | null
   profilePictureUrl?: string | null
   preferredGymTime?: string | null
+  trainingScheduleType?: string | null
+  trainingStartTime?: string | null
+  trainingEndTime?: string | null
+  trainingDaysOfWeek?: string | null
+  overrideTrainingScheduleConflict?: boolean
   isActive?: boolean | null
   /** Optional. If set, a new membership will be added for the user. */
   planId?: number | null

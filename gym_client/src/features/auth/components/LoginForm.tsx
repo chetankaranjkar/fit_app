@@ -53,6 +53,19 @@ export function LoginForm() {
         required
       />
 
+      <p className="text-right text-xs">
+        <Link to="/login/forgot-password" className="font-medium text-blue-300 transition hover:text-blue-200">
+          Forgot password?
+        </Link>
+      </p>
+
+      <p className="text-center text-xs text-slate-500">
+        New here?{' '}
+        <Link to="/signup" className="font-medium text-amber-300 hover:underline">
+          Create a member account
+        </Link>
+      </p>
+
       {(validationMessage || errorMessage) && (
         <div
           className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-300"

@@ -21,6 +21,10 @@ namespace GymManagement.Domain.Entities
         public int FailedLoginAttempts { get; set; }
         public DateTime? LockoutEnd { get; set; }
 
+        /// <summary>SHA-256 hash of opaque password-reset token (never store raw token).</summary>
+        public string? PasswordResetTokenHash { get; set; }
+        public DateTime? PasswordResetExpiry { get; set; }
+
         public ICollection<LoginActivity> LoginActivities { get; set; } = new List<LoginActivity>();
     }
 }

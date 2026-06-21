@@ -20,7 +20,15 @@ final bodyMetricsProvider = FutureProvider.autoDispose<List<MeBodyMetricLog>>((r
 });
 
 final notificationsProvider = FutureProvider.autoDispose<List<MeNotification>>((ref) async {
-  return MeService.instance.getNotifications();
+  return MeService.instance.getNotifications(take: 100);
+});
+
+final invoicesProvider = FutureProvider.autoDispose<List<MeInvoiceSummary>>((ref) async {
+  return MeService.instance.getInvoices();
+});
+
+final billingAccessProvider = FutureProvider.autoDispose<MeBillingAccess>((ref) async {
+  return MeService.instance.getBillingAccess();
 });
 
 final workoutPlansProvider = FutureProvider.autoDispose<List<MeWorkoutPlanSummary>>((ref) async {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useRevealOnScroll } from '../../../lib/animations/useRevealOnScroll'
 import { SectionHeader } from '../SectionHeader'
-import { scrollToSection } from '../../../lib/animations/useSmoothScroll'
 
 type Cycle = 'monthly' | 'yearly'
 
@@ -194,17 +194,16 @@ export function PlansSection() {
                   ))}
                 </ul>
 
-                <button
-                  type="button"
-                  onClick={() => scrollToSection('contact')}
-                  className={`mt-9 w-full rounded-full px-5 py-3.5 font-sans text-sm font-bold uppercase tracking-[0.06em] transition active:scale-[0.98] ${
+                <Link
+                  to="/signup"
+                  className={`mt-9 inline-flex w-full items-center justify-center rounded-full px-5 py-3.5 font-sans text-sm font-bold uppercase tracking-[0.06em] transition active:scale-[0.98] ${
                     plan.highlight
                       ? 'gradient-tiger text-black tiger-glow hover:scale-[1.02]'
                       : 'border border-[rgba(245,196,0,0.35)] bg-white/[0.03] text-white hover:border-[#F5C400] hover:bg-[rgba(245,196,0,0.08)]'
                   }`}
                 >
-                  {plan.highlight ? 'Start Free Trial' : 'Choose Plan'}
-                </button>
+                  {plan.highlight ? 'Join now' : 'Choose plan'}
+                </Link>
               </article>
             )
           })}

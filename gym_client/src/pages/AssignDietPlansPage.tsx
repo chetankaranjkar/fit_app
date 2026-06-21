@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { ListPagination } from '../components/ui/ListPagination'
 import { useClientPagination } from '../hooks/useClientPagination'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getApiErrorMessage } from '../lib/apiErrors'
-import { getSafeDashboardReturnPath, parseMemberIdsQuery } from '../lib/safeReturnPath'
+import { getSafeDashboardReturnPath, parseMemberIdsQuery, resolveAssignReturnPath } from '../lib/safeReturnPath'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../components/layout/DataPageShell'
 import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
@@ -94,6 +94,14 @@ export function AssignDietPlansPage() {
     () => getSafeDashboardReturnPath(searchParams.get('returnTo')),
     [searchParams],
   )
+
+  const redirectAfterAssign = useCallback(
+    (userId: number) => {
+      const target = resolveAssignReturnPath(searchParams.get('returnTo'), userId)
+      if (target) navigate(target, { replace: true })
+    },
+    [navigate, searchParams],
+  )
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(getDefaultForm())
   const [formError, setFormError] = useState<string | null>(null)
@@ -165,6 +173,8 @@ export function AssignDietPlansPage() {
       queryClient.invalidateQueries({ queryKey: ['userDietPlans'] })
       if (variables.userId) {
         queryClient.invalidateQueries({ queryKey: ['userDietPlans', variables.userId] })
+        queryClient.invalidateQueries({ queryKey: ['userProfileSummary', variables.userId] })
+        queryClient.invalidateQueries({ queryKey: ['user', variables.userId] })
       }
       setModalOpen(false)
       setForm(getDefaultForm())
@@ -172,9 +182,7 @@ export function AssignDietPlansPage() {
       setBulkUserIds([])
       setFormError(null)
       toast.success('Diet plan assigned.')
-      if (returnToSafe) {
-        navigate(returnToSafe)
-      }
+      redirectAfterAssign(variables.userId)
     },
     onError: (err: Error) =>
       setFormError(getApiErrorMessage(err, 'Failed to assign diet plan')),
@@ -249,7 +257,9 @@ export function AssignDietPlansPage() {
         setForm(getDefaultForm())
         setBulkAssignMode(false)
         setBulkUserIds([])
-        if (returnToSafe && succeeded > 0 && targetIds.length === 1) navigate(returnToSafe)
+        if (succeeded > 0 && targetIds.length === 1) {
+          redirectAfterAssign(targetIds[0]!)
+        }
       } finally {
         setBulkSubmitting(false)
       }

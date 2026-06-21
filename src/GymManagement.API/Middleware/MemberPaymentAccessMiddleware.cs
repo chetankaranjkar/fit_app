@@ -17,7 +17,10 @@ namespace GymManagement.API.Middleware
             "/api/Auth",
             "/swagger",
             "/health",
+            "/api/public",
             "/api/me/membership-billing",
+            "/api/me/payments",
+            "/api/me/invoices",
         };
 
         public MemberPaymentAccessMiddleware(RequestDelegate next) => _next = next;

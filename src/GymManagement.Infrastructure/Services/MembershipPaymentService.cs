@@ -19,6 +19,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly IBillingCalculationService _billing;
         private readonly IFinancialAuditService _audit;
         private readonly IAppCache _cache;
+        private readonly IMemberPushNotificationService _push;
 
         public MembershipPaymentService(
             IUnitOfWork unitOfWork,
@@ -27,7 +28,8 @@ namespace GymManagement.Infrastructure.Services
             ICouponService couponService,
             IBillingCalculationService billing,
             IFinancialAuditService audit,
-            IAppCache cache)
+            IAppCache cache,
+            IMemberPushNotificationService push)
         {
             _ = unitOfWork;
             _db = db;
@@ -36,6 +38,7 @@ namespace GymManagement.Infrastructure.Services
             _billing = billing;
             _audit = audit;
             _cache = cache;
+            _push = push;
         }
 
         private static bool IsTrialPlan(MembershipPlan plan)
@@ -750,15 +753,22 @@ namespace GymManagement.Infrastructure.Services
             {
                 var name = $"{p.User.FirstName} {p.User.LastName}".Trim();
                 var msg = $"Payment pending for member {name}. Due amount ₹{p.PendingAmount:N2}.";
+                const string title = "Payment due";
                 await _db.Notifications.AddAsync(new Notification
                 {
                     UserId = p.UserId,
-                    Title = "Payment due",
+                    Title = title,
                     Message = msg,
                     NotificationType = "payment_due",
                     CreatedDate = DateTime.UtcNow,
                     IsRead = false,
                 }, cancellationToken);
+                await _push.SendToUserAsync(
+                    p.UserId,
+                    title,
+                    $"₹{p.PendingAmount:N2} is due on your membership. Visit reception to pay.",
+                    "payment_due",
+                    cancellationToken);
                 p.DueReminderLastSentAt = DateTime.UtcNow;
                 n++;
             }

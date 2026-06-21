@@ -99,6 +99,28 @@ class AuthService {
     );
   }
 
+  Future<void> forgotPassword(String email) async {
+    await ApiClient.instance.post(
+      '/Auth/forgot-password',
+      body: {'email': email.trim()},
+    );
+  }
+
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    await ApiClient.instance.post(
+      '/Auth/reset-password',
+      body: {
+        'token': token.trim(),
+        'newPassword': newPassword,
+        'confirmPassword': confirmPassword,
+      },
+    );
+  }
+
   Future<void> logout() async {
     try {
       await ApiClient.instance.post('/Auth/logout');

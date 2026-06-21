@@ -21,6 +21,11 @@ namespace GymManagement.Core.DTOs
         public string? EmergencyPhone { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public string? PreferredGymTime { get; set; }
+        public string? TrainingScheduleType { get; set; }
+        public TimeSpan? TrainingStartTime { get; set; }
+        public TimeSpan? TrainingEndTime { get; set; }
+        public string? TrainingDaysOfWeek { get; set; }
+        public string? TrainingScheduleLabel { get; set; }
         public bool IsActive { get; set; }
         /// <summary>Login role when the user has an account: User (Member), Instructor, or Admin.</summary>
         public Role? Role { get; set; }
@@ -88,6 +93,12 @@ namespace GymManagement.Core.DTOs
         public string? EmergencyPhone { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public string? PreferredGymTime { get; set; }
+        public string? TrainingScheduleType { get; set; }
+        public TimeSpan? TrainingStartTime { get; set; }
+        public TimeSpan? TrainingEndTime { get; set; }
+        public string? TrainingDaysOfWeek { get; set; }
+        /// <summary>When true, admin allows overlapping coach bookings.</summary>
+        public bool OverrideTrainingScheduleConflict { get; set; }
         public bool IsActive { get; set; } = true;
         /// <summary>Deprecated: use <see cref="Email"/> as login id. Optional legacy alias.</summary>
         public string? Username { get; set; }
@@ -123,6 +134,11 @@ namespace GymManagement.Core.DTOs
         public string? EmergencyPhone { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public string? PreferredGymTime { get; set; }
+        public string? TrainingScheduleType { get; set; }
+        public TimeSpan? TrainingStartTime { get; set; }
+        public TimeSpan? TrainingEndTime { get; set; }
+        public string? TrainingDaysOfWeek { get; set; }
+        public bool OverrideTrainingScheduleConflict { get; set; }
         public bool? IsActive { get; set; }
         /// <summary>Optional. If set, a new membership will be added for the user.</summary>
         public int? PlanId { get; set; }

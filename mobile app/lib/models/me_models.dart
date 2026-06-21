@@ -292,11 +292,131 @@ class MeNotification {
 
   static String stripNotificationMarker(String raw) {
     final trimmed = raw.trim();
-    final pattern = RegExp(r'\s*\[mid:\d+\]\[d:\d+\]\s*$', caseSensitive: false);
-    return trimmed.replaceAll(pattern, '').trim();
+    var result = trimmed.replaceAll(
+      RegExp(r'\s*\[mid:\d+\]\[d:\d+\]\s*$', caseSensitive: false),
+      '',
+    );
+    result = result.replaceAll(
+      RegExp(r'\s*\[wdr:\d{8}:\d+\]\s*$', caseSensitive: false),
+      '',
+    );
+    return result.trim();
   }
 
   bool get isMembershipExpiring => type == 'membership_expiring';
+  bool get isPaymentDue => type == 'payment_due';
+  bool get isWorkoutToday => type == 'workout_today';
+}
+
+class MeInvoiceReceipt {
+  final int transactionId;
+  final String receiptNumber;
+  final num amount;
+  final DateTime paidAt;
+  final String method;
+  final String status;
+
+  const MeInvoiceReceipt({
+    required this.transactionId,
+    required this.receiptNumber,
+    required this.amount,
+    required this.paidAt,
+    required this.method,
+    required this.status,
+  });
+
+  factory MeInvoiceReceipt.fromJson(Map<String, dynamic> json) => MeInvoiceReceipt(
+        transactionId: _int(json['transactionId']) ?? 0,
+        receiptNumber: json['receiptNumber']?.toString() ?? '',
+        amount: json['amount'] is num ? json['amount'] as num : 0,
+        paidAt: _dt(json['paidAt']) ?? DateTime.now(),
+        method: json['method']?.toString() ?? '',
+        status: json['status']?.toString() ?? '',
+      );
+}
+
+class MeInvoiceSummary {
+  final int membershipPaymentId;
+  final String paymentNumber;
+  final String? invoiceNumber;
+  final int? invoiceId;
+  final String planName;
+  final num totalAmount;
+  final num paidAmount;
+  final num pendingAmount;
+  final String paymentStatus;
+  final DateTime? paymentDate;
+  final DateTime? nextDueDate;
+  final bool hasPdf;
+  final List<MeInvoiceReceipt> receipts;
+
+  const MeInvoiceSummary({
+    required this.membershipPaymentId,
+    required this.paymentNumber,
+    required this.planName,
+    required this.totalAmount,
+    required this.paidAmount,
+    required this.pendingAmount,
+    required this.paymentStatus,
+    required this.hasPdf,
+    required this.receipts,
+    this.invoiceNumber,
+    this.invoiceId,
+    this.paymentDate,
+    this.nextDueDate,
+  });
+
+  factory MeInvoiceSummary.fromJson(Map<String, dynamic> json) {
+    final receipts = (json['receipts'] as List? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(MeInvoiceReceipt.fromJson)
+        .toList();
+    return MeInvoiceSummary(
+      membershipPaymentId: _int(json['membershipPaymentId']) ?? 0,
+      paymentNumber: json['paymentNumber']?.toString() ?? '',
+      invoiceNumber: json['invoiceNumber']?.toString(),
+      invoiceId: _int(json['invoiceId']),
+      planName: json['planName']?.toString() ?? 'Membership',
+      totalAmount: json['totalAmount'] is num ? json['totalAmount'] as num : 0,
+      paidAmount: json['paidAmount'] is num ? json['paidAmount'] as num : 0,
+      pendingAmount: json['pendingAmount'] is num ? json['pendingAmount'] as num : 0,
+      paymentStatus: json['paymentStatus']?.toString() ?? '',
+      paymentDate: _dt(json['paymentDate']),
+      nextDueDate: _dt(json['nextDueDate']),
+      hasPdf: json['hasPdf'] == true,
+      receipts: receipts,
+    );
+  }
+
+  bool get isPaid => paymentStatus.toLowerCase() == 'paid';
+}
+
+class MeBillingAccess {
+  final bool accessBlocked;
+  final num? pendingAmount;
+  final DateTime? nextDueDate;
+  final String? message;
+  final int? membershipPaymentId;
+
+  const MeBillingAccess({
+    required this.accessBlocked,
+    this.pendingAmount,
+    this.nextDueDate,
+    this.message,
+    this.membershipPaymentId,
+  });
+
+  factory MeBillingAccess.fromJson(Map<String, dynamic> json) {
+    return MeBillingAccess(
+      accessBlocked: json['accessBlocked'] == true,
+      pendingAmount: json['pendingAmount'] is num ? json['pendingAmount'] as num : null,
+      nextDueDate: _dt(json['nextDueDate']),
+      message: json['message']?.toString(),
+      membershipPaymentId: _int(json['membershipPaymentId']),
+    );
+  }
+
+  bool get hasPendingBalance => (pendingAmount ?? 0) > 0;
 }
 
 class MeWorkoutPlanSummary {

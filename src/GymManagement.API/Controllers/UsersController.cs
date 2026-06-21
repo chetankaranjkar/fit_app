@@ -23,6 +23,7 @@ namespace GymManagement.API.Controllers
         private readonly IUserService _userService;
         private readonly IMobileNumberAvailabilityService _mobileAvailability;
         private readonly IUsernameAvailabilityService _usernameAvailability;
+        private readonly IMemberTrainingScheduleService _trainingScheduleService;
         private readonly IRbacService _rbacService;
         private readonly WebRootImageStorage _imageStorage;
         private readonly ApplicationDbContext _db;
@@ -31,6 +32,7 @@ namespace GymManagement.API.Controllers
             IUserService userService,
             IMobileNumberAvailabilityService mobileAvailability,
             IUsernameAvailabilityService usernameAvailability,
+            IMemberTrainingScheduleService trainingScheduleService,
             IRbacService rbacService,
             WebRootImageStorage imageStorage,
             ApplicationDbContext db)
@@ -38,6 +40,7 @@ namespace GymManagement.API.Controllers
             _userService = userService;
             _mobileAvailability = mobileAvailability;
             _usernameAvailability = usernameAvailability;
+            _trainingScheduleService = trainingScheduleService;
             _rbacService = rbacService;
             _imageStorage = imageStorage;
             _db = db;
@@ -63,6 +66,20 @@ namespace GymManagement.API.Controllers
         {
             var result = await _usernameAvailability.CheckAsync(username, excludeUserId);
             return Ok(result);
+        }
+
+        /// <summary>Preview coach booking conflicts for a member training slot.</summary>
+        [HttpPost("training-schedule/validate")]
+        [HasAnyPermission(PermissionCodes.UsersAccess, PermissionCodes.TrainerAccess)]
+        public async Task<ActionResult<IReadOnlyList<TrainingScheduleConflictDto>>> ValidateTrainingSchedule(
+            [FromBody] ValidateMemberTrainingScheduleDto dto,
+            CancellationToken cancellationToken)
+        {
+            if (dto.TrainerId <= 0)
+                return BadRequest(new { message = "trainerId is required." });
+
+            var conflicts = await _trainingScheduleService.GetConflictsAsync(dto, cancellationToken);
+            return Ok(conflicts);
         }
 
         [HttpGet]

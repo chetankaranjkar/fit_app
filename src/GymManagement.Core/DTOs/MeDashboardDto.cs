@@ -118,6 +118,48 @@ namespace GymManagement.Core.DTOs
         public string? Notes { get; set; }
     }
 
+    /// <summary>Member self-service body metric entry from mobile / member portal.</summary>
+    public class CreateMeBodyMetricDto
+    {
+        public DateTime? MeasurementDate { get; set; }
+        public decimal WeightKg { get; set; }
+        public decimal? BodyFatPct { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    public class RegisterMePushTokenDto
+    {
+        public string Token { get; set; } = string.Empty;
+        public string DeviceUniqueId { get; set; } = string.Empty;
+    }
+
+    public class MeInvoiceSummaryDto
+    {
+        public int MembershipPaymentId { get; set; }
+        public string PaymentNumber { get; set; } = string.Empty;
+        public string? InvoiceNumber { get; set; }
+        public int? InvoiceId { get; set; }
+        public string PlanName { get; set; } = string.Empty;
+        public decimal TotalAmount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal PendingAmount { get; set; }
+        public string PaymentStatus { get; set; } = string.Empty;
+        public DateTime? PaymentDate { get; set; }
+        public DateTime? NextDueDate { get; set; }
+        public bool HasPdf { get; set; }
+        public IReadOnlyList<MeInvoiceReceiptDto> Receipts { get; set; } = Array.Empty<MeInvoiceReceiptDto>();
+    }
+
+    public class MeInvoiceReceiptDto
+    {
+        public int TransactionId { get; set; }
+        public string ReceiptNumber { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public DateTime PaidAt { get; set; }
+        public string Method { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+    }
+
     /// <summary>Template for logging a workout: plan summary + each exercise with prescription and last performance.</summary>
     public sealed class MeWorkoutSessionTemplateDto
     {

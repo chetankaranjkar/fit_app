@@ -73,6 +73,12 @@ namespace GymManagement.Core.DTOs
         public string LastName { get; set; } = string.Empty;
         public string? Email { get; set; }
         public string? ProfilePicture { get; set; }
+        public string? PreferredGymTime { get; set; }
+        public string? TrainingScheduleType { get; set; }
+        public TimeSpan? TrainingStartTime { get; set; }
+        public TimeSpan? TrainingEndTime { get; set; }
+        public string? TrainingDaysOfWeek { get; set; }
+        public string? TrainingScheduleLabel { get; set; }
         public DateTime? AssignedOn { get; set; }
         public string? MembershipPlan { get; set; }
     }

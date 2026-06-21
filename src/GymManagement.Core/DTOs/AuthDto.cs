@@ -92,6 +92,27 @@ namespace GymManagement.Core.DTOs
         public bool RequiresCurrentPassword { get; set; }
     }
 
+    public class ForgotPasswordDto
+    {
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class ForgotPasswordResponseDto
+    {
+        public string Message { get; set; } =
+            "If an account exists for that email, password reset instructions have been sent.";
+
+        /// <summary>Development-only link for local testing (omitted in production).</summary>
+        public string? DevResetUrl { get; set; }
+    }
+
+    public class ResetPasswordDto
+    {
+        public string Token { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
     public class RegisterDto
     {
         /// <summary>Deprecated; use <see cref="Email"/>.</summary>

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
 using GymManagement.API.Extensions;
@@ -122,6 +123,46 @@ namespace GymManagement.API.Controllers
             }
 
             return Ok(new { message = "Registration successful." });
+        }
+
+        /// <summary>Request a password reset link for the login email (always returns a generic message).</summary>
+        [HttpPost("forgot-password")]
+        [ProducesResponseType(typeof(ForgotPasswordResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<ForgotPasswordResponseDto>> ForgotPassword([FromBody] ForgotPasswordDto? dto)
+        {
+            if (dto == null)
+                return BadRequest(new { message = "Request body is required." });
+
+            var email = (dto.Email ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(email))
+                return BadRequest(new { message = "Email is required." });
+
+            var includeDevUrl = HttpContext.RequestServices
+                .GetRequiredService<IWebHostEnvironment>()
+                .IsDevelopment();
+            var response = await _authService.RequestPasswordResetAsync(dto, includeDevUrl);
+            return Ok(response);
+        }
+
+        /// <summary>Set a new password using the token from the reset email link.</summary>
+        [HttpPost("reset-password")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto? dto)
+        {
+            if (dto == null)
+                return BadRequest(new { message = "Request body is required." });
+
+            try
+            {
+                await _authService.ResetPasswordAsync(dto);
+                return Ok(new { message = "Password updated successfully. You can sign in with your new password." });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         /// <summary>Login email and whether current password is required (any authenticated user).</summary>

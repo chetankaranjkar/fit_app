@@ -39,5 +39,11 @@ namespace GymManagement.Core.Services
 
         /// <summary>Updates password hash for the authenticated account (BCrypt).</summary>
         Task ChangePasswordAsync(int authUserId, ChangePasswordDto dto);
+
+        /// <summary>Issue a time-limited reset token for the account email (always returns a generic message).</summary>
+        Task<ForgotPasswordResponseDto> RequestPasswordResetAsync(ForgotPasswordDto dto, bool includeDevResetUrl = false);
+
+        /// <summary>Validate reset token and set a new password.</summary>
+        Task ResetPasswordAsync(ResetPasswordDto dto);
     }
 }

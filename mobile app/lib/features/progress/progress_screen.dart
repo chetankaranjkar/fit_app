@@ -19,6 +19,7 @@ import '../../widgets/premium_background.dart';
 import '../../widgets/press_scale.dart';
 import '../../services/me_service.dart';
 import '../shell/shell_layout_metrics.dart';
+import 'log_body_metric_sheet.dart';
 
 class ProgressScreen extends ConsumerWidget {
   const ProgressScreen({super.key});
@@ -104,7 +105,11 @@ class ProgressScreen extends ConsumerWidget {
                     data: (a) => _AttendanceStats(summary: a),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  const SectionHeader(title: 'Weight trend'),
+                  SectionHeader(
+                    title: 'Weight trend',
+                    action: 'Log weight',
+                    onActionTap: () => showLogBodyMetricSheet(context, ref),
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   metrics.when(
                     loading: () => const SkeletonBlock(height: 220),
@@ -234,10 +239,10 @@ class _WeightChart extends StatelessWidget {
       ..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
 
     if (filtered.isEmpty) {
-      return const GlassCard(
+      return GlassCard(
         child: EmptyState(
           title: 'No weight data',
-          message: 'Log a body metric in the gym to see your trend here.',
+          message: 'Tap Log weight to record your first checkpoint.',
           icon: CupertinoIcons.gauge,
         ),
       );

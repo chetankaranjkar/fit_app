@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
@@ -13,6 +14,11 @@ import { userSchedulesService } from '../../services/userSchedules.service'
 import { attendanceService } from '../../services/attendance.service'
 import type { User } from '../../types/user'
 import type { UserScheduleDto } from '../../types/userSchedule'
+import {
+  formatTrainingScheduleLabel,
+  memberHasTrainingToday,
+  memberTrainingTimeRange,
+} from '../../lib/memberTrainingSchedule'
 import { workoutTrackingService } from '../../services/workoutTracking.service'
 
 export function TrainerDashboardPage() {
@@ -63,6 +69,19 @@ export function TrainerDashboardPage() {
     },
   })
 
+  const todayDow = new Date().getDay()
+  const todayTrainingSlots = useMemo(() => {
+    return (data?.clients ?? [])
+      .filter((client) => memberHasTrainingToday(client, todayDow))
+      .map((client) => ({
+        id: client.id,
+        name: `${client.firstName} ${client.lastName}`.trim(),
+        label: formatTrainingScheduleLabel(client),
+        range: memberTrainingTimeRange(client),
+      }))
+      .sort((a, b) => (a.range?.start ?? '').localeCompare(b.range?.start ?? ''))
+  }, [data?.clients, todayDow])
+
   return (
     <DashboardLayout userName={userName}>
       <DashboardPageContent className="max-w-[1400px]">
@@ -102,6 +121,31 @@ export function TrainerDashboardPage() {
 
         <div className="grid gap-6 lg:grid-cols-3">
           <GlassPanel role="trainer" title="Today's timeline" subtitle="Scheduled classes" className="lg:col-span-2">
+            <div className="mb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-300/80">
+                Member training slots
+              </p>
+              <ul className="mt-2 space-y-2">
+                {todayTrainingSlots.slice(0, 6).map((slot) => (
+                  <li
+                    key={slot.id}
+                    className="flex items-center justify-between rounded-xl border border-orange-500/15 bg-orange-500/5 px-4 py-3 text-sm"
+                  >
+                    <Link to={`/dashboard/users/${slot.id}`} className="font-medium text-white hover:text-orange-200">
+                      {slot.name}
+                    </Link>
+                    <span className="text-slate-300">
+                      {slot.range ? `${slot.range.start.slice(0, 5)} – ${slot.range.end.slice(0, 5)}` : slot.label}
+                    </span>
+                  </li>
+                ))}
+                {todayTrainingSlots.length === 0 ? (
+                  <li className="rounded-xl border border-dashed border-white/10 px-4 py-3 text-sm text-slate-500">
+                    No custom training slots scheduled for today.
+                  </li>
+                ) : null}
+              </ul>
+            </div>
             <ul className="space-y-3">
               {(data?.todaySessions ?? []).slice(0, 8).map((s) => (
                 <li
@@ -144,7 +188,10 @@ export function TrainerDashboardPage() {
                   <Link to={`/dashboard/users/${c.id}`} className="min-w-0 font-medium text-white hover:text-orange-300">
                     {c.firstName} {c.lastName}
                   </Link>
-                  <div className="flex shrink-0 items-center gap-3">
+                  <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+                    <span className="max-w-[180px] truncate text-right text-[11px] text-slate-400">
+                      {formatTrainingScheduleLabel(c)}
+                    </span>
                     {trainerId ? (
                       <Link
                         to={workoutAssignmentUrl({

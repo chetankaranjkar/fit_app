@@ -22,6 +22,17 @@ namespace GymManagement.Infrastructure.Services
                 ["Accounts"] = ApplicationRoleCodes.Accountant,
             };
 
+        private static readonly Dictionary<string, string> RoleCodeToUserTypeName =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                [ApplicationRoleCodes.Admin] = "Admin",
+                [ApplicationRoleCodes.Member] = "Member",
+                [ApplicationRoleCodes.Trainer] = "Trainer",
+                [ApplicationRoleCodes.Staff] = "Staff",
+                [ApplicationRoleCodes.Receptionist] = "Receptionist",
+                [ApplicationRoleCodes.Accountant] = "Accountant",
+            };
+
         private readonly IUnitOfWork _unitOfWork;
 
         public UserProvisioningService(IUnitOfWork unitOfWork)
@@ -57,6 +68,7 @@ namespace GymManagement.Infrastructure.Services
             await AuthUserRoleHelper.EnsureUserHasAppRoleAsync(_unitOfWork, userId, code);
             await _unitOfWork.SaveChangesAsync();
             await EnsureProfileForRoleAsync(userId, code, null, cancellationToken);
+            await SyncUserTypesFromRolesAsync(userId, cancellationToken);
         }
 
         public async Task RevokeRoleAsync(int userId, string roleCode, CancellationToken cancellationToken = default)
@@ -73,6 +85,7 @@ namespace GymManagement.Infrastructure.Services
 
             await _unitOfWork.SaveChangesAsync();
             await DeactivateProfileForRoleAsync(userId, code, cancellationToken);
+            await SyncUserTypesFromRolesAsync(userId, cancellationToken);
         }
 
         public async Task EnsureProfilesForUserAsync(int userId, CancellationToken cancellationToken = default)
@@ -116,6 +129,52 @@ namespace GymManagement.Infrastructure.Services
                 await _unitOfWork.SaveChangesAsync();
 
             await EnsureProfilesForUserAsync(userId, cancellationToken);
+            await SyncUserTypesFromRolesAsync(userId, cancellationToken);
+        }
+
+        public async Task SyncFromRoleCodesAsync(
+            int userId,
+            IEnumerable<string>? roleCodes,
+            CancellationToken cancellationToken = default)
+        {
+            var desiredCodes = (roleCodes ?? Array.Empty<string>())
+                .Select(NormalizeRoleCode)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var managedRoleCodes = new HashSet<string>(UserTypeNameToRoleCode.Values, StringComparer.OrdinalIgnoreCase);
+            var currentRoleNames = await GetActiveRoleNamesForUserAsync(userId);
+            foreach (var current in currentRoleNames)
+            {
+                if (!managedRoleCodes.Contains(current))
+                    continue;
+                if (!desiredCodes.Contains(current))
+                    await RevokeRoleAsync(userId, current, cancellationToken);
+            }
+
+            foreach (var code in desiredCodes)
+                await AssignRoleAsync(userId, code, cancellationToken);
+        }
+
+        public async Task SyncUserTypesFromRolesAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            var roleNames = await GetActiveRoleNamesForUserAsync(userId);
+            var desiredTypeNames = roleNames
+                .Select(name => RoleCodeToUserTypeName.TryGetValue(name, out var typeName) ? typeName : null)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var allTypes = (await _unitOfWork.UserTypes.GetAllAsync()).ToList();
+            var desiredTypeIds = allTypes
+                .Where(t => desiredTypeNames.Contains(t.Name, StringComparer.OrdinalIgnoreCase))
+                .Select(t => t.Id)
+                .Distinct()
+                .ToList();
+
+            await _unitOfWork.SyncUserUserTypesAsync(userId, desiredTypeIds);
+            await _unitOfWork.SaveChangesAsync();
         }
 
         public async Task EnsureMemberProfileAsync(int userId, CancellationToken cancellationToken = default)
@@ -148,6 +207,10 @@ namespace GymManagement.Infrastructure.Services
                 EmergencyContact = user.EmergencyContact,
                 EmergencyPhone = user.EmergencyPhone,
                 PreferredGymTime = user.PreferredGymTime,
+                TrainingScheduleType = user.TrainingScheduleType,
+                TrainingStartTime = user.TrainingStartTime,
+                TrainingEndTime = user.TrainingEndTime,
+                TrainingDaysOfWeek = user.TrainingDaysOfWeek,
                 DateOfBirth = user.DateOfBirth,
                 Gender = user.Gender,
                 RegistrationDate = user.RegistrationDate,
@@ -251,6 +314,10 @@ namespace GymManagement.Infrastructure.Services
             member.EmergencyContact = user.EmergencyContact;
             member.EmergencyPhone = user.EmergencyPhone;
             member.PreferredGymTime = user.PreferredGymTime;
+            member.TrainingScheduleType = user.TrainingScheduleType;
+            member.TrainingStartTime = user.TrainingStartTime;
+            member.TrainingEndTime = user.TrainingEndTime;
+            member.TrainingDaysOfWeek = user.TrainingDaysOfWeek;
             member.DateOfBirth = user.DateOfBirth;
             member.Gender = user.Gender;
             member.IsActive = user.IsActive;

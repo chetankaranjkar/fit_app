@@ -91,6 +91,7 @@ And allow the redirect origin in your OAuth / App Check settings if applicable.
 | Wrong database | UAT uses volume `gym_uat_sqlserver_data`, not production’s |
 | “Database schema is out of date” / 500 on save user | Run **`./deploy/scripts/fix-uat-membership-schema.sh`** (pulls `uat`, fixes stuck migration history, rebuilds API). Confirm `DATABASE_AUTO_MIGRATE=true` in `deploy/.env.uat`. Then `docker logs gym-uat-api --tail 100` should show “Membership lifecycle schema is ready.” |
 | `address already in use` on `127.0.0.1:1434` | Usually duplicate SQL port mappings from merged compose files (fixed with `ports: !override` in `docker-compose.uat.yml`). Pull latest `uat`, then `bash deploy/scripts/fix-uat-sql-port.sh` and redeploy. Or set `SQLSERVER_PUBLISH_PORT=1435` in `deploy/.env.uat` |
+| `Cannot connect to SQL catalog 'GymManagementDb_UAT'` | Run **`./deploy/scripts/diagnose-uat-db.sh`**. Common causes: catalog still coming ONLINE after create (pull latest `uat` for longer wait), password changed after SQL volume was created, or special characters in `MSSQL_SA_PASSWORD` breaking the inline connection string (quote the value in `deploy/.env.uat`) |
 
 ```bash
 ./deploy/scripts/fix-uat-sql-port.sh

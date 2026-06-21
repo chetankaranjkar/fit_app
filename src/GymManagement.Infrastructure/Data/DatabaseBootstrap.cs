@@ -43,7 +43,93 @@ public static class DatabaseBootstrap
             """;
         cmd.Parameters.Add(new SqlParameter("@name", databaseName));
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        logger.LogInformation("Ensured SQL Server database {Database} exists.", databaseName);
+        logger.LogWarning("Ensured SQL Server database {Database} exists (or already present).", databaseName);
+    }
+
+    /// <summary>
+    /// Polls <c>sys.databases</c> until the catalog is <c>ONLINE</c>, then opens a direct connection.
+    /// More reliable than <see cref="DbContext.Database.CanConnectAsync"/> right after <c>CREATE DATABASE</c>.
+    /// </summary>
+    public static async Task WaitForCatalogOnlineAsync(
+        string connectionString,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        var csb = new SqlConnectionStringBuilder(connectionString);
+        var databaseName = csb.InitialCatalog?.Trim();
+        if (string.IsNullOrEmpty(databaseName))
+        {
+            throw new InvalidOperationException(
+                "Connection string has no Initial Catalog; cannot wait for SQL database.");
+        }
+
+        csb.InitialCatalog = "master";
+        var masterCs = csb.ConnectionString;
+        csb.InitialCatalog = databaseName;
+        var catalogCs = csb.ConnectionString;
+
+        const int maxAttempts = 30;
+        SqlException? lastSqlError = null;
+        string? lastState = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await using (var master = new SqlConnection(masterCs))
+                {
+                    await master.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    await using var stateCmd = master.CreateCommand();
+                    stateCmd.CommandText = "SELECT state_desc FROM sys.databases WHERE name = @name";
+                    stateCmd.Parameters.Add(new SqlParameter("@name", databaseName));
+                    lastState = (await stateCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) as string;
+                }
+
+                if (!string.Equals(lastState, "ONLINE", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogWarning(
+                        "SQL catalog {Database} state is {State} ({Attempt}/{Max})...",
+                        databaseName,
+                        string.IsNullOrEmpty(lastState) ? "MISSING" : lastState,
+                        attempt,
+                        maxAttempts);
+                }
+                else
+                {
+                    await using var catalog = new SqlConnection(catalogCs);
+                    await catalog.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    logger.LogWarning("SQL catalog {Database} is ONLINE and accepting connections.", databaseName);
+                    return;
+                }
+            }
+            catch (SqlException ex)
+            {
+                lastSqlError = ex;
+                logger.LogWarning(
+                    ex,
+                    "SQL catalog {Database} connect attempt {Attempt}/{Max} failed (error {SqlError}).",
+                    databaseName,
+                    attempt,
+                    maxAttempts,
+                    ex.Number);
+            }
+
+            if (attempt >= maxAttempts)
+                break;
+
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+        }
+
+        var detail = lastSqlError != null
+            ? $" Last SQL error {lastSqlError.Number}: {lastSqlError.Message}."
+            : lastState != null
+                ? $" Last catalog state: {lastState}."
+                : " Catalog not found in sys.databases.";
+
+        throw new InvalidOperationException(
+            $"Cannot connect to SQL catalog '{databaseName}' after ensure-database.{detail} " +
+            "On the VPS run: ./deploy/scripts/diagnose-uat-db.sh — check MSSQL_DATABASE, MSSQL_SA_PASSWORD " +
+            "(special characters must be quoted in deploy/.env.uat), and sys.databases state.");
     }
 
     /// <summary>Ensure catalog exists, wait for connectivity, apply EF migrations + schema patches.</summary>
@@ -54,31 +140,15 @@ public static class DatabaseBootstrap
         CancellationToken cancellationToken = default)
     {
         var catalog = new SqlConnectionStringBuilder(connectionString).InitialCatalog?.Trim();
-        logger.LogInformation(
+        logger.LogWarning(
             "Preparing database migrations for catalog {Database}...",
             string.IsNullOrEmpty(catalog) ? "(none)" : catalog);
 
         await EnsureSqlServerDatabaseExistsAsync(connectionString, logger, cancellationToken)
             .ConfigureAwait(false);
 
-        for (var connectAttempt = 1; connectAttempt <= 5; connectAttempt++)
-        {
-            if (await dbContext.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false))
-                break;
-
-            if (connectAttempt >= 5)
-            {
-                throw new InvalidOperationException(
-                    $"Cannot connect to SQL catalog '{catalog}' after ensure-database. " +
-                    "Check MSSQL_DATABASE, MSSQL_SA_PASSWORD, and sys.databases state on the server.");
-            }
-
-            logger.LogWarning(
-                "Waiting for SQL catalog {Database} to accept connections ({Attempt}/5)...",
-                catalog,
-                connectAttempt);
-            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
-        }
+        await WaitForCatalogOnlineAsync(connectionString, logger, cancellationToken)
+            .ConfigureAwait(false);
 
         var pending = (await dbContext.Database.GetPendingMigrationsAsync(cancellationToken).ConfigureAwait(false))
             .ToList();

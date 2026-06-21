@@ -3,7 +3,7 @@ import {
   commercialService,
   type RazorpayOrderResponse,
   type RazorpayVerifyPayload,
-} from '../services/commercial.service'
+} from '../../services/commercial.service'
 
 type RazorpayHandlerResponse = {
   razorpay_order_id: string

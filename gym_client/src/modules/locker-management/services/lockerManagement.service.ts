@@ -47,9 +47,12 @@ interface ApiAssignment {
   id: number
   lockerId: number
   lockerNumber: string
+  userId?: number | null
   memberName: string
   assignedDate: string
   expiryDate: string
+  lockerStatus?: string
+  assignmentStatus?: string
 }
 
 interface ApiAccessLog {
@@ -107,9 +110,13 @@ const mapAssignment = (a: ApiAssignment): LockerAssignment => ({
   id: String(a.id),
   lockerId: String(a.lockerId),
   lockerNumber: a.lockerNumber,
+  userId: a.userId != null ? String(a.userId) : undefined,
   memberName: a.memberName,
   assignedDate: a.assignedDate,
   expiryDate: a.expiryDate,
+  lockerStatus: a.lockerStatus ? toStatus(a.lockerStatus) : undefined,
+  assignmentStatus:
+    (a.assignmentStatus ?? '').toUpperCase() === 'EXPIRED' ? 'Expired' : 'Active',
 })
 
 const mapAccessLog = (a: ApiAccessLog): LockerAccessLog => ({
@@ -166,6 +173,7 @@ export interface LockerInput {
 export interface AssignmentInput {
   lockerId: string
   memberName: string
+  userId?: number
   assignedDate: string
   expiryDate: string
 }
@@ -194,6 +202,7 @@ const toApiLockerPayload = (i: LockerInput) => ({
 const toApiAssignmentPayload = (i: AssignmentInput) => ({
   lockerId: Number(i.lockerId),
   memberName: i.memberName,
+  userId: i.userId ?? null,
   assignedDate: i.assignedDate,
   expiryDate: i.expiryDate,
 })
@@ -298,6 +307,16 @@ export const lockerManagementService = {
       mapAssignment,
       MOCK_ASSIGNMENTS,
     ),
+
+  listAssignmentsByUserId: async (userId: number): Promise<LockerAssignment[]> => {
+    if (!USE_API) {
+      return MOCK_ASSIGNMENTS.filter(
+        (a) => a.memberName.toLowerCase().includes('member') || a.userId === String(userId),
+      )
+    }
+    const res = await api.get<ApiAssignment[]>(`/locker-management/assignments/by-user/${userId}`)
+    return (res.data ?? []).map(mapAssignment)
+  },
 
   async createAssignment(input: AssignmentInput, lockerNumber: string): Promise<LockerAssignment> {
     if (!USE_API) return mockAssignment(input, lockerNumber)

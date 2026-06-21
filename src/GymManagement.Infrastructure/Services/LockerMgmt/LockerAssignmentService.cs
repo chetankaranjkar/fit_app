@@ -25,6 +25,32 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
             return list.Select(Map);
         }
 
+        public async Task<IEnumerable<LockerAssignmentDto>> GetByUserIdAsync(int userId)
+        {
+            var user = await _db.Users.AsNoTracking()
+                .Where(u => u.Id == userId && !u.IsDeleted)
+                .Select(u => new { u.FirstName, u.LastName })
+                .FirstOrDefaultAsync();
+            if (user == null)
+                return Array.Empty<LockerAssignmentDto>();
+
+            var fullName = $"{user.FirstName} {user.LastName}".Trim();
+            var normalizedName = fullName.ToLowerInvariant();
+
+            var list = await _db.Set<LockerAssignment>()
+                .AsNoTracking()
+                .Include(a => a.Locker)
+                .Where(a =>
+                    a.UserId == userId
+                    || (a.UserId == null
+                        && normalizedName.Length > 0
+                        && a.MemberName.ToLower() == normalizedName))
+                .OrderByDescending(a => a.AssignedDate)
+                .ToListAsync();
+
+            return list.Select(Map);
+        }
+
         public async Task<LockerAssignmentDto?> GetByIdAsync(int id)
         {
             var entity = await _db.Set<LockerAssignment>()
@@ -39,10 +65,30 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
             var locker = await _db.Set<Locker>().FirstOrDefaultAsync(l => l.Id == dto.LockerId)
                 ?? throw new InvalidOperationException("Locker not found.");
 
+            string memberName;
+            int? userId = null;
+            if (dto.UserId is > 0)
+            {
+                var user = await _db.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == dto.UserId.Value && !u.IsDeleted)
+                    ?? throw new InvalidOperationException("Member not found.");
+                userId = user.Id;
+                memberName = $"{user.FirstName} {user.LastName}".Trim();
+                if (string.IsNullOrWhiteSpace(memberName))
+                    throw new InvalidOperationException("Member name is required.");
+            }
+            else
+            {
+                memberName = dto.MemberName?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(memberName))
+                    throw new InvalidOperationException("Member name or user id is required.");
+            }
+
             var entity = new LockerAssignment
             {
                 LockerId = dto.LockerId,
-                MemberName = dto.MemberName,
+                UserId = userId,
+                MemberName = memberName,
                 AssignedDate = dto.AssignedDate,
                 ExpiryDate = dto.ExpiryDate
             };
@@ -82,14 +128,22 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
             return true;
         }
 
-        private static LockerAssignmentDto Map(LockerAssignment a) => new()
+        private static LockerAssignmentDto Map(LockerAssignment a)
         {
-            Id = a.Id,
-            LockerId = a.LockerId,
-            LockerNumber = a.Locker?.LockerNumber ?? string.Empty,
-            MemberName = a.MemberName,
-            AssignedDate = a.AssignedDate,
-            ExpiryDate = a.ExpiryDate
-        };
+            var today = DateTime.UtcNow.Date;
+            var expiryDate = a.ExpiryDate.Date;
+            return new LockerAssignmentDto
+            {
+                Id = a.Id,
+                LockerId = a.LockerId,
+                LockerNumber = a.Locker?.LockerNumber ?? string.Empty,
+                UserId = a.UserId,
+                MemberName = a.MemberName,
+                AssignedDate = a.AssignedDate,
+                ExpiryDate = a.ExpiryDate,
+                LockerStatus = a.Locker?.Status ?? string.Empty,
+                AssignmentStatus = expiryDate >= today ? "Active" : "Expired",
+            };
+        }
     }
 }

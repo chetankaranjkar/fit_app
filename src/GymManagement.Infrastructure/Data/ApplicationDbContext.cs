@@ -1864,7 +1864,12 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany(l => l.Assignments)
                     .HasForeignKey(e => e.LockerId)
                     .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.SetNull);
                 entity.HasIndex(e => e.LockerId);
+                entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.ExpiryDate);
                 entity.ToTable("LockerMgmt_Assignments");
             });

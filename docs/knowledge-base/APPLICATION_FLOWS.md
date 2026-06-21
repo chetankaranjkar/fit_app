@@ -95,7 +95,7 @@ One **person** = one row in `Users`. Login = `AuthUsers` (email, password) → `
 | Route | Page | Primary API |
 |-------|------|-------------|
 | `/dashboard/users` | **Grid-first** members directory with compact header + summary strip; light page scroll + tall grid panel (`min-height` ~viewport) | `GET /api/Users/paged?membersOnly=true` (+ `assignedToCoachOnly=true` when coach-scoped) |
-| `/dashboard/users/:id` | Member detail | `GET /api/Users/{id}` + deferred `GET /api/Users/{id}/profile-summary` (hero stats & onboarding flags; coach scope enforced via `UserInstructors` when applicable) |
+| `/dashboard/users/:id` | Member detail | `GET /api/Users/{id}` + deferred `GET /api/Users/{id}/profile-summary`; **Details** tab includes locker allocation via `GET /api/locker-management/assignments/by-user/{userId}` (locker #, locker status, assignment date/status) |
 | `/dashboard/trainers` | Trainers list | `GET /api/Trainers` |
 | `/dashboard/trainers/:id` | Trainer detail | `GET /api/Trainers/{id}`, tabs: Clients, Schedule, … |
 | `/dashboard/trainers/:id?mode=edit` | Opens edit modal | |

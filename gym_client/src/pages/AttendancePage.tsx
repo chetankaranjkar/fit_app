@@ -433,13 +433,13 @@ export function AttendancePage() {
 
   const filterToolbar = (
     <div className="flex w-full min-w-0 flex-col gap-4">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-2">
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="min-w-[min(100%,280px)] flex-1 space-y-2">
           <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            <CalendarRange className="size-3.5 text-sky-400" aria-hidden />
+            <CalendarRange className="size-3.5 shrink-0 text-sky-400" aria-hidden />
             Date Range
           </label>
-          <div className="flex gap-2">
+          <div className="grid min-w-0 grid-cols-2 gap-2">
             <Input
               type="date"
               value={startDate}
@@ -456,9 +456,9 @@ export function AttendancePage() {
             />
           </div>
         </div>
-        <div className="space-y-2">
+        <div className="min-w-[min(100%,220px)] flex-[1.2] space-y-2">
           <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            <Search className="size-3.5 text-emerald-400" aria-hidden />
+            <Search className="size-3.5 shrink-0 text-emerald-400" aria-hidden />
             Search
           </label>
           <Input
@@ -468,9 +468,9 @@ export function AttendancePage() {
             className="!py-2.5 text-sm"
           />
         </div>
-        <div className="space-y-2">
+        <div className="min-w-[min(100%,180px)] flex-1 space-y-2">
           <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            <Activity className="size-3.5 text-violet-400" aria-hidden />
+            <Activity className="size-3.5 shrink-0 text-violet-400" aria-hidden />
             Status Filter
           </label>
           <select

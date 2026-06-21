@@ -51,7 +51,7 @@ export function Modal({
   } as const
 
   return createPortal(
-    <div className="fixed inset-0 z-[200]" data-lenis-prevent>
+    <div className="fixed inset-0 z-[220]" data-lenis-prevent>
       {closeOnBackdropClick ? (
         <button
           type="button"

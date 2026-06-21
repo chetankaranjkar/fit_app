@@ -44,6 +44,7 @@ import { MemberSupplementsPanel } from '../modules/supplement-tracking/component
 import { MemberPaymentHistoryTab } from '../components/users/MemberPaymentHistoryTab'
 import { MemberMembershipsModal } from '../components/users/MemberMembershipsModal'
 import { MemberMembershipManagePanel } from '../components/users/MemberMembershipManagePanel'
+import { MemberLockerSection } from '../components/users/MemberLockerSection'
 import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
 import { formatInr } from '../lib/formatInr'
 import { displayAadhaar, validateAadhaarNumber } from '../lib/aadhaar'
@@ -2599,6 +2600,10 @@ function DetailsTab({
         memberName={`${user.firstName} ${user.lastName}`.trim()}
         canManage={!viewMode}
         compact={viewMode}
+      />
+      <MemberLockerSection
+        userId={user.id}
+        memberName={`${user.firstName} ${user.lastName}`.trim()}
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <InfoCard

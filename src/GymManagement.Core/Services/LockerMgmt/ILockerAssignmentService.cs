@@ -5,6 +5,7 @@ namespace GymManagement.Core.Services.LockerMgmt
     public interface ILockerAssignmentService
     {
         Task<IEnumerable<LockerAssignmentDto>> GetAllAsync();
+        Task<IEnumerable<LockerAssignmentDto>> GetByUserIdAsync(int userId);
         Task<LockerAssignmentDto?> GetByIdAsync(int id);
         Task<LockerAssignmentDto> CreateAsync(CreateLockerAssignmentDto dto);
         Task<bool> DeleteAsync(int id);

@@ -21,9 +21,12 @@ export interface LockerAssignment {
   id: string
   lockerId: string
   lockerNumber: string
+  userId?: string
   memberName: string
   assignedDate: string
   expiryDate: string
+  lockerStatus?: LockerStatus
+  assignmentStatus?: 'Active' | 'Expired'
 }
 
 export type AccessAction = 'OPEN' | 'CLOSE'

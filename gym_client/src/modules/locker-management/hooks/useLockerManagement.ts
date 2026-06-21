@@ -42,6 +42,18 @@ export function useAssignments() {
   })
 }
 
+export function memberLockerAssignmentsQueryKey(userId: number) {
+  return [...NAMESPACE, 'assignments', 'by-user', userId] as const
+}
+
+export function useMemberLockerAssignments(userId: number | undefined) {
+  return useQuery({
+    queryKey: memberLockerAssignmentsQueryKey(userId ?? 0),
+    queryFn: () => lockerManagementService.listAssignmentsByUserId(userId!),
+    enabled: Boolean(userId && userId > 0),
+  })
+}
+
 export function useAccessLogs() {
   return useQuery({
     queryKey: ACCESS_LOGS_KEY,
@@ -104,6 +116,7 @@ export function useCreateAssignment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ASSIGNMENTS_KEY })
       qc.invalidateQueries({ queryKey: LOCKERS_KEY })
+      qc.invalidateQueries({ queryKey: [...NAMESPACE, 'assignments', 'by-user'] })
     },
   })
 }
@@ -115,6 +128,7 @@ export function useDeleteAssignment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ASSIGNMENTS_KEY })
       qc.invalidateQueries({ queryKey: LOCKERS_KEY })
+      qc.invalidateQueries({ queryKey: [...NAMESPACE, 'assignments', 'by-user'] })
     },
   })
 }

@@ -75,12 +75,21 @@ export function LockerDetailPanel({
     deleteMut.mutate(locker.id, { onSuccess: onClose })
   }
 
+  const handlePanelClose = () => {
+    if (assignOpen) {
+      setAssignOpen(false)
+      return
+    }
+    onClose()
+  }
+
   if (!locker) return null
 
   return (
+    <>
     <SidePanel
       open={!!locker}
-      onClose={onClose}
+      onClose={handlePanelClose}
       title={
         <span className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -102,18 +111,10 @@ export function LockerDetailPanel({
             <IconTrash className="size-3.5" />
             Delete
           </Button>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => onEdit(locker)}>
-              <IconEdit className="size-3.5" />
-              Edit locker
-            </Button>
-            {canAssign ? (
-              <Button size="sm" onClick={() => setAssignOpen(true)}>
-                <IconUser className="size-3.5" />
-                Assign to member
-              </Button>
-            ) : null}
-          </div>
+          <Button variant="ghost" size="sm" onClick={() => onEdit(locker)}>
+            <IconEdit className="size-3.5" />
+            Edit locker
+          </Button>
         </div>
       }
     >
@@ -233,15 +234,16 @@ export function LockerDetailPanel({
           )}
         </Section>
       </div>
-
-      <AssignLockerWizard
-        open={assignOpen}
-        onClose={() => setAssignOpen(false)}
-        availableLockers={[locker]}
-        preselectedLocker={locker}
-        onAssigned={() => setAssignOpen(false)}
-      />
     </SidePanel>
+
+    <AssignLockerWizard
+      open={assignOpen}
+      onClose={() => setAssignOpen(false)}
+      availableLockers={[locker]}
+      preselectedLocker={locker}
+      onAssigned={() => setAssignOpen(false)}
+    />
+    </>
   )
 }
 

@@ -21,6 +21,10 @@ namespace GymManagement.API.Controllers.LockerMgmt
         public async Task<ActionResult<IEnumerable<LockerAssignmentDto>>> GetAll()
             => Ok(await _service.GetAllAsync());
 
+        [HttpGet("by-user/{userId:int}")]
+        public async Task<ActionResult<IEnumerable<LockerAssignmentDto>>> GetByUser(int userId)
+            => Ok(await _service.GetByUserIdAsync(userId));
+
         [HttpGet("{id}")]
         public async Task<ActionResult<LockerAssignmentDto>> Get(int id)
         {

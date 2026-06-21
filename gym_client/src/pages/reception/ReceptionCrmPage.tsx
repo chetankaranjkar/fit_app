@@ -18,6 +18,11 @@ import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import { LeadSourceCombobox } from '../../components/reception/LeadSourceCombobox'
 import { formatLeadSourceDisplay, resolveLeadSourceForForm } from '../../lib/leadSources'
+import {
+  digitsOnlyPhoneInput,
+  getPhoneValidationError,
+  normalizePhoneNumber,
+} from '../../lib/phone'
 import { authService } from '../../services/auth.service'
 import { leadsService } from '../../services/leads.service'
 import { getDashboardUser } from '../../lib/dashboardUser'
@@ -41,6 +46,187 @@ const STATUS_LABEL: Record<LeadPipelineStatus, string> = {
   INTERESTED: 'Interested',
   NOT_INTERESTED: 'Not interested',
   CONVERTED: 'Converted',
+}
+
+const LEAD_GENDER_OPTIONS = ['Male', 'Female', 'Other'] as const
+const LEAD_AGE_MIN = 5
+const LEAD_AGE_MAX = 120
+const LEAD_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function getLeadEmailValidationError(email: string | null | undefined): string | null {
+  const trimmed = email?.trim() ?? ''
+  if (!trimmed) return null
+  if (!LEAD_EMAIL_REGEX.test(trimmed)) return 'Enter a valid email address.'
+  return null
+}
+
+function getLeadAgeValidationError(age: number | null | undefined): string | null {
+  if (age == null || age === undefined) return null
+  if (!Number.isFinite(age) || !Number.isInteger(age)) return 'Age must be a whole number.'
+  if (age < LEAD_AGE_MIN || age > LEAD_AGE_MAX) {
+    return `Age must be between ${LEAD_AGE_MIN} and ${LEAD_AGE_MAX}.`
+  }
+  return null
+}
+
+function validateLeadCoreFields(form: CreateGymLeadDto) {
+  return {
+    phoneError: getPhoneValidationError(form.phone, false),
+    emailError: getLeadEmailValidationError(form.email),
+    ageError: getLeadAgeValidationError(form.age),
+  }
+}
+
+type LeadCoreFieldKey = 'fullName' | 'phone' | 'email' | 'gender' | 'age' | 'occupation' | 'fitnessGoal'
+
+const LEAD_CORE_FIELDS: ReadonlyArray<
+  readonly [LeadCoreFieldKey, string, 'text' | 'email' | 'number' | 'select', boolean]
+> = [
+  ['fullName', 'Full name', 'text', true],
+  ['phone', 'Mobile', 'text', false],
+  ['email', 'Email', 'email', false],
+  ['gender', 'Gender', 'select', false],
+  ['age', 'Age', 'number', false],
+  ['occupation', 'Occupation', 'text', false],
+  ['fitnessGoal', 'Fitness goal', 'text', false],
+]
+
+function LeadCoreFields({
+  form,
+  setForm,
+  glassInput,
+  phoneError,
+  emailError,
+  ageError,
+}: {
+  form: CreateGymLeadDto
+  setForm: React.Dispatch<React.SetStateAction<CreateGymLeadDto>>
+  glassInput: string
+  phoneError?: string | null
+  emailError?: string | null
+  ageError?: string | null
+}) {
+  const fieldErrorClass = 'border-rose-500/60 focus:border-rose-500/60 focus:ring-rose-500/25'
+
+  return (
+    <>
+      {LEAD_CORE_FIELDS.map(([key, label, type, required]) => (
+        <label
+          key={key}
+          className="block text-xs font-medium uppercase tracking-wider text-slate-400 sm:col-span-1"
+        >
+          {label}
+          {required && <span className="text-rose-400/90"> *</span>}
+          {type === 'select' ? (
+            <select
+              aria-label={label}
+              className={glassInput}
+              value={form.gender || 'Other'}
+              onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
+            >
+              {LEAD_GENDER_OPTIONS.map((option) => (
+                <option key={option} value={option} className="bg-slate-900">
+                  {option}
+                </option>
+              ))}
+            </select>
+          ) : key === 'phone' ? (
+            <>
+              <input
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                maxLength={10}
+                placeholder="10-digit mobile"
+                className={[glassInput, phoneError ? fieldErrorClass : ''].filter(Boolean).join(' ')}
+                value={form.phone ?? ''}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phone: digitsOnlyPhoneInput(e.target.value) }))
+                }
+                aria-invalid={Boolean(phoneError)}
+                aria-describedby={phoneError ? 'lead-phone-error' : undefined}
+              />
+              {phoneError ? (
+                <p id="lead-phone-error" className="mt-1.5 text-xs text-rose-300" role="alert">
+                  {phoneError}
+                </p>
+              ) : (
+                <p className="mt-1 text-[11px] normal-case tracking-normal text-slate-500">
+                  Optional — 10 digits, starting with 6–9.
+                </p>
+              )}
+            </>
+          ) : key === 'email' ? (
+            <>
+              <input
+                type="email"
+                autoComplete="email"
+                placeholder="name@example.com"
+                className={[glassInput, emailError ? fieldErrorClass : ''].filter(Boolean).join(' ')}
+                value={form.email ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                aria-invalid={Boolean(emailError)}
+                aria-describedby={emailError ? 'lead-email-error' : undefined}
+              />
+              {emailError ? (
+                <p id="lead-email-error" className="mt-1.5 text-xs text-rose-300" role="alert">
+                  {emailError}
+                </p>
+              ) : (
+                <p className="mt-1 text-[11px] normal-case tracking-normal text-slate-500">
+                  Optional — use a valid email format.
+                </p>
+              )}
+            </>
+          ) : key === 'age' ? (
+            <>
+              <input
+                type="number"
+                min={LEAD_AGE_MIN}
+                max={LEAD_AGE_MAX}
+                step={1}
+                inputMode="numeric"
+                placeholder={`${LEAD_AGE_MIN}–${LEAD_AGE_MAX}`}
+                className={[glassInput, ageError ? fieldErrorClass : ''].filter(Boolean).join(' ')}
+                value={form.age ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  setForm((f) => ({
+                    ...f,
+                    age: raw === '' ? undefined : Number.parseInt(raw, 10),
+                  }))
+                }}
+                aria-invalid={Boolean(ageError)}
+                aria-describedby={ageError ? 'lead-age-error' : undefined}
+              />
+              {ageError ? (
+                <p id="lead-age-error" className="mt-1.5 text-xs text-rose-300" role="alert">
+                  {ageError}
+                </p>
+              ) : (
+                <p className="mt-1 text-[11px] normal-case tracking-normal text-slate-500">
+                  Optional — whole number between {LEAD_AGE_MIN} and {LEAD_AGE_MAX}.
+                </p>
+              )}
+            </>
+          ) : (
+            <input
+              required={required}
+              type={type}
+              className={glassInput}
+              value={String((form as Record<string, unknown>)[key] ?? '')}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  [key]: e.target.value,
+                }))
+              }
+            />
+          )}
+        </label>
+      ))}
+    </>
+  )
 }
 
 function statusAccent(status: LeadPipelineStatus): string {
@@ -676,6 +862,9 @@ function NewLeadModal({
   })
   const [sourceErr, setSourceErr] = useState<string | undefined>()
   const [customErr, setCustomErr] = useState<string | undefined>()
+  const [phoneErr, setPhoneErr] = useState<string | null>(null)
+  const [emailErr, setEmailErr] = useState<string | null>(null)
+  const [ageErr, setAgeErr] = useState<string | null>(null)
   const qc = useQueryClient()
 
   useEffect(() => {
@@ -688,6 +877,9 @@ function NewLeadModal({
     })
     setSourceErr(undefined)
     setCustomErr(undefined)
+    setPhoneErr(null)
+    setEmailErr(null)
+    setAgeErr(null)
   }, [open])
 
   const mu = useMutation({
@@ -696,8 +888,8 @@ function NewLeadModal({
       const body: CreateGymLeadDto = {
         fullName: form.fullName.trim(),
         gender: form.gender,
-        phone: form.phone || null,
-        email: form.email || null,
+        phone: normalizePhoneNumber(form.phone) ?? null,
+        email: form.email?.trim().toLowerCase() || null,
         age: form.age ?? null,
         occupation: form.occupation || null,
         fitnessGoal: form.fitnessGoal || null,
@@ -719,7 +911,12 @@ function NewLeadModal({
   const trySave = () => {
     setSourceErr(undefined)
     setCustomErr(undefined)
+    const { phoneError, emailError, ageError } = validateLeadCoreFields(form)
+    setPhoneErr(phoneError)
+    setEmailErr(emailError)
+    setAgeErr(ageError)
     if (!form.fullName?.trim()) return
+    if (phoneError || emailError || ageError) return
     if (!(form.leadSource ?? '').trim()) {
       setSourceErr('Please select a lead source.')
       return
@@ -734,34 +931,14 @@ function NewLeadModal({
   return (
     <Modal open={open} onClose={onClose} title="New lead" size="wide" scrollable>
       <div className="grid gap-3 sm:grid-cols-2">
-        {(
-          [
-            ['fullName', 'Full name', 'text', true],
-            ['phone', 'Mobile', 'text', false],
-            ['email', 'Email', 'email', false],
-            ['gender', 'Gender', 'text', false],
-            ['age', 'Age', 'number', false],
-            ['occupation', 'Occupation', 'text', false],
-            ['fitnessGoal', 'Fitness goal', 'text', false],
-          ] as const
-        ).map(([key, label, type, required]) => (
-          <label key={key} className="block text-xs font-medium uppercase tracking-wider text-slate-400 sm:col-span-1">
-            {label}
-            {required && <span className="text-rose-400/90"> *</span>}
-            <input
-              required={required}
-              type={type}
-              className={glassInput}
-              value={String((form as Record<string, unknown>)[key] ?? '')}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  [key]: type === 'number' ? (e.target.value ? Number(e.target.value) : undefined) : e.target.value,
-                }))
-              }
-            />
-          </label>
-        ))}
+        <LeadCoreFields
+          form={form}
+          setForm={setForm}
+          glassInput={glassInput}
+          phoneError={phoneErr}
+          emailError={emailErr}
+          ageError={ageErr}
+        />
         <div className="sm:col-span-2 rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.08] via-transparent to-cyan-500/[0.04] p-4 sm:p-5">
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-200/90">
             How did you hear about us?
@@ -834,6 +1011,9 @@ function EditLeadModal({
   })
   const [sourceErr, setSourceErr] = useState<string | undefined>()
   const [customErr, setCustomErr] = useState<string | undefined>()
+  const [phoneErr, setPhoneErr] = useState<string | null>(null)
+  const [emailErr, setEmailErr] = useState<string | null>(null)
+  const [ageErr, setAgeErr] = useState<string | null>(null)
   const qc = useQueryClient()
 
   useEffect(() => {
@@ -854,6 +1034,9 @@ function EditLeadModal({
     })
     setSourceErr(undefined)
     setCustomErr(undefined)
+    setPhoneErr(null)
+    setEmailErr(null)
+    setAgeErr(null)
   }, [open, lead])
 
   const mu = useMutation({
@@ -862,8 +1045,8 @@ function EditLeadModal({
       return leadsService.update(lead.id, {
         fullName: form.fullName.trim(),
         gender: form.gender,
-        phone: form.phone || null,
-        email: form.email || null,
+        phone: normalizePhoneNumber(form.phone) ?? null,
+        email: form.email?.trim().toLowerCase() || null,
         age: form.age ?? null,
         occupation: form.occupation || null,
         fitnessGoal: form.fitnessGoal || null,
@@ -882,7 +1065,12 @@ function EditLeadModal({
   const trySave = () => {
     setSourceErr(undefined)
     setCustomErr(undefined)
+    const { phoneError, emailError, ageError } = validateLeadCoreFields(form)
+    setPhoneErr(phoneError)
+    setEmailErr(emailError)
+    setAgeErr(ageError)
     if (!form.fullName?.trim()) return
+    if (phoneError || emailError || ageError) return
     if (!(form.leadSource ?? '').trim()) {
       setSourceErr('Please select a lead source.')
       return
@@ -899,34 +1087,14 @@ function EditLeadModal({
   return (
     <Modal open={open} onClose={onClose} title="Edit lead" size="wide" scrollable>
       <div className="grid gap-3 sm:grid-cols-2">
-        {(
-          [
-            ['fullName', 'Full name', 'text', true],
-            ['phone', 'Mobile', 'text', false],
-            ['email', 'Email', 'email', false],
-            ['gender', 'Gender', 'text', false],
-            ['age', 'Age', 'number', false],
-            ['occupation', 'Occupation', 'text', false],
-            ['fitnessGoal', 'Fitness goal', 'text', false],
-          ] as const
-        ).map(([key, label, type, required]) => (
-          <label key={key} className="block text-xs font-medium uppercase tracking-wider text-slate-400 sm:col-span-1">
-            {label}
-            {required && <span className="text-rose-400/90"> *</span>}
-            <input
-              required={required}
-              type={type}
-              className={glassInput}
-              value={String((form as Record<string, unknown>)[key] ?? '')}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  [key]: type === 'number' ? (e.target.value ? Number(e.target.value) : undefined) : e.target.value,
-                }))
-              }
-            />
-          </label>
-        ))}
+        <LeadCoreFields
+          form={form}
+          setForm={setForm}
+          glassInput={glassInput}
+          phoneError={phoneErr}
+          emailError={emailErr}
+          ageError={ageErr}
+        />
         <div className="sm:col-span-2 rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.08] via-transparent to-cyan-500/[0.04] p-4 sm:p-5">
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-200/90">
             How did you hear about us?

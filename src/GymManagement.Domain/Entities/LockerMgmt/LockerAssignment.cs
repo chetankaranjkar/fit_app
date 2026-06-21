@@ -1,3 +1,5 @@
+using GymManagement.Domain.Entities;
+
 namespace GymManagement.Domain.Entities.LockerMgmt
 {
     /// <summary>
@@ -8,6 +10,10 @@ namespace GymManagement.Domain.Entities.LockerMgmt
     {
         public int LockerId { get; set; }
         public Locker? Locker { get; set; }
+
+        /// <summary>Linked gym member when assigned from the member directory.</summary>
+        public int? UserId { get; set; }
+        public User? User { get; set; }
 
         public string MemberName { get; set; } = string.Empty;
         public DateTime AssignedDate { get; set; }

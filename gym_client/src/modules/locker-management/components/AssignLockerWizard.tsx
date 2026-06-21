@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import gsap from 'gsap'
+import { useQuery } from '@tanstack/react-query'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
+import { Input } from '../../../components/ui/Input'
 import { StepProgressBar } from './StepProgressBar'
 import { LockerGridTile } from './LockerGridTile'
-import { LabeledDate, LabeledInput } from './FormFields'
+import { LabeledDate } from './FormFields'
 import { IconArrowLeft, IconArrowRight, IconCalendar, IconCheck, IconUser } from './Icons'
 import { useCreateAssignment } from '../hooks/useLockerManagement'
 import { formatDate } from '../utils/format'
+import { usersService } from '../../../services/users.service'
 import type { Locker } from '../types'
 
 type Step = 0 | 1 | 2
@@ -20,6 +23,7 @@ export function AssignLockerWizard({
   onClose,
   availableLockers,
   preselectedLocker = null,
+  preselectedMember = null,
   onAssigned,
 }: {
   open: boolean
@@ -27,6 +31,8 @@ export function AssignLockerWizard({
   availableLockers: Locker[]
   /** When set, skip locker picker (assign from locker detail panel). */
   preselectedLocker?: Locker | null
+  /** When set, member step is pre-filled and linked to Users.Id. */
+  preselectedMember?: { userId: number; name: string } | null
   onAssigned?: () => void
 }) {
   const createMut = useCreateAssignment()
@@ -41,7 +47,10 @@ export function AssignLockerWizard({
 
   const [step, setStep] = useState<Step>(0)
   const [lockerId, setLockerId] = useState<string>('')
+  const [memberUserId, setMemberUserId] = useState<number>(0)
   const [memberName, setMemberName] = useState('')
+  const [memberSearch, setMemberSearch] = useState('')
+  const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('')
   const [assignedDate, setAssignedDate] = useState(today)
   const [expiryDate, setExpiryDate] = useState(defaultExpiry)
   const [search, setSearch] = useState('')
@@ -52,7 +61,10 @@ export function AssignLockerWizard({
     if (!open) {
       setStep(0)
       setLockerId('')
+      setMemberUserId(0)
       setMemberName('')
+      setMemberSearch('')
+      setDebouncedMemberSearch('')
       setAssignedDate(today)
       setExpiryDate(defaultExpiry)
       setSearch('')
@@ -61,13 +73,38 @@ export function AssignLockerWizard({
     if (preselectedLocker) {
       setLockerId(preselectedLocker.id)
       setStep(0)
-      setMemberName('')
       setAssignedDate(today)
       setExpiryDate(defaultExpiry)
     }
+    if (preselectedMember) {
+      setMemberUserId(preselectedMember.userId)
+      setMemberName(preselectedMember.name)
+    }
     // intentionally only run when `open` / preselected locker flips
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, preselectedLocker?.id])
+  }, [open, preselectedLocker?.id, preselectedMember?.userId])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedMemberSearch(memberSearch.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [memberSearch])
+
+  const { data: memberSearchPage, isFetching: membersFetching } = useQuery({
+    queryKey: ['locker-assign-member-search', debouncedMemberSearch],
+    queryFn: () =>
+      usersService
+        .getPaged({
+          page: 1,
+          pageSize: 20,
+          search: debouncedMemberSearch || undefined,
+          membersOnly: true,
+          includeBilling: false,
+        })
+        .then((r) => r.data),
+    enabled: open && !preselectedMember,
+  })
+
+  const memberOptions = memberSearchPage?.items ?? []
 
   // Cross-fade step content with a subtle horizontal slide
   useEffect(() => {
@@ -99,7 +136,7 @@ export function AssignLockerWizard({
   }, [availableLockers, search])
 
   const validLocker = !!selected
-  const validMember = memberName.trim() !== ''
+  const validMember = memberUserId > 0 && memberName.trim() !== ''
   const validDuration =
     assignedDate !== '' && expiryDate !== '' && new Date(expiryDate) > new Date(assignedDate)
 
@@ -127,6 +164,7 @@ export function AssignLockerWizard({
         input: {
           lockerId: selected.id,
           memberName: memberName.trim(),
+          userId: memberUserId,
           assignedDate: new Date(assignedDate).toISOString(),
           expiryDate: new Date(expiryDate).toISOString(),
         },
@@ -168,7 +206,20 @@ export function AssignLockerWizard({
             />
           )}
           {(quickMode ? step === 0 : step === 1) && (
-            <StepMember memberName={memberName} setMemberName={setMemberName} locker={selected} />
+            <StepMember
+              memberUserId={memberUserId}
+              memberName={memberName}
+              memberSearch={memberSearch}
+              onMemberSearchChange={setMemberSearch}
+              members={memberOptions}
+              membersLoading={membersFetching}
+              lockedMember={preselectedMember}
+              onSelectMember={(userId, name) => {
+                setMemberUserId(userId)
+                setMemberName(name)
+              }}
+              locker={selected}
+            />
           )}
           {(quickMode ? step === 1 : step === 2) && (
             <StepDuration
@@ -298,20 +349,32 @@ function StepLockerPicker({
 // ---------------------------------------------------------------------------
 
 function StepMember({
+  memberUserId,
   memberName,
-  setMemberName,
+  memberSearch,
+  onMemberSearchChange,
+  members,
+  membersLoading,
+  lockedMember,
+  onSelectMember,
   locker,
 }: {
+  memberUserId: number
   memberName: string
-  setMemberName: (v: string) => void
+  memberSearch: string
+  onMemberSearchChange: (v: string) => void
+  members: Array<{ id: number; firstName: string; lastName: string; email?: string | null }>
+  membersLoading: boolean
+  lockedMember?: { userId: number; name: string } | null
+  onSelectMember: (userId: number, name: string) => void
   locker: Locker | null
 }) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-sm font-semibold text-white">Who is this locker for?</p>
+        <p className="text-sm font-semibold text-white">Which member gets this locker?</p>
         <p className="text-xs text-slate-400">
-          Enter the member\u2019s full name as it should appear on the assignment.
+          Search the member directory so the assignment appears on their profile.
         </p>
       </div>
 
@@ -328,13 +391,55 @@ function StepMember({
         </div>
       )}
 
-      <LabeledInput
-        label="Member name"
-        value={memberName}
-        onChange={setMemberName}
-        required
-        placeholder="e.g. Rahul Sharma"
-      />
+      {lockedMember ? (
+        <div className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+          {lockedMember.name}
+        </div>
+      ) : (
+        <>
+          <Input
+            label="Search member"
+            value={memberSearch}
+            onChange={(e) => onMemberSearchChange(e.target.value)}
+            placeholder="Name, email, or phone"
+          />
+          {membersLoading ? (
+            <p className="text-xs text-slate-500">Searching members…</p>
+          ) : members.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-center text-xs text-slate-500">
+              No members found.
+            </p>
+          ) : (
+            <div
+              className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-2"
+              data-lenis-prevent
+            >
+              {members.map((member) => {
+                const name = `${member.firstName} ${member.lastName}`.trim()
+                const selected = memberUserId === member.id
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => onSelectMember(member.id, name)}
+                    className={[
+                      'w-full rounded-lg px-3 py-2 text-left text-sm transition',
+                      selected
+                        ? 'bg-blue-500/20 text-blue-100 ring-1 ring-blue-400/30'
+                        : 'text-slate-200 hover:bg-white/10',
+                    ].join(' ')}
+                  >
+                    <span className="font-semibold">{name}</span>
+                    {member.email ? (
+                      <span className="mt-0.5 block truncate text-xs text-slate-400">{member.email}</span>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
 
       <div className="flex items-center gap-3 rounded-xl border border-white/5 bg-black/20 px-3 py-2">
         <span className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/30 to-purple-500/30 text-sm font-semibold text-white">
@@ -348,7 +453,7 @@ function StepMember({
             : <IconUser className="size-4 text-slate-300" />}
         </span>
         <span className="truncate text-xs text-slate-400">
-          {memberName.trim() ? memberName : 'Preview will appear here as you type\u2026'}
+          {memberName.trim() ? memberName : 'Select a member from the list above'}
         </span>
       </div>
     </div>

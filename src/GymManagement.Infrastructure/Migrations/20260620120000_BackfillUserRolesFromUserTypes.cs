@@ -14,37 +14,39 @@ namespace GymManagement.Infrastructure.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
-                ;WITH [BackfillRoles] AS (
-                    SELECT DISTINCT uut.[UserId], r.[Id] AS [RoleId]
-                    FROM [UserUserTypes] uut
-                    INNER JOIN [UserTypes] ut ON ut.[Id] = uut.[UserTypeId] AND ut.[IsDeleted] = 0
-                    INNER JOIN [Roles] r ON r.[IsDeleted] = 0 AND r.[IsActive] = 1 AND r.[Name] = CASE ut.[Name]
-                        WHEN N'Admin' THEN N'ADMIN'
-                        WHEN N'Member' THEN N'MEMBER'
-                        WHEN N'Trainer' THEN N'TRAINER'
-                        WHEN N'Staff' THEN N'STAFF'
-                        WHEN N'Receptionist' THEN N'RECEPTIONIST'
-                        WHEN N'Reception' THEN N'RECEPTIONIST'
-                        WHEN N'Accountant' THEN N'ACCOUNTANT'
-                        WHEN N'Accounts' THEN N'ACCOUNTANT'
-                        ELSE NULL
-                    END
-                    WHERE uut.[IsDeleted] = 0
-                      AND r.[Name] IS NOT NULL
-                )
+                SELECT DISTINCT uut.[UserId], r.[Id] AS [RoleId]
+                INTO #BackfillRoles
+                FROM [UserUserTypes] uut
+                INNER JOIN [UserTypes] ut ON ut.[Id] = uut.[UserTypeId] AND ut.[IsDeleted] = 0
+                INNER JOIN [Roles] r ON r.[IsDeleted] = 0 AND r.[IsActive] = 1 AND r.[Name] = CASE ut.[Name]
+                    WHEN N'Admin' THEN N'ADMIN'
+                    WHEN N'Member' THEN N'MEMBER'
+                    WHEN N'Trainer' THEN N'TRAINER'
+                    WHEN N'Staff' THEN N'STAFF'
+                    WHEN N'Receptionist' THEN N'RECEPTIONIST'
+                    WHEN N'Reception' THEN N'RECEPTIONIST'
+                    WHEN N'Accountant' THEN N'ACCOUNTANT'
+                    WHEN N'Accounts' THEN N'ACCOUNTANT'
+                    ELSE NULL
+                END
+                WHERE uut.[IsDeleted] = 0
+                  AND r.[Name] IS NOT NULL;
+
                 UPDATE ur
                 SET ur.[IsDeleted] = 0,
                     ur.[UpdatedDate] = SYSUTCDATETIME()
                 FROM [UserRoles] ur
-                INNER JOIN [BackfillRoles] src ON src.[UserId] = ur.[UserId] AND src.[RoleId] = ur.[RoleId]
+                INNER JOIN #BackfillRoles src ON src.[UserId] = ur.[UserId] AND src.[RoleId] = ur.[RoleId]
                 WHERE ur.[IsDeleted] = 1;
 
                 INSERT INTO [UserRoles] ([UserId], [RoleId], [CreatedDate], [UpdatedDate], [IsDeleted])
                 SELECT src.[UserId], src.[RoleId], SYSUTCDATETIME(), NULL, 0
-                FROM [BackfillRoles] src
+                FROM #BackfillRoles src
                 WHERE NOT EXISTS (
                     SELECT 1 FROM [UserRoles] ur
                     WHERE ur.[UserId] = src.[UserId] AND ur.[RoleId] = src.[RoleId]);
+
+                DROP TABLE #BackfillRoles;
                 """);
         }
 

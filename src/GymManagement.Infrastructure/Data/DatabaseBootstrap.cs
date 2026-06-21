@@ -1,6 +1,7 @@
 using GymManagement.Core.Authorization;
 using GymManagement.Core.Interfaces;
 using GymManagement.Domain.Entities;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,39 @@ namespace GymManagement.Infrastructure.Data;
 /// </summary>
 public static class DatabaseBootstrap
 {
+    /// <summary>
+    /// Creates the catalog on master when missing (idempotent). Uses the name from the connection string
+    /// so UAT (<c>GymManagementDb_UAT</c>) and production stay separate.
+    /// </summary>
+    public static async Task EnsureSqlServerDatabaseExistsAsync(
+        string connectionString,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        var csb = new SqlConnectionStringBuilder(connectionString);
+        var databaseName = csb.InitialCatalog?.Trim();
+        if (string.IsNullOrEmpty(databaseName))
+        {
+            logger.LogWarning("Connection string has no database catalog; skipping ensure-database.");
+            return;
+        }
+
+        csb.InitialCatalog = "master";
+        await using var conn = new SqlConnection(csb.ConnectionString);
+        await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = @name)
+            BEGIN
+                DECLARE @sql nvarchar(max) = N'CREATE DATABASE ' + QUOTENAME(@name);
+                EXEC(@sql);
+            END
+            """;
+        cmd.Parameters.Add(new SqlParameter("@name", databaseName));
+        await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        logger.LogInformation("Ensured SQL Server database {Database} exists.", databaseName);
+    }
+
     public static async Task SeedIfNoAccountsAsync(
         IServiceProvider services,
         ILogger logger,

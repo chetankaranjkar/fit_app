@@ -503,31 +503,13 @@ if (app.Environment.IsDevelopment())
                 // Ensure database exists (avoids "Cannot open database requested by the login" when DB never created)
                 try
                 {
-                    await EnsureSqlServerDatabaseExistsAsync(connectionString!, logger);
+                    await DatabaseBootstrap.EnsureSqlServerDatabaseExistsAsync(connectionString!, logger);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogWarning(ex, "Could not ensure database exists. Migrations may fail if GymManagementDb does not exist.");
+                    logger.LogWarning(ex, "Could not ensure database exists. Migrations may fail if the catalog is missing.");
                 }
             }
-
-        static async Task EnsureSqlServerDatabaseExistsAsync(string connectionString, ILogger logger)
-        {
-            var builder = new SqlConnectionStringBuilder(connectionString) { InitialCatalog = "master" };
-            await using var conn = new SqlConnection(builder.ConnectionString);
-            await conn.OpenAsync();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
-IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'GymManagementDb')
-BEGIN
-    CREATE DATABASE [GymManagementDb];
-    SELECT 1;
-END
-ELSE
-    SELECT 0;";
-            var created = Convert.ToInt32(await cmd.ExecuteScalarAsync() ?? 0) == 1;
-            if (created) logger.LogInformation("Database GymManagementDb was created.");
-        }
 
         static bool TryAttachExistingDatabase(string appConnectionString, ILogger log, string? configuredDataPath = null)
         {
@@ -864,7 +846,25 @@ else
             using var scope = app.Services.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             logger.LogInformation("Applying production database migrations (Database:AutoMigrate=true)...");
-            await dbContext.Database.MigrateAsync();
+            await DatabaseBootstrap.EnsureSqlServerDatabaseExistsAsync(connectionString!, logger);
+            if (!await dbContext.Database.CanConnectAsync())
+            {
+                throw new InvalidOperationException(
+                    "Cannot connect to the configured SQL Server database after ensure-database. " +
+                    "Check MSSQL_DATABASE, MSSQL_SA_PASSWORD, and sys.databases state on the server.");
+            }
+
+            try
+            {
+                await dbContext.Database.MigrateAsync();
+            }
+            catch (SqlException ex) when (ex.Number == 1801)
+            {
+                // EF sometimes races CREATE DATABASE when the catalog already exists (UAT restarts).
+                logger.LogWarning(ex, "Database already exists; retrying migrations once.");
+                await dbContext.Database.MigrateAsync();
+            }
+
             await DatabaseSchemaPatch.ApplyAsync(dbContext, logger);
             logger.LogInformation("Production database migrations applied.");
         }

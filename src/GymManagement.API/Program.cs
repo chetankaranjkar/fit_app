@@ -33,11 +33,24 @@ using GymManagement.API;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var dataProtectionKeysPath = Path.Combine(builder.Environment.ContentRootPath, "DataProtection-Keys");
+var dataProtectionKeysPath = ResolveDataProtectionKeysPath(builder);
 Directory.CreateDirectory(dataProtectionKeysPath);
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
     .SetApplicationName("GymManagement");
+
+static string ResolveDataProtectionKeysPath(WebApplicationBuilder builder)
+{
+    var configured = builder.Configuration["DataProtection:KeysPath"]?.Trim();
+    if (!string.IsNullOrEmpty(configured))
+        return configured;
+
+    // Docker runs as non-root; only wwwroot/uploads is writable (mounted volume).
+    if (builder.Environment.IsProduction() || builder.Environment.IsStaging())
+        return Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads", ".data-protection-keys");
+
+    return Path.Combine(builder.Environment.ContentRootPath, "DataProtection-Keys");
+}
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();

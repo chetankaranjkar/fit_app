@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { dashboardService } from '../../services/dashboard.service'
 
@@ -28,6 +29,7 @@ export function OutboundRemindersOpsPanel({ enabled }: { enabled: boolean }) {
 
   const hooks = data
   const anyWebhook = hooks?.emailEnabled || hooks?.whatsAppEnabled
+  const smtpOn = hooks?.smtpEmailConfigured
 
   return (
     <section className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4">
@@ -35,13 +37,21 @@ export function OutboundRemindersOpsPanel({ enabled }: { enabled: boolean }) {
         <div>
           <h2 className="text-sm font-semibold text-white">Outbound reminders</h2>
           <p className="mt-1 max-w-2xl text-xs text-slate-400">
-            Email/WhatsApp webhooks fire at membership expiry milestones (14, 7, 3, 1, 0 days).
-            Configure URLs in server env — see <code className="text-slate-300">docs/NOTIFICATION_WEBHOOKS.md</code>.
+            Email can be sent via admin SMTP settings or optional webhooks at membership expiry milestones
+            (14, 7, 3, 1, 0 days). Configure SMTP under{' '}
+            <Link to="/dashboard/settings/email" className="text-violet-300 hover:underline">
+              Email settings
+            </Link>
+            .
           </p>
         </div>
         {!isLoading && hooks ? (
           <div className="flex flex-wrap gap-2">
             <StatusPill ok={hooks.emailEnabled} label={hooks.emailEnabled ? 'Email wired' : 'Email off'} />
+            <StatusPill
+              ok={Boolean(smtpOn)}
+              label={smtpOn ? 'SMTP configured' : 'SMTP off'}
+            />
             <StatusPill
               ok={hooks.whatsAppEnabled}
               label={hooks.whatsAppEnabled ? 'WhatsApp wired' : 'WhatsApp off'}
@@ -59,9 +69,10 @@ export function OutboundRemindersOpsPanel({ enabled }: { enabled: boolean }) {
           <span className="text-xs text-slate-500">Checking…</span>
         )}
       </div>
-      {!isLoading && hooks && !anyWebhook ? (
+      {!isLoading && hooks && !anyWebhook && !smtpOn ? (
         <p className="mt-3 text-xs text-amber-200/90">
-          No webhook URLs configured. Members still receive in-app expiry notices when in-app reminders are enabled.
+          No email channel configured. Set up SMTP in Email settings or webhook URLs on the server.
+          Members still receive in-app expiry notices when in-app reminders are enabled.
         </p>
       ) : null}
       {!isLoading && hooks && anyWebhook && !hooks.scheduledRemindersEnabled ? (

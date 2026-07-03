@@ -16,11 +16,16 @@ namespace GymManagement.Infrastructure.Services
         private const int DefaultMaxActiveClients = 30;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _db;
+        private readonly INotificationEventService _notifications;
 
-        public UserInstructorService(IUnitOfWork unitOfWork, ApplicationDbContext db)
+        public UserInstructorService(
+            IUnitOfWork unitOfWork,
+            ApplicationDbContext db,
+            INotificationEventService notifications)
         {
             _unitOfWork = unitOfWork;
             _db = db;
+            _notifications = notifications;
         }
 
         public async Task<IEnumerable<UserInstructorDto>> GetAllAssignmentsAsync()
@@ -197,6 +202,8 @@ namespace GymManagement.Infrastructure.Services
             trainer.TotalClients = activeAssignments.Count + 1;
             _unitOfWork.Trainers.Update(trainer);
             await _unitOfWork.SaveChangesAsync();
+
+            await _notifications.QueueTrainerAssignedAsync(assignment.UserId, assignment.TrainerId);
 
             var assignments = new[] { assignment };
             var dtos = await MapAssignmentsToDtoAsync(assignments);

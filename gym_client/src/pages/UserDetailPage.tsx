@@ -24,6 +24,7 @@ import { bodyMetricsService } from '../services/bodyMetrics.service'
 import { attendanceService } from '../services/attendance.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
 import { trainersService } from '../services/trainers.service'
+import { userInstructorsService } from '../services/userInstructors.service'
 import { UserApplicationRolesEditor } from '../components/users/UserApplicationRolesEditor'
 import { workoutPlansService } from '../services/workoutPlans.service'
 import { userSchedulesService } from '../services/userSchedules.service'
@@ -37,6 +38,7 @@ import {
   UserOnboardingChecklist,
   type OnboardingStep,
 } from '../components/users/UserOnboardingChecklist'
+import { MemberOnboardingBillingActions } from '../components/users/MemberOnboardingBillingActions'
 import { DietAssignmentsSection } from '../components/users/DietAssignmentsSection'
 import { MemberReportExports } from '../components/users/MemberReportExports'
 import { TrainerHealthAlertPanel } from '../modules/health-profile/components/TrainerHealthAlertPanel'
@@ -55,6 +57,7 @@ import {
   isTrainingScheduleValid,
   trainingScheduleFromUser,
   type MemberTrainingScheduleValue,
+  type TrainingScheduleConflict,
 } from '../lib/memberTrainingSchedule'
 import { ProfilePhotoEditor } from '../components/users/ProfilePhotoEditor'
 import { formatInr } from '../lib/formatInr'
@@ -88,6 +91,10 @@ import type { CreateUserScheduleDto, ScheduleType, UserScheduleDto } from '../ty
 import type { Trainer } from '../types/trainer'
 import type { UserDietPlanDto } from '../types/dietPlan'
 import type { UserMembership } from '../types/userMembership'
+import type {
+  TrainerAssignmentRecommendation,
+  UserInstructorAssignment,
+} from '../types/userInstructor'
 import toast from 'react-hot-toast'
 
 function getDashboardUser() {
@@ -211,6 +218,14 @@ const TABS_META: TabDef[] = [
     ),
   },
   {
+    id: 'Trainer',
+    icon: (
+      <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M9 20H4v-2a3 3 0 015.356-1.857M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+    ),
+  },
+  {
     id: 'In Action',
     icon: (
       <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -226,6 +241,7 @@ const TAB_IDS = [
   'Graph',
   'Payment History',
   'Membership History',
+  'Trainer',
   'In Action',
 ] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -240,6 +256,10 @@ const TAB_FROM_SEARCH_PARAM: Record<string, TabId> = {
   membership: 'Membership History',
   'membership-history': 'Membership History',
   memberships: 'Membership History',
+  trainer: 'Trainer',
+  coach: 'Trainer',
+  'trainer-history': 'Trainer',
+  'coach-history': 'Trainer',
   action: 'In Action',
   'in-action': 'In Action',
 }
@@ -250,6 +270,7 @@ const TAB_TO_SEARCH_PARAM: Partial<Record<TabId, string>> = {
   Graph: 'graph',
   'Payment History': 'payment-history',
   'Membership History': 'membership-history',
+  Trainer: 'trainer',
   'In Action': 'in-action',
 }
 
@@ -305,6 +326,10 @@ export function UserDetailPage() {
   const [addDetailOpen, setAddDetailOpen] = useState(false)
   const [addMetricsOpen, setAddMetricsOpen] = useState(false)
   const [editProfileOpen, setEditProfileOpen] = useState(false)
+  const [coachModalOpen, setCoachModalOpen] = useState(false)
+  const [coachTrainerId, setCoachTrainerId] = useState<number | ''>('')
+  const [coachNotes, setCoachNotes] = useState('')
+  const [coachError, setCoachError] = useState<string | null>(null)
   const [membershipModalOpen, setMembershipModalOpen] = useState(false)
   const [profileForm, setProfileForm] = useState<UpdateUserDto>({})
   const [trainingSchedule, setTrainingSchedule] =
@@ -394,6 +419,7 @@ export function UserDetailPage() {
   const needsAttendanceData = activeTab === 'In Action'
   const needsMembershipList = activeTab === 'Membership History' || editProfileOpen
   const needsDetailsAssignments = activeTab === 'Details'
+  const needsTrainerAssignments = activeTab === 'Trainer'
   const needsAttendanceForHero =
     activeTab !== 'Membership History' && activeTab !== 'Payment History'
 
@@ -469,7 +495,7 @@ export function UserDetailPage() {
       const { data } = await trainersService.getAll()
       return Array.isArray(data) ? data : []
     },
-    enabled: editProfileOpen,
+    enabled: editProfileOpen || coachModalOpen,
   })
 
   const { data: workoutPlans = [] } = useQuery({
@@ -506,6 +532,74 @@ export function UserDetailPage() {
     },
     enabled: userIdReady && loadSecondary && needsDetailsAssignments,
     staleTime: 30_000,
+  })
+
+  const {
+    data: trainerAssignments = [],
+    isLoading: trainerAssignmentsLoading,
+    error: trainerAssignmentsError,
+  } = useQuery({
+    queryKey: ['userInstructorAssignments', id],
+    queryFn: async () => {
+      const { data } = await userInstructorsService.getByUserId(id)
+      return Array.isArray(data) ? data : []
+    },
+    enabled: userIdReady && loadSecondary && needsTrainerAssignments,
+    staleTime: 30_000,
+  })
+
+  const { data: trainerRecommendations = [], isFetching: trainerRecommendationsFetching } = useQuery({
+    queryKey: ['trainerAssignmentRecommendations', id],
+    queryFn: async () => {
+      const { data } = await userInstructorsService.getRecommendations(id)
+      return Array.isArray(data) ? data : []
+    },
+    enabled: userIdReady && coachModalOpen,
+    staleTime: 30_000,
+  })
+
+  const coachSchedulePreview = useMemo(
+    () => (user ? trainingScheduleFromUser(user) : DEFAULT_TRAINING_SCHEDULE),
+    [user],
+  )
+  const selectedCoachId = typeof coachTrainerId === 'number' ? coachTrainerId : null
+  const selectedCoach = selectedCoachId
+    ? trainers.find((trainer) => trainer.id === selectedCoachId) ?? null
+    : null
+  const selectedCoachRecommendation = selectedCoachId
+    ? trainerRecommendations.find((item) => item.trainerId === selectedCoachId) ?? null
+    : null
+
+  const { data: coachScheduleConflicts = [], isFetching: coachScheduleConflictsFetching } = useQuery({
+    queryKey: [
+      'coachAssignmentScheduleConflicts',
+      id,
+      selectedCoachId,
+      coachSchedulePreview.trainingScheduleType,
+      coachSchedulePreview.preferredGymTime,
+      coachSchedulePreview.trainingStartTime,
+      coachSchedulePreview.trainingEndTime,
+      coachSchedulePreview.trainingDaysOfWeek.join(','),
+    ],
+    queryFn: async () => {
+      const payload = buildTrainingSchedulePayload(coachSchedulePreview)
+      const { data } = await usersService.validateTrainingSchedule({
+        trainerId: selectedCoachId!,
+        userId: id,
+        trainingScheduleType: payload.trainingScheduleType,
+        preferredGymTime: payload.preferredGymTime ?? undefined,
+        trainingStartTime: payload.trainingStartTime,
+        trainingEndTime: payload.trainingEndTime,
+        trainingDaysOfWeek: payload.trainingDaysOfWeek ?? undefined,
+      })
+      return (Array.isArray(data) ? data : []) as TrainingScheduleConflict[]
+    },
+    enabled:
+      coachModalOpen &&
+      selectedCoachId != null &&
+      selectedCoachId > 0 &&
+      isTrainingScheduleValid(coachSchedulePreview),
+    staleTime: 15_000,
   })
 
   const addDetailMutation = useMutation({
@@ -602,6 +696,7 @@ export function UserDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['trainer-clients', updated.assignedTrainerId] })
       }
       queryClient.invalidateQueries({ queryKey: ['trainer-clients'] })
+      queryClient.invalidateQueries({ queryKey: ['userInstructorAssignments', id] })
       queryClient.invalidateQueries({ queryKey: ['userProfileSummary', id] })
       setEditProfileOpen(false)
       setProfileForm({})
@@ -618,6 +713,53 @@ export function UserDetailPage() {
       }
     },
     onError: (err: unknown) => setProfileError(getApiErrorMessage(err, 'Failed to update profile')),
+  })
+
+  const updateTrainerAssignmentNotesMutation = useMutation({
+    mutationFn: ({ assignmentId, notes }: { assignmentId: number; notes: string }) =>
+      userInstructorsService.update(assignmentId, { notes: notes.trim() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userInstructorAssignments', id] })
+      toast.success('Trainer notes updated.')
+    },
+    onError: (err: unknown) =>
+      toast.error(getApiErrorMessage(err, 'Could not update trainer notes.')),
+  })
+
+  const assignCoachMutation = useMutation({
+    mutationFn: async ({ trainerId, notes }: { trainerId: number | null; notes: string }) => {
+      const { data: updated } = await usersService.update(id, { trainerId: trainerId ?? 0 })
+      const trimmedNotes = notes.trim()
+      if (trainerId && trimmedNotes) {
+        const { data: assignments } = await userInstructorsService.getByUserId(id)
+        const active = (Array.isArray(assignments) ? assignments : []).find(
+          (assignment) =>
+            assignment.trainerId === trainerId && assignment.isActive && !assignment.endDate,
+        )
+        if (active) {
+          await userInstructorsService.update(active.id, { notes: trimmedNotes })
+        }
+      }
+      return updated
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['user', id] })
+      queryClient.invalidateQueries({ queryKey: ['userInstructorAssignments', id] })
+      queryClient.invalidateQueries({ queryKey: ['trainerAssignmentRecommendations', id] })
+      queryClient.invalidateQueries({ queryKey: ['trainer-clients'] })
+      queryClient.invalidateQueries({ queryKey: ['trainers'] })
+      void queryClient.invalidateQueries({ queryKey: ['users-paged'] })
+      if (updated?.assignedTrainerId) {
+        queryClient.invalidateQueries({ queryKey: ['trainer-clients', updated.assignedTrainerId] })
+      }
+      setCoachModalOpen(false)
+      setCoachTrainerId('')
+      setCoachNotes('')
+      setCoachError(null)
+      toast.success(updated?.assignedTrainerId ? 'Coach assigned.' : 'Coach unassigned.')
+    },
+    onError: (err: unknown) =>
+      setCoachError(getApiErrorMessage(err, 'Could not update coach assignment.')),
   })
 
   const createScheduleMutation = useMutation({
@@ -977,6 +1119,43 @@ export function UserDetailPage() {
     deleteMetricsMutation.mutate(metric.id)
   }
 
+  const handleOpenAssignCoach = () => {
+    queryClient.invalidateQueries({ queryKey: ['trainers'] })
+    queryClient.invalidateQueries({ queryKey: ['trainerAssignmentRecommendations', id] })
+    const trainerRaw = user.assignedTrainerId ?? user.trainerId
+    const trainerId =
+      trainerRaw != null && Number(trainerRaw) > 0 ? Number(trainerRaw) : ''
+    setCoachTrainerId(trainerId)
+    setCoachNotes('')
+    setCoachError(null)
+    setCoachModalOpen(true)
+  }
+
+  const handleCloseAssignCoach = () => {
+    if (assignCoachMutation.isPending) return
+    setCoachModalOpen(false)
+    setCoachTrainerId('')
+    setCoachNotes('')
+    setCoachError(null)
+  }
+
+  const handleSubmitAssignCoach = (e: React.FormEvent) => {
+    e.preventDefault()
+    setCoachError(null)
+    const nextTrainerId = typeof coachTrainerId === 'number' ? coachTrainerId : null
+    const currentTrainerId =
+      user.assignedTrainerId ?? user.trainerId ?? null
+    if ((nextTrainerId ?? null) === (currentTrainerId && currentTrainerId > 0 ? currentTrainerId : null)) {
+      setCoachError('Select a different coach before saving.')
+      return
+    }
+    if (currentTrainerId && nextTrainerId && !coachNotes.trim()) {
+      setCoachError('Add a short handover note when changing coaches.')
+      return
+    }
+    assignCoachMutation.mutate({ trainerId: nextTrainerId, notes: coachNotes })
+  }
+
   const handleOpenEditProfile = () => {
     queryClient.invalidateQueries({ queryKey: ['trainers'] })
     const fromList = pickMembershipRowForPrefill(userMemberships)
@@ -1014,6 +1193,8 @@ export function UserDetailPage() {
       preferredGymTime: user.preferredGymTime ?? '',
       profilePictureUrl: user.profilePictureUrl ?? '',
       isActive: user.isActive,
+      receiveEmailNotifications: user.receiveEmailNotifications ?? false,
+      receiveSmsNotifications: user.receiveSmsNotifications ?? false,
       planId,
       membershipStartDate,
       trainerId,
@@ -1177,6 +1358,8 @@ export function UserDetailPage() {
           ? profileForm.profilePictureUrl.trim()
           : null,
       isActive: profileForm.isActive,
+      receiveEmailNotifications: profileForm.receiveEmailNotifications ?? false,
+      receiveSmsNotifications: profileForm.receiveSmsNotifications ?? false,
       planId: !membershipUnchanged && formPlanId ? formPlanId : undefined,
       membershipStartDate:
         !membershipUnchanged && formPlanId ? profileForm.membershipStartDate || undefined : undefined,
@@ -1337,7 +1520,11 @@ export function UserDetailPage() {
         />
 
         {loadSecondary ? (
-          <UserOnboardingChecklist steps={onboardingSteps} loading={onboardingLoading} />
+          <UserOnboardingChecklist
+            steps={onboardingSteps}
+            loading={onboardingLoading}
+            aside={<MemberOnboardingBillingActions user={user} userId={id} />}
+          />
         ) : (
           <div className="glass-card h-28 animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.03]" />
         )}
@@ -1406,10 +1593,29 @@ export function UserDetailPage() {
             userId={id}
             memberName={userDisplayName}
             memberPhotoUrl={user.profilePictureUrl}
+            receiveEmailNotifications={user.receiveEmailNotifications ?? false}
+            receiveSmsNotifications={user.receiveSmsNotifications ?? false}
           />
         )}
         {activeTab === 'Membership History' && Number.isFinite(id) && id > 0 && user && (
           <MemberMembershipManagePanel user={user} onMembershipChanged={handleMembershipChanged} />
+        )}
+        {activeTab === 'Trainer' && (
+          <TrainerTab
+            user={user}
+            assignments={trainerAssignments}
+            loading={trainerAssignmentsLoading}
+            error={trainerAssignmentsError}
+            viewMode={viewMode}
+            savingAssignmentId={
+              updateTrainerAssignmentNotesMutation.variables?.assignmentId ?? null
+            }
+            isSavingNotes={updateTrainerAssignmentNotesMutation.isPending}
+            onEditCoach={handleOpenAssignCoach}
+            onSaveNotes={(assignmentId, notes) =>
+              updateTrainerAssignmentNotesMutation.mutate({ assignmentId, notes })
+            }
+          />
         )}
         {activeTab === 'In Action' && (
           <InActionTab
@@ -1422,6 +1628,29 @@ export function UserDetailPage() {
           />
         )}
       </DashboardPageContent>
+
+      {!viewMode && (
+        <CoachAssignmentModal
+          open={coachModalOpen}
+          user={user}
+          trainers={trainers as Trainer[]}
+          recommendations={trainerRecommendations}
+          recommendationsLoading={trainerRecommendationsFetching}
+          selectedTrainerId={coachTrainerId}
+          selectedTrainer={selectedCoach}
+          selectedRecommendation={selectedCoachRecommendation}
+          schedulePreview={coachSchedulePreview}
+          conflicts={coachScheduleConflicts}
+          conflictsLoading={coachScheduleConflictsFetching}
+          notes={coachNotes}
+          error={coachError}
+          isSaving={assignCoachMutation.isPending}
+          onClose={handleCloseAssignCoach}
+          onSelectTrainer={setCoachTrainerId}
+          onNotesChange={setCoachNotes}
+          onSubmit={handleSubmitAssignCoach}
+        />
+      )}
 
       {/* Edit-only modals */}
       {!viewMode && (
@@ -1738,6 +1967,43 @@ export function UserDetailPage() {
                   <label htmlFor="profile-is-active" className="text-sm font-medium text-slate-300">
                     Active
                   </label>
+                </div>
+                <div className="sm:col-span-2 space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Notification preferences
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Off by default. Enable so this member receives payment receipts, renewal reminders, and
+                    other alerts on the matching channel.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="profile-receive-email"
+                      checked={profileForm.receiveEmailNotifications ?? false}
+                      onChange={(e) =>
+                        setProfileForm((f) => ({ ...f, receiveEmailNotifications: e.target.checked }))
+                      }
+                      className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-400/40"
+                    />
+                    <label htmlFor="profile-receive-email" className="text-sm font-medium text-slate-300">
+                      Receive email
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="profile-receive-sms"
+                      checked={profileForm.receiveSmsNotifications ?? false}
+                      onChange={(e) =>
+                        setProfileForm((f) => ({ ...f, receiveSmsNotifications: e.target.checked }))
+                      }
+                      className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-400/40"
+                    />
+                    <label htmlFor="profile-receive-sms" className="text-sm font-medium text-slate-300">
+                      Receive SMS / WhatsApp
+                    </label>
+                  </div>
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelClass}>Add membership plan (optional)</label>
@@ -2892,6 +3158,546 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
       <dt className="shrink-0 text-xs text-slate-500">{label}</dt>
       <dd className="text-right text-sm text-slate-100">{value}</dd>
     </div>
+  )
+}
+
+function formatTrainerWorkingSchedule(trainer: Trainer | null) {
+  if (!trainer) return 'Select a coach to view working schedule.'
+  const days = trainer.workingDays?.trim() || 'Working days not set'
+  const start = trainer.workingHoursStart?.slice(0, 5)
+  const end = trainer.workingHoursEnd?.slice(0, 5)
+  const hours = start && end ? `${start} - ${end}` : 'Working hours not set'
+  return `${days} · ${hours}`
+}
+
+function CoachAssignmentModal({
+  open,
+  user,
+  trainers,
+  recommendations,
+  recommendationsLoading,
+  selectedTrainerId,
+  selectedTrainer,
+  selectedRecommendation,
+  schedulePreview,
+  conflicts,
+  conflictsLoading,
+  notes,
+  error,
+  isSaving,
+  onClose,
+  onSelectTrainer,
+  onNotesChange,
+  onSubmit,
+}: {
+  open: boolean
+  user: User
+  trainers: Trainer[]
+  recommendations: TrainerAssignmentRecommendation[]
+  recommendationsLoading: boolean
+  selectedTrainerId: number | ''
+  selectedTrainer: Trainer | null
+  selectedRecommendation: TrainerAssignmentRecommendation | null
+  schedulePreview: MemberTrainingScheduleValue
+  conflicts: TrainingScheduleConflict[]
+  conflictsLoading: boolean
+  notes: string
+  error: string | null
+  isSaving: boolean
+  onClose: () => void
+  onSelectTrainer: (trainerId: number | '') => void
+  onNotesChange: (notes: string) => void
+  onSubmit: (e: React.FormEvent) => void
+}) {
+  const currentTrainerId = user.assignedTrainerId ?? user.trainerId ?? null
+  const recommendationByTrainerId = useMemo(
+    () => new Map(recommendations.map((item) => [item.trainerId, item])),
+    [recommendations],
+  )
+  const sortedTrainers = useMemo(
+    () =>
+      [...trainers]
+        .filter((trainer) => trainer.isActive || trainer.id === currentTrainerId)
+        .sort((a, b) => {
+          const recA = recommendationByTrainerId.get(a.id)
+          const recB = recommendationByTrainerId.get(b.id)
+          if (Boolean(recA?.isRecommended) !== Boolean(recB?.isRecommended)) {
+            return recA?.isRecommended ? -1 : 1
+          }
+          const capA = recA?.remainingCapacity ?? 0
+          const capB = recB?.remainingCapacity ?? 0
+          if (capA !== capB) return capB - capA
+          return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+        }),
+    [currentTrainerId, recommendationByTrainerId, trainers],
+  )
+  const hasSchedule = isTrainingScheduleValid(schedulePreview)
+  const isChangingCoach =
+    selectedTrainerId !== '' &&
+    currentTrainerId != null &&
+    currentTrainerId > 0 &&
+    selectedTrainerId !== currentTrainerId
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Assign Personal Coach"
+      size="wide"
+      scrollable
+      closeOnBackdropClick={!isSaving}
+      closeOnEscape={!isSaving}
+    >
+      <form onSubmit={onSubmit} className="space-y-5">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                Member schedule
+              </p>
+              <p className="mt-1 text-sm font-medium text-white">
+                {formatTrainingScheduleLabel(user)}
+              </p>
+            </div>
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+              Current coach:{' '}
+              {user.assignedTrainerName ??
+                (currentTrainerId ? `Trainer #${currentTrainerId}` : 'None')}
+            </span>
+          </div>
+          {!hasSchedule ? (
+            <p className="mt-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+              This member has no complete training schedule yet. You can assign a coach now, then set the member
+              schedule from Edit profile.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <label className={labelClass}>Select coach</label>
+              {recommendationsLoading ? (
+                <span className="text-[11px] text-slate-500">Loading recommendations...</span>
+              ) : null}
+            </div>
+            <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+              <button
+                type="button"
+                onClick={() => onSelectTrainer('')}
+                className={`w-full rounded-2xl border p-4 text-left transition ${
+                  selectedTrainerId === ''
+                    ? 'border-slate-300/40 bg-white/10'
+                    : 'border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.06]'
+                }`}
+              >
+                <p className="font-semibold text-white">No personal coach</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Unassign the current coach and keep this member without a trainer.
+                </p>
+              </button>
+              {sortedTrainers.map((trainer) => {
+                const rec = recommendationByTrainerId.get(trainer.id)
+                const selected = selectedTrainerId === trainer.id
+                const name = `${trainer.firstName} ${trainer.lastName}`.trim() || `Trainer #${trainer.id}`
+                return (
+                  <button
+                    key={trainer.id}
+                    type="button"
+                    onClick={() => onSelectTrainer(trainer.id)}
+                    className={`w-full rounded-2xl border p-4 text-left transition ${
+                      selected
+                        ? 'border-orange-300/50 bg-orange-500/10 ring-1 ring-orange-300/30'
+                        : 'border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-white">{name}</span>
+                      {trainer.id === currentTrainerId ? (
+                        <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200 ring-1 ring-blue-400/30">
+                          Current
+                        </span>
+                      ) : null}
+                      {rec?.isRecommended ? (
+                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-200 ring-1 ring-emerald-400/30">
+                          Recommended
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {trainer.specialization || 'General training'} · {formatTrainerWorkingSchedule(trainer)}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-slate-300">
+                        {rec
+                          ? `${rec.activeClients}/${rec.maxActiveClients} clients`
+                          : `${trainer.totalClients ?? 0}/${trainer.maxClients ?? '—'} clients`}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-slate-300">
+                        {rec?.availabilityStatus ?? trainer.availabilityStatus ?? 'Available'}
+                      </span>
+                      {rec && rec.conflictCount > 0 ? (
+                        <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-amber-100">
+                          {rec.conflictCount} conflict(s)
+                        </span>
+                      ) : null}
+                    </div>
+                    {rec?.warnings?.length ? (
+                      <p className="mt-2 text-xs text-amber-200">{rec.warnings.join(' · ')}</p>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                Selected coach schedule
+              </p>
+              <p className="mt-1 text-sm font-semibold text-white">
+                {selectedTrainer
+                  ? `${selectedTrainer.firstName} ${selectedTrainer.lastName}`.trim()
+                  : selectedTrainerId === ''
+                    ? 'No coach selected'
+                    : 'Select a coach'}
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                {formatTrainerWorkingSchedule(selectedTrainer)}
+              </p>
+            </div>
+
+            {selectedRecommendation ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Capacity</p>
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    {selectedRecommendation.remainingCapacity}
+                  </p>
+                  <p className="text-xs text-slate-500">slots remaining</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Fit</p>
+                  <p className={`mt-1 text-sm font-semibold ${selectedRecommendation.isRecommended ? 'text-emerald-200' : 'text-amber-200'}`}>
+                    {selectedRecommendation.isRecommended ? 'Recommended' : 'Review'}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {selectedRecommendation.conflictCount} schedule conflict(s)
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                Live conflict check
+              </p>
+              {selectedTrainerId === '' ? (
+                <p className="mt-2 text-sm text-slate-500">No check needed when unassigning coach.</p>
+              ) : conflictsLoading ? (
+                <p className="mt-2 text-sm text-slate-500">Checking selected coach schedule...</p>
+              ) : conflicts.length > 0 ? (
+                <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-3 text-xs text-amber-100">
+                  <p className="font-semibold">Potential overlap</p>
+                  <ul className="mt-2 space-y-1">
+                    {conflicts.map((conflict) => (
+                      <li key={conflict.userId}>
+                        {conflict.memberName} · {conflict.scheduleLabel} · {conflict.overlapDays}{' '}
+                        {conflict.overlapTime}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : selectedTrainerId ? (
+                <p className="mt-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                  No overlap found for this member&apos;s current schedule.
+                </p>
+              ) : null}
+            </div>
+
+            <div>
+              <label className={labelClass}>
+                Handover note {isChangingCoach ? '(required)' : '(optional)'}
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => onNotesChange(e.target.value)}
+                rows={5}
+                className={`${selectClass} min-h-[120px] resize-y`}
+                placeholder="Goals, injuries, preferences, follow-up items, or why the coach is changing."
+              />
+            </div>
+          </div>
+        </div>
+
+        {error ? (
+          <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button type="submit" isLoading={isSaving}>
+            {selectedTrainerId === '' ? 'Unassign coach' : 'Assign coach'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function TrainerTab({
+  user,
+  assignments,
+  loading,
+  error,
+  viewMode,
+  savingAssignmentId,
+  isSavingNotes,
+  onEditCoach,
+  onSaveNotes,
+}: {
+  user: User
+  assignments: UserInstructorAssignment[]
+  loading: boolean
+  error: unknown
+  viewMode: boolean
+  savingAssignmentId: number | null
+  isSavingNotes: boolean
+  onEditCoach: () => void
+  onSaveNotes: (assignmentId: number, notes: string) => void
+}) {
+  const sortedAssignments = useMemo(
+    () =>
+      [...assignments].sort(
+        (a, b) => new Date(b.assignmentDate).getTime() - new Date(a.assignmentDate).getTime(),
+      ),
+    [assignments],
+  )
+  const activeAssignment =
+    sortedAssignments.find((item) => item.isActive && !item.endDate) ?? null
+  const currentCoachName =
+    activeAssignment?.trainerName ??
+    user.assignedTrainerName ??
+    (user.assignedTrainerId ? `Trainer #${user.assignedTrainerId}` : null)
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-40 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+        <div className="h-64 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5 text-sm text-rose-100">
+        {getApiErrorMessage(error, 'Could not load trainer assignments.')}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <InfoCard
+          title="Current Coach"
+          icon={
+            <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A8.966 8.966 0 0112 15c2.21 0 4.234.8 5.879 2.129M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          }
+          accent="from-orange-400 to-amber-500"
+          action={!viewMode ? { label: currentCoachName ? 'Change' : 'Assign', onClick: onEditCoach } : undefined}
+        >
+          <InfoRow
+            label="Coach"
+            value={
+              activeAssignment ? (
+                <Link
+                  to={`/dashboard/trainers/${activeAssignment.trainerId}`}
+                  className="font-medium text-orange-200 hover:text-orange-100 hover:underline"
+                >
+                  {activeAssignment.trainerName || `Trainer #${activeAssignment.trainerId}`}
+                </Link>
+              ) : (
+                currentCoachName ?? '—'
+              )
+            }
+          />
+          <InfoRow
+            label="Assigned"
+            value={activeAssignment ? formatDate(activeAssignment.assignmentDate) : '—'}
+          />
+          <InfoRow
+            label="Status"
+            value={
+              currentCoachName ? (
+                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-200 ring-1 ring-emerald-400/30">
+                  Active
+                </span>
+              ) : (
+                <span className="rounded-full bg-slate-500/15 px-2 py-0.5 text-xs font-semibold text-slate-300 ring-1 ring-slate-400/20">
+                  Unassigned
+                </span>
+              )
+            }
+          />
+        </InfoCard>
+
+        <div className="rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.55)] p-5 lg:col-span-2">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                Coach Notes
+              </p>
+              <h3 className="mt-1 text-lg font-semibold text-white">
+                Trainer handover context
+              </h3>
+            </div>
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+              {sortedAssignments.length} {sortedAssignments.length === 1 ? 'assignment' : 'assignments'}
+            </span>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-slate-400">
+            Use this tab for coach-specific notes and to review when a member moved between trainers.
+            Notes are stored on the coach assignment record, so they travel with the handover history.
+          </p>
+        </div>
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.55)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+              Trainer Change History
+            </p>
+            <h3 className="mt-1 text-lg font-semibold text-white">Coach assignment timeline</h3>
+          </div>
+          {!viewMode && (
+            <Button variant="secondary" size="sm" onClick={onEditCoach}>
+              Change coach
+            </Button>
+          )}
+        </div>
+
+        {sortedAssignments.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-sm font-medium text-white">No trainer assignment yet.</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Assign a personal coach from Edit profile to start tracking history and notes.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4 p-5">
+            {sortedAssignments.map((assignment) => (
+              <TrainerAssignmentCard
+                key={`${assignment.id}:${assignment.notes ?? ''}`}
+                assignment={assignment}
+                viewMode={viewMode}
+                isSaving={isSavingNotes && savingAssignmentId === assignment.id}
+                onSaveNotes={onSaveNotes}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function TrainerAssignmentCard({
+  assignment,
+  viewMode,
+  isSaving,
+  onSaveNotes,
+}: {
+  assignment: UserInstructorAssignment
+  viewMode: boolean
+  isSaving: boolean
+  onSaveNotes: (assignmentId: number, notes: string) => void
+}) {
+  const [notesDraft, setNotesDraft] = useState(assignment.notes ?? '')
+
+  const hasChanged = notesDraft.trim() !== (assignment.notes ?? '').trim()
+  const isActive = assignment.isActive && !assignment.endDate
+
+  return (
+    <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div
+        aria-hidden
+        className={`absolute left-0 top-0 h-full w-1 ${isActive ? 'bg-emerald-400' : 'bg-slate-600'}`}
+      />
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to={`/dashboard/trainers/${assignment.trainerId}`}
+              className="text-base font-semibold text-white hover:text-orange-200 hover:underline"
+            >
+              {assignment.trainerName || `Trainer #${assignment.trainerId}`}
+            </Link>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${
+                isActive
+                  ? 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30'
+                  : 'bg-slate-500/15 text-slate-300 ring-slate-400/20'
+              }`}
+            >
+              {isActive ? 'Current' : 'Previous'}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-slate-400">
+            Assigned {formatDate(assignment.assignmentDate)}
+            {assignment.endDate ? ` · Ended ${formatDate(assignment.endDate)}` : ''}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label className={labelClass}>Trainer notes</label>
+        {viewMode ? (
+          <p className="min-h-[72px] rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm leading-6 text-slate-200">
+            {assignment.notes?.trim() || 'No notes recorded for this assignment.'}
+          </p>
+        ) : (
+          <>
+            <textarea
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              rows={4}
+              className={`${selectClass} min-h-[112px] resize-y`}
+              placeholder="Add trainer notes, handover context, injuries to watch, preferences, or follow-up items."
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={!hasChanged || isSaving}
+                onClick={() => setNotesDraft(assignment.notes ?? '')}
+              >
+                Reset
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!hasChanged || isSaving}
+                isLoading={isSaving}
+                onClick={() => onSaveNotes(assignment.id, notesDraft)}
+              >
+                Save notes
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </article>
   )
 }
 

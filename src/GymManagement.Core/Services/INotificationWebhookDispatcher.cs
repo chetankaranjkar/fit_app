@@ -7,6 +7,16 @@ namespace GymManagement.Core.Services
     {
         Task DispatchPaymentReceiptAsync(PaymentReceiptNotificationDto dto, CancellationToken cancellationToken = default);
 
+        Task<SendPaymentReceiptResultDto> SendPaymentReceiptManualAsync(
+            PaymentReceiptNotificationDto dto,
+            string channel,
+            CancellationToken cancellationToken = default);
+
+        Task<SendPaymentReceiptResultDto> SendPaymentDueReminderManualAsync(
+            PaymentDueReminderNotificationDto dto,
+            string channel,
+            CancellationToken cancellationToken = default);
+
         Task DispatchMembershipExpiringAsync(MembershipExpiringNotificationDto dto, CancellationToken cancellationToken = default);
 
         Task DispatchDietAssignmentAssignedAsync(DietAssignmentAssignedNotificationDto dto, CancellationToken cancellationToken = default);

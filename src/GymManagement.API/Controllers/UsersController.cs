@@ -249,6 +249,32 @@ namespace GymManagement.API.Controllers
             }
         }
 
+        /// <summary>Update member email/SMS opt-in without re-validating training schedule.</summary>
+        [HttpPut("{id:int}/notification-preferences")]
+        [HasAnyPermission(PermissionCodes.Payments, PermissionCodes.UsersAccess, PermissionCodes.MANAGE_MEMBERS)]
+        public async Task<ActionResult<MeNotificationPreferencesDto>> UpdateNotificationPreferences(
+            int id,
+            [FromBody] MeUpdateNotificationPreferencesDto? dto,
+            CancellationToken cancellationToken)
+        {
+            if (dto == null)
+                return BadRequest(new { message = "Request body is required." });
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted, cancellationToken);
+            if (user == null)
+                return NotFound();
+
+            user.ReceiveEmailNotifications = dto.ReceiveEmailNotifications;
+            user.ReceiveSmsNotifications = dto.ReceiveSmsNotifications;
+            await _db.SaveChangesAsync(cancellationToken);
+
+            return Ok(new MeNotificationPreferencesDto
+            {
+                ReceiveEmailNotifications = user.ReceiveEmailNotifications,
+                ReceiveSmsNotifications = user.ReceiveSmsNotifications,
+            });
+        }
+
         [HttpPut("{id}")]
         [HasPermission(PermissionCodes.MANAGE_MEMBERS)]
         public async Task<ActionResult<UserDto>> UpdateUser(int id, UpdateUserDto updateUserDto)

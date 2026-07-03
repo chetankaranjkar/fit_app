@@ -34,6 +34,25 @@ class MeService {
     return MeProfile.fromJson(res.data ?? {});
   }
 
+  Future<MeNotificationPreferences> getNotificationPreferences() async {
+    final res = await ApiClient.instance.get<Map<String, dynamic>>('/me/notification-preferences');
+    return MeNotificationPreferences.fromJson(res.data ?? {});
+  }
+
+  Future<MeNotificationPreferences> updateNotificationPreferences({
+    required bool receiveEmailNotifications,
+    required bool receiveSmsNotifications,
+  }) async {
+    final res = await ApiClient.instance.put<Map<String, dynamic>>(
+      '/me/notification-preferences',
+      body: {
+        'receiveEmailNotifications': receiveEmailNotifications,
+        'receiveSmsNotifications': receiveSmsNotifications,
+      },
+    );
+    return MeNotificationPreferences.fromJson(res.data ?? {});
+  }
+
   Future<List<MeWorkoutSessionSummary>> getWorkoutSessions({int take = 40}) async {
     final res = await ApiClient.instance.get<List<dynamic>>(
       '/me/workout-sessions',

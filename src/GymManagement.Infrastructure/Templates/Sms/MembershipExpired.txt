@@ -1,0 +1,1 @@
+Hi {{MemberName}}, your {{PlanName}} expired on {{EndDate}}. Renew at {{GymName}} to restore access. {{SupportPhone}}

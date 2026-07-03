@@ -10,6 +10,8 @@ import { DashboardLayout } from '../components/layout/DashboardLayout'
 
 import { DashboardSubpageShell } from '../components/layout/DashboardSubpageShell'
 
+import { BillingPaymentsNav } from '../components/billing/BillingPaymentsNav'
+
 import { MembershipAuditTrail } from '../components/memberships/MembershipAuditTrail'
 
 import { Button } from '../components/ui/Button'
@@ -256,7 +258,7 @@ export function MembershipApprovalRequestsPage() {
 
         ) : null}
 
-
+        <BillingPaymentsNav />
 
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 

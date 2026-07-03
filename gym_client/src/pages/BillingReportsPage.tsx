@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../components/layout/DashboardSubpageShell'
+import { BillingPaymentsNav } from '../components/billing/BillingPaymentsNav'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { membershipPaymentsService } from '../services/membershipPayments.service'
@@ -112,6 +113,8 @@ export function BillingReportsPage() {
         subtitle="Daily and monthly collections, outstanding dues, coupons, waive-offs, voids, refunds, and member ledgers."
         showExport={false}
       >
+        <BillingPaymentsNav />
+
         <div className="grid gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase text-slate-400">Report</label>

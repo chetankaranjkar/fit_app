@@ -94,6 +94,13 @@ const retailSubItems = [
   { path: '/dashboard/retail/alerts', label: 'Stock Alerts' },
 ] as const
 
+const notificationsSubItems = [
+  { path: '/dashboard/settings/email', label: 'Email settings' },
+  { path: '/dashboard/settings/sms', label: 'SMS settings' },
+  { path: '/dashboard/settings/invoice-branding', label: 'Invoice branding' },
+  { path: '/dashboard/settings/notification-templates', label: 'Notification templates' },
+] as const
+
 /** Door / QR entry (scan = all; owner console = ADMIN + STAFF). */
 const accessNavItems: ReadonlyArray<{
   path: string
@@ -201,6 +208,11 @@ const iconMap = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
     </svg>
   ),
+  notifications: (
+    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+  ),
 }
 
 interface SidebarNavProps {
@@ -243,6 +255,9 @@ export function SidebarNav({
   const isRetailPath = retailSubItems.some(
     (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
   )
+  const isNotificationsPath = notificationsSubItems.some(
+    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
+  )
   const staffFrontDesk = isStaffFrontDeskOnly()
   const visibleAccessNav = accessNavItems.filter(
     (item) => !item.requiresQrConsole || authService.hasQrOwnerAccess(),
@@ -258,6 +273,7 @@ export function SidebarNav({
   const [ptOpen, setPtOpen] = useState(isPtPath)
   const [retailOpen, setRetailOpen] = useState(isRetailPath)
   const [accessOpen, setAccessOpen] = useState(isAccessPath)
+  const [notificationsOpen, setNotificationsOpen] = useState(isNotificationsPath)
   const visibleNavItems = navItems.filter((item) => {
     if (item.path === '/dashboard/security') return false
     if (item.path === '/dashboard/attendance') return canAccessAttendanceNav()
@@ -299,6 +315,9 @@ export function SidebarNav({
   useEffect(() => {
     if (isAccessPath) setAccessOpen(true)
   }, [isAccessPath])
+  useEffect(() => {
+    if (isNotificationsPath) setNotificationsOpen(true)
+  }, [isNotificationsPath])
 
   const collapsedAccessHref =
     visibleAccessNav.find((p) => p.path.endsWith('/scan'))?.path ??
@@ -1015,6 +1034,66 @@ export function SidebarNav({
                 {!collapsed && <span className="truncate">Owner Analytics</span>}
               </Link>
             )}
+
+            {/* Notifications group (Email, SMS, Templates) — bottom of menu */}
+            {canAccessConfigNav() &&
+            (collapsed ? (
+              <Link
+                to="/dashboard/settings/email"
+                {...linkPrefetchProps('/dashboard/settings/email')}
+                onClick={handleNavClick}
+                title="Notifications"
+                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
+                  isNotificationsPath ? activeBase : inactiveBase
+                }`}
+              >
+                <span
+                  className={isNotificationsPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}
+                >
+                  {iconMap.notifications}
+                </span>
+              </Link>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen((o) => !o)}
+                  onMouseEnter={() => prefetchRoute('/dashboard/settings/email')}
+                  onFocus={() => prefetchRoute('/dashboard/settings/email')}
+                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="text-slate-400 group-hover:text-white">{iconMap.notifications}</span>
+                    <span>Notifications</span>
+                  </span>
+                  <svg
+                    className={`size-4 shrink-0 text-slate-500 transition-transform ${
+                      notificationsOpen ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {notificationsOpen && (
+                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
+                    {notificationsSubItems.map(({ path, label }) => (
+                      <Link
+                        key={path}
+                        to={path}
+                        {...linkPrefetchProps(path)}
+                        onClick={handleNavClick}
+                        className={subLinkClass(path)}
+                      >
+                        {label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
               </>
             )}
           </div>

@@ -123,6 +123,17 @@ export const usersService = {
       options?.timeoutMs != null ? { timeout: options.timeoutMs } : undefined,
     ),
   update: (id: number, data: UpdateUserDto) => api.put<User>(`/Users/${id}`, data),
+  updateNotificationPreferences: (
+    id: number,
+    data: { receiveEmailNotifications: boolean; receiveSmsNotifications: boolean },
+  ) =>
+    api.put<{ receiveEmailNotifications: boolean; receiveSmsNotifications: boolean }>(
+      `/Users/${id}/notification-preferences`,
+      {
+        receiveEmailNotifications: data.receiveEmailNotifications,
+        receiveSmsNotifications: data.receiveSmsNotifications,
+      },
+    ),
   validateTrainingSchedule: (data: {
     trainerId: number
     userId?: number

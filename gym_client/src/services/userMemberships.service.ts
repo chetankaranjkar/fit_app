@@ -63,6 +63,13 @@ export const userMembershipsByUserQueryKey = (userId: number) =>
   ['user-memberships', 'by-user', userId] as const
 
 function normalizeExpiringQueueItem(raw: Record<string, unknown>): ExpiringMembershipQueueItem {
+  const pendingAmount = Number(raw.pendingAmount ?? raw.PendingAmount ?? 0)
+  const paymentStatus = (raw.paymentStatus ?? raw.PaymentStatus ?? null) as string | null
+  const isFullyPaidRaw = raw.isFullyPaid ?? raw.IsFullyPaid
+  const isFullyPaid =
+    typeof isFullyPaidRaw === 'boolean'
+      ? isFullyPaidRaw
+      : paymentStatus?.toLowerCase() === 'paid' || pendingAmount <= 0.02
   return {
     id: Number(raw.id ?? raw.Id ?? 0),
     userId: Number(raw.userId ?? raw.UserId ?? 0),
@@ -74,6 +81,11 @@ function normalizeExpiringQueueItem(raw: Record<string, unknown>): ExpiringMembe
     memberPhone: (raw.memberPhone ?? raw.MemberPhone ?? null) as string | null,
     planName: (raw.planName ?? raw.PlanName ?? null) as string | null,
     daysRemaining: Number(raw.daysRemaining ?? raw.DaysRemaining ?? 0),
+    isExpired: Boolean(raw.isExpired ?? raw.IsExpired ?? false),
+    membershipPaymentId: Number(raw.membershipPaymentId ?? raw.MembershipPaymentId ?? 0) || null,
+    pendingAmount,
+    paymentStatus,
+    isFullyPaid,
   }
 }
 

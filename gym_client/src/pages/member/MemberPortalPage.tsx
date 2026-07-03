@@ -73,6 +73,10 @@ export function MemberPortalPage() {
               Diet
             </Link>
             {' · '}
+            <Link to="/dashboard/profile" className="text-orange-400 hover:underline">
+              Account & notifications
+            </Link>
+            {' · '}
             <Link to="/dashboard/member/progress" className="text-orange-400 hover:underline">
               Progress
             </Link>

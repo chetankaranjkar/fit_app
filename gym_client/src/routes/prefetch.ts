@@ -33,6 +33,10 @@ const loaders: Record<string, Loader> = {
     import('../pages/MembershipApprovalRequestsPage'),
   '/dashboard/payments/reports': () => import('../pages/BillingReportsPage'),
   '/dashboard/security': () => import('../pages/SecurityPage'),
+  '/dashboard/settings/email': () => import('../pages/EmailSettingsPage'),
+  '/dashboard/settings/sms': () => import('../pages/SmsSettingsPage'),
+  '/dashboard/settings/invoice-branding': () => import('../pages/InvoiceBrandingPage'),
+  '/dashboard/settings/notification-templates': () => import('../pages/NotificationTemplatesPage'),
   '/dashboard/roles': () => import('../pages/RolesPage'),
   '/dashboard/trainers': () => import('../pages/TrainersPage'),
 

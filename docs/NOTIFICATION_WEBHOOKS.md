@@ -42,7 +42,18 @@ Use `memberPhone` for WhatsApp automations and `memberEmail` for email.
 
 ## Configuration
 
-### ASP.NET (`appsettings` or env)
+### Admin SMTP (recommended for Gmail)
+
+Dashboard → **Email settings** (`/dashboard/settings/email`, requires **Config** permission).
+
+1. Choose **Gmail** (or Outlook / custom SMTP).
+2. Enter Gmail address, **App password** (Google Account → Security → App passwords), and **From** address.
+3. Enable outbound email and choose event types (payment receipts, renewal reminders, diet assignments).
+4. **Save**, then **Send test**.
+
+Settings are stored in `GymSettings` (password encrypted with ASP.NET Data Protection). No webhook or n8n required for direct email.
+
+### ASP.NET webhooks (optional)
 
 | Setting | Env (Docker / VPS) | Default |
 |---------|-------------------|---------|

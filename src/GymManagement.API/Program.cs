@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using GymManagement.Core.Interfaces.Caching;
@@ -31,6 +32,12 @@ using GymManagement.API.Swagger;
 using GymManagement.API;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var dataProtectionKeysPath = Path.Combine(builder.Environment.ContentRootPath, "DataProtection-Keys");
+Directory.CreateDirectory(dataProtectionKeysPath);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+    .SetApplicationName("GymManagement");
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
@@ -300,6 +307,23 @@ builder.Services.AddScoped<IBodyPartService, BodyPartService>();
 builder.Services.AddScoped<IBodyPartMuscleService, BodyPartMuscleService>();
 builder.Services.AddScoped<IWorkoutPlanAuditService, WorkoutPlanAuditService>();
 builder.Services.AddScoped<IGymSettingsService, GymSettingsService>();
+builder.Services.AddScoped<IGymBrandingService, GymBrandingService>();
+builder.Services.AddSingleton<IWebRootPathResolver, WebRootPathResolver>();
+builder.Services.AddScoped<IEmailSettingsService, EmailSettingsService>();
+builder.Services.AddScoped<ISmsSettingsService, SmsSettingsService>();
+builder.Services.AddScoped<IEmailTransportService, GymManagement.Infrastructure.Services.Notifications.EmailTransportService>();
+builder.Services.AddScoped<ISmsTransportService, GymManagement.Infrastructure.Services.Notifications.SmsWebhookTransportService>();
+builder.Services.AddScoped<INotificationTemplateRenderer, GymManagement.Infrastructure.Services.Notifications.NotificationTemplateRenderer>();
+builder.Services.AddScoped<INotificationTemplateProvider, GymManagement.Infrastructure.Services.Notifications.NotificationTemplateProvider>();
+builder.Services.AddScoped<INotificationTemplateService, GymManagement.Infrastructure.Services.Notifications.NotificationTemplateService>();
+builder.Services.AddScoped<INotificationContextBuilder, GymManagement.Infrastructure.Services.Notifications.NotificationContextBuilder>();
+builder.Services.AddScoped<INotificationComposerService, GymManagement.Infrastructure.Services.Notifications.NotificationComposerService>();
+builder.Services.AddScoped<INotificationOutboxService, GymManagement.Infrastructure.Services.Notifications.NotificationOutboxService>();
+builder.Services.AddScoped<INotificationHistoryService, GymManagement.Infrastructure.Services.Notifications.NotificationHistoryService>();
+builder.Services.AddScoped<INotificationEventService, GymManagement.Infrastructure.Services.Notifications.NotificationEventService>();
+builder.Services.AddScoped<IOutboundEmailService, OutboundEmailService>();
+builder.Services.AddScoped<IUserNotificationPreferenceService, UserNotificationPreferenceService>();
+builder.Services.AddHostedService<GymManagement.Infrastructure.Hosting.NotificationOutboxHostedService>();
 builder.Services.AddScoped<IPersonalWorkoutPlanAccessService, PersonalWorkoutPlanAccessService>();
 builder.Services.AddScoped<IPersonalWorkoutPlanService, PersonalWorkoutPlanService>();
 builder.Services.AddScoped<IWorkoutPlanService, WorkoutPlanService>();

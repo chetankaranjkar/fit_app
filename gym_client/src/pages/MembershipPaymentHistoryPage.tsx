@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { PaymentReceiptModal, type PaymentReceiptData } from '../components/billing/PaymentReceiptModal'
+import { BillingPaymentsNav } from '../components/billing/BillingPaymentsNav'
 import { membershipPaymentsService } from '../services/membershipPayments.service'
 import { formatInr } from '../lib/formatInr'
 import { getApiErrorMessage } from '../lib/apiErrors'
@@ -62,18 +63,22 @@ export function MembershipPaymentHistoryPage() {
   const [receipt, setReceipt] = useState<PaymentReceiptData | null>(null)
   const [receiptOpen, setReceiptOpen] = useState(false)
 
-  const queryParams = useMemo(
-    () => ({
+  const queryParams = useMemo(() => {
+    const trimmedMemberId = memberId.trim()
+    const parsedUserId = trimmedMemberId ? Number(trimmedMemberId) : undefined
+    return {
       fromDate: fromDate || undefined,
       toDate: toDate || undefined,
       status: status || undefined,
       method: method || undefined,
-      userId: memberId ? Number(memberId) : undefined,
-    }),
-    [fromDate, toDate, status, method, memberId],
-  )
+      userId:
+        parsedUserId != null && Number.isInteger(parsedUserId) && parsedUserId > 0
+          ? parsedUserId
+          : undefined,
+    }
+  }, [fromDate, toDate, status, method, memberId])
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading, isError, error } = useQuery({
     queryKey: ['payment-transactions', queryParams],
     queryFn: async () => {
       const { data } = await membershipPaymentsService.listTransactions(queryParams)
@@ -121,6 +126,8 @@ export function MembershipPaymentHistoryPage() {
         titleGradient="payment history"
         subtitle="Membership installments — void, refund, and receipts"
       >
+        <BillingPaymentsNav />
+
         <div className="mb-4 grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-2 lg:grid-cols-5">
           <Input label="From" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
           <Input label="To" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
@@ -148,10 +155,44 @@ export function MembershipPaymentHistoryPage() {
               <option className="bg-slate-900 text-slate-100" value="Cash">Cash</option>
               <option className="bg-slate-900 text-slate-100" value="Upi">UPI</option>
               <option className="bg-slate-900 text-slate-100" value="Card">Card</option>
+              <option className="bg-slate-900 text-slate-100" value="BankTransfer">Bank transfer</option>
+              <option className="bg-slate-900 text-slate-100" value="Online">Online</option>
+              <option className="bg-slate-900 text-slate-100" value="Other">Other</option>
             </select>
           </div>
-          <Input label="Member user ID" value={memberId} onChange={(e) => setMemberId(e.target.value)} />
+          <Input
+            label="Member user ID"
+            inputMode="numeric"
+            value={memberId}
+            onChange={(e) => setMemberId(e.target.value)}
+          />
         </div>
+
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-slate-500">
+            {rows.length > 0 ? `${rows.length} payment${rows.length === 1 ? '' : 's'} shown` : ' '}
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="!px-3 !py-1.5 text-xs"
+            onClick={() => {
+              setFromDate('')
+              setToDate('')
+              setStatus('')
+              setMethod('')
+              setMemberId('')
+            }}
+          >
+            Clear filters
+          </Button>
+        </div>
+
+        {isError && (
+          <p className="mb-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {getApiErrorMessage(error, 'Could not load payment history.')}
+          </p>
+        )}
 
         <div className="overflow-x-auto rounded-2xl border border-white/10">
           <table className="min-w-[960px] w-full text-left text-sm text-slate-200">
@@ -176,7 +217,7 @@ export function MembershipPaymentHistoryPage() {
                   </td>
                 </tr>
               )}
-              {!isLoading && rows.length === 0 && (
+              {!isLoading && !isError && rows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-8 text-center text-slate-500">
                     No payments found.
@@ -212,6 +253,8 @@ export function MembershipPaymentHistoryPage() {
                         className="!px-2 !py-1 text-xs"
                         onClick={() => {
                           setReceipt({
+                            transactionId: row.id,
+                            userId: row.userId,
                             receiptNumber: row.receiptNumber,
                             memberName: row.memberName ?? `User ${row.userId}`,
                             memberId: `M-${row.userId}`,
@@ -219,8 +262,10 @@ export function MembershipPaymentHistoryPage() {
                             planName: row.planName,
                             amountPaid: row.transactionAmount,
                             paymentMethod: row.transactionMethod,
-                            remainingBalance: 0,
+                            remainingBalance: row.pendingAmount ?? 0,
                             paymentDate: row.transactionDate,
+                            receiveEmailNotifications: row.receiveEmailNotifications ?? false,
+                            receiveSmsNotifications: row.receiveSmsNotifications ?? false,
                           })
                           setReceiptOpen(true)
                         }}

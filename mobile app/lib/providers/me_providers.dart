@@ -44,6 +44,11 @@ final profileProvider = FutureProvider.autoDispose<MeProfile>((ref) async {
   return MeService.instance.getProfile();
 });
 
+final notificationPreferencesProvider =
+    FutureProvider.autoDispose<MeNotificationPreferences>((ref) async {
+  return MeService.instance.getNotificationPreferences();
+});
+
 final dietPlanProvider = FutureProvider.autoDispose<MeDietPlan?>((ref) async {
   return MeService.instance.getDietPlan();
 });

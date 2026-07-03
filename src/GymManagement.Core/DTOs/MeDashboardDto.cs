@@ -29,6 +29,19 @@ namespace GymManagement.Core.DTOs
         public string? PreferredGymTime { get; set; }
     }
 
+    /// <summary>Member opt-in for outbound email and SMS/WhatsApp.</summary>
+    public sealed class MeNotificationPreferencesDto
+    {
+        public bool ReceiveEmailNotifications { get; set; }
+        public bool ReceiveSmsNotifications { get; set; }
+    }
+
+    public sealed class MeUpdateNotificationPreferencesDto
+    {
+        public bool ReceiveEmailNotifications { get; set; }
+        public bool ReceiveSmsNotifications { get; set; }
+    }
+
     public class MeMembershipDto
     {
         public int Id { get; set; }

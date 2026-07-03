@@ -396,6 +396,52 @@ namespace GymManagement.API.Controllers
             return NoContent();
         }
 
+        /// <summary>Outbound email / SMS opt-in for the authenticated member.</summary>
+        [HttpGet("notification-preferences")]
+        public async Task<ActionResult<MeNotificationPreferencesDto>> GetNotificationPreferences(CancellationToken cancellationToken = default)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            var prefs = await _db.Users.AsNoTracking()
+                .Where(u => u.Id == userId.Value && !u.IsDeleted)
+                .Select(u => new MeNotificationPreferencesDto
+                {
+                    ReceiveEmailNotifications = u.ReceiveEmailNotifications,
+                    ReceiveSmsNotifications = u.ReceiveSmsNotifications,
+                })
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (prefs == null) return NotFound();
+            return Ok(prefs);
+        }
+
+        /// <summary>Update outbound email / SMS opt-in for the authenticated member.</summary>
+        [HttpPut("notification-preferences")]
+        public async Task<ActionResult<MeNotificationPreferencesDto>> UpdateNotificationPreferences(
+            [FromBody] MeUpdateNotificationPreferencesDto? dto,
+            CancellationToken cancellationToken = default)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+            if (dto == null)
+                return BadRequest(new { message = "Request body is required." });
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId.Value && !u.IsDeleted, cancellationToken);
+            if (user == null) return NotFound();
+
+            user.ReceiveEmailNotifications = dto.ReceiveEmailNotifications;
+            user.ReceiveSmsNotifications = dto.ReceiveSmsNotifications;
+            await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            return Ok(new MeNotificationPreferencesDto
+            {
+                ReceiveEmailNotifications = user.ReceiveEmailNotifications,
+                ReceiveSmsNotifications = user.ReceiveSmsNotifications,
+            });
+        }
+
         /// <summary>Workout plans assigned to the member via active <see cref="UserSchedule"/> rows.</summary>
         [HttpGet("workout-plans")]
         public async Task<ActionResult<IReadOnlyList<MeWorkoutPlanSummaryDto>>> GetWorkoutPlans()

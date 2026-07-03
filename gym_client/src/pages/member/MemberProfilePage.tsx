@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChangePasswordCard } from '../../components/account/ChangePasswordCard'
+import { MemberNotificationPreferencesCard } from '../../components/member/MemberNotificationPreferencesCard'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
@@ -69,6 +70,7 @@ export function MemberProfilePage() {
             </button>
           </div>
         </GlassPanel>
+        {hasMemberProfile ? <MemberNotificationPreferencesCard /> : null}
         <ChangePasswordCard />
         <Link to="/dashboard" className="text-sm text-orange-400 hover:underline">
           ← Back to home

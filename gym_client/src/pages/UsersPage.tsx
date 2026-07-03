@@ -263,6 +263,8 @@ const defaultCreateForm: CreateUserDto = {
   emergencyPhone: '',
   preferredGymTime: '',
   isActive: true,
+  receiveEmailNotifications: false,
+  receiveSmsNotifications: false,
   password: '',
   role: undefined,
   planId: undefined,
@@ -820,6 +822,8 @@ export function UsersPage() {
       planId: form.planId && form.planId > 0 ? form.planId : undefined,
       membershipStartDate: form.membershipStartDate || undefined,
       trainerId: form.trainerId && form.trainerId > 0 ? form.trainerId : undefined,
+      receiveEmailNotifications: form.receiveEmailNotifications ?? false,
+      receiveSmsNotifications: form.receiveSmsNotifications ?? false,
       instructorSpecialization: undefined,
       instructorBio: undefined,
       instructorHireDate: undefined,
@@ -1488,6 +1492,38 @@ export function UsersPage() {
                   >
                     Use mobile as password
                   </Button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <h3 className="mb-0.5 text-sm font-semibold text-white">Notification preferences</h3>
+                <p className="mb-3 text-xs text-slate-400">
+                  Off by default. Enable so this member receives payment receipts, renewal reminders, and other
+                  alerts on the matching channel.
+                </p>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={form.receiveEmailNotifications ?? false}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, receiveEmailNotifications: e.target.checked }))
+                      }
+                      className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-400/40"
+                    />
+                    Receive email
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={form.receiveSmsNotifications ?? false}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, receiveSmsNotifications: e.target.checked }))
+                      }
+                      className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-400/40"
+                    />
+                    Receive SMS / WhatsApp
+                  </label>
                 </div>
               </div>
 

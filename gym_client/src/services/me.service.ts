@@ -63,6 +63,16 @@ export type MeNotification = {
   type?: string | null
 }
 
+export type MeNotificationPreferences = {
+  receiveEmailNotifications: boolean
+  receiveSmsNotifications: boolean
+}
+
+export type UpdateMeNotificationPreferences = {
+  receiveEmailNotifications: boolean
+  receiveSmsNotifications: boolean
+}
+
 export type MeDashboard = {
   profile: MeProfile
   membership?: MeMembership | null
@@ -159,6 +169,12 @@ export const meService = {
     api.get<MeNotification[]>('/me/notifications', { params: { take } }).then((r) => r.data),
   markNotificationRead: (id: number) => api.post(`/me/notifications/${id}/read`),
   getProfile: () => api.get<MeProfile>('/me/profile'),
+  getNotificationPreferences: () =>
+    api.get<MeNotificationPreferences>('/me/notification-preferences').then((r) => r.data),
+  updateNotificationPreferences: (payload: UpdateMeNotificationPreferences) =>
+    api
+      .put<MeNotificationPreferences>('/me/notification-preferences', payload)
+      .then((r) => r.data),
   getWorkoutPlans: () => api.get<MeWorkoutPlanSummary[]>('/me/workout-plans'),
   getWorkoutProgram: () => api.get<MeWorkoutProgram>('/me/workout-program'),
   /** Returns null when the member has no active diet plan (204/404), not an error. */

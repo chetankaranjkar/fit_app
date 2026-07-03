@@ -54,6 +54,7 @@ Thumbs.db
 *.local
 .env
 .env.*
+src/GymManagement.API/DataProtection-Keys/
 firebase-service-account.json
 **/firebase-service-account*.json
 !**/firebase-service-account.json.example

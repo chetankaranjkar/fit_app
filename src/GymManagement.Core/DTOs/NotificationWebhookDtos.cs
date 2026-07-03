@@ -12,6 +12,7 @@ namespace GymManagement.Core.DTOs
     public class PaymentReceiptNotificationDto
     {
         public int InvoiceId { get; set; }
+        public int UserId { get; set; }
         public string InvoiceNumber { get; set; } = string.Empty;
         public int? PaymentId { get; set; }
         public string? ReceiptNo { get; set; }
@@ -20,9 +21,11 @@ namespace GymManagement.Core.DTOs
         public int UserMembershipId { get; set; }
         public string? CustomerName { get; set; }
         public string? CustomerEmail { get; set; }
+        public string? MemberPhone { get; set; }
         public decimal TotalAmount { get; set; }
         public string Currency { get; set; } = "INR";
         public string? PlanName { get; set; }
+        public IReadOnlyList<string>? AttachmentPaths { get; set; }
     }
 
     public class MembershipExpiringNotificationDto
@@ -50,5 +53,36 @@ namespace GymManagement.Core.DTOs
         public DateTime? EndDateUtc { get; set; }
         public bool IsActive { get; set; }
         public string? Notes { get; set; }
+    }
+
+    public class PaymentDueReminderNotificationDto
+    {
+        public int UserId { get; set; }
+        public int MembershipPaymentId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerEmail { get; set; }
+        public string? MemberPhone { get; set; }
+        public string? InvoiceNumber { get; set; }
+        public decimal PendingAmount { get; set; }
+        public DateTime? NextDueDateUtc { get; set; }
+        public string? PlanName { get; set; }
+    }
+
+    public sealed class SendNotificationChannelResultDto
+    {
+        public bool Sent { get; set; }
+        public string? Message { get; set; }
+    }
+
+    public sealed class SendPaymentReceiptResultDto
+    {
+        public SendNotificationChannelResultDto Email { get; set; } = new();
+        public SendNotificationChannelResultDto Sms { get; set; } = new();
+    }
+
+    public sealed class SendPaymentReceiptRequestDto
+    {
+        /// <summary>email, sms, or both.</summary>
+        public string Channel { get; set; } = "both";
     }
 }

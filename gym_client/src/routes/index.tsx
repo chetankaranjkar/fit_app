@@ -256,6 +256,18 @@ const AssignDietPlansPage = lazy(() =>
 const SecurityPage = lazy(() =>
   import('../pages/SecurityPage').then((m) => ({ default: m.SecurityPage })),
 )
+const EmailSettingsPage = lazy(() =>
+  import('../pages/EmailSettingsPage').then((m) => ({ default: m.EmailSettingsPage })),
+)
+const NotificationTemplatesPage = lazy(() =>
+  import('../pages/NotificationTemplatesPage').then((m) => ({ default: m.NotificationTemplatesPage })),
+)
+const SmsSettingsPage = lazy(() =>
+  import('../pages/SmsSettingsPage').then((m) => ({ default: m.SmsSettingsPage })),
+)
+const InvoiceBrandingPage = lazy(() =>
+  import('../pages/InvoiceBrandingPage').then((m) => ({ default: m.InvoiceBrandingPage })),
+)
 
 // Gym Operations module
 const EquipmentPage = lazy(() =>
@@ -376,6 +388,10 @@ const router = createBrowserRouter([
               { path: '/dashboard/personal-training/sessions', element: withSuspense(<PtSessionsPage />) },
               { path: '/dashboard/personal-training/reports', element: withSuspense(<PtReportsPage />) },
               { path: '/dashboard/roles', element: withSuspense(<RolesPage />) },
+              { path: '/dashboard/settings/notification-templates', element: withSuspense(<NotificationTemplatesPage />) },
+              { path: '/dashboard/settings/email', element: withSuspense(<EmailSettingsPage />) },
+              { path: '/dashboard/settings/sms', element: withSuspense(<SmsSettingsPage />) },
+              { path: '/dashboard/settings/invoice-branding', element: withSuspense(<InvoiceBrandingPage />) },
               { path: '/dashboard/security', element: withSuspense(<SecurityPage />) },
               { path: '/dashboard/trainers', element: withSuspense(<TrainersPage />) },
               { path: '/dashboard/trainers/:trainerId', element: withSuspense(<TrainerDetailPage />) },

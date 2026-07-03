@@ -87,5 +87,17 @@ namespace GymManagement.Core.Services
             int? userId,
             int take,
             CancellationToken cancellationToken = default);
+
+        Task<SendPaymentReceiptResultDto> SendPaymentReceiptForTransactionAsync(
+            int transactionId,
+            string channel,
+            CancellationToken cancellationToken = default);
+
+        Task<SendPaymentReceiptResultDto> SendPaymentDueReminderForMembershipPaymentAsync(
+            int membershipPaymentId,
+            string channel,
+            CancellationToken cancellationToken = default);
+
+        Task<byte[]> GetReceiptPdfForTransactionAsync(int transactionId, CancellationToken cancellationToken = default);
     }
 }

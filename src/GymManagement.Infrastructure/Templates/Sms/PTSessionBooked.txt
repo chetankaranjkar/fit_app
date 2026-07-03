@@ -1,0 +1,1 @@
+﻿PT session booked with {{TrainerName}} on {{StartDate}}. {{GymName}}

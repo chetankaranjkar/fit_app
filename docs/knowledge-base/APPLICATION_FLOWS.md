@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-06-19 (Commercial: self-signup + Razorpay online payments).
+**Last updated:** 2026-06-28 (Focused member coach assignment popup with schedule preview).
 
 ---
 
@@ -97,7 +97,7 @@ One **person** = one row in `Users`. Login = `AuthUsers` (email, password) → `
 | Route | Page | Primary API |
 |-------|------|-------------|
 | `/dashboard/users` | **Grid-first** members directory with compact header + summary strip; light page scroll + tall grid panel (`min-height` ~viewport) | `GET /api/Users/paged?membersOnly=true` (+ `assignedToCoachOnly=true` when coach-scoped) |
-| `/dashboard/users/:id` | Member detail | `GET /api/Users/{id}` + deferred `GET /api/Users/{id}/profile-summary`; **Details** tab includes locker allocation via `GET /api/locker-management/assignments/by-user/{userId}` (locker #, locker status, assignment date/status) |
+| `/dashboard/users/:id` | Member detail | `GET /api/Users/{id}` + deferred `GET /api/Users/{id}/profile-summary`; **Details** tab includes locker allocation via `GET /api/locker-management/assignments/by-user/{userId}` (locker #, locker status, assignment date/status); **Trainer** tab reads `GET /api/UserInstructors/user/{userId}` for current coach, assignment history, and notes |
 | `/dashboard/trainers` | Trainers list | `GET /api/Trainers` |
 | `/dashboard/trainers/:id` | Trainer detail | `GET /api/Trainers/{id}`, tabs: Clients, Schedule, … |
 | `/dashboard/trainers/:id?mode=edit` | Opens edit modal | |
@@ -159,6 +159,8 @@ sequenceDiagram
 ```
 
 **Invalidate queries:** `trainer-clients`, `user`, `users`, `trainer` after assignment.
+
+**Frontend:** `UserDetailPage` → **Trainer** tab (`?tab=trainer`) shows current coach, assignment timeline, and editable assignment notes via `PUT /api/UserInstructors/{id}`. Coach changes use the focused **Assign Personal Coach** popup from the Trainer tab, not the full profile modal. The popup reads `GET /api/UserInstructors/recommendations/{userId}` for capacity/recommended badges, shows the selected trainer working schedule from `GET /api/Trainers`, checks overlap with `POST /api/Users/training-schedule/validate`, then saves through `PUT /api/Users/{id}` with `trainerId` so the assignment path remains centralized in `UserService` / `UserInstructorService`.
 
 ---
 
@@ -447,7 +449,7 @@ Only transactions with **Status = Completed** count toward paid/outstanding. **V
 | `/dashboard/payments/waive-offs` | Request list; admin approve/reject |
 | `/dashboard/payments/membership-approvals` | Membership void/cancel/change approvals |
 | `/dashboard/payments/reports` | Collection, outstanding, coupon, waive-off, void/refund reports + CSV export |
-| User detail → **Payment History** tab | Financial summary card, member ledger, billing table |
+| User detail → **Payment History** tab | Financial summary card, member ledger, billing table; **Send email** / **Send SMS** per completed installment (`POST /api/membership-payments/transactions/{id}/send-receipt`) — respects member opt-in and gym SMTP / WhatsApp webhook config |
 
 ### APIs
 
@@ -490,7 +492,7 @@ Only transactions with **Status = Completed** count toward paid/outstanding. **V
 
 **Renew path:** Members list → **Memberships** modal or `/dashboard/payments/collect` after staff adds/renews plan (§11b, §12).
 
-**Staff renewal queue:** Dashboard → **Renewal queue** panel (`GET /api/UserMemberships/expiring-queue?withinDays=14`). Lists `Active`, `ActivePendingPayment`, and `PartialPayment` rows ending soon (sorted by end date). Actions: **Collect** → `/dashboard/payments/collect`, **Renew** → shared `MemberMembershipsModal`. Requires `Payments` permission. Refreshes with dashboard KPIs after payment or membership change.
+**Staff renewal queue:** Dashboard → **Renewal queue** panel (`GET /api/UserMemberships/expiring-queue?withinDays=14`). Lists memberships **ending within 14 days** (`Active`, `ActivePendingPayment`, `PartialPayment`) and **recently expired** rows (last 30 days). Each item includes billing summary: `pendingAmount`, `paymentStatus`, `isFullyPaid`. **Fully paid** members still appear because renewal (new plan period) is separate from installment collection — use **Renew** / **Renew access**. **Collect** shows only when `pendingAmount > 0`. Actions: **Collect** → `/dashboard/payments/collect`, **Renew** → shared `MemberMembershipsModal`. Requires `Payments` permission. Refreshes with dashboard KPIs after payment or membership change.
 
 **Member in-app expiry reminders:** `MembershipExpiryReminderHostedService` → `MembershipExpiryInAppNotificationService` writes `Notifications` rows (`type: membership_expiring`) at **14 / 7 / 3 / 1 / 0** days before end. Enabled by `Notifications:EnableInAppMembershipExpiryReminders` (default **true**), window `InAppMembershipExpiryReminderDays` (default **14**). Independent of outbound webhooks (`EnableScheduledReminders`). Optional FCM push when `Notifications:EnablePushNotifications` and Firebase Admin credentials are configured.
 
@@ -498,7 +500,17 @@ Only transactions with **Status = Completed** count toward paid/outstanding. **V
 
 **Workout day reminders:** `WorkoutDayReminderHostedService` → `WorkoutDayReminderService` creates `workout_today` notifications when the member has an active `UserSchedules` row matching today's weekday (IST). Toggle: `Notifications:EnableWorkoutDayReminders` (default **true**).
 
-**Outbound webhooks (email / WhatsApp):** Membership expiry milestones via `MembershipExpiryWebhookReminderService` → `INotificationWebhookDispatcher`. Set `Notifications:EmailWebhookUrl` / `WhatsAppWebhookUrl`. Ops guide: [NOTIFICATION_WEBHOOKS.md](../NOTIFICATION_WEBHOOKS.md).
+**Notifications nav group:** Sidebar → **Notifications** (collapsible, **Config** permission) groups **Email settings** (`/dashboard/settings/email`), **SMS settings** (`/dashboard/settings/sms`), and **Notification templates** (`/dashboard/settings/notification-templates`).
+
+**Admin SMTP email:** Dashboard → **Email settings** (`/dashboard/settings/email`, **Config** permission). Admin saves Gmail/Outlook/custom SMTP in `GymSettings` (app password encrypted). Sends payment receipts, membership expiry reminders (14/7/3/1/0 days), and diet assignments when enabled. API: `GET/PUT /api/EmailSettings`, `POST /api/EmailSettings/test`. See [NOTIFICATION_WEBHOOKS.md](../NOTIFICATION_WEBHOOKS.md).
+
+**Admin SMS / WhatsApp:** Dashboard → **SMS settings** (`/dashboard/settings/sms`, **Config**). The page has **two independent channel sections — SMS and WhatsApp** — each DB-backed (`GymSettings.Sms*` and `GymSettings.WhatsApp*`) with its own enable, webhook URL, optional sender id, optional encrypted `Authorization` header, and payment-receipt / expiry-reminder toggles. `ISmsTransportService` (`SmsWebhookTransportService`) **fans out** the templated text envelope to every enabled+configured channel (DB config first; WhatsApp falls back to legacy `Notifications:WhatsAppWebhookUrl`), applying per-channel event toggles; it succeeds if at least one channel delivers. The envelope `channel` field is `"sms"` or `"whatsapp"`. Used by the outbox, the dispatcher, and the per-channel test endpoint. Expiry reminders are scheduled when any channel allows them. API: `GET/PUT /api/SmsSettings`, `POST /api/SmsSettings/test` (with `channel`). Members still need `ReceiveSmsNotifications` on.
+
+**Notification template engine:** Dashboard → **Notification templates** (`/dashboard/settings/notification-templates`, **Config**). DB-backed HTML email + SMS templates with `{{Placeholder}}` replacement, admin edit/preview/test-send/reset, outbox queue + `NotificationOutboxHostedService` (retry, history audit). File defaults under `GymManagement.Infrastructure/Templates/`. API: `GET/PUT /api/notification-templates`, preview, test-send, history. Wired events include payment success (invoice PDF attachment when available), membership renewal/expired, diet assignment, forgot-password reset, welcome/new member, attendance check-in, workout assignment, and trainer assignment.
+
+**Member notification opt-in:** `Users.ReceiveEmailNotifications` / `ReceiveSmsNotifications` (default **off** for existing and new members). Outbound email/SMS only when the member (or admin on their profile) opts in. **Self-service:** `GET/PUT /api/me/notification-preferences`. **Web:** `/dashboard/profile` → Notification preferences. **Mobile:** Profile → Notifications. **Admin:** User detail → Edit profile → Notification preferences.
+
+**Outbound webhooks (email / WhatsApp, optional):** Membership expiry milestones via `MembershipExpiryWebhookReminderService` → `INotificationWebhookDispatcher` (runs alongside SMTP when configured). Set `Notifications:EmailWebhookUrl` / `WhatsAppWebhookUrl`. Ops guide: [NOTIFICATION_WEBHOOKS.md](../NOTIFICATION_WEBHOOKS.md).
 
 **Member billing in app:** `GET /api/me/invoices` lists membership payment headers + receipt lines; `GET /api/me/invoices/{membershipPaymentId}/pdf` downloads invoice PDF (own records only). **Mobile:** Membership tab → **Billing & receipts** + **Payment due** card when balance is pending.
 

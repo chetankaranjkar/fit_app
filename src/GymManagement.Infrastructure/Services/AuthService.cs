@@ -31,6 +31,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly ILoginPayloadFactory _loginPayloadFactory;
         private readonly IDeviceSessionService _deviceSessionService;
         private readonly IFirebaseAuthService _firebaseAuth;
+        private readonly INotificationEventService _notifications;
 
         public AuthService(
             IUnitOfWork unitOfWork,
@@ -41,7 +42,8 @@ namespace GymManagement.Infrastructure.Services
             IHttpContextAccessor httpContextAccessor,
             ILoginPayloadFactory loginPayloadFactory,
             IDeviceSessionService deviceSessionService,
-            IFirebaseAuthService firebaseAuth)
+            IFirebaseAuthService firebaseAuth,
+            INotificationEventService notifications)
         {
             _unitOfWork = unitOfWork;
             _db = db;
@@ -52,6 +54,7 @@ namespace GymManagement.Infrastructure.Services
             _loginPayloadFactory = loginPayloadFactory;
             _deviceSessionService = deviceSessionService;
             _firebaseAuth = firebaseAuth;
+            _notifications = notifications;
         }
 
         public async Task<LoginAttemptResultDto> LoginAsync(LoginDto loginDto)
@@ -722,6 +725,7 @@ namespace GymManagement.Infrastructure.Services
 
             var emailLower = email.ToLowerInvariant();
             var authUser = await _db.AuthUsers
+                .Include(a => a.User)
                 .FirstOrDefaultAsync(a => !a.IsDeleted && a.Email.ToLower() == emailLower)
                 .ConfigureAwait(false);
             if (authUser == null || string.IsNullOrWhiteSpace(authUser.PasswordHash))
@@ -742,6 +746,13 @@ namespace GymManagement.Infrastructure.Services
                 "Password reset requested for {Email}. Reset link (valid 1h): {ResetUrl}",
                 authUser.Email,
                 resetUrl);
+
+            await _notifications.QueueForgotPasswordAsync(
+                    authUser.UserId,
+                    authUser.Email,
+                    authUser.User == null ? "Member" : $"{authUser.User.FirstName} {authUser.User.LastName}".Trim(),
+                    resetUrl)
+                .ConfigureAwait(false);
 
             if (includeDevResetUrl)
                 response.DevResetUrl = resetUrl;

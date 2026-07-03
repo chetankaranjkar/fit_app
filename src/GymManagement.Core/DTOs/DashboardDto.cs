@@ -25,6 +25,7 @@ namespace GymManagement.Core.DTOs
     public class NotificationHookStatusDto
     {
         public bool EmailEnabled { get; set; }
+        public bool SmtpEmailConfigured { get; set; }
         public bool WhatsAppEnabled { get; set; }
         public bool ScheduledRemindersEnabled { get; set; }
         public bool InAppExpiryRemindersEnabled { get; set; }

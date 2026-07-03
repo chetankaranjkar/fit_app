@@ -7,6 +7,7 @@ import { userMembershipsService } from '../../services/userMemberships.service'
 import { usersService } from '../../services/users.service'
 import { RENEWAL_QUEUE_QUERY_KEY } from '../../lib/dashboardQueryKeys'
 import { collectPaymentPath, memberProfilePath } from '../../lib/membershipPaymentNavigation'
+import { formatInr } from '../../lib/formatInr'
 import type { ExpiringMembershipQueueItem } from '../../types/userMembership'
 import type { User } from '../../types/user'
 
@@ -19,23 +20,62 @@ function formatEndDate(iso: string) {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function daysLabel(days: number) {
-  if (days <= 0) return 'Ends today'
-  if (days === 1) return '1 day left'
-  return `${days} days left`
-}
-
-function urgencyClass(days: number) {
-  if (days <= 3) return 'border-rose-500/35 bg-rose-500/10 text-rose-100'
-  if (days <= 7) return 'border-amber-500/35 bg-amber-500/10 text-amber-100'
+function urgencyClass(item: ExpiringMembershipQueueItem) {
+  if (item.isExpired) return 'border-rose-500/35 bg-rose-500/10 text-rose-100'
+  if (item.daysRemaining <= 3) return 'border-rose-500/35 bg-rose-500/10 text-rose-100'
+  if (item.daysRemaining <= 7) return 'border-amber-500/35 bg-amber-500/10 text-amber-100'
   return 'border-white/10 bg-white/5 text-slate-300'
 }
 
-function statusChip(status: ExpiringMembershipQueueItem['status']) {
-  if (status === 'PartialPayment' || status === 'ActivePendingPayment') {
+function timelineLabel(item: ExpiringMembershipQueueItem) {
+  if (item.isExpired) {
+    const daysAgo = Math.abs(item.daysRemaining)
+    if (daysAgo === 0) return 'Expired today'
+    if (daysAgo === 1) return 'Expired 1 day ago'
+    return `Expired ${daysAgo} days ago`
+  }
+  if (item.daysRemaining <= 0) return 'Ends today'
+  if (item.daysRemaining === 1) return '1 day left'
+  return `${item.daysRemaining} days left`
+}
+
+function paymentSummary(item: ExpiringMembershipQueueItem) {
+  if (item.isFullyPaid) return 'Fully paid · renew plan to extend access'
+  if (item.pendingAmount > 0.02) {
+    const status = item.paymentStatus?.toLowerCase()
+    if (status === 'overdue') return `Overdue · ${formatInr(item.pendingAmount)} due`
+    if (status === 'partial') return `Partial · ${formatInr(item.pendingAmount)} remaining`
+    return `${formatInr(item.pendingAmount)} due`
+  }
+  return 'Payment status unavailable'
+}
+
+function queueBadge(item: ExpiringMembershipQueueItem) {
+  if (item.isExpired) {
+    return (
+      <span className="rounded-md border border-rose-400/30 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-rose-200">
+        Expired
+      </span>
+    )
+  }
+  if (item.isFullyPaid) {
+    return (
+      <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-200">
+        Fully paid
+      </span>
+    )
+  }
+  if (item.status === 'PartialPayment' || item.status === 'ActivePendingPayment') {
     return (
       <span className="rounded-md border border-violet-400/30 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-200">
         Payment due
+      </span>
+    )
+  }
+  if (item.pendingAmount > 0.02) {
+    return (
+      <span className="rounded-md border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-200">
+        Balance due
       </span>
     )
   }
@@ -86,13 +126,14 @@ export function RenewalQueuePanel({ enabled }: { enabled: boolean }) {
 
   const items = data?.items ?? []
   const total = data?.totalCount ?? 0
+  const needsCollect = (item: ExpiringMembershipQueueItem) => !item.isFullyPaid && item.pendingAmount > 0.02
 
   return (
     <>
       <GlassPanel
         role="admin"
         title="Renewal queue"
-        subtitle={`Plans ending in the next ${QUEUE_WITHIN_DAYS} days — renew before members hit the QR gate`}
+        subtitle={`Plans ending in ${QUEUE_WITHIN_DAYS} days or recently expired — fully paid members still need renewal before QR check-in`}
         action={
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -121,7 +162,7 @@ export function RenewalQueuePanel({ enabled }: { enabled: boolean }) {
           <p className="py-6 text-center text-sm text-rose-300">Could not load renewal queue.</p>
         ) : items.length === 0 ? (
           <p className="py-6 text-center text-sm text-slate-500">
-            No memberships expiring in the next {QUEUE_WITHIN_DAYS} days.
+            No memberships expiring in the next {QUEUE_WITHIN_DAYS} days or recently expired.
           </p>
         ) : (
           <>
@@ -143,33 +184,36 @@ export function RenewalQueuePanel({ enabled }: { enabled: boolean }) {
                       >
                         {item.userName?.trim() || `Member #${item.userId}`}
                       </Link>
-                      {statusChip(item.status)}
+                      {queueBadge(item)}
                     </div>
                     <p className="mt-0.5 truncate text-xs text-slate-400">
                       {item.planName ?? 'Plan'} · ends {formatEndDate(item.endDate)}
                       {item.memberPhone ? ` · ${item.memberPhone}` : ''}
                     </p>
+                    <p className="mt-1 text-xs text-slate-500">{paymentSummary(item)}</p>
                   </div>
                   <span
-                    className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium ${urgencyClass(item.daysRemaining)}`}
+                    className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium ${urgencyClass(item)}`}
                   >
-                    {daysLabel(item.daysRemaining)}
+                    {timelineLabel(item)}
                   </span>
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => collectPayment(item)}
-                      className="rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
-                    >
-                      Collect
-                    </button>
+                    {needsCollect(item) ? (
+                      <button
+                        type="button"
+                        onClick={() => collectPayment(item)}
+                        className="rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
+                      >
+                        Collect
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => void openMemberships(item)}
                       disabled={openingUserId === item.userId}
                       className="rounded-lg border border-violet-400/35 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-100 hover:bg-violet-500/20 disabled:opacity-50"
                     >
-                      {openingUserId === item.userId ? 'Opening…' : 'Renew'}
+                      {openingUserId === item.userId ? 'Opening…' : item.isExpired ? 'Renew access' : 'Renew'}
                     </button>
                   </div>
                 </li>

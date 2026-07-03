@@ -1,0 +1,1 @@
+﻿New workout assigned: {{WorkoutName}}. Start {{StartDate}} — {{GymName}}

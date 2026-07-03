@@ -218,7 +218,10 @@ class ProfileScreen extends ConsumerWidget {
                         label: 'Security & devices',
                         onTap: () => context.push('/profile/security'),
                       ),
-                      _ActionRow(icon: CupertinoIcons.bell, label: 'Notifications', onTap: () {}),
+                      _ActionRow(icon: CupertinoIcons.bell, label: 'Notifications', onTap: () {
+                        HapticFeedback.selectionClick();
+                        context.push('/profile/notifications');
+                      }),
                       _ActionRow(
                         icon: CupertinoIcons.lock,
                         label: 'Privacy',

@@ -61,6 +61,11 @@ export interface ExpiringMembershipQueueItem {
   memberPhone?: string | null
   planName?: string | null
   daysRemaining: number
+  isExpired: boolean
+  membershipPaymentId?: number | null
+  pendingAmount: number
+  paymentStatus?: string | null
+  isFullyPaid: boolean
 }
 
 export interface PagedExpiringMembershipQueueResponse {

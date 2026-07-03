@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../components/layout/DashboardSubpageShell'
+import { BillingPaymentsNav } from '../components/billing/BillingPaymentsNav'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { Input } from '../components/ui/Input'
@@ -89,6 +90,8 @@ export function WaiveOffRequestsPage() {
         titleGradient="waive-off requests"
         subtitle="Admin-approved fee reductions (distinct from coupon discounts)"
       >
+        <BillingPaymentsNav />
+
         <div className="mb-4 flex flex-wrap gap-2">
           {(['Pending', 'Approved', 'Rejected', 'All'] as const).map((s) => (
             <button

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using GymManagement.API.Attributes;
+using GymManagement.API.Helpers;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Services;
@@ -14,10 +15,12 @@ namespace GymManagement.API.Controllers
     public class MembershipPaymentsController : ControllerBase
     {
         private readonly IMembershipPaymentService _service;
+        private readonly IGymBrandingService _branding;
 
-        public MembershipPaymentsController(IMembershipPaymentService service)
+        public MembershipPaymentsController(IMembershipPaymentService service, IGymBrandingService branding)
         {
             _service = service;
+            _branding = branding;
         }
 
         [HttpGet("dashboard-summary")]
@@ -100,9 +103,30 @@ namespace GymManagement.API.Controllers
         [HttpGet("transactions")]
         [HasPermission(PermissionCodes.Payments)]
         public async Task<ActionResult<IReadOnlyList<MembershipPaymentTransactionListDto>>> Transactions(
-            [FromQuery] MembershipPaymentTransactionQuery query,
-            CancellationToken ct) =>
-            Ok(await _service.ListTransactionsAsync(query, ct));
+            [FromQuery] string? fromDate,
+            [FromQuery] string? toDate,
+            [FromQuery] string? status,
+            [FromQuery] string? method,
+            [FromQuery] int? userId,
+            CancellationToken ct)
+        {
+            var query = MembershipPaymentQueryParsing.ParseTransactionListQuery(
+                fromDate, toDate, status, method, userId);
+            return Ok(await _service.ListTransactionsAsync(query, ct));
+        }
+
+        [HttpGet("receipt-branding")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<GymBrandingDto>> ReceiptBranding(CancellationToken ct) =>
+            Ok(await _branding.GetAsync(ct));
+
+        [HttpGet("transactions/{transactionId:int}/receipt-pdf")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<IActionResult> ReceiptPdf(int transactionId, CancellationToken ct)
+        {
+            var bytes = await _service.GetReceiptPdfForTransactionAsync(transactionId, ct);
+            return File(bytes, "application/pdf", $"payment-receipt-{transactionId}.pdf");
+        }
 
         [HttpPost("transactions/{transactionId:int}/void")]
         [HasPermission(PermissionCodes.VoidPayment)]
@@ -126,6 +150,34 @@ namespace GymManagement.API.Controllers
             var staffUserId = ResolveStaffUserId();
             if (!staffUserId.HasValue) return Unauthorized();
             return Ok(await _service.RefundTransactionAsync(transactionId, dto, staffUserId.Value, ct));
+        }
+
+        [HttpPost("transactions/{transactionId:int}/send-receipt")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<SendPaymentReceiptResultDto>> SendReceipt(
+            int transactionId,
+            [FromBody] SendPaymentReceiptRequestDto? dto,
+            CancellationToken ct)
+        {
+            var channel = string.IsNullOrWhiteSpace(dto?.Channel) ? "both" : dto.Channel.Trim().ToLowerInvariant();
+            if (channel is not ("email" or "sms" or "both"))
+                return BadRequest(new { message = "Channel must be email, sms, or both." });
+
+            return Ok(await _service.SendPaymentReceiptForTransactionAsync(transactionId, channel, ct));
+        }
+
+        [HttpPost("{id:int}/send-due-reminder")]
+        [HasPermission(PermissionCodes.Payments)]
+        public async Task<ActionResult<SendPaymentReceiptResultDto>> SendDueReminder(
+            int id,
+            [FromBody] SendPaymentReceiptRequestDto? dto,
+            CancellationToken ct)
+        {
+            var channel = string.IsNullOrWhiteSpace(dto?.Channel) ? "both" : dto.Channel.Trim().ToLowerInvariant();
+            if (channel is not ("email" or "sms" or "both"))
+                return BadRequest(new { message = "Channel must be email, sms, or both." });
+
+            return Ok(await _service.SendPaymentDueReminderForMembershipPaymentAsync(id, channel, ct));
         }
 
         [HttpGet("enterprise-dashboard")]

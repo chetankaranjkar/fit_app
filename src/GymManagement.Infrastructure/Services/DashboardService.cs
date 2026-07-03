@@ -18,17 +18,23 @@ namespace GymManagement.Infrastructure.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _context;
         private readonly IOptions<NotificationWebhookOptions> _notificationOptions;
+        private readonly IEmailSettingsService _emailSettings;
+        private readonly ISmsTransportService _smsTransport;
         private readonly IAppCache _cache;
 
         public DashboardService(
             IUnitOfWork unitOfWork,
             ApplicationDbContext context,
             IOptions<NotificationWebhookOptions> notificationOptions,
+            IEmailSettingsService emailSettings,
+            ISmsTransportService smsTransport,
             IAppCache cache)
         {
             _unitOfWork = unitOfWork;
             _context = context;
             _notificationOptions = notificationOptions;
+            _emailSettings = emailSettings;
+            _smsTransport = smsTransport;
             _cache = cache;
         }
 
@@ -246,11 +252,19 @@ namespace GymManagement.Infrastructure.Services
             };
 
             var n = _notificationOptions.Value;
+            var smtp = await _emailSettings.GetSmtpConfigAsync();
+            var smtpConfigured = smtp.IsConfigured;
+            var smsConfigured = await _smsTransport.IsConfiguredAsync();
+            var smsExpiryReminders = await _smsTransport.AllowsExpiryRemindersAsync();
             var hooks = new NotificationHookStatusDto
             {
                 EmailEnabled = !string.IsNullOrWhiteSpace(n.EmailWebhookUrl),
-                WhatsAppEnabled = !string.IsNullOrWhiteSpace(n.WhatsAppWebhookUrl),
-                ScheduledRemindersEnabled = n.EnableScheduledReminders && n.HasOutboundWebhook,
+                SmtpEmailConfigured = smtpConfigured,
+                WhatsAppEnabled = smsConfigured,
+                ScheduledRemindersEnabled = (n.EnableScheduledReminders
+                        && !string.IsNullOrWhiteSpace(n.EmailWebhookUrl))
+                    || smsExpiryReminders
+                    || (smtpConfigured && smtp.SendMembershipExpiryReminders),
                 InAppExpiryRemindersEnabled = n.EnableInAppMembershipExpiryReminders,
                 MembershipExpiryReminderDays = n.MembershipExpiryReminderDays,
                 InAppMembershipExpiryReminderDays = n.InAppMembershipExpiryReminderDays,

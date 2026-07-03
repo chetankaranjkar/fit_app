@@ -1,0 +1,1 @@
+Your {{PlanName}} expires in {{DaysRemaining}} day(s) — {{GymName}}

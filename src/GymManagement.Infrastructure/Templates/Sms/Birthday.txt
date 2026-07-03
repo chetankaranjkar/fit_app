@@ -1,0 +1,1 @@
+﻿Happy Birthday {{MemberName}}! Wishing you a great year from {{GymName}}.

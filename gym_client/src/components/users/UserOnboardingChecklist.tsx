@@ -11,15 +11,19 @@ export type OnboardingStep = {
 export function UserOnboardingChecklist({
   steps,
   loading,
+  aside,
 }: {
   steps: OnboardingStep[]
   loading?: boolean
+  aside?: React.ReactNode
 }) {
   const doneCount = steps.filter((s) => s.done).length
   const allDone = doneCount === steps.length
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1">
       <div>
         <h2 className="text-sm font-semibold text-white">Member onboarding</h2>
         <p className="mt-0.5 text-xs text-slate-400">
@@ -73,6 +77,9 @@ export function UserOnboardingChecklist({
           </li>
         ))}
       </ol>
+        </div>
+        {aside ? <aside className="w-full shrink-0 lg:max-w-sm">{aside}</aside> : null}
+      </div>
     </div>
   )
 }

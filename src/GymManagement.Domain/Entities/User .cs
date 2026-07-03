@@ -28,6 +28,10 @@ namespace GymManagement.Domain.Entities
         /// <summary>CSV of .NET <see cref="DayOfWeek"/> ints (0=Sun … 6=Sat).</summary>
         public string? TrainingDaysOfWeek { get; set; }
         public bool IsActive { get; set; } = true;
+        /// <summary>Opt-in. When true, member receives payment receipts and renewal emails (if gym SMTP is configured).</summary>
+        public bool ReceiveEmailNotifications { get; set; }
+        /// <summary>Opt-in. When true, member receives SMS/WhatsApp webhook notifications.</summary>
+        public bool ReceiveSmsNotifications { get; set; }
         public string? QrCode { get; set; }
         public string? MembershipStatus { get; set; }
         public int? OrganizationId { get; set; }

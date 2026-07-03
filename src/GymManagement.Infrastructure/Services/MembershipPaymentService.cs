@@ -20,6 +20,8 @@ namespace GymManagement.Infrastructure.Services
         private readonly IFinancialAuditService _audit;
         private readonly IAppCache _cache;
         private readonly IMemberPushNotificationService _push;
+        private readonly INotificationWebhookDispatcher _notificationDispatcher;
+        private readonly IWebRootPathResolver _webRootPaths;
 
         public MembershipPaymentService(
             IUnitOfWork unitOfWork,
@@ -29,7 +31,9 @@ namespace GymManagement.Infrastructure.Services
             IBillingCalculationService billing,
             IFinancialAuditService audit,
             IAppCache cache,
-            IMemberPushNotificationService push)
+            IMemberPushNotificationService push,
+            INotificationWebhookDispatcher notificationDispatcher,
+            IWebRootPathResolver webRootPaths)
         {
             _ = unitOfWork;
             _db = db;
@@ -39,6 +43,8 @@ namespace GymManagement.Infrastructure.Services
             _audit = audit;
             _cache = cache;
             _push = push;
+            _notificationDispatcher = notificationDispatcher;
+            _webRootPaths = webRootPaths;
         }
 
         private static bool IsTrialPlan(MembershipPlan plan)

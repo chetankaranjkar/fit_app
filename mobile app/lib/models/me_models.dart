@@ -51,6 +51,23 @@ class MeProfile {
   }
 }
 
+class MeNotificationPreferences {
+  final bool receiveEmailNotifications;
+  final bool receiveSmsNotifications;
+
+  const MeNotificationPreferences({
+    required this.receiveEmailNotifications,
+    required this.receiveSmsNotifications,
+  });
+
+  factory MeNotificationPreferences.fromJson(Map<String, dynamic> json) {
+    return MeNotificationPreferences(
+      receiveEmailNotifications: json['receiveEmailNotifications'] == true,
+      receiveSmsNotifications: json['receiveSmsNotifications'] == true,
+    );
+  }
+}
+
 /// Progress / transformation photo (`UserBodyImage`) from `/api/me/progress-photos`.
 class MeProgressPhoto {
   final int id;

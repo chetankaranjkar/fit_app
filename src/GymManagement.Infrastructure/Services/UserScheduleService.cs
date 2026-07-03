@@ -8,10 +8,14 @@ namespace GymManagement.Infrastructure.Services
     public class UserScheduleService : IUserScheduleService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly INotificationEventService _notifications;
 
-        public UserScheduleService(IUnitOfWork unitOfWork)
+        public UserScheduleService(
+            IUnitOfWork unitOfWork,
+            INotificationEventService notifications)
         {
             _unitOfWork = unitOfWork;
+            _notifications = notifications;
         }
 
         public async Task<IEnumerable<UserScheduleDto>> GetAllSchedulesAsync()
@@ -69,6 +73,8 @@ namespace GymManagement.Infrastructure.Services
             await _unitOfWork.UserSchedules.AddAsync(schedule);
             await _unitOfWork.SaveChangesAsync();
 
+            await _notifications.QueueWorkoutAssignedAsync(schedule.UserId, schedule.WorkoutPlanId);
+
             var schedules = new[] { schedule };
             var dtos = await MapSchedulesToDtoAsync(schedules);
             return dtos.First();
@@ -108,6 +114,8 @@ namespace GymManagement.Infrastructure.Services
 
             await _unitOfWork.UserSchedules.AddAsync(schedule);
             await _unitOfWork.SaveChangesAsync();
+
+            await _notifications.QueueWorkoutAssignedAsync(schedule.UserId, schedule.WorkoutPlanId);
 
             var schedules = new[] { schedule };
             var dtos = await MapSchedulesToDtoAsync(schedules);

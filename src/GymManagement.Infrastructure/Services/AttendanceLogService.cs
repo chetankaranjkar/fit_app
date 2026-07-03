@@ -13,11 +13,16 @@ namespace GymManagement.Infrastructure.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _context;
+        private readonly INotificationEventService _notifications;
 
-        public AttendanceLogService(IUnitOfWork unitOfWork, ApplicationDbContext context)
+        public AttendanceLogService(
+            IUnitOfWork unitOfWork,
+            ApplicationDbContext context,
+            INotificationEventService notifications)
         {
             _unitOfWork = unitOfWork;
             _context = context;
+            _notifications = notifications;
         }
 
         public async Task<PagedResultDto<AttendanceLogDto>> GetPagedAsync(
@@ -175,6 +180,8 @@ namespace GymManagement.Infrastructure.Services
             await _unitOfWork.AttendanceLogs.AddAsync(attendanceLog);
             await _unitOfWork.SaveChangesAsync();
 
+            await _notifications.QueueAttendanceAsync(userId, checkInTime);
+
             var logs = new[] { attendanceLog };
             var dtos = await MapAttendanceLogsToDtoAsync(logs);
             return dtos.First();
@@ -227,6 +234,9 @@ namespace GymManagement.Infrastructure.Services
 
             await _unitOfWork.AttendanceLogs.AddAsync(attendanceLog);
             await _unitOfWork.SaveChangesAsync();
+
+            if (attendanceLog.UserId.HasValue)
+                await _notifications.QueueAttendanceAsync(attendanceLog.UserId.Value, checkInTime);
 
             var logs = new[] { attendanceLog };
             var dtos = await MapAttendanceLogsToDtoAsync(logs);

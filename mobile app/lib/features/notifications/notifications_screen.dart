@@ -203,7 +203,7 @@ class _NotificationCard extends StatelessWidget {
   IconData _iconFor(MeNotification notification) {
     if (notification.isWorkoutToday) return CupertinoIcons.flame_fill;
     if (notification.isPaymentDue) return CupertinoIcons.money_dollar_circle_fill;
-    if (notification.isMembershipExpiring) return CupertinoIcons.calendar_badge_exclamationmark;
+    if (notification.isMembershipExpiring) return CupertinoIcons.exclamationmark_circle_fill;
     return CupertinoIcons.bell_fill;
   }
 }

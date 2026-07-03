@@ -47,17 +47,24 @@ namespace GymManagement.Infrastructure.Hosting
                             .ConfigureAwait(false);
                     }
 
-                    if (opts.EnableScheduledReminders && opts.HasOutboundWebhook)
+                    var emailSettings = scope.ServiceProvider.GetRequiredService<IEmailSettingsService>();
+                    var smtp = await emailSettings.GetSmtpConfigAsync(stoppingToken).ConfigureAwait(false);
+                    var smsTransport = scope.ServiceProvider.GetRequiredService<ISmsTransportService>();
+                    var smsScheduled = await smsTransport.AllowsExpiryRemindersAsync(stoppingToken).ConfigureAwait(false);
+                    var webhookScheduled = opts.EnableScheduledReminders && !string.IsNullOrWhiteSpace(opts.EmailWebhookUrl);
+                    var smtpScheduled = smtp.IsConfigured && smtp.SendMembershipExpiryReminders;
+
+                    if (webhookScheduled || smsScheduled || smtpScheduled)
                     {
                         var webhooks = scope.ServiceProvider
                             .GetRequiredService<IMembershipExpiryWebhookReminderService>();
                         await webhooks.DispatchMilestoneRemindersAsync(opts.MembershipExpiryReminderDays, stoppingToken)
                             .ConfigureAwait(false);
                     }
-                    else if (opts.EnableScheduledReminders && !opts.HasOutboundWebhook)
+                    else if (opts.EnableScheduledReminders && !webhookScheduled && !smsScheduled && !smtpScheduled)
                     {
                         _logger.LogWarning(
-                            "EnableScheduledReminders is true but no Email/WhatsApp webhook URL is configured; outbound reminders skipped.");
+                            "EnableScheduledReminders is true but no Email webhook, SMS settings, or SMTP expiry reminders are configured; outbound reminders skipped.");
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

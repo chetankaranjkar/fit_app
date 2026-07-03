@@ -491,7 +491,7 @@ class _PendingBillingCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Due ${Fmt.date(access.nextDueDate!)}',
-              style: AppType.caption.copyWith(color: AppColors.resolveMuted(context)),
+              style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
             ),
           ],
           const SizedBox(height: AppSpacing.md),

@@ -21,15 +21,18 @@ namespace GymManagement.Infrastructure.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _context;
         private readonly INotificationWebhookDispatcher _notificationWebhookDispatcher;
+        private readonly IWebRootPathResolver _webRootPaths;
 
         public InvoiceService(
             IUnitOfWork unitOfWork,
             ApplicationDbContext context,
-            INotificationWebhookDispatcher notificationWebhookDispatcher)
+            INotificationWebhookDispatcher notificationWebhookDispatcher,
+            IWebRootPathResolver webRootPaths)
         {
             _unitOfWork = unitOfWork;
             _context = context;
             _notificationWebhookDispatcher = notificationWebhookDispatcher;
+            _webRootPaths = webRootPaths;
         }
 
         private IQueryable<Invoice> InvoicesWithIncludes() =>
@@ -314,6 +317,8 @@ namespace GymManagement.Infrastructure.Services
             var payment = await _context.Payments
                 .Include(p => p.Membership)
                     .ThenInclude(m => m.Plan)
+                .Include(p => p.Membership)
+                    .ThenInclude(m => m.User)
                 .FirstOrDefaultAsync(p => p.Id == paymentId);
 
             if (payment?.Membership?.Plan == null)
@@ -391,11 +396,14 @@ namespace GymManagement.Infrastructure.Services
                                 PaymentMode = payment.PaymentMode.ToString(),
                                 PaymentDateUtc = paidInstant,
                                 UserMembershipId = membership.Id,
+                                UserId = membership.UserId,
                                 CustomerName = createdDto.CustomerName,
                                 CustomerEmail = createdDto.CustomerEmail,
+                                MemberPhone = membership.User?.Phone,
                                 TotalAmount = createdDto.TotalAmount,
                                 Currency = createdDto.Currency ?? "INR",
                                 PlanName = plan.PlanName,
+                                AttachmentPaths = await TryCreateInvoiceAttachmentAsync(createdDto.Id),
                             }).ConfigureAwait(false);
                     }
 
@@ -415,6 +423,8 @@ namespace GymManagement.Infrastructure.Services
         {
             var invoice = await GetByIdAsync(id);
             if (invoice == null) throw new Exception("Invoice not found");
+
+            var branding = await LoadInvoiceBrandingAsync();
 
             // Required by QuestPDF in recent versions.
             QuestPDF.Settings.License = LicenseType.Community;
@@ -443,11 +453,25 @@ namespace GymManagement.Infrastructure.Services
                                 left.Spacing(2);
                                 left.Item().Row(brand =>
                                 {
-                                    brand.ConstantItem(34).Height(34).Background(Colors.Blue.Darken2).AlignCenter().AlignMiddle()
-                                        .Text("GM").FontColor(Colors.White).SemiBold().FontSize(11);
+                                    if (!string.IsNullOrWhiteSpace(branding.LogoFilePath))
+                                    {
+                                        brand.ConstantItem(42).Height(42).Image(branding.LogoFilePath).FitArea();
+                                    }
+                                    else
+                                    {
+                                        var initials = new string(branding.GymName
+                                            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                                            .Select(w => w[0])
+                                            .Take(2)
+                                            .ToArray()).ToUpperInvariant();
+                                        if (string.IsNullOrWhiteSpace(initials))
+                                            initials = "GM";
+                                        brand.ConstantItem(34).Height(34).Background(Colors.Blue.Darken2).AlignCenter().AlignMiddle()
+                                            .Text(initials).FontColor(Colors.White).SemiBold().FontSize(11);
+                                    }
                                     brand.RelativeItem().PaddingLeft(8).Column(text =>
                                     {
-                                        text.Item().Text("Gym Management").FontSize(19).Bold().FontColor(Colors.Blue.Darken2);
+                                        text.Item().Text(branding.GymName).FontSize(19).Bold().FontColor(Colors.Blue.Darken2);
                                         text.Item().Text("Invoice / Receipt").FontSize(11).SemiBold().FontColor(Colors.Grey.Darken1);
                                     });
                                 });
@@ -593,9 +617,9 @@ namespace GymManagement.Infrastructure.Services
                         {
                             r.RelativeItem().Column(c =>
                             {
-                                c.Item().Text("Gym Management Pvt. Ltd.").SemiBold().FontSize(9);
-                                c.Item().Text("GSTIN: 00ABCDE1234F1Z5 • support@gym.local").FontSize(8.5f);
-                                c.Item().Text("123 Fitness Street, Your City, India").FontSize(8.5f);
+                                c.Item().Text(branding.GymName).SemiBold().FontSize(9);
+                                if (!string.IsNullOrWhiteSpace(branding.SupportLine))
+                                    c.Item().Text(branding.SupportLine).FontSize(8.5f);
                             });
                             r.ConstantItem(160).Column(c =>
                             {
@@ -605,7 +629,7 @@ namespace GymManagement.Infrastructure.Services
                         });
                         footer.Item().PaddingTop(6).Row(r =>
                         {
-                            r.RelativeItem().Text("Generated by Gym Management")
+                            r.RelativeItem().Text($"Generated by {branding.GymName}")
                                 .FontSize(9).FontColor(Colors.Grey.Darken1);
                             r.ConstantItem(120).AlignRight().Text(text =>
                             {
@@ -616,6 +640,50 @@ namespace GymManagement.Infrastructure.Services
                     });
                 });
             }).GeneratePdf();
+        }
+
+        private async Task<InvoicePdfBranding> LoadInvoiceBrandingAsync()
+        {
+            var settings = await _context.GymSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Id == 1);
+            var gymName = settings?.GymName?.Trim();
+            if (string.IsNullOrWhiteSpace(gymName))
+                gymName = settings?.EmailFromDisplayName?.Trim();
+            if (string.IsNullOrWhiteSpace(gymName))
+            {
+                var org = await _context.Organizations.AsNoTracking().OrderBy(o => o.Id).FirstOrDefaultAsync();
+                gymName = org?.Name?.Trim();
+            }
+            if (string.IsNullOrWhiteSpace(gymName))
+                gymName = "Gym Management";
+
+            var logoUrl = settings?.InvoiceLogoUrl?.Trim();
+            if (string.IsNullOrWhiteSpace(logoUrl))
+                logoUrl = settings?.GymLogoUrl?.Trim();
+
+            var supportEmail = settings?.EmailFromAddress?.Trim();
+            var supportLine = string.IsNullOrWhiteSpace(supportEmail) ? null : supportEmail;
+
+            return new InvoicePdfBranding(
+                gymName,
+                _webRootPaths.MapToAbsolutePath(logoUrl),
+                supportLine);
+        }
+
+        private sealed record InvoicePdfBranding(string GymName, string? LogoFilePath, string? SupportLine);
+
+        private async Task<IReadOnlyList<string>?> TryCreateInvoiceAttachmentAsync(int invoiceId)
+        {
+            try
+            {
+                var bytes = await GeneratePdfBytesAsync(invoiceId);
+                var path = Path.Combine(Path.GetTempPath(), $"gym-invoice-{invoiceId}-{Guid.NewGuid():N}.pdf");
+                await File.WriteAllBytesAsync(path, bytes);
+                return new[] { path };
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private async Task<string> GenerateInvoiceNumberAsync()

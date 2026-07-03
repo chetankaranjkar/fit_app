@@ -2,8 +2,10 @@
 
 Use this document to work through improvements **one item at a time**. Mark items with `[x]` when done.
 
-**Last updated:** May 2026  
-**Related docs:** [USER_GUIDE.md](./USER_GUIDE.md) · [deploy/DEPLOYMENT.md](../deploy/DEPLOYMENT.md) · [deploy/DEPLOYMENT-TESTING.md](../deploy/DEPLOYMENT-TESTING.md)
+**Last updated:** Jun 2026  
+**Related docs:** [SESSION_HANDOFF.md](./SESSION_HANDOFF.md) (latest done + next-up) · [USER_GUIDE.md](./USER_GUIDE.md) · [deploy/DEPLOYMENT.md](../deploy/DEPLOYMENT.md) · [deploy/DEPLOYMENT-TESTING.md](../deploy/DEPLOYMENT-TESTING.md)
+
+> **Note:** Notifications (email + SMS/WhatsApp settings, templates, outbox, expiry/diet reminders) and the member portal/mobile profile shipped in Jun 2026 — some checkboxes below may lag reality. See `SESSION_HANDOFF.md` for the current state.
 
 ---
 
@@ -286,7 +288,7 @@ Work in this sequence for the fastest impact:
 - [ ] 7.3 Bulk member import
 - [ ] 7.4 Export member report
 - [ ] 7.5 Bulk workout assignment
-- [ ] 7.6 Diet reminder notifications
+- [x] 7.6 Diet reminder notifications (email + SMS/WhatsApp via notification engine)
 
 ---
 
@@ -346,7 +348,7 @@ Work in this sequence for the fastest impact:
 **Checklist**
 
 - [ ] 10.1 Push notifications FCM
-- [ ] 10.2 Membership expiry reminders
+- [x] 10.2 Membership expiry reminders (DB settings + hosted service + templated email/SMS/WhatsApp)
 - [ ] 10.3 Workout day reminders
 - [ ] 10.4 Notification center mobile
 
@@ -446,7 +448,7 @@ PHASE 7 — WEB POLISH
 [ ] 7.3  Bulk member import
 [ ] 7.4  Export member report
 [ ] 7.5  Bulk workout assignment
-[ ] 7.6  Diet reminder notifications
+[x] 7.6  Diet reminder notifications
 
 PHASE 8 — INFRASTRUCTURE
 [x] 8.1  Docker deploy testing mode
@@ -466,7 +468,7 @@ PHASE 9 — TRAINING / AI
 
 PHASE 10 — NOTIFICATIONS
 [ ] 10.1 Push notifications FCM
-[ ] 10.2 Membership expiry reminders
+[x] 10.2 Membership expiry reminders
 [ ] 10.3 Workout day reminders
 [ ] 10.4 Notification center mobile
 

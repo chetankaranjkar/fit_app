@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Payment Receipt — {{GymName}}</title>
+  <!--[if mso]><style type="text/css">body,table,td{font-family:Arial,sans-serif!important;}</style><![endif]-->
+</head>
+<body style="margin:0;padding:0;background-color:#0f172a;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#0f172a;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;width:100%;background-color:#1e293b;border-radius:16px;overflow:hidden;border:1px solid #334155;">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);padding:32px 40px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;">{{GymName}}</h1>
+              <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">Payment Confirmation</p>
+            </td>
+          </tr>
+          <!-- Success icon -->
+          <tr>
+            <td style="padding:32px 40px 0;text-align:center;">
+              <div style="display:inline-block;width:56px;height:56px;background-color:#064e3b;border-radius:50%;line-height:56px;font-size:28px;">✓</div>
+              <h2 style="margin:16px 0 8px;color:#f8fafc;font-size:22px;font-weight:600;">Thank you, {{MemberName}}!</h2>
+              <p style="margin:0;color:#94a3b8;font-size:15px;line-height:1.6;">Your payment has been received successfully.</p>
+            </td>
+          </tr>
+          <!-- Amount highlight -->
+          <tr>
+            <td style="padding:24px 40px;text-align:center;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#0f172a;border-radius:12px;border:1px solid #334155;">
+                <tr>
+                  <td style="padding:24px;text-align:center;">
+                    <p style="margin:0 0 4px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Amount Paid</p>
+                    <p style="margin:0;color:#34d399;font-size:36px;font-weight:700;">₹{{Amount}}</p>
+                    <span style="display:inline-block;margin-top:12px;padding:4px 12px;background-color:#064e3b;color:#6ee7b7;font-size:12px;font-weight:600;border-radius:999px;">{{PaymentStatus}}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Details table -->
+          <tr>
+            <td style="padding:0 40px 32px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
+                <tr><td colspan="2" style="padding:0 0 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #334155;">Payment Details</td></tr>
+                <tr>
+                  <td style="padding:12px 0;color:#94a3b8;font-size:14px;width:40%;">Receipt No.</td>
+                  <td style="padding:12px 0;color:#f1f5f9;font-size:14px;font-weight:600;text-align:right;">{{ReceiptNumber}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0;color:#94a3b8;font-size:14px;border-top:1px solid #1e293b;">Invoice No.</td>
+                  <td style="padding:12px 0;color:#f1f5f9;font-size:14px;font-weight:600;text-align:right;border-top:1px solid #1e293b;">{{InvoiceNumber}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0;color:#94a3b8;font-size:14px;border-top:1px solid #1e293b;">Plan</td>
+                  <td style="padding:12px 0;color:#f1f5f9;font-size:14px;font-weight:600;text-align:right;border-top:1px solid #1e293b;">{{PlanName}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0;color:#94a3b8;font-size:14px;border-top:1px solid #1e293b;">Payment Mode</td>
+                  <td style="padding:12px 0;color:#f1f5f9;font-size:14px;font-weight:600;text-align:right;border-top:1px solid #1e293b;">{{PaymentMode}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0;color:#94a3b8;font-size:14px;border-top:1px solid #1e293b;">Date</td>
+                  <td style="padding:12px 0;color:#f1f5f9;font-size:14px;font-weight:600;text-align:right;border-top:1px solid #1e293b;">{{PaymentDate}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0;color:#94a3b8;font-size:14px;border-top:1px solid #1e293b;">Member ID</td>
+                  <td style="padding:12px 0;color:#f1f5f9;font-size:14px;font-weight:600;text-align:right;border-top:1px solid #1e293b;">{{MemberId}}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#0f172a;padding:24px 40px;border-top:1px solid #334155;text-align:center;">
+              <p style="margin:0 0 8px;color:#64748b;font-size:13px;">Questions? Contact us at <a href="mailto:{{SupportEmail}}" style="color:#60a5fa;text-decoration:none;">{{SupportEmail}}</a> · {{SupportPhone}}</p>
+              <p style="margin:0 0 8px;color:#475569;font-size:12px;">{{Website}}</p>
+              <p style="margin:16px 0 0;color:#334155;font-size:11px;">© {{CurrentYear}} {{GymName}}. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

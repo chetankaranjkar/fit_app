@@ -1,0 +1,1 @@
+Hi {{MemberName}}, Rs.{{PendingAmount}} is pending for {{PlanName}} at {{GymName}}. Please pay by {{NextDueDate}}.

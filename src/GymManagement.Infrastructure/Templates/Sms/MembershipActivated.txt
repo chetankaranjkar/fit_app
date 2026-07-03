@@ -1,0 +1,1 @@
+﻿Welcome! Your {{PlanName}} membership is now active at {{GymName}}.

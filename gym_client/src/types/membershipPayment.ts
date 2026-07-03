@@ -57,6 +57,9 @@ export interface MembershipPaymentTransactionRow {
   remarks?: string | null
   collectedByName?: string | null
   planName?: string | null
+  pendingAmount?: number
+  receiveEmailNotifications?: boolean
+  receiveSmsNotifications?: boolean
 }
 
 export interface DuplicatePaymentCheck {
@@ -195,4 +198,14 @@ export interface PendingMembershipPaymentRedirect {
   startDate: string
   endDate: string
   membershipPaymentId: number
+}
+
+export interface SendNotificationChannelResult {
+  sent: boolean
+  message?: string | null
+}
+
+export interface SendPaymentReceiptResult {
+  email: SendNotificationChannelResult
+  sms: SendNotificationChannelResult
 }

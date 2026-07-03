@@ -27,6 +27,10 @@ namespace GymManagement.Core.DTOs
         public string? TrainingDaysOfWeek { get; set; }
         public string? TrainingScheduleLabel { get; set; }
         public bool IsActive { get; set; }
+        /// <summary>Opt-in for outbound email (receipts, renewal reminders, diet).</summary>
+        public bool ReceiveEmailNotifications { get; set; } = true;
+        /// <summary>Opt-in for SMS / WhatsApp outbound notifications.</summary>
+        public bool ReceiveSmsNotifications { get; set; } = true;
         /// <summary>Login role when the user has an account: User (Member), Instructor, or Admin.</summary>
         public Role? Role { get; set; }
         /// <summary>Login email when the user has an account (same as <see cref="Email"/> when linked to <c>AuthUsers</c>).</summary>
@@ -100,6 +104,8 @@ namespace GymManagement.Core.DTOs
         /// <summary>When true, admin allows overlapping coach bookings.</summary>
         public bool OverrideTrainingScheduleConflict { get; set; }
         public bool IsActive { get; set; } = true;
+        public bool ReceiveEmailNotifications { get; set; }
+        public bool ReceiveSmsNotifications { get; set; }
         /// <summary>Deprecated: use <see cref="Email"/> as login id. Optional legacy alias.</summary>
         public string? Username { get; set; }
         public string? Password { get; set; }
@@ -140,6 +146,8 @@ namespace GymManagement.Core.DTOs
         public string? TrainingDaysOfWeek { get; set; }
         public bool OverrideTrainingScheduleConflict { get; set; }
         public bool? IsActive { get; set; }
+        public bool? ReceiveEmailNotifications { get; set; }
+        public bool? ReceiveSmsNotifications { get; set; }
         /// <summary>Optional. If set, a new membership will be added for the user.</summary>
         public int? PlanId { get; set; }
         /// <summary>Optional. Start date for new membership (defaults to today if PlanId is set).</summary>

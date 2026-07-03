@@ -1,0 +1,1 @@
+﻿Invoice {{InvoiceNumber}} for Rs.{{Amount}} is ready. {{GymName}}

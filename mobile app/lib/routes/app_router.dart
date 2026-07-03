@@ -9,7 +9,9 @@ import '../features/media/onboarding_profile_photo_screen.dart';
 import '../features/media/transformation_tracker_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/diet/diet_screen.dart';
+import '../features/membership/membership_screen.dart';
 import '../features/notifications/notifications_screen.dart';
+import '../features/profile/notification_preferences_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/change_password_screen.dart';
 import '../features/profile/security_devices_screen.dart';
@@ -120,6 +122,11 @@ final appRouter = GoRouter(
           pageBuilder: (_, __) => _slidePage(const LoginHistoryScreen()),
         ),
       ],
+    ),
+    GoRoute(
+      path: '/profile/notifications',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const NotificationPreferencesScreen()),
     ),
     StatefulShellRoute.indexedStack(
       builder: (_, __, navigationShell) => AppShell(navigationShell: navigationShell),

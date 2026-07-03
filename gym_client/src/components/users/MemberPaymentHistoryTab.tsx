@@ -1,14 +1,16 @@
-import { Fragment, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { membershipPaymentsService } from '../../services/membershipPayments.service'
+import { usersService } from '../../services/users.service'
 import { formatInr } from '../../lib/formatInr'
+import { getApiErrorMessage } from '../../lib/apiErrors'
 import { usePermission } from '../../features/auth/hooks/usePermission'
 import { authService } from '../../services/auth.service'
 import { Button } from '../ui/Button'
 import { MembershipFinancialSummaryCard } from '../billing/MembershipFinancialSummaryCard'
-import type { MembershipPaymentDetail } from '../../types/membershipPayment'
+import type { MembershipPaymentDetail, MembershipPaymentTransaction } from '../../types/membershipPayment'
 import {
   computeNetPayable,
   getMembershipAmount,
@@ -39,19 +41,199 @@ function pickPrimaryBilling(rows: MembershipPaymentDetail[]) {
   return withBalance ?? rows[0]
 }
 
+function latestCompletedTransaction(row: MembershipPaymentDetail): MembershipPaymentTransaction | null {
+  const completed = row.transactions.filter((t) => (t.status ?? 'Completed') === 'Completed')
+  if (!completed.length) return null
+  return [...completed].sort(
+    (a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime(),
+  )[0]
+}
+
+type IconActionTone = 'neutral' | 'primary' | 'success' | 'muted'
+
+const iconActionToneClass: Record<IconActionTone, string> = {
+  neutral:
+    'border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/10 hover:text-white',
+  primary:
+    'border-blue-400/30 bg-blue-500/10 text-blue-200 hover:border-blue-400/60 hover:bg-blue-500/20 hover:text-white',
+  success:
+    'border-emerald-400/40 bg-emerald-500/15 text-emerald-200 hover:border-emerald-400/70 hover:bg-emerald-500/25 hover:text-white shadow-sm shadow-emerald-500/10',
+  muted:
+    'border-white/5 bg-white/[0.02] text-slate-500 cursor-not-allowed opacity-60',
+}
+
+function IconActionButton({
+  label,
+  tone = 'neutral',
+  busy = false,
+  disabled = false,
+  onClick,
+  children,
+}: {
+  label: string
+  tone?: IconActionTone
+  busy?: boolean
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={disabled || busy}
+      onClick={onClick}
+      className={[
+        'inline-flex size-8 items-center justify-center rounded-lg border transition-all duration-150',
+        'focus:outline-none focus:ring-2 focus:ring-white/20 disabled:cursor-not-allowed disabled:opacity-40',
+        'hover:-translate-y-0.5 active:translate-y-0',
+        iconActionToneClass[tone],
+      ].join(' ')}
+    >
+      {busy ? (
+        <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+      ) : (
+        children
+      )}
+    </button>
+  )
+}
+
+const ICONS = {
+  collect: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h2m4 0h4M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z" />
+    </svg>
+  ),
+  pdf: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+    </svg>
+  ),
+  email: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l9 6 9-6M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+    </svg>
+  ),
+  sms: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m-9 6l2.5-2.5H18a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v13z" />
+    </svg>
+  ),
+  timeline: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  enableEmail: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l9 6 9-6M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 11v4m0 0l-1.5-1.5M12 15l1.5-1.5" />
+    </svg>
+  ),
+  enableSms: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m-9 6l2.5-2.5H18a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v13z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 0l-1.5-1.5M12 12l1.5-1.5" />
+    </svg>
+  ),
+}
+
+function SendReceiptButtons({
+  transactionId,
+  sendingKey,
+  enablingKey,
+  emailEnabled,
+  smsEnabled,
+  onSend,
+  onEnable,
+}: {
+  transactionId: number
+  sendingKey: string | null
+  enablingKey: string | null
+  emailEnabled: boolean
+  smsEnabled: boolean
+  onSend: (transactionId: number, channel: 'email' | 'sms') => void
+  onEnable: (channel: 'email' | 'sms') => void
+}) {
+  const emailBusy = sendingKey === `${transactionId}-email`
+  const smsBusy = sendingKey === `${transactionId}-sms`
+  const emailEnabling = enablingKey === 'email'
+  const smsEnabling = enablingKey === 'sms'
+
+  return (
+    <>
+      {emailEnabled ? (
+        <IconActionButton
+          label="Send receipt by email"
+          tone="success"
+          busy={emailBusy}
+          disabled={smsBusy || emailEnabling || smsEnabling}
+          onClick={() => onSend(transactionId, 'email')}
+        >
+          {ICONS.email}
+        </IconActionButton>
+      ) : (
+        <IconActionButton
+          label="Enable email notifications for member"
+          tone="primary"
+          busy={emailEnabling}
+          disabled={emailBusy || smsBusy || smsEnabling}
+          onClick={() => onEnable('email')}
+        >
+          {ICONS.enableEmail}
+        </IconActionButton>
+      )}
+      {smsEnabled ? (
+        <IconActionButton
+          label="Send receipt by SMS / WhatsApp"
+          tone="success"
+          busy={smsBusy}
+          disabled={emailBusy || emailEnabling || smsEnabling}
+          onClick={() => onSend(transactionId, 'sms')}
+        >
+          {ICONS.sms}
+        </IconActionButton>
+      ) : (
+        <IconActionButton
+          label="Enable SMS notifications for member"
+          tone="primary"
+          busy={smsEnabling}
+          disabled={emailBusy || smsBusy || emailEnabling}
+          onClick={() => onEnable('sms')}
+        >
+          {ICONS.enableSms}
+        </IconActionButton>
+      )}
+    </>
+  )
+}
+
 export function MemberPaymentHistoryTab({
   userId,
   memberName,
   memberPhotoUrl,
+  receiveEmailNotifications = false,
+  receiveSmsNotifications = false,
 }: {
   userId: number
   memberName?: string
   memberPhotoUrl?: string | null
+  receiveEmailNotifications?: boolean
+  receiveSmsNotifications?: boolean
 }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const canPayments = usePermission(authService.permissionCodes.payments)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [ledgerOpen, setLedgerOpen] = useState(true)
+  const [sendingKey, setSendingKey] = useState<string | null>(null)
+  const [enablingKey, setEnablingKey] = useState<string | null>(null)
+  const [prefsOverride, setPrefsOverride] = useState<{ email?: boolean; sms?: boolean }>({})
+
+  const emailEnabled = prefsOverride.email ?? receiveEmailNotifications
+  const smsEnabled = prefsOverride.sms ?? receiveSmsNotifications
 
   const { data = [], isLoading } = useQuery({
     queryKey: ['membership-payments-user', userId],
@@ -143,6 +325,45 @@ export function MemberPaymentHistoryTab({
       setTimeout(() => URL.revokeObjectURL(url), 120_000)
     } catch {
       toast.error('Could not open invoice for printing.')
+    }
+  }
+
+  async function sendReceipt(transactionId: number, channel: 'email' | 'sms') {
+    setSendingKey(`${transactionId}-${channel}`)
+    try {
+      const { data } = await membershipPaymentsService.sendReceipt(transactionId, channel)
+      const result = channel === 'email' ? data.email : data.sms
+      if (result.sent) {
+        toast.success(result.message ?? (channel === 'email' ? 'Email sent.' : 'SMS sent.'))
+      } else {
+        toast.error(result.message ?? 'Notification was not sent.')
+      }
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, 'Could not send notification.'))
+    } finally {
+      setSendingKey(null)
+    }
+  }
+
+  async function enableNotification(channel: 'email' | 'sms') {
+    setEnablingKey(channel)
+    try {
+      await usersService.updateNotificationPreferences(userId, {
+        receiveEmailNotifications: channel === 'email' ? true : emailEnabled,
+        receiveSmsNotifications: channel === 'sms' ? true : smsEnabled,
+      })
+      setPrefsOverride((prev) => ({
+        ...prev,
+        ...(channel === 'email' ? { email: true } : { sms: true }),
+      }))
+      await queryClient.invalidateQueries({ queryKey: ['user', userId] })
+      toast.success(
+        channel === 'email' ? 'Email notifications enabled for member.' : 'SMS notifications enabled for member.',
+      )
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, 'Could not enable notifications.'))
+    } finally {
+      setEnablingKey(null)
     }
   }
 
@@ -298,6 +519,7 @@ export function MemberPaymentHistoryTab({
             {rows.map((row) => {
               const lp = lastPaymentDate(row)
               const open = expandedId === row.id
+              const latestTx = latestCompletedTransaction(row)
               return (
                 <Fragment key={row.id}>
                   <tr className="transition hover:bg-white/[0.03]">
@@ -340,36 +562,44 @@ export function MemberPaymentHistoryTab({
                       {lp ? new Date(lp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="!py-1.5 !text-xs"
-                          onClick={() =>
-                            navigate(
-                              collectPaymentPath(row.membershipId, userId, memberProfilePath(userId)),
-                            )
-                          }
-                        >
-                          Collect
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="!py-1.5 !text-xs"
-                          onClick={() => void downloadInvoice(row.id)}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {row.pendingAmount > 0.02 && (
+                          <IconActionButton
+                            label="Collect payment"
+                            tone="primary"
+                            onClick={() =>
+                              navigate(
+                                collectPaymentPath(row.membershipId, userId, memberProfilePath(userId)),
+                              )
+                            }
+                          >
+                            {ICONS.collect}
+                          </IconActionButton>
+                        )}
+                        <IconActionButton
+                          label="Download invoice PDF"
                           disabled={row.invoiceId == null}
+                          onClick={() => void downloadInvoice(row.id)}
                         >
-                          PDF
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="!py-1.5 !text-xs"
+                          {ICONS.pdf}
+                        </IconActionButton>
+                        {latestTx && (
+                          <SendReceiptButtons
+                            transactionId={latestTx.id}
+                            sendingKey={sendingKey}
+                            enablingKey={enablingKey}
+                            emailEnabled={emailEnabled}
+                            smsEnabled={smsEnabled}
+                            onSend={sendReceipt}
+                            onEnable={enableNotification}
+                          />
+                        )}
+                        <IconActionButton
+                          label={open ? 'Hide timeline' : 'Show timeline'}
                           onClick={() => setExpandedId(open ? null : row.id)}
                         >
-                          {open ? 'Hide' : 'Timeline'}
-                        </Button>
+                          {ICONS.timeline}
+                        </IconActionButton>
                       </div>
                     </td>
                   </tr>
@@ -379,32 +609,64 @@ export function MemberPaymentHistoryTab({
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
                           Billing timeline ({row.installmentCount ?? row.transactions.length} installments)
                         </p>
-                        {(row.timeline?.length ?? 0) === 0 && row.transactions.length === 0 ? (
+                        {(row.timeline?.length ?? 0) === 0 &&
+                        row.transactions.filter((t) => (t.status ?? 'Completed') === 'Completed').length === 0 ? (
                           <p className="text-sm text-slate-500">No activity recorded.</p>
                         ) : (
                           <ul className="space-y-2">
-                            {(row.timeline?.length
-                              ? row.timeline
-                              : row.transactions.map((t) => ({
-                                  eventType: 'payment',
-                                  occurredAt: t.transactionDate,
-                                  amount: t.transactionAmount,
-                                  label: `${t.receiptNumber ? t.receiptNumber + ' · ' : ''}Payment: ${formatInr(t.transactionAmount)}${t.status && t.status !== 'Completed' ? ` (${t.status})` : ''}`,
-                                }))
-                            ).map((ev, i) => (
-                              <li
-                                key={i}
-                                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300"
-                              >
-                                <p className="text-slate-500">
-                                  {new Date(ev.occurredAt).toLocaleString('en-IN', {
-                                    dateStyle: 'medium',
-                                    timeStyle: 'short',
-                                  })}
-                                </p>
-                                <p className="font-medium text-white">{ev.label ?? ev.eventType}</p>
-                              </li>
-                            ))}
+                            {row.transactions
+                              .filter((t) => (t.status ?? 'Completed') === 'Completed')
+                              .sort(
+                                (a, b) =>
+                                  new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime(),
+                              )
+                              .map((t) => (
+                                <li
+                                  key={t.id}
+                                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300"
+                                >
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                      <p className="text-slate-500">
+                                        {new Date(t.transactionDate).toLocaleString('en-IN', {
+                                          dateStyle: 'medium',
+                                          timeStyle: 'short',
+                                        })}
+                                      </p>
+                                      <p className="font-medium text-white">
+                                        {t.receiptNumber ? `${t.receiptNumber} · ` : ''}
+                                        {formatInr(t.transactionAmount)} · {t.transactionMethod}
+                                      </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <SendReceiptButtons
+                                        transactionId={t.id}
+                                        sendingKey={sendingKey}
+                                        enablingKey={enablingKey}
+                                        emailEnabled={emailEnabled}
+                                        smsEnabled={smsEnabled}
+                                        onSend={sendReceipt}
+                                        onEnable={enableNotification}
+                                      />
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                            {(row.timeline?.length ?? 0) > 0 &&
+                              row.timeline!.map((ev, i) => (
+                                <li
+                                  key={`ev-${i}`}
+                                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300"
+                                >
+                                  <p className="text-slate-500">
+                                    {new Date(ev.occurredAt).toLocaleString('en-IN', {
+                                      dateStyle: 'medium',
+                                      timeStyle: 'short',
+                                    })}
+                                  </p>
+                                  <p className="font-medium text-white">{ev.label ?? ev.eventType}</p>
+                                </li>
+                              ))}
                           </ul>
                         )}
                         <div className="mt-3 flex flex-wrap gap-2">

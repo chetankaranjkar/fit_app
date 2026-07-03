@@ -1,0 +1,1 @@
+Hi {{MemberName}}, your {{PlanName}} membership expires in {{DaysRemaining}} day(s) on {{EndDate}}. Renew at {{GymName}} to avoid interruption. Support: {{SupportPhone}}

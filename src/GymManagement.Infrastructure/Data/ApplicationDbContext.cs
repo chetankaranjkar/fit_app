@@ -98,6 +98,9 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<UserUserType> UserUserTypes { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
+        public DbSet<NotificationHistory> NotificationHistories { get; set; }
+        public DbSet<NotificationOutbox> NotificationOutboxes { get; set; }
         public DbSet<DietPlan> DietPlans { get; set; }
         public DbSet<UserDietPlan> UserDietPlans { get; set; }
         public DbSet<DietMeal> DietMeals { get; set; }
@@ -193,6 +196,8 @@ namespace GymManagement.Infrastructure.Data
                     .HasDatabaseName("IX_Users_AadhaarNumber")
                     .HasFilter("[AadhaarNumber] IS NOT NULL AND [IsDeleted] = 0");
                 entity.HasIndex(e => e.IsActive).HasFilter("[IsDeleted] = 0");
+                entity.Property(e => e.ReceiveEmailNotifications).HasDefaultValue(false);
+                entity.Property(e => e.ReceiveSmsNotifications).HasDefaultValue(false);
                 entity.HasIndex(e => e.RegistrationDate);
                 entity.HasIndex(e => e.FirstName).HasFilter("[IsDeleted] = 0");
                 entity.HasIndex(e => e.LastName).HasFilter("[IsDeleted] = 0");
@@ -1193,6 +1198,17 @@ namespace GymManagement.Infrastructure.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.ToTable("GymSettings");
+                entity.Property(e => e.GymName).HasMaxLength(200);
+                entity.Property(e => e.GymLogoUrl).HasMaxLength(500);
+                entity.Property(e => e.InvoiceLogoUrl).HasMaxLength(500);
+                entity.Property(e => e.SmtpHost).HasMaxLength(255);
+                entity.Property(e => e.SmtpUsername).HasMaxLength(255);
+                entity.Property(e => e.EmailFromAddress).HasMaxLength(255);
+                entity.Property(e => e.EmailFromDisplayName).HasMaxLength(255);
+                entity.Property(e => e.SmsWebhookUrl).HasMaxLength(500);
+                entity.Property(e => e.SmsSenderId).HasMaxLength(50);
+                entity.Property(e => e.WhatsAppWebhookUrl).HasMaxLength(500);
+                entity.Property(e => e.WhatsAppSenderId).HasMaxLength(50);
             });
 
             // Configure Invoice

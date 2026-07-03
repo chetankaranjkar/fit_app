@@ -1,0 +1,1 @@
+{{GymName}}: Payment of Rs.{{Amount}} received. Receipt {{ReceiptNumber}} for {{PlanName}} on {{PaymentDate}}. Thank you!

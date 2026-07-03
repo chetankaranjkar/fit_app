@@ -40,6 +40,10 @@ export interface User {
   trainingDaysOfWeek?: string | null
   trainingScheduleLabel?: string | null
   isActive: boolean
+  /** Opt-in: member receives payment receipts / renewal emails (when gym SMTP configured). */
+  receiveEmailNotifications?: boolean
+  /** Opt-in: member receives SMS / WhatsApp notifications. */
+  receiveSmsNotifications?: boolean
   /** Login role when user has an account: 1/'User' = Member, 2/'Instructor', 3/'Admin' (API may send number or string) */
   role?: UserRole | UserRoleString | number | string | null
   /** Login username when user has an account */
@@ -93,6 +97,10 @@ export interface CreateUserDto {
   trainingDaysOfWeek?: string | null
   overrideTrainingScheduleConflict?: boolean
   isActive: boolean
+  /** Opt-in for outbound email (defaults off). */
+  receiveEmailNotifications?: boolean
+  /** Opt-in for SMS / WhatsApp (defaults off). */
+  receiveSmsNotifications?: boolean
   /** @deprecated Use email as login id. Optional legacy alias for AuthUsers.Email. */
   username?: string | null
   password?: string | null
@@ -132,6 +140,10 @@ export interface UpdateUserDto {
   trainingDaysOfWeek?: string | null
   overrideTrainingScheduleConflict?: boolean
   isActive?: boolean | null
+  /** Opt-in for outbound email. */
+  receiveEmailNotifications?: boolean | null
+  /** Opt-in for SMS / WhatsApp. */
+  receiveSmsNotifications?: boolean | null
   /** Optional. If set, a new membership will be added for the user. */
   planId?: number | null
   /** Optional. Start date for new membership (defaults to today if planId is set). */

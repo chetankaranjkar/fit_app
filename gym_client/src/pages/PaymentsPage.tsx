@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
@@ -40,6 +40,7 @@ import type { Coupon, ValidateCouponResponse } from '../types/coupon'
 import { formatInr, formatInrWhole } from '../lib/formatInr'
 import { getApiErrorMessage } from '../lib/apiErrors'
 import { invalidateDashboardQueries } from '../lib/dashboardQueryKeys'
+import { BillingPaymentsNav } from '../components/billing/BillingPaymentsNav'
 
 function getDashboardUser() {
   try {
@@ -644,35 +645,7 @@ export function PaymentsPage() {
         showExport={false}
       >
         <DataPageSection>
-        {canManagePayments && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            <Link
-              to="/dashboard/payments/history"
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
-            >
-              Payment history
-            </Link>
-            <Link
-              to="/dashboard/payments/waive-offs"
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
-            >
-              Waive-off requests
-            </Link>
-            <Link
-              to="/dashboard/payments/membership-approvals"
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
-            >
-              Membership approvals
-            </Link>
-            <Link
-              to="/dashboard/payments/reports"
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
-            >
-              Billing reports
-            </Link>
-          </div>
-        )}
-
+        {canManagePayments && <BillingPaymentsNav showBack={false} />}
         </DataPageSection>
 
         <DataPageSection>

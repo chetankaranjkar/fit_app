@@ -207,16 +207,21 @@ namespace GymManagement.Infrastructure.Services
                 MembershipStatus.ActivePendingPayment,
                 MembershipStatus.PartialPayment,
             };
+            var expiredLookbackDays = Math.Max(windowDays, 30);
+            var expiredCutoff = today.AddDays(-expiredLookbackDays);
 
             var trimmedSearch = search?.Trim();
             var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
 
             IQueryable<UserMembership> query = _db.UserMemberships
                 .AsNoTracking()
-                .Where(m => !m.IsDeleted
-                    && renewingStatuses.Contains(m.Status)
-                    && m.EndDate.Date >= today
-                    && m.EndDate.Date <= windowEnd);
+                .Where(m => !m.IsDeleted && (
+                    (renewingStatuses.Contains(m.Status)
+                        && m.EndDate.Date >= today
+                        && m.EndDate.Date <= windowEnd)
+                    || (m.Status == MembershipStatus.Expired
+                        && m.EndDate.Date >= expiredCutoff
+                        && m.EndDate.Date < today)));
 
             if (!string.IsNullOrWhiteSpace(likeSearch))
             {
@@ -231,7 +236,8 @@ namespace GymManagement.Infrastructure.Services
 
             var totalCount = await query.CountAsync();
             var pageItems = await query
-                .OrderBy(m => m.EndDate)
+                .OrderBy(m => m.Status == MembershipStatus.Expired ? 0 : 1)
+                .ThenBy(m => m.EndDate)
                 .ThenBy(m => m.UserId)
                 .Skip((safePage - 1) * safePageSize)
                 .Take(safePageSize)
@@ -250,13 +256,24 @@ namespace GymManagement.Infrastructure.Services
 
             var userIds = pageItems.Select(x => x.UserId).Distinct().ToList();
             var planIds = pageItems.Select(x => x.PlanId).Distinct().ToList();
+            var membershipIds = pageItems.Select(x => x.Id).Distinct().ToList();
             var users = (await _unitOfWork.Users.FindAsync(u => userIds.Contains(u.Id))).ToDictionary(u => u.Id);
             var plans = (await _unitOfWork.MembershipPlans.FindAsync(p => planIds.Contains(p.Id))).ToDictionary(p => p.Id);
+            var payments = await _db.MembershipPayments.AsNoTracking()
+                .Where(p => !p.IsDeleted && membershipIds.Contains(p.MembershipId))
+                .ToDictionaryAsync(p => p.MembershipId);
 
             var items = pageItems.Select(m =>
             {
                 users.TryGetValue(m.UserId, out var u);
                 plans.TryGetValue(m.PlanId, out var p);
+                payments.TryGetValue(m.Id, out var payment);
+                var isExpired = m.Status == MembershipStatus.Expired || m.EndDate.Date < today;
+                var pendingAmount = payment?.PendingAmount ?? 0m;
+                var paymentStatus = payment?.PaymentStatus.ToString();
+                var isFullyPaid = payment == null
+                    || payment.PaymentStatus == MembershipPaymentStatus.Paid
+                    || pendingAmount <= 0.02m;
                 return new ExpiringMembershipQueueItemDto
                 {
                     Id = m.Id,
@@ -268,7 +285,12 @@ namespace GymManagement.Infrastructure.Services
                     UserName = u != null ? $"{u.FirstName} {u.LastName}".Trim() : null,
                     MemberPhone = u?.Phone,
                     PlanName = p?.PlanName,
-                    DaysRemaining = Math.Max(0, (m.EndDate.Date - today).Days),
+                    DaysRemaining = (m.EndDate.Date - today).Days,
+                    IsExpired = isExpired,
+                    MembershipPaymentId = payment?.Id,
+                    PendingAmount = pendingAmount,
+                    PaymentStatus = paymentStatus,
+                    IsFullyPaid = isFullyPaid,
                 };
             }).ToList();
 

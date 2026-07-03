@@ -75,6 +75,9 @@ namespace GymManagement.Core.DTOs
         public int? CollectedByUserId { get; set; }
         public string? CollectedByName { get; set; }
         public string? PlanName { get; set; }
+        public decimal PendingAmount { get; set; }
+        public bool ReceiveEmailNotifications { get; set; }
+        public bool ReceiveSmsNotifications { get; set; }
     }
 
     public sealed class MembershipPaymentTransactionQuery

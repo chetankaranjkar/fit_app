@@ -28,6 +28,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly IMobileNumberAvailabilityService _mobileAvailability;
         private readonly IUsernameAvailabilityService _usernameAvailability;
         private readonly IMemberTrainingScheduleService _trainingScheduleService;
+        private readonly INotificationEventService _notifications;
         public UserService(
             IUnitOfWork unitOfWork,
             IMembershipPaymentService membershipPaymentService,
@@ -38,7 +39,8 @@ namespace GymManagement.Infrastructure.Services
             ICurrentUserAccessContext accessContext,
             IMobileNumberAvailabilityService mobileAvailability,
             IUsernameAvailabilityService usernameAvailability,
-            IMemberTrainingScheduleService trainingScheduleService)
+            IMemberTrainingScheduleService trainingScheduleService,
+            INotificationEventService notifications)
         {
             _unitOfWork = unitOfWork;
             _membershipPaymentService = membershipPaymentService;
@@ -50,6 +52,7 @@ namespace GymManagement.Infrastructure.Services
             _mobileAvailability = mobileAvailability;
             _usernameAvailability = usernameAvailability;
             _trainingScheduleService = trainingScheduleService;
+            _notifications = notifications;
         }
 
         public async Task<IEnumerable<UserDto>> GetAllUsersAsync(int? assignedToTrainerProfileId = null)
@@ -367,6 +370,8 @@ namespace GymManagement.Infrastructure.Services
                 EmergencyPhone = PhoneNumberValidator.NormalizeOptionalPhone(createUserDto.EmergencyPhone),
                 ProfilePictureUrl = createUserDto.ProfilePictureUrl,
                 IsActive = createUserDto.IsActive,
+                ReceiveEmailNotifications = createUserDto.ReceiveEmailNotifications,
+                ReceiveSmsNotifications = createUserDto.ReceiveSmsNotifications,
                 RegistrationDate = DateTime.UtcNow
             };
             MemberTrainingScheduleApplicator.Apply(
@@ -476,6 +481,8 @@ namespace GymManagement.Infrastructure.Services
             var userTypeDtos = await GetUserTypeDtosForUserAsync(user.Id);
             var appRoleNamesForNew = await BuildAppRoleNamesByUserIdsAsync(new HashSet<int> { user.Id });
             var dto = MapToDto(user, authForNew, trainerUserIds.Contains(user.Id), userTypeDtos, appRoleNamesForNew.GetValueOrDefault(user.Id));
+
+            await _notifications.QueueWelcomeAsync(user.Id);
 
             if (createdMembership != null && createdPlan != null)
             {
@@ -821,13 +828,22 @@ namespace GymManagement.Infrastructure.Services
             }
             if (updateUserDto.IsActive.HasValue)
                 user.IsActive = updateUserDto.IsActive.Value;
+            if (updateUserDto.ReceiveEmailNotifications.HasValue)
+                user.ReceiveEmailNotifications = updateUserDto.ReceiveEmailNotifications.Value;
+            if (updateUserDto.ReceiveSmsNotifications.HasValue)
+                user.ReceiveSmsNotifications = updateUserDto.ReceiveSmsNotifications.Value;
 
-            var trainerIdForValidation = await ResolveActiveTrainerIdForValidationAsync(id, updateUserDto.TrainerId);
-            if (trainerIdForValidation.HasValue)
+            var shouldValidateTrainingSchedule =
+                HasTrainingScheduleUpdate(updateUserDto) || updateUserDto.TrainerId.HasValue;
+            if (shouldValidateTrainingSchedule)
             {
-                await _trainingScheduleService.EnsureNoConflictsOrThrowAsync(
-                    BuildValidateDto(trainerIdForValidation.Value, id, user),
-                    updateUserDto.OverrideTrainingScheduleConflict);
+                var trainerIdForValidation = await ResolveActiveTrainerIdForValidationAsync(id, updateUserDto.TrainerId);
+                if (trainerIdForValidation.HasValue)
+                {
+                    await _trainingScheduleService.EnsureNoConflictsOrThrowAsync(
+                        BuildValidateDto(trainerIdForValidation.Value, id, user),
+                        updateUserDto.OverrideTrainingScheduleConflict);
+                }
             }
 
             _unitOfWork.Users.Update(user);
@@ -1131,6 +1147,8 @@ namespace GymManagement.Infrastructure.Services
                     user.TrainingEndTime,
                     user.TrainingDaysOfWeek),
                 IsActive = user.IsActive,
+                ReceiveEmailNotifications = user.ReceiveEmailNotifications,
+                ReceiveSmsNotifications = user.ReceiveSmsNotifications,
                 Role = role,
                 Username = username,
                 UserTypes = userTypes ?? new List<UserTypeDto>(),

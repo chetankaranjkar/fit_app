@@ -83,7 +83,7 @@ namespace GymManagement.Infrastructure.Services
             }
             if (query.Status.HasValue)
                 q = q.Where(t => t.Status == query.Status.Value);
-            if (query.UserId.HasValue)
+            if (query.UserId is > 0)
                 q = q.Where(t => t.Payment.UserId == query.UserId.Value);
             if (query.Method.HasValue)
                 q = q.Where(t => t.TransactionMethod == query.Method.Value);
@@ -111,6 +111,9 @@ namespace GymManagement.Infrastructure.Services
                 CollectedByUserId = t.CollectedByUserId,
                 CollectedByName = t.CollectedByUserId.HasValue && names.TryGetValue(t.CollectedByUserId.Value, out var n) ? n : null,
                 PlanName = t.Payment.Membership.Plan?.PlanName,
+                PendingAmount = t.Payment.PendingAmount,
+                ReceiveEmailNotifications = t.Payment.User.ReceiveEmailNotifications,
+                ReceiveSmsNotifications = t.Payment.User.ReceiveSmsNotifications,
             }).ToList();
         }
 

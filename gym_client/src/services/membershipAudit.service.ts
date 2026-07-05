@@ -4,6 +4,7 @@ export type MembershipAuditAction =
   | 'Created'
   | 'Updated'
   | 'Renewed'
+  | 'RenewalReverted'
   | 'CancelRequested'
   | 'CancelApproved'
   | 'VoidRequested'

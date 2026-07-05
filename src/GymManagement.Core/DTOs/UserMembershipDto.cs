@@ -15,6 +15,25 @@ namespace GymManagement.Core.DTOs
         public string? FreezeReason { get; set; }
         public string? UserName { get; set; }
         public string? PlanName { get; set; }
+        public string? MemberPhone { get; set; }
+        public int DaysRemaining { get; set; }
+        public bool IsExpired { get; set; }
+        public int? MembershipPaymentId { get; set; }
+        public decimal PendingAmount { get; set; }
+        public string? PaymentStatus { get; set; }
+        public bool IsFullyPaid { get; set; }
+        /// <summary>True when completed payment transactions exist — direct date/plan edits require approval.</summary>
+        public bool HasCompletedPayments { get; set; }
+    }
+
+    public sealed class UserMembershipSummaryDto
+    {
+        public int Total { get; set; }
+        public int Active { get; set; }
+        public int PaymentDue { get; set; }
+        public int Expiring14d { get; set; }
+        public int VoidPending { get; set; }
+        public int Expired { get; set; }
     }
 
     public class CreateUserMembershipDto
@@ -43,6 +62,28 @@ namespace GymManagement.Core.DTOs
         public DateTime? FreezeStartDate { get; set; }
         public DateTime? FreezeEndDate { get; set; }
         public string? FreezeReason { get; set; }
+    }
+
+    /// <summary>Extend the current membership end date by one plan duration (staff renew access).</summary>
+    public sealed class RenewMembershipAccessDto
+    {
+        public int? PlanId { get; set; }
+    }
+
+    /// <summary>Snapshot restored by POST …/revert-last-renewal (from last Renewed audit OldValue).</summary>
+    public sealed class LastRenewalRevertPreviewDto
+    {
+        public int MembershipId { get; set; }
+        public int CurrentPlanId { get; set; }
+        public string? CurrentPlanName { get; set; }
+        public DateTime CurrentEndDate { get; set; }
+        public int PreviousPlanId { get; set; }
+        public string? PreviousPlanName { get; set; }
+        public DateTime PreviousStartDate { get; set; }
+        public DateTime PreviousEndDate { get; set; }
+        public MembershipStatus PreviousStatus { get; set; }
+        public DateTime LastRenewedAt { get; set; }
+        public string? LastRenewedByName { get; set; }
     }
 
     /// <summary>Staff renewal queue: memberships ending within a date window or recently expired.</summary>

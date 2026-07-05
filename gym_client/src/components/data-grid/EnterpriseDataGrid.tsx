@@ -55,7 +55,9 @@ export function EnterpriseDataGrid<T>({
   className = '',
   footer,
   chainScrollToParent = false,
+  pageScroll = false,
   onRowClick,
+  getRowClassName,
 }: {
   data: T[]
   columns: DataGridColumnDef<T>[]
@@ -72,7 +74,10 @@ export function EnterpriseDataGrid<T>({
   footer?: ReactNode
   /** When true, wheel at grid edges (or when grid has no overflow) scrolls the page shell */
   chainScrollToParent?: boolean
+  /** When true, grid grows with rows and the page shell scrolls (no inner scroll trap). */
+  pageScroll?: boolean
   onRowClick?: (row: T) => void
+  getRowClassName?: (row: T) => string | undefined
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [sorting, setSorting] = useState<SortingState>([])
@@ -292,6 +297,7 @@ export function EnterpriseDataGrid<T>({
         className={[
           'group border-b border-white/[0.04] transition-colors hover:bg-violet-500/[0.05]',
           onRowClick ? 'cursor-pointer' : '',
+          getRowClassName?.(row.original) ?? '',
         ].join(' ')}
         onClick={onRowClick ? () => onRowClick(row.original) : undefined}
       >
@@ -329,14 +335,15 @@ export function EnterpriseDataGrid<T>({
   }
 
   return (
-    <div className={`flex min-h-0 flex-1 flex-col ${className}`}>
+    <div className={`flex flex-col ${pageScroll ? '' : 'min-h-0 flex-1'} ${className}`}>
       <div
         ref={scrollRef}
         className={[
-          'data-grid-scroll min-h-0 flex-1 overflow-auto',
-          chainScrollToParent ? 'overscroll-y-auto' : 'overscroll-contain',
+          'data-grid-scroll',
+          pageScroll ? 'overflow-visible' : 'min-h-0 flex-1 overflow-auto',
+          chainScrollToParent ? 'overscroll-y-auto' : pageScroll ? '' : 'overscroll-contain',
         ].join(' ')}
-        {...(chainScrollToParent ? {} : { 'data-lenis-prevent': true })}
+        {...(chainScrollToParent || pageScroll ? {} : { 'data-lenis-prevent': true })}
       >
         {loading ? (
           <div className="flex items-center justify-center px-6 py-16 text-sm text-slate-400">

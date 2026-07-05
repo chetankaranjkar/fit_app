@@ -76,8 +76,9 @@ function MembershipTable({
                 </td>
                 <td className="px-4 py-3">
                   <Link
-                    to={`/dashboard/user-memberships`}
+                    to={`/dashboard/user-memberships?membershipId=${m.id}`}
                     className="font-mono text-xs text-blue-300 hover:text-blue-200"
+                    title="Open in member plans registry"
                   >
                     #{m.id}
                   </Link>
@@ -100,7 +101,7 @@ export function MemberMembershipHistoryTab({
   userId: number
   canManageMemberships?: boolean
   onAddMembership?: () => void
-  onRenewMembership?: (latestExpired: UserMembership) => void
+  onRenewMembership?: (membership: UserMembership) => void
 }) {
   const navigate = useNavigate()
   const canManageMemberships = canManageProp ?? authService.canPaymentsAccess()
@@ -171,6 +172,41 @@ export function MemberMembershipHistoryTab({
 
   return (
     <div className="space-y-8">
+      {modalState.state === 'has_active' && modalState.occupyingMembership ? (
+        <div className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <MembershipStatusBadge status={modalState.occupyingMembership.status} />
+            <p className="text-sm text-blue-100">
+              Current plan ends{' '}
+              <span className="font-medium">
+                {formatMembershipDisplayDate(modalState.occupyingMembership.endDate)}
+              </span>
+            </p>
+          </div>
+          {canManageMemberships ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {getMembershipCollectPaymentPath(modalState.occupyingMembership, `/dashboard/users/${userId}`) ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => handleCollectPayment(modalState.occupyingMembership!)}
+                >
+                  Collect payment
+                </Button>
+              ) : null}
+              {modalState.canRenewMembership && onRenewMembership ? (
+                <Button
+                  type="button"
+                  onClick={() => onRenewMembership(modalState.occupyingMembership!)}
+                >
+                  Renew membership
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {modalState.state === 'expired_history_only' && modalState.latestExpired ? (
         <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -190,7 +226,7 @@ export function MemberMembershipHistoryTab({
                   variant="secondary"
                   onClick={() => onRenewMembership(modalState.latestExpired!)}
                 >
-                  Renew Membership
+                  Renew membership
                 </Button>
               ) : null}
               {modalState.canAddMembership && onAddMembership ? (

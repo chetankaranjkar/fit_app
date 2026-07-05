@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { MemberMembershipManagePanel } from './MemberMembershipManagePanel'
+import { memberMembershipHistoryPath } from '../../lib/membershipPaymentNavigation'
 import { userMembershipsByUserQueryKey } from '../../services/userMemberships.service'
 import type { User } from '../../types/user'
 
@@ -31,7 +32,7 @@ export function MemberMembershipsModal({
 
   if (!user) return null
 
-  const profileHref = `/dashboard/users/${user.id}?mode=view&tab=membership-history`
+  const profileHref = memberMembershipHistoryPath(user.id)
 
   return (
     <Modal open={open} onClose={onClose} title={`Memberships — ${memberName(user)}`} size="wide">

@@ -43,7 +43,8 @@ New or extended `GET .../paged` endpoints return a standard envelope:
 | `GET /api/DietPlans/paged` | `DietPlanService` | `page`, `pageSize`, `search`, `goalType`, `isActive` |
 | `GET /api/DietPlans/stats` | `DietPlanService` | Aggregated diet plan KPIs |
 | `GET /api/Users/paged` | `UserService` | `page`, `pageSize`, `search`, `membersOnly`, `isActive` |
-| `GET /api/UserMemberships/paged` | `UserMembershipService` | `page`, `pageSize`, `search`, `status` |
+| `GET /api/UserMemberships/paged` | `UserMembershipService` | `page`, `pageSize`, `search`, `status`, `needsPayment`, `expiringWithinDays`, `includeTerminal`, `membershipId` |
+| `GET /api/UserMemberships/summary` | `UserMembershipService` | operational KPI counts |
 | `GET /api/Exercises/paged` | `ExerciseService` | Existing paged exercises API (client fallback updated) |
 
 Legacy `GET` list routes remain for backward compatibility.

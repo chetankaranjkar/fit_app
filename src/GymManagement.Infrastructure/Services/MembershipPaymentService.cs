@@ -246,6 +246,8 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<IReadOnlyList<MembershipPaymentDto>> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default)
         {
+            await EnsureBillingForUnbilledMembershipsAsync(userId, cancellationToken);
+
             var list = await _db.MembershipPayments.AsNoTracking()
                 .Include(p => p.Transactions)
                 .Include(p => p.Membership)
@@ -257,6 +259,22 @@ namespace GymManagement.Infrastructure.Services
             foreach (var h in list)
                 result.Add(await MapToDtoAsync(h, cancellationToken));
             return result;
+        }
+
+        private async Task EnsureBillingForUnbilledMembershipsAsync(int userId, CancellationToken cancellationToken)
+        {
+            var unbilledMembershipIds = await _db.UserMemberships.AsNoTracking()
+                .Where(m =>
+                    m.UserId == userId
+                    && !m.IsDeleted
+                    && m.Status != MembershipStatus.Voided
+                    && m.Status != MembershipStatus.Transferred
+                    && !_db.MembershipPayments.Any(p => p.MembershipId == m.Id && !p.IsDeleted))
+                .Select(m => m.Id)
+                .ToListAsync(cancellationToken);
+
+            foreach (var membershipId in unbilledMembershipIds)
+                await EnsureBillingForMembershipIdAsync(membershipId, cancellationToken);
         }
 
         private async Task<MembershipPaymentDto> MapToDtoAsync(MembershipPayment h, CancellationToken ct)

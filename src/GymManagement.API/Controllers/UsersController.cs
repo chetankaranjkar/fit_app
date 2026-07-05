@@ -104,6 +104,7 @@ namespace GymManagement.API.Controllers
             [FromQuery] bool? isActive = null,
             [FromQuery] bool includeBilling = true,
             [FromQuery] string? preferredGymTime = null,
+            [FromQuery] bool countOnly = false,
             CancellationToken cancellationToken = default)
         {
             var safePage = page < 1 ? 1 : page;
@@ -128,8 +129,50 @@ namespace GymManagement.API.Controllers
                 isActive,
                 includeBilling,
                 preferredGymTime,
-                assignedTrainerProfileId);
+                assignedTrainerProfileId,
+                countOnly);
             return Ok(result);
+        }
+
+        /// <summary>Lightweight member-directory count (no row hydration).</summary>
+        [HttpGet("members-directory-count")]
+        [HasAnyPermission(PermissionCodes.UsersAccess, PermissionCodes.TrainerAccess)]
+        public async Task<ActionResult<int>> GetMembersDirectoryCount(
+            [FromQuery] bool? isActive = null,
+            [FromQuery] string? preferredGymTime = null,
+            CancellationToken cancellationToken = default)
+        {
+            var assignedTrainerProfileId = await ResolveAssignedTrainerProfileIdAsync(cancellationToken);
+            if (assignedTrainerProfileId == CoachScopeMissingTrainerProfile)
+                return Ok(0);
+
+            var count = await _userService.GetMembersDirectoryCountAsync(
+                isActive,
+                preferredGymTime,
+                assignedTrainerProfileId);
+            return Ok(count);
+        }
+
+        /// <summary>Member-directory KPI counts (total, active, inactive, batch breakdown).</summary>
+        [HttpGet("members-directory-stats")]
+        [HasAnyPermission(PermissionCodes.UsersAccess, PermissionCodes.TrainerAccess)]
+        public async Task<ActionResult<MembersDirectoryStatsDto>> GetMembersDirectoryStats(
+            CancellationToken cancellationToken = default)
+        {
+            var assignedTrainerProfileId = await ResolveAssignedTrainerProfileIdAsync(cancellationToken);
+            if (assignedTrainerProfileId == CoachScopeMissingTrainerProfile)
+            {
+                return Ok(new MembersDirectoryStatsDto
+                {
+                    Total = 0,
+                    Active = 0,
+                    Inactive = 0,
+                    Batches = Array.Empty<MemberBatchCountDto>(),
+                });
+            }
+
+            var stats = await _userService.GetMembersDirectoryStatsAsync(assignedTrainerProfileId);
+            return Ok(stats);
         }
 
         [HttpGet("{id}")]

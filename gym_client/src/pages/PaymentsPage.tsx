@@ -645,7 +645,7 @@ export function PaymentsPage() {
         showExport={false}
       >
         <DataPageSection>
-        {canManagePayments && <BillingPaymentsNav showBack={false} />}
+        {canManagePayments && <BillingPaymentsNav showBackLinks={false} />}
         </DataPageSection>
 
         <DataPageSection>

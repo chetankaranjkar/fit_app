@@ -14,7 +14,13 @@ namespace GymManagement.Core.Services
             bool? isActive = null,
             bool includeBillingSummary = true,
             string? preferredGymTime = null,
+            int? assignedToTrainerProfileId = null,
+            bool countOnly = false);
+        Task<int> GetMembersDirectoryCountAsync(
+            bool? isActive = null,
+            string? preferredGymTime = null,
             int? assignedToTrainerProfileId = null);
+        Task<MembersDirectoryStatsDto> GetMembersDirectoryStatsAsync(int? assignedToTrainerProfileId = null);
         Task<UserDto?> GetUserByIdAsync(int id);
         Task<UserAggregateDto?> GetUserAggregateAsync(int id);
         Task<UserProfileSummaryDto?> GetUserProfileSummaryAsync(int userId);

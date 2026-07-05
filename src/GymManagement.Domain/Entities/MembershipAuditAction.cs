@@ -5,6 +5,7 @@ namespace GymManagement.Domain.Entities
         Created,
         Updated,
         Renewed,
+        RenewalReverted,
         CancelRequested,
         CancelApproved,
         VoidRequested,

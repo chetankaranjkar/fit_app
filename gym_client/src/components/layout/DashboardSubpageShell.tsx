@@ -91,14 +91,22 @@ export function DashboardTablePanel({
   description = '',
   toolbar,
   children,
+  pageScroll = false,
 }: {
   title: string
   description?: string
   toolbar?: ReactNode
   children: ReactNode
+  /** Let the page scroll instead of trapping scroll inside the panel. */
+  pageScroll?: boolean
 }) {
   return (
-    <section className="glass-card dashboard-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl">
+    <section
+      className={[
+        'glass-card dashboard-card min-w-0 rounded-2xl',
+        pageScroll ? '' : 'flex min-h-0 flex-1 flex-col overflow-hidden',
+      ].join(' ')}
+    >
       <div className="shrink-0 border-b border-white/5 px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -110,7 +118,7 @@ export function DashboardTablePanel({
           ) : null}
         </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+      <div className={pageScroll ? '' : 'flex min-h-0 flex-1 flex-col overflow-hidden'}>{children}</div>
     </section>
   )
 }

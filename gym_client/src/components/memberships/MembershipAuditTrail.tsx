@@ -5,6 +5,7 @@ const actionLabel: Record<string, string> = {
   Created: 'Membership created',
   Updated: 'Membership updated',
   Renewed: 'Membership renewed',
+  RenewalReverted: 'Last renewal reverted',
   CancelRequested: 'Cancel requested',
   CancelApproved: 'Cancel approved',
   VoidRequested: 'Void requested',

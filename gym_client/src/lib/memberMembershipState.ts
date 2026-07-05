@@ -37,7 +37,7 @@ export function deriveMemberMembershipModalState(
       state: 'has_active',
       occupyingMembership,
       canAddMembership: false,
-      canRenewMembership: false,
+      canRenewMembership: true,
     }
   }
 

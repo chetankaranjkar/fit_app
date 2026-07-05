@@ -7,6 +7,13 @@ import { PHONE_MESSAGES } from '../lib/phone'
 import type { UserDetailDto, CreateUserDetailDto } from '../types/userDetail'
 import type { UserProfileSummary } from '../types/userProfileSummary'
 
+export type MembersDirectoryStats = {
+  total: number
+  active: number
+  inactive: number
+  batches: { batch: string; count: number }[]
+}
+
 export const usersService = {
   getAll: (params?: { assignedToCoachOnly?: boolean }) => {
     const query = new URLSearchParams()
@@ -27,6 +34,8 @@ export const usersService = {
       includeBilling?: boolean
       /** Limit to members assigned to the signed-in coach (trainer persona / coach-only access). */
       assignedToCoachOnly?: boolean
+      /** Count only — skips row hydration (faster KPI queries). */
+      countOnly?: boolean
     },
     options?: { signal?: AbortSignal },
   ) => {
@@ -39,7 +48,26 @@ export const usersService = {
     if (params.preferredGymTime?.trim()) query.set('preferredGymTime', params.preferredGymTime.trim())
     if (params.includeBilling === false) query.set('includeBilling', 'false')
     if (params.assignedToCoachOnly) query.set('assignedToCoachOnly', 'true')
+    if (params.countOnly) query.set('countOnly', 'true')
     return api.get<PagedUsersResponse>(`/Users/paged?${query.toString()}`, { signal: options?.signal })
+  },
+  getMembersDirectoryCount: (params?: {
+    isActive?: boolean
+    preferredGymTime?: string
+    assignedToCoachOnly?: boolean
+  }) => {
+    const query = new URLSearchParams()
+    if (typeof params?.isActive === 'boolean') query.set('isActive', String(params.isActive))
+    if (params?.preferredGymTime?.trim()) query.set('preferredGymTime', params.preferredGymTime.trim())
+    if (params?.assignedToCoachOnly) query.set('assignedToCoachOnly', 'true')
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return api.get<number>(`/Users/members-directory-count${suffix}`)
+  },
+  getMembersDirectoryStats: (params?: { assignedToCoachOnly?: boolean }) => {
+    const query = new URLSearchParams()
+    if (params?.assignedToCoachOnly) query.set('assignedToCoachOnly', 'true')
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return api.get<MembersDirectoryStats>(`/Users/members-directory-stats${suffix}`)
   },
   getById: (id: number) => api.get<User>(`/Users/${id}`),
   getProfileSummary: (id: number) => api.get<UserProfileSummary>(`/Users/${id}/profile-summary`),

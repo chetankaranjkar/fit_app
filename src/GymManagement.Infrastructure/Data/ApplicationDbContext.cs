@@ -203,6 +203,9 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.LastName).HasFilter("[IsDeleted] = 0");
                 entity.HasIndex(e => new { e.IsDeleted, e.RegistrationDate, e.Id })
                     .HasDatabaseName("IX_Users_IsDeleted_RegistrationDate_Id");
+                entity.HasIndex(e => new { e.IsActive, e.RegistrationDate, e.Id })
+                    .HasDatabaseName("IX_Users_IsActive_RegistrationDate_Id")
+                    .HasFilter("[IsDeleted] = 0");
                 entity.Property(e => e.PreferredGymTime).HasMaxLength(20);
                 entity.Property(e => e.TrainingScheduleType).HasMaxLength(20);
                 entity.Property(e => e.TrainingDaysOfWeek).HasMaxLength(30);
@@ -235,6 +238,9 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.UserId).IsUnique();
                 entity.HasIndex(e => e.IsActive).HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => new { e.UserId, e.PreferredGymTime })
+                    .HasDatabaseName("IX_Members_UserId_PreferredGymTime")
+                    .HasFilter("[IsDeleted] = 0");
                 entity.Property(e => e.FitnessGoal).HasMaxLength(100);
                 entity.Property(e => e.MedicalConditions).HasMaxLength(2000);
                 entity.Property(e => e.EmergencyContact).HasMaxLength(150);
@@ -765,6 +771,9 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany(i => i.UserAssignments)
                     .HasForeignKey(e => e.TrainerId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => new { e.TrainerId, e.UserId })
+                    .HasDatabaseName("IX_UserInstructors_TrainerId_UserId")
+                    .HasFilter("[IsDeleted] = 0 AND [IsActive] = 1 AND [EndDate] IS NULL");
             });
 
             // Configure UserType
@@ -811,6 +820,9 @@ namespace GymManagement.Infrastructure.Data
                     .IsUnique()
                     .HasDatabaseName("IX_UserRoles_UserId_RoleId")
                     .HasFilter(null);
+                entity.HasIndex(e => new { e.RoleId, e.UserId })
+                    .HasDatabaseName("IX_UserRoles_RoleId_UserId")
+                    .HasFilter("[IsDeleted] = 0");
                 entity.ToTable("UserRoles");
             });
 
@@ -1617,6 +1629,9 @@ namespace GymManagement.Infrastructure.Data
                     .WithOne(u => u.AuthUser)
                     .HasForeignKey<AuthUser>(e => e.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(e => e.Email)
+                    .HasDatabaseName("IX_AuthUsers_Email")
+                    .HasFilter("[IsDeleted] = 0");
                 entity.ToTable("AuthUsers");
             });
 

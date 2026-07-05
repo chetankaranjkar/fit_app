@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { MEMBER_BATCH_META, MEMBER_BATCH_VALUES, type MemberBatchValue } from '../lib/memberBatches'
 import { usersService } from '../services/users.service'
 
@@ -16,8 +16,8 @@ type UseMemberDirectoryStatsOptions = {
   assignedToCoachOnly?: boolean
 }
 
-function statsQueryKey(scope: 'coach' | 'all', segment: string, extra?: string) {
-  return ['member-directory-stats', scope, segment, extra].filter(Boolean) as string[]
+function statsQueryKey(scope: 'coach' | 'all', segment: string) {
+  return ['member-directory-stats', scope, segment] as const
 }
 
 export function useMemberDirectoryStats(
@@ -25,72 +25,36 @@ export function useMemberDirectoryStats(
   { assignedToCoachOnly = false }: UseMemberDirectoryStatsOptions = {},
 ) {
   const scope = assignedToCoachOnly ? 'coach' : 'all'
-  const statsBase = {
-    membersOnly: true,
-    assignedToCoachOnly,
-    includeBilling: false as const,
-    page: 1,
-    pageSize: 1,
-  }
 
-  const totalQuery = useQuery({
-    queryKey: statsQueryKey(scope, 'total'),
+  const statsQuery = useQuery({
+    queryKey: statsQueryKey(scope, 'aggregate'),
     enabled,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await usersService.getPaged(statsBase)
-      return data.totalCount ?? 0
+      const { data } = await usersService.getMembersDirectoryStats({ assignedToCoachOnly })
+      return data
     },
   })
 
-  const activeQuery = useQuery({
-    queryKey: statsQueryKey(scope, 'active'),
-    enabled,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data } = await usersService.getPaged({ ...statsBase, isActive: true })
-      return data.totalCount ?? 0
-    },
-  })
+  const total = statsQuery.data?.total ?? 0
+  const active = statsQuery.data?.active ?? 0
+  const inactive = statsQuery.data?.inactive ?? 0
 
-  const inactiveQuery = useQuery({
-    queryKey: statsQueryKey(scope, 'inactive'),
-    enabled,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data } = await usersService.getPaged({ ...statsBase, isActive: false })
-      return data.totalCount ?? 0
-    },
-  })
-
-  const batchQueries = useQueries({
-    queries: MEMBER_BATCH_VALUES.map((batch) => ({
-      queryKey: statsQueryKey(scope, 'batch', batch),
-      enabled,
-      staleTime: 60_000,
-      queryFn: async () => {
-        const { data } = await usersService.getPaged({
-          ...statsBase,
-          preferredGymTime: batch,
-        })
-        return { batch, count: data.totalCount ?? 0 }
-      },
-    })),
-  })
-
-  const total = totalQuery.data ?? 0
-  const active = activeQuery.data ?? 0
-  const inactive = inactiveQuery.data ?? 0
-
-  const knownBatchTotal = batchQueries.reduce((sum, q) => sum + (q.data?.count ?? 0), 0)
+  const batchCountByName = new Map(
+    (statsQuery.data?.batches ?? []).map((b) => [b.batch, b.count]),
+  )
+  const knownBatchTotal = MEMBER_BATCH_VALUES.reduce(
+    (sum, batch) => sum + (batchCountByName.get(batch) ?? 0),
+    0,
+  )
   const unassignedCount = Math.max(0, total - knownBatchTotal)
 
-  const batches: MemberBatchStat[] = MEMBER_BATCH_VALUES.map((batch, index) => {
+  const batches: MemberBatchStat[] = MEMBER_BATCH_VALUES.map((batch) => {
     const meta = MEMBER_BATCH_META[batch]
     return {
       key: batch,
       label: meta.label,
-      count: batchQueries[index]?.data?.count ?? 0,
+      count: batchCountByName.get(batch) ?? 0,
       barClass: meta.barClass,
     }
   })
@@ -106,13 +70,7 @@ export function useMemberDirectoryStats(
 
   const maxBatchCount = Math.max(1, ...batches.map((b) => b.count))
 
-  const isLoading =
-    totalQuery.isLoading
-    || activeQuery.isLoading
-    || inactiveQuery.isLoading
-    || batchQueries.some((q) => q.isLoading)
-
-  return { total, active, inactive, batches, maxBatchCount, isLoading }
+  return { total, active, inactive, batches, maxBatchCount, isLoading: statsQuery.isLoading }
 }
 
 /** Coach-scoped member stats for trainer dashboard. */

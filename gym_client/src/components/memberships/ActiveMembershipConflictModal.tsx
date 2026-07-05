@@ -2,35 +2,42 @@ import { Link } from 'react-router-dom'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { MembershipStatusBadge } from '../billing/MembershipStatusBadge'
+import { conflictNeedsCollectPayment } from '../../lib/membershipRenewFlow'
 import type { ActiveMembershipConflict } from '../../types/activeMembershipConflict'
 
 function formatDate(iso: string) {
   if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString()
+  const d = new Date(iso.slice(0, 10) + 'T12:00:00')
+  return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toLocaleDateString()
 }
 
 export function ActiveMembershipConflictModal({
   open,
   conflict,
+  renewRequiresApproval = false,
   onClose,
   onRenew,
+  onRequestExtension,
   onUpgrade,
 }: {
   open: boolean
   conflict: ActiveMembershipConflict | null
+  renewRequiresApproval?: boolean
   onClose: () => void
   onRenew: (conflict: ActiveMembershipConflict) => void
+  onRequestExtension?: (conflict: ActiveMembershipConflict) => void
   onUpgrade: (conflict: ActiveMembershipConflict) => void
 }) {
   if (!conflict) return null
 
   const viewHref = `/dashboard/users/${conflict.userId}`
+  const needsCollect = conflictNeedsCollectPayment(conflict)
+  const showRequestExtension = renewRequiresApproval && onRequestExtension != null
 
   return (
     <Modal open={open} onClose={onClose} title="Membership already exists" size="wide">
       <p className="mb-4 text-sm text-amber-100">{conflict.message}</p>
-      <dl className="mb-6 grid gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm sm:grid-cols-2">
+      <dl className="mb-4 grid gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm sm:grid-cols-2">
         {conflict.existingStatus ? (
           <div>
             <dt className="text-slate-500">Current status</dt>
@@ -56,6 +63,13 @@ export function ActiveMembershipConflictModal({
           <dd className="text-slate-200">{formatDate(conflict.endDate)}</dd>
         </div>
       </dl>
+      <p className="mb-6 text-xs leading-relaxed text-slate-400">
+        {needsCollect
+          ? 'Collect payment settles the current membership period. After that, use Extend access to add more time.'
+          : showRequestExtension
+            ? 'This membership has payment records. Request extension submits a new end date for admin approval.'
+            : 'Extend access adds another plan duration to the current end date when there are no completed payments. If this membership has payment records, use Request extension or Change plan or dates.'}
+      </p>
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onClose}>
           Close
@@ -67,11 +81,21 @@ export function ActiveMembershipConflictModal({
         >
           View membership
         </Link>
-        <Button type="button" variant="secondary" onClick={() => onRenew(conflict)}>
-          Renew membership
-        </Button>
+        {needsCollect ? (
+          <Button type="button" variant="secondary" onClick={() => onRenew(conflict)}>
+            Collect payment
+          </Button>
+        ) : showRequestExtension ? (
+          <Button type="button" variant="secondary" onClick={() => onRequestExtension!(conflict)}>
+            Request extension
+          </Button>
+        ) : (
+          <Button type="button" variant="secondary" onClick={() => onRenew(conflict)}>
+            Extend access
+          </Button>
+        )}
         <Button type="button" variant="primary" onClick={() => onUpgrade(conflict)}>
-          Upgrade membership
+          Change plan or dates
         </Button>
       </div>
     </Modal>

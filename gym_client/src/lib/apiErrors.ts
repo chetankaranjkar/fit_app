@@ -48,7 +48,10 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed. P
     if (typeof data?.title === 'string' && data.title.trim()) return data.title
     return DEFAULT_SERVER
   }
-  if (!ax?.response) return DEFAULT_NETWORK
+  if (!ax?.response) {
+    if (error instanceof Error && error.message.trim()) return error.message.trim()
+    return DEFAULT_NETWORK
+  }
   if (typeof data?.message === 'string' && data.message.trim()) return data.message
   if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail
   if (typeof data?.title === 'string' && data.title.trim()) return data.title

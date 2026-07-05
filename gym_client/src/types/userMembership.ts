@@ -20,6 +20,23 @@ export interface UserMembership {
   status: MembershipStatus
   userName?: string | null
   planName?: string | null
+  memberPhone?: string | null
+  daysRemaining?: number
+  isExpired?: boolean
+  membershipPaymentId?: number | null
+  pendingAmount?: number
+  paymentStatus?: string | null
+  isFullyPaid?: boolean
+  hasCompletedPayments?: boolean
+}
+
+export interface UserMembershipSummary {
+  total: number
+  active: number
+  paymentDue: number
+  expiring14d: number
+  voidPending: number
+  expired: number
 }
 
 export interface CreateUserMembershipDto {
@@ -40,6 +57,20 @@ export interface UpdateUserMembershipDto {
   startDate?: string | null
   endDate?: string | null
   status?: MembershipStatus | null
+}
+
+export interface LastRenewalRevertPreview {
+  membershipId: number
+  currentPlanId: number
+  currentPlanName?: string | null
+  currentEndDate: string
+  previousPlanId: number
+  previousPlanName?: string | null
+  previousStartDate: string
+  previousEndDate: string
+  previousStatus: string
+  lastRenewedAt: string
+  lastRenewedByName?: string | null
 }
 
 export interface PagedUserMembershipsResponse {

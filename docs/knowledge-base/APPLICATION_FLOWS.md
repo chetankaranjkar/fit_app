@@ -374,7 +374,7 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 
 ## 11b. User memberships (one occupying membership per member)
 
-**Rule:** A member may have only **one occupying** membership at a time: `Active`, `ActivePendingPayment`, `PartialPayment`, `Frozen`, `Pending`, or `VoidPending`. While any of these exists, **no new membership row may be created** — use collect payment (renew) or edit the existing row (upgrade). Returns **409** (`ACTIVE_MEMBERSHIP_EXISTS`) with plan, status, dates, remaining days, and actions (view / renew / upgrade). `Expired`, `Cancelled`, and `Voided` allow a new membership.
+**Rule:** A member may have only **one occupying** membership at a time: `Active`, `ActivePendingPayment`, `PartialPayment`, `Frozen`, `Pending`, or `VoidPending`. While any of these exists, **no new membership row may be created** — use **Collect payment** (outstanding balance on current period), **Extend access** (add plan duration to current end date), or **Change plan or dates** (edit / approval). Returns **409** (`ACTIVE_MEMBERSHIP_EXISTS`) with plan, status, dates, remaining days, and actions. `Expired`, `Cancelled`, and `Voided` allow a new membership.
 
 **Enforced in:** DB unique index `IX_user_memberships_one_active_per_user` (Active only), `UserMembershipConflictGuard` (all occupying statuses), `UserMembershipService` / `UserService`, `GET /api/UserMemberships/active-conflict/{userId}`, and `/dashboard/user-memberships` conflict modal.
 
@@ -383,11 +383,13 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 | State | UI |
 |-------|-----|
 | No membership | **+ Add Membership** |
-| Active / occupying | History only (no add) |
+| Active / occupying | **Renew membership** extends the current row’s end date by plan duration (staff action, no admin approval). Use **Collect payment** when the current period still has a balance. Use **Change plan or dates** (edit / approval) only for retroactive corrections. |
 | Expired history only | **Renew Membership** (prefills last plan, `intent: renew`) + **+ New Membership** |
 | Inactive history only (voided/cancelled) | **+ Add Membership** |
 
 Both entry points use shared **`AddUserMembershipModal`** → `POST /api/UserMemberships` (optional `creationSource`, `intent`, `priorMembershipId` for audit). Permission: **`Payments`** (`authService.canPaymentsAccess()`). Member is locked in the list modal; `/dashboard/user-memberships` opens the same modal with member picker. **Reactivation:** creating a new membership for an inactive member sets **`Users.IsActive = true`** automatically (`MemberAccountReactivation` in `UserMembershipService` / `UserService`). **Member profile:** onboarding **Manage memberships** opens the same `MemberMembershipsModal`; **Membership History** tab uses shared `MemberMembershipManagePanel` (add / renew buttons identical to the grid modal).
+
+**`/dashboard/user-memberships` (member plans page):** `MembershipBillingNav`; **`GET /api/UserMemberships/summary`** KPI cards; paged list with `search` (incl. membership ID), `status`, `needsPayment`, `expiringWithinDays`, `includeTerminal`, `membershipId`; grid columns **Timeline** + **Payment**; URL `?quick=needsPayment|expiring14|…&membershipId=`. Collapsible **Renewal focus** strip (`UserMembershipRenewalFocusStrip`). ID / **View details** opens **`UserMembershipDetailDrawer`** (billing summary, audit, actions). **Export CSV** (up to 500 filtered rows). Sectioned **Edit** modal; paid rows use **`RequestMembershipChangeModal`** → approvals. **Help** module `user_memberships`. Components: `UserMembershipsSummaryStrip`, `UserMembershipsToolbar`, `UserMembershipsGrid`, `EditUserMembershipModal`.
 
 **Existing duplicates** (e.g. two `ActivePendingPayment` rows for Rajesh Yadav) must be fixed manually: void/cancel or expire one row, then use the remaining membership for payment or upgrade.
 
@@ -410,7 +412,9 @@ Both entry points use shared **`AddUserMembershipModal`** → `POST /api/UserMem
 
 **Void flow:** Memberships grid → **Request void** (not delete) → `POST /api/membership-requests` (`RequestType: Void`) → membership → `VoidPending` → admin **Membership approvals** → **Approve** (ADMIN role or `APPROVE_MEMBERSHIP_REQUEST`) → `Voided`. Voided rows are hidden from the default membership list; history remains under member **Membership History** and `GET /api/membership-audit`. Payments and audit rows are retained. **Created** audit entries show who originally added a duplicate row.
 
-**Post-payment edits:** Plan/date/status changes after the first completed installment require an approval request (`DateChange`, `PlanChange`, `FeeChange`, etc.).
+**Renew / extend access:** Staff renew extends the same row (plan + end date). Mistaken renewals can be undone with **Revert last renewal** (`POST /api/UserMemberships/{id}/revert-last-renewal`), which restores plan, dates, and status from the last `Renewed` audit entry. Does not remove payment records. Preview: `GET …/last-renewal-revert-preview`.
+
+**Post-payment edits:** Arbitrary plan/date/status changes on an existing paid period (via **Edit**) require an approval request (`DateChange`, `PlanChange`, etc.). **Renew / extend access** is a normal staff action and does not require approval.
 
 **Routes:** `/dashboard/payments/membership-approvals` (admin queue), user detail → **Membership History** tab (all statuses visible).
 

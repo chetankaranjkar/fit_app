@@ -7,7 +7,16 @@ namespace GymManagement.Core.Services
     public interface IUserMembershipService
     {
         Task<IEnumerable<UserMembershipDto>> GetAllAsync();
-        Task<PagedResultDto<UserMembershipDto>> GetPagedAsync(int page, int pageSize, string? search = null, MembershipStatus? status = null);
+        Task<UserMembershipSummaryDto> GetSummaryAsync();
+        Task<PagedResultDto<UserMembershipDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null,
+            MembershipStatus? status = null,
+            bool needsPayment = false,
+            int? expiringWithinDays = null,
+            bool includeTerminal = false,
+            int? membershipId = null);
         Task<PagedResultDto<ExpiringMembershipQueueItemDto>> GetExpiringQueueAsync(
             int withinDays,
             int page,
@@ -18,5 +27,8 @@ namespace GymManagement.Core.Services
         Task<ActiveMembershipConflictDto?> GetActiveMembershipConflictForUserAsync(int userId, int? excludeMembershipId = null);
         Task<UserMembershipDto> CreateAsync(CreateUserMembershipDto dto, int performedByUserId);
         Task<UserMembershipDto?> UpdateAsync(int id, UpdateUserMembershipDto dto, int performedByUserId);
+        Task<UserMembershipDto> RenewAccessAsync(int id, RenewMembershipAccessDto? dto, int performedByUserId);
+        Task<LastRenewalRevertPreviewDto?> GetLastRenewalRevertPreviewAsync(int membershipId);
+        Task<UserMembershipDto> RevertLastRenewalAsync(int id, int performedByUserId);
     }
 }

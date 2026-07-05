@@ -25,6 +25,9 @@ import {
   paymentStatusLabel,
 } from '../components/billing/membershipPaymentUi'
 import { resolvePostCollectPaymentPath } from '../lib/membershipPaymentNavigation'
+import { membershipToConflict } from '../lib/activeMembershipConflict'
+import { extendMembershipAccessRenewal } from '../lib/membershipRenewFlow'
+import { userMembershipsService } from '../services/userMemberships.service'
 import type { MembershipPaymentMethod } from '../types/membershipPayment'
 import type { ValidateCouponResponse } from '../types/coupon'
 import { usePermission } from '../features/auth/hooks/usePermission'
@@ -142,6 +145,34 @@ export function CollectMembershipPaymentPage() {
     if (!data) return 0
     return Math.max(0, remainingBeforePay - paidNum)
   }, [data, remainingBeforePay, paidNum])
+
+  const fullyPaid = remainingBeforePay <= 0.02
+  const backPath = resolvePostCollectPaymentPath(userIdFromUrl || data?.userId || 0, returnToParam)
+
+  const extendAccessMutation = useMutation({
+    mutationFn: async () => {
+      const { data: membership } = await userMembershipsService.getById(membershipId)
+      if (!membership?.id) throw new Error('Membership not found.')
+      const result = await extendMembershipAccessRenewal(membershipToConflict(membership))
+      if (!result.ok) {
+        throw new Error(
+          result.message ??
+            (result.reason === 'needs_collect'
+              ? 'Collect outstanding payment before extending access.'
+              : 'Could not extend membership access.'),
+        )
+      }
+      return result.endDate
+    },
+    onSuccess: (endDate) => {
+      toast.success(`Membership extended until ${new Date(endDate + 'T12:00:00').toLocaleDateString()}.`)
+      queryClient.invalidateQueries({ queryKey: ['membership-payment', membershipId] })
+      queryClient.invalidateQueries({ queryKey: ['membership-financial-summary', membershipId] })
+      invalidateDashboardQueries(queryClient)
+      if (backPath) navigate(backPath, { replace: true })
+    },
+    onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Could not extend membership')),
+  })
 
   const applyCouponMutation = useMutation({
     mutationFn: async (couponCode: string) => {
@@ -312,6 +343,34 @@ export function CollectMembershipPaymentPage() {
               )}
             </section>
 
+            {fullyPaid ? (
+              <section className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-5 backdrop-blur-md sm:p-6">
+                <h2 className="text-sm font-semibold text-amber-100">No payment due on this period</h2>
+                <p className="mt-2 text-sm leading-relaxed text-amber-100/90">
+                  This membership is fully paid for the current billing period. Collect payment only
+                  applies when there is an outstanding balance (pending, partial, or expired renewal
+                  due).
+                </p>
+                <p className="mt-2 text-sm text-amber-100/90">
+                  To add more gym access time, extend the membership end date instead.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {backPath ? (
+                    <Button type="button" variant="secondary" onClick={() => navigate(backPath)}>
+                      Go back
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    onClick={() => extendAccessMutation.mutate()}
+                    disabled={extendAccessMutation.isPending}
+                    isLoading={extendAccessMutation.isPending}
+                  >
+                    Extend access
+                  </Button>
+                </div>
+              </section>
+            ) : (
             <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-md sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-white">Record payment</h2>
@@ -500,6 +559,7 @@ export function CollectMembershipPaymentPage() {
                 </Button>
               </div>
             </section>
+            )}
 
             <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-md sm:p-6">
               <h2 className="text-sm font-semibold text-white">Timeline</h2>

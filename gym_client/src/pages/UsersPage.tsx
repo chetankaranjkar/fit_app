@@ -49,7 +49,6 @@ import { useMobileNumberAvailability } from '../hooks/useMobileNumberAvailabilit
 import { useUsernameAvailability } from '../hooks/useUsernameAvailability'
 import { MobileNumberAvailabilityHint } from '../components/users/MobileNumberAvailabilityHint'
 import {
-  acceptIsoDateInput,
   getBirthDateError,
   MIN_BIRTH_DATE,
   todayIsoDate,
@@ -348,16 +347,12 @@ export function UsersPage() {
   const { data: directoryTotalCount } = useQuery({
     queryKey: ['users-directory-total', statusFilter, shiftFilter, coachClientsOnly],
     queryFn: async () => {
-      const { data } = await usersService.getPaged({
-        page: 1,
-        pageSize: 1,
-        membersOnly: true,
+      const { data } = await usersService.getMembersDirectoryCount({
         isActive: listIsActiveFilter,
         preferredGymTime: listPreferredGymTimeFilter,
-        includeBilling: false,
         assignedToCoachOnly: coachClientsOnly,
       })
-      return data.totalCount ?? 0
+      return data ?? 0
     },
     staleTime: shiftFilter === 'all' && statusFilter === 'all' ? 60_000 : 0,
   })
@@ -549,9 +544,7 @@ export function UsersPage() {
   }
 
   const handleDateOfBirthChange = (raw: string) => {
-    const next = acceptIsoDateInput(raw)
-    if (next === null) return
-    setForm((f) => ({ ...f, dateOfBirth: next }))
+    setForm((f) => ({ ...f, dateOfBirth: raw }))
     if (dateOfBirthError) setDateOfBirthError(null)
   }
 
@@ -566,9 +559,7 @@ export function UsersPage() {
   }
 
   const handleMembershipStartDateChange = (raw: string) => {
-    const next = acceptIsoDateInput(raw)
-    if (next === null) return
-    setForm((f) => ({ ...f, membershipStartDate: next }))
+    setForm((f) => ({ ...f, membershipStartDate: raw }))
     if (membershipStartDateError) setMembershipStartDateError(null)
   }
 

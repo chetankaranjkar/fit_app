@@ -1,4 +1,3 @@
-using GymManagement.Core.Authorization;
 using GymManagement.Core.Search;
 using GymManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -39,27 +38,19 @@ internal static class UserSearchQueryExtensions
             return query;
 
         var shift = preferredGymTime.Trim();
-        var memberUserIdsForShift = members.AsNoTracking()
-            .Where(m => !m.IsDeleted && m.PreferredGymTime == shift)
-            .Select(m => m.UserId);
-
         return query.Where(u =>
-            u.PreferredGymTime == shift || memberUserIdsForShift.Contains(u.Id));
+            u.PreferredGymTime == shift
+            || members.Any(m => !m.IsDeleted && m.UserId == u.Id && m.PreferredGymTime == shift));
     }
 
-    /// <summary>Members directory: users with active <c>MEMBER</c> application role (<c>UserRoles</c>).</summary>
+    /// <summary>Members directory: users with <c>MEMBER</c> application role (<c>UserRoles</c>).</summary>
     public static IQueryable<User> ApplyMembersOnlyFilter(
         this IQueryable<User> query,
         IQueryable<UserRole> userRoles,
-        IQueryable<AppRole> appRoles,
-        string memberRoleCode = ApplicationRoleCodes.Member)
+        int memberRoleId)
     {
-        var memberUserIds = from ur in userRoles.AsNoTracking()
-            join role in appRoles.AsNoTracking() on ur.RoleId equals role.Id
-            where !ur.IsDeleted && role.IsActive && role.Name == memberRoleCode
-            select ur.UserId;
-
-        return query.Where(u => memberUserIds.Contains(u.Id));
+        return query.Where(u => userRoles.Any(ur =>
+            !ur.IsDeleted && ur.UserId == u.Id && ur.RoleId == memberRoleId));
     }
 
     /// <summary>Limit directory rows to members with an active coach assignment for the given trainer profile id.</summary>
@@ -68,15 +59,12 @@ internal static class UserSearchQueryExtensions
         IQueryable<UserInstructor> userInstructors,
         int trainerProfileId)
     {
-        var assignedUserIds = userInstructors.AsNoTracking()
-            .Where(ui =>
-                !ui.IsDeleted
-                && ui.IsActive
-                && !ui.EndDate.HasValue
-                && ui.TrainerId == trainerProfileId)
-            .Select(ui => ui.UserId);
-
-        return query.Where(u => assignedUserIds.Contains(u.Id));
+        return query.Where(u => userInstructors.Any(ui =>
+            !ui.IsDeleted
+            && ui.IsActive
+            && !ui.EndDate.HasValue
+            && ui.TrainerId == trainerProfileId
+            && ui.UserId == u.Id));
     }
 
     private static IQueryable<User> ApplyEmailPrefixFilter(
@@ -84,11 +72,8 @@ internal static class UserSearchQueryExtensions
         IQueryable<AuthUser> authUsers,
         string emailPrefix)
     {
-        var matchingUserIds = authUsers.AsNoTracking()
-            .Where(a => !a.IsDeleted && a.UserId != null && a.Email.StartsWith(emailPrefix))
-            .Select(a => a.UserId!.Value);
-
-        return query.Where(u => matchingUserIds.Contains(u.Id));
+        return query.Where(u => authUsers.Any(a =>
+            !a.IsDeleted && a.UserId == u.Id && a.Email.StartsWith(emailPrefix)));
     }
 
     private static IQueryable<User> ApplyFullNameFilter(
@@ -106,14 +91,10 @@ internal static class UserSearchQueryExtensions
         IQueryable<AuthUser> authUsers,
         string prefix)
     {
-        var matchingUserIds = authUsers.AsNoTracking()
-            .Where(a => !a.IsDeleted && a.UserId != null && a.Email.StartsWith(prefix))
-            .Select(a => a.UserId!.Value);
-
         return query.Where(u =>
             u.FirstName.StartsWith(prefix)
             || u.LastName.StartsWith(prefix)
             || (u.Phone != null && u.Phone.StartsWith(prefix))
-            || matchingUserIds.Contains(u.Id));
+            || authUsers.Any(a => !a.IsDeleted && a.UserId == u.Id && a.Email.StartsWith(prefix)));
     }
 }

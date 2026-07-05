@@ -52,9 +52,3 @@ export function getBirthDateError(
 
   return null
 }
-
-/** Accept only empty or a fully valid ISO date for controlled date inputs. */
-export function acceptIsoDateInput(raw: string): string | null {
-  if (!raw) return ''
-  return isValidIsoDate(raw) ? raw : null
-}

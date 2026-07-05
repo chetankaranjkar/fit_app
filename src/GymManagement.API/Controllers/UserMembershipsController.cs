@@ -12,11 +12,11 @@ using GymManagement.Core.DTOs;
 
 using GymManagement.Core.DTOs.Common;
 
+using GymManagement.Core.Exceptions;
+
 using GymManagement.Core.Services;
 
 using GymManagement.Domain.Entities;
-
-
 
 namespace GymManagement.API.Controllers
 
@@ -62,28 +62,35 @@ namespace GymManagement.API.Controllers
 
 
 
-        [HttpGet("paged")]
-
-        public async Task<ActionResult<PagedResultDto<UserMembershipDto>>> GetPaged(
-
-            [FromQuery] int page = 1,
-
-            [FromQuery] int pageSize = 50,
-
-            [FromQuery] string? search = null,
-
-            [FromQuery] MembershipStatus? status = null)
-
+        [HttpGet("summary")]
+        public async Task<ActionResult<UserMembershipSummaryDto>> GetSummary()
         {
+            return Ok(await _service.GetSummaryAsync());
+        }
 
+        [HttpGet("paged")]
+        public async Task<ActionResult<PagedResultDto<UserMembershipDto>>> GetPaged(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            [FromQuery] string? search = null,
+            [FromQuery] MembershipStatus? status = null,
+            [FromQuery] bool needsPayment = false,
+            [FromQuery] int? expiringWithinDays = null,
+            [FromQuery] bool includeTerminal = false,
+            [FromQuery] int? membershipId = null)
+        {
             var safePage = page < 1 ? 1 : page;
-
             var safePageSize = Math.Clamp(pageSize, 1, 200);
-
-            var result = await _service.GetPagedAsync(safePage, safePageSize, search, status);
-
+            var result = await _service.GetPagedAsync(
+                safePage,
+                safePageSize,
+                search,
+                status,
+                needsPayment,
+                expiringWithinDays,
+                includeTerminal,
+                membershipId);
             return Ok(result);
-
         }
 
         /// <summary>Staff renewal queue — plans ending within <paramref name="withinDays"/> (default 14).</summary>
@@ -192,6 +199,48 @@ namespace GymManagement.API.Controllers
 
             return Ok(item);
 
+        }
+
+        [HttpPost("{id}/renew-access")]
+        public async Task<ActionResult<UserMembershipDto>> RenewAccess(int id, RenewMembershipAccessDto? dto)
+        {
+            var userId = ResolveUserId();
+            if (!userId.HasValue) return Unauthorized();
+
+            try
+            {
+                var item = await _service.RenewAccessAsync(id, dto, userId.Value);
+                return Ok(item);
+            }
+            catch (NotFoundException)
+            {
+                return NotFound();
+            }
+        }
+
+        [HttpGet("{id}/last-renewal-revert-preview")]
+        public async Task<ActionResult<LastRenewalRevertPreviewDto>> GetLastRenewalRevertPreview(int id)
+        {
+            var preview = await _service.GetLastRenewalRevertPreviewAsync(id);
+            if (preview == null) return NotFound();
+            return Ok(preview);
+        }
+
+        [HttpPost("{id}/revert-last-renewal")]
+        public async Task<ActionResult<UserMembershipDto>> RevertLastRenewal(int id)
+        {
+            var userId = ResolveUserId();
+            if (!userId.HasValue) return Unauthorized();
+
+            try
+            {
+                var item = await _service.RevertLastRenewalAsync(id, userId.Value);
+                return Ok(item);
+            }
+            catch (NotFoundException)
+            {
+                return NotFound();
+            }
         }
 
 

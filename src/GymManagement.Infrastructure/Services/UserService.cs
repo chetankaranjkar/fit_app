@@ -103,24 +103,31 @@ namespace GymManagement.Infrastructure.Services
             bool? isActive = null,
             bool includeBillingSummary = true,
             string? preferredGymTime = null,
-            int? assignedToTrainerProfileId = null)
+            int? assignedToTrainerProfileId = null,
+            bool countOnly = false)
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
-            IQueryable<User> query = _db.Users.AsNoTracking().Where(u => !u.IsDeleted);
 
-            if (isActive.HasValue)
-                query = query.Where(u => u.IsActive == isActive.Value);
+            var query = await BuildMembersDirectoryQueryAsync(
+                membersOnly,
+                isActive,
+                preferredGymTime,
+                assignedToTrainerProfileId,
+                search)
+                .ConfigureAwait(false);
 
-            query = query.ApplyPreferredGymTimeFilter(_db.Members, preferredGymTime);
-
-            if (membersOnly)
-                query = query.ApplyMembersOnlyFilter(_db.UserRoles, _db.AppRoles);
-
-            if (assignedToTrainerProfileId.HasValue)
-                query = query.ApplyAssignedToTrainerFilter(_db.UserInstructors, assignedToTrainerProfileId.Value);
-
-            query = query.ApplyUserSearchFilter(_db.AuthUsers, search);
+            if (countOnly)
+            {
+                var countOnlyTotal = await query.CountAsync().ConfigureAwait(false);
+                return new PagedResultDto<UserDto>
+                {
+                    Items = Array.Empty<UserDto>(),
+                    TotalCount = countOnlyTotal,
+                    Page = safePage,
+                    PageSize = safePageSize,
+                };
+            }
 
             var pageUsers = await query
                 .OrderByDescending(u => u.RegistrationDate)
@@ -175,6 +182,93 @@ namespace GymManagement.Infrastructure.Services
                 Page = safePage,
                 PageSize = safePageSize,
             };
+        }
+
+        public async Task<int> GetMembersDirectoryCountAsync(
+            bool? isActive = null,
+            string? preferredGymTime = null,
+            int? assignedToTrainerProfileId = null)
+        {
+            var query = await BuildMembersDirectoryQueryAsync(
+                membersOnly: true,
+                isActive,
+                preferredGymTime,
+                assignedToTrainerProfileId,
+                search: null)
+                .ConfigureAwait(false);
+
+            return await query.CountAsync().ConfigureAwait(false);
+        }
+
+        public async Task<MembersDirectoryStatsDto> GetMembersDirectoryStatsAsync(int? assignedToTrainerProfileId = null)
+        {
+            var baseQuery = await BuildMembersDirectoryQueryAsync(
+                membersOnly: true,
+                isActive: null,
+                preferredGymTime: null,
+                assignedToTrainerProfileId,
+                search: null)
+                .ConfigureAwait(false);
+
+            var batchNames = new[] { "Morning", "Afternoon", "Evening", "Night" };
+            var total = await baseQuery.CountAsync().ConfigureAwait(false);
+            var active = await baseQuery.Where(u => u.IsActive).CountAsync().ConfigureAwait(false);
+            var batches = new List<MemberBatchCountDto>();
+            foreach (var batch in batchNames)
+            {
+                var count = await baseQuery
+                    .ApplyPreferredGymTimeFilter(_db.Members, batch)
+                    .CountAsync()
+                    .ConfigureAwait(false);
+                batches.Add(new MemberBatchCountDto { Batch = batch, Count = count });
+            }
+
+            return new MembersDirectoryStatsDto
+            {
+                Total = total,
+                Active = active,
+                Inactive = Math.Max(0, total - active),
+                Batches = batches,
+            };
+        }
+
+        private async Task<IQueryable<User>> BuildMembersDirectoryQueryAsync(
+            bool membersOnly,
+            bool? isActive,
+            string? preferredGymTime,
+            int? assignedToTrainerProfileId,
+            string? search)
+        {
+            IQueryable<User> query = _db.Users.AsNoTracking().Where(u => !u.IsDeleted);
+
+            if (isActive.HasValue)
+                query = query.Where(u => u.IsActive == isActive.Value);
+
+            query = query.ApplyPreferredGymTimeFilter(_db.Members, preferredGymTime);
+
+            if (membersOnly)
+            {
+                var memberRoleId = await ResolveMemberRoleIdAsync().ConfigureAwait(false);
+                if (!memberRoleId.HasValue)
+                    return _db.Users.AsNoTracking().Where(u => false);
+
+                query = query.ApplyMembersOnlyFilter(_db.UserRoles, memberRoleId.Value);
+            }
+
+            if (assignedToTrainerProfileId.HasValue)
+                query = query.ApplyAssignedToTrainerFilter(_db.UserInstructors, assignedToTrainerProfileId.Value);
+
+            query = query.ApplyUserSearchFilter(_db.AuthUsers, search);
+            return query;
+        }
+
+        private async Task<int?> ResolveMemberRoleIdAsync()
+        {
+            return await _db.AppRoles.AsNoTracking()
+                .Where(r => !r.IsDeleted && r.IsActive && r.Name == ApplicationRoleCodes.Member)
+                .Select(r => (int?)r.Id)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
         }
 
         public async Task<UserDto?> GetUserByIdAsync(int id)

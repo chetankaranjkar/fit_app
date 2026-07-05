@@ -1,10 +1,9 @@
 /**
  * Routes where the main shell stays fixed and only the data grid panel scrolls.
- * `/dashboard/users` uses soft scroll (taller layout + light page scroll) — see UsersPage.
+ * `/dashboard/users` and `/dashboard/user-memberships` use page scroll (KPI strips, renewal queue, etc.).
  */
 const EXACT_LOCK_ROUTES = new Set([
   '/dashboard/payments',
-  '/dashboard/user-memberships',
   '/dashboard/membership-plans',
   '/dashboard/retail/products',
   '/dashboard/personal-training/sessions',

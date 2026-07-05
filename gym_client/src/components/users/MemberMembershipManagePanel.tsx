@@ -4,7 +4,7 @@ import { MemberMembershipHistoryTab } from './MemberMembershipHistoryTab'
 import { AddUserMembershipModal } from '../memberships/AddUserMembershipModal'
 import { userMembershipsByUserQueryKey } from '../../services/userMemberships.service'
 import { authService } from '../../services/auth.service'
-import { todayIsoDate } from '../../lib/membershipFormUtils'
+import { renewStartDateForMembership } from '../../lib/membershipFormUtils'
 import type { User } from '../../types/user'
 import type { UserMembership } from '../../types/userMembership'
 
@@ -31,12 +31,12 @@ export function MemberMembershipManagePanel({
     setAddModalOpen(true)
   }, [])
 
-  const openRenewMembership = useCallback((latestExpired: UserMembership) => {
+  const openRenewMembership = useCallback((membership: UserMembership) => {
     setAddIntent('renew')
     setRenewPrefill({
-      planId: latestExpired.planId,
-      startDate: todayIsoDate(),
-      priorMembershipId: latestExpired.id,
+      planId: membership.planId,
+      startDate: renewStartDateForMembership(membership),
+      priorMembershipId: membership.id,
     })
     setAddModalOpen(true)
   }, [])

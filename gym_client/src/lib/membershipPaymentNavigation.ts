@@ -1,8 +1,13 @@
 import { getSafeDashboardReturnPath } from './safeReturnPath'
+import type { ActiveMembershipConflict } from '../types/activeMembershipConflict'
 import type { MembershipStatus, UserMembership } from '../types/userMembership'
 
 export function memberProfilePath(userId: number): string {
   return `/dashboard/users/${userId}`
+}
+
+export function memberMembershipHistoryPath(userId: number): string {
+  return `/dashboard/users/${userId}?mode=view&tab=membership-history`
 }
 
 export function collectPaymentPath(
@@ -34,6 +39,22 @@ export function membershipStatusOpensCollectPayment(status: MembershipStatus): b
   return (
     status === 'ActivePendingPayment' || status === 'PartialPayment' || status === 'Expired'
   )
+}
+
+export function conflictNeedsCollectPayment(
+  conflict: Pick<ActiveMembershipConflict, 'existingStatus'>,
+): boolean {
+  return (
+    conflict.existingStatus != null &&
+    membershipStatusOpensCollectPayment(conflict.existingStatus)
+  )
+}
+
+export function conflictCollectPaymentPath(
+  conflict: ActiveMembershipConflict,
+  returnTo?: string | null,
+): string {
+  return collectPaymentPath(conflict.membershipId, conflict.userId, returnTo)
 }
 
 export function getMembershipCollectPaymentPath(

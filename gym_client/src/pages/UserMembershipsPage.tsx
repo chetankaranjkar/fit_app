@@ -1,53 +1,54 @@
-import { useState, useMemo, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell, DashboardTablePanel } from '../components/layout/DashboardSubpageShell'
 import { DataPageSection } from '../components/layout/DataPageShell'
-import { MembershipStatusBadge } from '../components/billing/MembershipStatusBadge'
-import { AddUserMembershipModal } from '../components/memberships/AddUserMembershipModal'
+import { AddUserMembershipModal, type AddUserMembershipIntent } from '../components/memberships/AddUserMembershipModal'
 import { RequestMembershipVoidModal } from '../components/memberships/RequestMembershipVoidModal'
-import {
-  DataFilterSelect,
-  DataToolbar,
-  EnterpriseDataGrid,
-  RowActionsMenu,
-  type DataGridColumnDef,
-} from '../components/data-grid'
-import { DashboardMetricsGrid } from '../components/layout/DashboardMetricsGrid'
-import { MetricCard } from '../components/dashboard/MetricCard'
-import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
-import { Modal } from '../components/ui/Modal'
+import { RevertLastRenewalModal } from '../components/memberships/RevertLastRenewalModal'
+import { RequestMembershipChangeModal } from '../components/memberships/RequestMembershipChangeModal'
+import { ActiveMembershipConflictModal } from '../components/memberships/ActiveMembershipConflictModal'
+import { MembershipBillingNav } from '../components/memberships/MembershipBillingNav'
+import { UserMembershipsSummaryStrip } from '../components/memberships/UserMembershipsSummaryStrip'
+import { UserMembershipsToolbar } from '../components/memberships/UserMembershipsToolbar'
+import { UserMembershipsGrid } from '../components/memberships/UserMembershipsGrid'
+import { EditUserMembershipModal } from '../components/memberships/EditUserMembershipModal'
+import { UserMembershipDetailDrawer } from '../components/memberships/UserMembershipDetailDrawer'
+import { UserMembershipRenewalFocusStrip } from '../components/memberships/UserMembershipRenewalFocusStrip'
+import { HelpButton } from '../modules/help/components/HelpButton'
 import { userMembershipsService } from '../services/userMemberships.service'
-import {
-  membershipFormLabelClass,
-  membershipFormSelectClass,
-  membershipStatusLabel,
-  membershipStatusOptions,
-} from '../lib/membershipFormUtils'
+import { usersService } from '../services/users.service'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import { downloadUserMembershipsCsv } from '../lib/userMembershipsCsv'
 import {
   findOccupyingMembershipConflict,
   occupiesMembershipSlot,
 } from '../lib/membershipRules'
 import {
-  getMembershipCollectPaymentPath,
-  membershipStatusClickTitle,
-} from '../lib/membershipPaymentNavigation'
+  conflictCollectPaymentPath,
+  conflictNeedsCollectPayment,
+  extendMembershipAccessRenewal,
+} from '../lib/membershipRenewFlow'
+import { renewStartDateForMembership } from '../lib/membershipFormUtils'
+import {
+  parseUserMembershipQuickFilter,
+  type UserMembershipQuickFilter,
+} from '../lib/userMembershipListUtils'
 import {
   membershipToConflict,
   parseActiveMembershipConflict,
 } from '../lib/activeMembershipConflict'
-import { ActiveMembershipConflictModal } from '../components/memberships/ActiveMembershipConflictModal'
 import type { ActiveMembershipConflict } from '../types/activeMembershipConflict'
 import type {
   UserMembership,
   CreateUserMembershipDto,
   UpdateUserMembershipDto,
+  MembershipStatus,
+  ExpiringMembershipQueueItem,
 } from '../types/userMembership'
-import type { MembershipStatus } from '../types/userMembership'
+import type { User } from '../types/user'
 
 function getDashboardUser() {
   try {
@@ -60,22 +61,8 @@ function getDashboardUser() {
   }
 }
 
-function formatDate(iso: string) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString()
-}
-
-const statusOptions: MembershipStatus[] = [
-  'Active',
-  'ActivePendingPayment',
-  'PartialPayment',
-  'Paused',
-  'Expired',
-]
-
-/** Shared prefix so create/update/delete invalidate the paged list too. */
 const MEMBERSHIPS_QUERY_KEY = ['user-memberships'] as const
+const MEMBERSHIPS_PAGE_PATH = '/dashboard/user-memberships'
 
 const defaultEditForm: CreateUserMembershipDto = {
   userId: 0,
@@ -85,75 +72,203 @@ const defaultEditForm: CreateUserMembershipDto = {
   status: 'Active',
 }
 
-const membershipMetricIcons = {
-  total: (
-    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-    </svg>
-  ),
-  active: (
-    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  paused: (
-    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  expired: (
-    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
+const STATUS_FILTER_VALUES = new Set<string>([
+  'all',
+  'Active',
+  'ActivePendingPayment',
+  'PartialPayment',
+  'Paused',
+  'Expired',
+  'VoidPending',
+])
+
+function parseStatusFilter(raw: string | null): 'all' | MembershipStatus {
+  if (!raw || !STATUS_FILTER_VALUES.has(raw) || raw === 'all') return 'all'
+  return raw as MembershipStatus
+}
+
+function parsePage(raw: string | null): number {
+  const page = Number.parseInt(raw ?? '1', 10)
+  return Number.isFinite(page) && page > 0 ? page : 1
+}
+
+function parseMembershipId(raw: string | null): number | null {
+  const id = Number.parseInt(raw ?? '', 10)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
+
+function buildPagedQueryParams(options: {
+  quickFilter: UserMembershipQuickFilter
+  statusFilter: 'all' | MembershipStatus
+  membershipId: number | null
+}) {
+  const { quickFilter, statusFilter, membershipId } = options
+  if (membershipId != null) {
+    return { membershipId, includeTerminal: true as const }
+  }
+
+  switch (quickFilter) {
+    case 'needsPayment':
+      return { needsPayment: true as const }
+    case 'expiring14':
+      return { expiringWithinDays: 14 }
+    case 'voidPending':
+      return { status: 'VoidPending' as const }
+    case 'expired':
+      return { status: 'Expired' as const }
+    case 'terminal':
+      return { includeTerminal: true as const }
+    default:
+      return statusFilter === 'all' ? {} : { status: statusFilter }
+  }
 }
 
 export function UserMembershipsPage() {
   const { userName } = getDashboardUser()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const listSearch = searchParams.get('search') ?? ''
+  const statusFilter = parseStatusFilter(searchParams.get('status'))
+  const quickFilter = parseUserMembershipQuickFilter(searchParams.get('quick'))
+  const highlightMembershipId = parseMembershipId(searchParams.get('membershipId'))
+  const page = parsePage(searchParams.get('page'))
+  const [pageSize, setPageSize] = useState(50)
+  const [debouncedListSearch, setDebouncedListSearch] = useState(listSearch.trim())
+
+  const pagedFilters = useMemo(
+    () =>
+      buildPagedQueryParams({
+        quickFilter,
+        statusFilter,
+        membershipId: highlightMembershipId,
+      }),
+    [quickFilter, statusFilter, highlightMembershipId],
+  )
+
+  const filteredView =
+    Boolean(debouncedListSearch.trim()) ||
+    quickFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    highlightMembershipId != null
+
   const [addModalOpen, setAddModalOpen] = useState(false)
+  const [addIntent, setAddIntent] = useState<AddUserMembershipIntent>('create')
+  const [addPrefill, setAddPrefill] = useState<{
+    planId?: number
+    startDate?: string
+    priorMembershipId?: number
+  }>()
+  const [addLockedMember, setAddLockedMember] = useState<User | null>(null)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [voidTarget, setVoidTarget] = useState<UserMembership | null>(null)
+  const [revertTarget, setRevertTarget] = useState<UserMembership | null>(null)
   const [activeConflict, setActiveConflict] = useState<ActiveMembershipConflict | null>(null)
   const [editing, setEditing] = useState<UserMembership | null>(null)
   const [form, setForm] = useState<CreateUserMembershipDto>(defaultEditForm)
   const [formError, setFormError] = useState<string | null>(null)
-  const [listSearch, setListSearch] = useState('')
-  const [debouncedListSearch, setDebouncedListSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | MembershipStatus>('all')
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(50)
+  const [openingRenewUserId, setOpeningRenewUserId] = useState<number | null>(null)
+  const [detailMembership, setDetailMembership] = useState<UserMembership | null>(null)
+  const [changeRequestOpen, setChangeRequestOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
-  const { data: membershipsPage, isLoading, isFetching } = useQuery({
-    queryKey: [...MEMBERSHIPS_QUERY_KEY, 'paged', page, pageSize, debouncedListSearch, statusFilter],
-    queryFn: async () => {
-      const { data } = await userMembershipsService.getPaged({
-        page,
-        pageSize,
-        search: debouncedListSearch || undefined,
-        status: statusFilter,
-      })
-      return data
+  const updateSearchParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          for (const [key, value] of Object.entries(patch)) {
+            if (value == null || value === '') next.delete(key)
+            else next.set(key, value)
+          }
+          return next
+        },
+        { replace: true },
+      )
     },
-  })
-  const memberships = membershipsPage?.items ?? []
-  const totalMemberships = membershipsPage?.totalCount ?? 0
+    [setSearchParams],
+  )
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedListSearch(listSearch.trim()), 250)
     return () => window.clearTimeout(timer)
   }, [listSearch])
 
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: [...MEMBERSHIPS_QUERY_KEY, 'summary'],
+    queryFn: () => userMembershipsService.getSummary(),
+    staleTime: 30_000,
+  })
+
+  const { data: membershipsPage, isLoading, isFetching } = useQuery({
+    queryKey: [
+      ...MEMBERSHIPS_QUERY_KEY,
+      'paged',
+      page,
+      pageSize,
+      debouncedListSearch,
+      quickFilter,
+      statusFilter,
+      highlightMembershipId,
+      pagedFilters,
+    ],
+    queryFn: () =>
+      userMembershipsService.getPaged({
+        page,
+        pageSize,
+        search: debouncedListSearch || undefined,
+        ...pagedFilters,
+      }),
+  })
+
+  const memberships = membershipsPage?.items ?? []
+  const totalMemberships = membershipsPage?.totalCount ?? 0
+
   useEffect(() => {
-    setPage(1)
-  }, [debouncedListSearch, statusFilter])
+    if (!highlightMembershipId) return
+    const row = memberships.find((m) => m.id === highlightMembershipId)
+    if (row) setDetailMembership(row)
+  }, [highlightMembershipId, memberships])
+
+  const openDetail = useCallback(
+    (membership: UserMembership) => {
+      setDetailMembership(membership)
+      updateSearchParams({ membershipId: String(membership.id), page: null })
+    },
+    [updateSearchParams],
+  )
+
+  const closeDetail = useCallback(() => {
+    setDetailMembership(null)
+    updateSearchParams({ membershipId: null })
+  }, [updateSearchParams])
+
+  const emptyMessage = useMemo(() => {
+    if (highlightMembershipId != null && !debouncedListSearch.trim()) {
+      return `Membership #${highlightMembershipId} was not found in the current filter.`
+    }
+    if (debouncedListSearch.trim()) {
+      return 'No memberships match your search. Try another name, plan, or membership ID.'
+    }
+    if (quickFilter === 'needsPayment') {
+      return 'No memberships need payment right now.'
+    }
+    if (quickFilter === 'expiring14') {
+      return 'No memberships are expiring within the next 14 days.'
+    }
+    if (quickFilter !== 'all' || statusFilter !== 'all') {
+      return 'No memberships in this filter. Try another view or add a new membership.'
+    }
+    return 'No memberships yet. Add one to assign a plan to a member.'
+  }, [debouncedListSearch, quickFilter, statusFilter, highlightMembershipId])
 
   const updateMutation = useMutation({
     mutationFn: ({ id, dto }: { id: number; dto: UpdateUserMembershipDto }) =>
       userMembershipsService.update(id, dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
+      queryClient.invalidateQueries({ queryKey: [...MEMBERSHIPS_QUERY_KEY, 'summary'] })
       setEditModalOpen(false)
       setEditing(null)
       setForm(defaultEditForm)
@@ -170,19 +285,21 @@ export function UserMembershipsPage() {
     },
   })
 
-  const membershipStats = useMemo(() => {
-    const total = memberships.length
-    const active = memberships.filter((m) => m.status === 'Active').length
-    const paused = memberships.filter((m) => m.status === 'Paused').length
-    const expired = memberships.filter((m) => m.status === 'Expired').length
-    return { total, active, paused, expired }
-  }, [memberships])
-
   const openAdd = () => {
+    setAddIntent('create')
+    setAddPrefill(undefined)
+    setAddLockedMember(null)
     setAddModalOpen(true)
   }
 
-  const openEdit = (m: UserMembership) => {
+  const closeAddModal = () => {
+    setAddModalOpen(false)
+    setAddIntent('create')
+    setAddPrefill(undefined)
+    setAddLockedMember(null)
+  }
+
+  const openEdit = useCallback((m: UserMembership) => {
     setEditing(m)
     setForm({
       userId: m.userId,
@@ -193,7 +310,7 @@ export function UserMembershipsPage() {
     })
     setFormError(null)
     setEditModalOpen(true)
-  }
+  }, [])
 
   const closeEditModal = () => {
     setEditModalOpen(false)
@@ -208,11 +325,28 @@ export function UserMembershipsPage() {
     setAddModalOpen(false)
   }
 
-  const handleRenewActive = (conflict: ActiveMembershipConflict) => {
+  const handleRenewActive = async (conflict: ActiveMembershipConflict) => {
     setActiveConflict(null)
-    navigate(
-      `/dashboard/payments/collect?membershipId=${conflict.membershipId}&userId=${conflict.userId}`,
-    )
+
+    if (conflictNeedsCollectPayment(conflict)) {
+      navigate(conflictCollectPaymentPath(conflict, MEMBERSHIPS_PAGE_PATH))
+      return
+    }
+
+    const result = await extendMembershipAccessRenewal(conflict)
+    if (result.ok) {
+      toast.success(`Membership extended until ${new Date(result.endDate + 'T12:00:00').toLocaleDateString()}.`)
+      void queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
+      void queryClient.invalidateQueries({ queryKey: [...MEMBERSHIPS_QUERY_KEY, 'summary'] })
+      return
+    }
+
+    if (result.reason === 'needs_collect') {
+      navigate(conflictCollectPaymentPath(conflict, MEMBERSHIPS_PAGE_PATH))
+      return
+    }
+
+    toast.error(result.message ?? 'Could not extend membership.')
   }
 
   const handleUpgradeActive = (conflict: ActiveMembershipConflict) => {
@@ -251,271 +385,263 @@ export function UserMembershipsPage() {
     })
   }
 
-  const handleRequestVoid = (m: UserMembership) => {
+  const handleRequestVoid = useCallback((m: UserMembership) => {
     if (m.status === 'Voided' || m.status === 'Transferred') {
       toast.error('This membership is already voided or transferred.')
       return
     }
     setVoidTarget(m)
-  }
+  }, [])
 
-  const membershipStatusAction = (m: UserMembership) => {
-    const collectPath = getMembershipCollectPaymentPath(m)
-    if (collectPath) return () => navigate(collectPath)
-    if (m.status === 'Paused') return () => openEdit(m)
-    return () => navigate(`/dashboard/users/${m.userId}`)
-  }
+  const handleRenewMembership = useCallback(async (m: UserMembership) => {
+    if (openingRenewUserId != null) return
+    setOpeningRenewUserId(m.userId)
+    try {
+      const { data: user } = await usersService.getById(m.userId)
+      setAddLockedMember(user)
+      setAddIntent('renew')
+      setAddPrefill({
+        planId: m.planId,
+        startDate: renewStartDateForMembership(m),
+        priorMembershipId: m.id,
+      })
+      setAddModalOpen(true)
+    } catch {
+      toast.error('Could not load member for renewal.')
+    } finally {
+      setOpeningRenewUserId(null)
+    }
+  }, [openingRenewUserId])
 
-  const membershipStatusTitle = (status: MembershipStatus) => {
-    const collectTitle = membershipStatusClickTitle(status)
-    if (collectTitle) return collectTitle
-    if (status === 'Paused') return 'Edit membership'
-    return 'Open member profile'
-  }
-
-  const membershipColumns = useMemo<DataGridColumnDef<UserMembership>[]>(
-    () => [
-      {
-        id: 'member',
-        header: 'Member',
-        sticky: true,
-        minWidth: 180,
-        width: 200,
-        sortable: true,
-        accessorFn: (m) => m.userName ?? `User #${m.userId}`,
-        cell: ({ row }) =>
-          row.userName ? (
-            <Link
-              to={`/dashboard/users/${row.userId}`}
-              className="truncate font-medium text-blue-300 hover:text-blue-200"
-            >
-              {row.userName}
-            </Link>
-          ) : (
-            <span className="text-slate-300">User #{row.userId}</span>
-          ),
-      },
-      {
-        id: 'plan',
-        header: 'Plan',
-        minWidth: 140,
-        width: 160,
-        sortable: true,
-        accessorFn: (m) => m.planName ?? `Plan #${m.planId}`,
-      },
-      {
-        id: 'start',
-        header: 'Start',
-        minWidth: 110,
-        width: 120,
-        sortable: true,
-        accessorFn: (m) => m.startDate,
-        cell: ({ row }) => formatDate(row.startDate),
-      },
-      {
-        id: 'end',
-        header: 'End',
-        minWidth: 110,
-        width: 120,
-        hideBelow: 'md',
-        accessorFn: (m) => m.endDate,
-        cell: ({ row }) => formatDate(row.endDate),
-      },
-      {
-        id: 'status',
-        header: 'Status',
-        minWidth: 150,
-        width: 160,
-        sortable: true,
-        accessorFn: (m) => m.status,
-        cell: ({ row }) => (
-          <MembershipStatusBadge
-            status={row.status}
-            onClick={membershipStatusAction(row)}
-            title={membershipStatusTitle(row.status)}
-          />
-        ),
-      },
-      {
-        id: 'actions',
-        header: '',
-        width: 72,
-        minWidth: 72,
-        align: 'right',
-        cell: ({ row }) => (
-          <RowActionsMenu
-            row={row}
-            actions={[
-              { id: 'edit', label: 'Edit', onClick: openEdit },
-              ...(row.status !== 'Voided' && row.status !== 'Transferred'
-                ? [
-                    {
-                      id: 'void',
-                      label: 'Request void',
-                      variant: 'danger' as const,
-                      onClick: handleRequestVoid,
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        ),
-      },
-    ],
-    [navigate, openEdit, handleRequestVoid],
+  const handleRenewQueueItem = useCallback(
+    async (item: ExpiringMembershipQueueItem) => {
+      await handleRenewMembership({
+        id: item.id,
+        userId: item.userId,
+        planId: item.planId,
+        startDate: item.startDate,
+        endDate: item.endDate,
+        status: item.status,
+        userName: item.userName,
+        planName: item.planName,
+      })
+    },
+    [handleRenewMembership],
   )
+
+  const handleExportCsv = useCallback(async () => {
+    setExporting(true)
+    try {
+      const exportPage = await userMembershipsService.getPaged({
+        page: 1,
+        pageSize: Math.min(Math.max(totalMemberships, memberships.length), 500),
+        search: debouncedListSearch || undefined,
+        ...pagedFilters,
+      })
+      if (exportPage.items.length === 0) {
+        toast.error('Nothing to export for the current filter.')
+        return
+      }
+      downloadUserMembershipsCsv(exportPage.items)
+      toast.success(`Exported ${exportPage.items.length} row(s)`)
+    } catch {
+      toast.error('Export failed.')
+    } finally {
+      setExporting(false)
+    }
+  }, [debouncedListSearch, memberships.length, pagedFilters, totalMemberships])
+
+  const handleOpenExpiringFilter = () => {
+    updateSearchParams({ quick: 'expiring14', status: null, page: null, membershipId: null })
+  }
+
+  const handleSearchChange = (value: string) => {
+    updateSearchParams({ search: value.trim() || null, page: null, membershipId: null })
+  }
+
+  const handleStatusFilterChange = (value: 'all' | MembershipStatus) => {
+    updateSearchParams({
+      status: value === 'all' ? null : value,
+      quick: null,
+      page: null,
+      membershipId: null,
+    })
+  }
+
+  const handleQuickFilterChange = (value: UserMembershipQuickFilter) => {
+    updateSearchParams({
+      quick: value === 'all' ? null : value,
+      status: null,
+      page: null,
+      membershipId: null,
+    })
+  }
+
+  const handlePageChange = (nextPage: number) => {
+    updateSearchParams({ page: nextPage <= 1 ? null : String(nextPage) })
+  }
+
+  const handleClearMembershipFocus = () => {
+    setDetailMembership(null)
+    updateSearchParams({ membershipId: null, page: null })
+  }
 
   return (
     <DashboardLayout userName={userName}>
       <DashboardSubpageShell
         eyebrow="Memberships"
-        titleGradient="user memberships"
-        subtitle="Assign plans to members and track start dates, end dates, and status."
+        titleGradient="member plans"
+        subtitle="Assign plans, collect payment, renew access, and request lifecycle changes."
         primaryAction={{ label: '+ Add membership', onClick: openAdd }}
+        showExport={false}
+        lockViewport={false}
       >
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+          <HelpButton moduleKey="user_memberships" size="sm" />
+          <button
+            type="button"
+            disabled={exporting || isLoading}
+            onClick={() => void handleExportCsv()}
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
+          >
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+        </div>
+
+        <MembershipBillingNav />
+
         <DataPageSection>
-        <DashboardMetricsGrid cols={4}>
-          <MetricCard
-            title="Total"
-            value={membershipStats.total}
-            gradient="from-blue-500 to-indigo-500"
-            icon={membershipMetricIcons.total}
-            caption="Membership records"
+          <UserMembershipsSummaryStrip
+            summary={summary}
+            matchingCount={totalMemberships}
+            isLoading={summaryLoading || isLoading}
+            filteredView={filteredView}
+            quickFilter={quickFilter}
+            onQuickFilterChange={handleQuickFilterChange}
           />
-          <MetricCard
-            title="Active"
-            value={membershipStats.active}
-            gradient="from-emerald-400 to-teal-500"
-            icon={membershipMetricIcons.active}
-            caption="Currently valid"
-          />
-          <MetricCard
-            title="Paused"
-            value={membershipStats.paused}
-            gradient="from-amber-400 to-orange-500"
-            icon={membershipMetricIcons.paused}
-            caption="On hold"
-          />
-          <MetricCard
-            title="Expired"
-            value={membershipStats.expired}
-            gradient="from-slate-500 to-slate-700"
-            icon={membershipMetricIcons.expired}
-            caption="Past end date"
-          />
-        </DashboardMetricsGrid>
         </DataPageSection>
+
+        <DataPageSection>
+          <UserMembershipRenewalFocusStrip
+            returnTo={MEMBERSHIPS_PAGE_PATH}
+            onOpenExpiringFilter={handleOpenExpiringFilter}
+            onRenewItem={(item) => void handleRenewQueueItem(item)}
+          />
+        </DataPageSection>
+
+        {highlightMembershipId != null ? (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3">
+            <p className="text-sm text-amber-100">
+              Showing membership <span className="font-mono font-semibold">#{highlightMembershipId}</span>
+            </p>
+            <button
+              type="button"
+              onClick={handleClearMembershipFocus}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
+            >
+              Clear focus
+            </button>
+          </div>
+        ) : null}
 
         <DashboardTablePanel
           title="Membership list"
-          description="Click status badges for payment or profile actions."
+          description="Timeline and payment columns reflect billing status. Member names open membership history."
+          pageScroll
           toolbar={
-            <DataToolbar
-              searchValue={listSearch}
-              onSearchChange={setListSearch}
-              searchPlaceholder="Search member or plan…"
-              searchAriaLabel="Search memberships"
-              filters={
-                <DataFilterSelect
-                  value={statusFilter}
-                  onChange={(v) => setStatusFilter(v as 'all' | MembershipStatus)}
-                  ariaLabel="Filter by status"
-                  options={[
-                    { value: 'all', label: 'Operational (hide voided)' },
-                    ...statusOptions.map((s) => ({ value: s, label: membershipStatusLabel[s] ?? s })),
-                  ]}
-                />
-              }
+            <UserMembershipsToolbar
+              listSearch={listSearch}
+              onSearchChange={handleSearchChange}
+              statusFilter={statusFilter}
+              onStatusFilterChange={handleStatusFilterChange}
+              quickFilter={quickFilter}
+              onQuickFilterChange={handleQuickFilterChange}
             />
           }
         >
-          <EnterpriseDataGrid
-            data={memberships}
-            columns={membershipColumns}
-            getRowId={(m) => m.id}
+          <UserMembershipsGrid
+            memberships={memberships}
             loading={isLoading}
-            emptyMessage="No memberships yet. Add one to get started."
-            pagination={
-              totalMemberships > 0
-                ? {
-                    page,
-                    pageSize,
-                    totalCount: totalMemberships,
-                    isFetching,
-                    pageSizeOptions: [25, 50, 100],
-                    onPageChange: setPage,
-                    onPageSizeChange: (size) => {
-                      setPageSize(size)
-                      setPage(1)
-                    },
-                  }
-                : undefined
-            }
+            isFetching={isFetching}
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalMemberships}
+            emptyMessage={emptyMessage}
+            returnTo={MEMBERSHIPS_PAGE_PATH}
+            highlightMembershipId={highlightMembershipId}
+            onOpenDetail={openDetail}
+            onPageChange={handlePageChange}
+            onPageSizeChange={setPageSize}
+            onEdit={openEdit}
+            onRequestVoid={handleRequestVoid}
+            onRenew={handleRenewMembership}
+            pageScroll
           />
         </DashboardTablePanel>
       </DashboardSubpageShell>
 
       <AddUserMembershipModal
         open={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
+        onClose={closeAddModal}
+        lockedMember={addLockedMember}
+        intent={addIntent}
+        prefill={addPrefill}
         creationSource="user_memberships_page"
         extraInvalidateQueryKeys={[[...MEMBERSHIPS_QUERY_KEY, 'paged']]}
-        onCreated={() => {
-          setPage(1)
+        onCreated={() => updateSearchParams({ page: null })}
+      />
+
+      <EditUserMembershipModal
+        open={editModalOpen}
+        editing={editing}
+        form={form}
+        formError={formError}
+        isPending={updateMutation.isPending}
+        onClose={closeEditModal}
+        onSubmit={handleSubmit}
+        onRequestApproval={() => setChangeRequestOpen(true)}
+        onFormChange={setForm}
+      />
+
+      <RequestMembershipChangeModal
+        open={changeRequestOpen}
+        membership={editing}
+        form={form}
+        onClose={() => setChangeRequestOpen(false)}
+        onSubmitted={() => {
+          setChangeRequestOpen(false)
+          closeEditModal()
+          void queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
+          void queryClient.invalidateQueries({ queryKey: [...MEMBERSHIPS_QUERY_KEY, 'summary'] })
+          void queryClient.invalidateQueries({ queryKey: ['membership-approval-requests'] })
         }}
       />
 
-      <Modal open={editModalOpen && editing != null} onClose={closeEditModal} title="Edit membership">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {formError ? (
-            <p
-              className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
-              role="alert"
-            >
-              {formError}
-            </p>
-          ) : null}
-          <Input
-            label="Start date"
-            type="date"
-            value={form.startDate.slice(0, 10)}
-            onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
-            required
-          />
-          <Input
-            label="End date"
-            type="date"
-            value={form.endDate.slice(0, 10)}
-            onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-            required
-          />
-          <div>
-            <label className={membershipFormLabelClass}>Status</label>
-            <select
-              value={form.status}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, status: e.target.value as MembershipStatus }))
-              }
-              className={membershipFormSelectClass}
-              aria-label="Select membership status"
-            >
-              {membershipStatusOptions.map((s) => (
-                <option key={s} value={s} className="bg-slate-900">
-                  {membershipStatusLabel[s] ?? s}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={closeEditModal}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={updateMutation.isPending} isLoading={updateMutation.isPending}>
-              Update
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      <UserMembershipDetailDrawer
+        membership={detailMembership}
+        open={detailMembership != null}
+        returnTo={MEMBERSHIPS_PAGE_PATH}
+        onClose={closeDetail}
+        onEdit={(m) => {
+          closeDetail()
+          openEdit(m)
+        }}
+        onRenew={handleRenewMembership}
+        onRequestVoid={handleRequestVoid}
+        onRevertLastRenewal={setRevertTarget}
+      />
+
+      <RevertLastRenewalModal
+        open={revertTarget != null}
+        membership={revertTarget}
+        onClose={() => setRevertTarget(null)}
+        onReverted={() => {
+          void queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
+          void queryClient.invalidateQueries({ queryKey: [...MEMBERSHIPS_QUERY_KEY, 'summary'] })
+          void queryClient.invalidateQueries({ queryKey: ['membership-audit'] })
+          void queryClient.invalidateQueries({ queryKey: ['membership-revert-preview'] })
+        }}
+      />
 
       <RequestMembershipVoidModal
         open={voidTarget != null}
@@ -523,6 +649,7 @@ export function UserMembershipsPage() {
         onClose={() => setVoidTarget(null)}
         onSubmitted={() => {
           queryClient.invalidateQueries({ queryKey: MEMBERSHIPS_QUERY_KEY })
+          queryClient.invalidateQueries({ queryKey: [...MEMBERSHIPS_QUERY_KEY, 'summary'] })
           queryClient.invalidateQueries({ queryKey: ['membership-approval-requests'] })
         }}
       />

@@ -1,14 +1,26 @@
 # Build the Flutter app in GitHub Actions (no local Flutter install).
 # Download the APK from the workflow run → Artifacts.
+#
+# development: debug APK, debug signing. API URL may be HTTP (LAN/emulator).
+# production:  release APK, upload-keystore secrets required (no debug fallback).
+#              API URL must be HTTPS (https://tigerfitness.tech or https://uat.tigerfitness.tech).
 name: Mobile app — Android APK
 
 on:
   workflow_dispatch:
     inputs:
-      api_base_url:
-        description: "API base URL (no /api). Example: http://192.168.1.19:5104"
+      build_profile:
+        description: "development = debug-signed debug APK. production = release-signed release APK (HTTPS + ANDROID_KEYSTORE_* secrets)."
+        type: choice
         required: true
-        default: "http://10.0.2.2:5104"
+        default: development
+        options:
+          - development
+          - production
+      api_base_url:
+        description: "API base URL (no /api). Development default is UAT HTTPS. Production must be HTTPS (https://tigerfitness.tech)."
+        required: false
+        default: "https://uat.tigerfitness.tech"
 
 jobs:
   build-apk:
@@ -16,23 +28,105 @@ jobs:
     defaults:
       run:
         working-directory: "mobile app"
+    env:
+      BUILD_PROFILE: ${{ inputs.build_profile }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate API base URL
+        env:
+          INPUT_API_BASE_URL: ${{ inputs.api_base_url }}
+        run: |
+          set -euo pipefail
+          URL="$(printf '%s' "${INPUT_API_BASE_URL:-}" | tr -d '[:space:]')"
+          if [ -z "$URL" ]; then
+            if [ "$BUILD_PROFILE" = "production" ]; then
+              echo "Production builds require api_base_url (HTTPS). Example: https://tigerfitness.tech"
+              exit 1
+            fi
+            URL="https://uat.tigerfitness.tech"
+            echo "No API URL supplied; using documented UAT HTTPS default: $URL"
+          fi
+          case "$URL" in
+            http://*|https://*) ;;
+            *)
+              echo "API_BASE_URL must start with http:// or https:// (no /api suffix). Got: $URL"
+              exit 1
+              ;;
+          esac
+          if [ "$BUILD_PROFILE" = "production" ]; then
+            case "$URL" in
+              https://*) ;;
+              *)
+                echo "Production/release APKs require HTTPS API_BASE_URL (https://tigerfitness.tech). Refusing HTTP: $URL"
+                exit 1
+                ;;
+            esac
+          fi
+          echo "Using API_BASE_URL=$URL (profile=$BUILD_PROFILE)"
+          echo "API_BASE_URL=$URL" >> "$GITHUB_ENV"
+
+      - name: Configure Android release signing
+        if: ${{ inputs.build_profile == 'production' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then echo "Missing secret ANDROID_KEYSTORE_BASE64"; missing=1; fi
+          if [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ]; then echo "Missing secret ANDROID_KEYSTORE_PASSWORD"; missing=1; fi
+          if [ -z "${ANDROID_KEY_ALIAS:-}" ]; then echo "Missing secret ANDROID_KEY_ALIAS"; missing=1; fi
+          if [ -z "${ANDROID_KEY_PASSWORD:-}" ]; then echo "Missing secret ANDROID_KEY_PASSWORD"; missing=1; fi
+          if [ "$missing" -ne 0 ]; then
+            echo "Production/release APKs require ANDROID_KEYSTORE_* GitHub secrets. Refusing silent debug signing."
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '\r\n' | base64 -d > android/upload-keystore.jks
+          {
+            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'storeFile=upload-keystore.jks\n'
+          } > android/key.properties
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.41.9"
           cache: true
 
       - name: Dependencies
         run: flutter pub get
 
-      - name: Build APK (release)
-        run: flutter build apk --release --dart-define=API_BASE_URL=${{ inputs.api_base_url }}
+      - name: Analyze
+        run: flutter analyze
 
-      - name: Upload APK
+      - name: Test
+        run: flutter test
+
+      - name: Build debug APK (development)
+        if: ${{ inputs.build_profile == 'development' }}
+        run: flutter build apk --dart-define="API_BASE_URL=${API_BASE_URL}"
+
+      - name: Build release APK (production)
+        if: ${{ inputs.build_profile == 'production' }}
+        run: flutter build apk --release --dart-define="API_BASE_URL=${API_BASE_URL}"
+
+      - name: Upload debug APK
+        if: ${{ inputs.build_profile == 'development' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsefit-android-debug
+          path: "mobile app/build/app/outputs/flutter-apk/app-debug.apk"
+          if-no-files-found: error
+
+      - name: Upload release APK
+        if: ${{ inputs.build_profile == 'production' }}
         uses: actions/upload-artifact@v4
         with:
           name: pulsefit-android-release

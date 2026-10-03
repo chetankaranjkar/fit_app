@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import axios from 'axios'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -13,6 +12,8 @@ import {
   Target,
   X,
 } from 'lucide-react'
+import { ExerciseLibraryUnavailableBanner } from '../../components/training/ExerciseLibraryUnavailableBanner'
+import { getApiErrorMessage } from '../../lib/apiErrors'
 import { DayBuilder } from './components/DayBuilder'
 import { DayTabs } from './components/DayTabs'
 import { ExerciseDropZone } from './components/ExerciseDropZone'
@@ -110,7 +111,7 @@ export function WorkoutPlanBuilderPage() {
     setActiveDayId,
     hydrateFromApi,
   } = useWorkoutPlanBuilderStore()
-  const { data: library = [] } = useExerciseLibrary(search)
+  const { data: library = [], isError, error, refetch, isFetching } = useExerciseLibrary(search)
   const { data: plan } = useWorkoutPlan(planId)
   const {
     createWorkoutPlan,
@@ -149,19 +150,6 @@ export function WorkoutPlanBuilderPage() {
       document.body.style.overflow = original
     }
   }, [])
-
-  function describeError(error: unknown, fallback: string) {
-    if (axios.isAxiosError(error)) {
-      const data = error.response?.data as { message?: string; error?: string } | undefined
-      const apiMessage = data?.message ?? data?.error
-      if (apiMessage) return apiMessage
-      if (error.response?.status) return `${fallback} (HTTP ${error.response.status})`
-      if (error.code === 'ERR_NETWORK') return `${fallback} — backend unreachable. Is the API running?`
-      return `${fallback}: ${error.message}`
-    }
-    if (error instanceof Error) return `${fallback}: ${error.message}`
-    return fallback
-  }
 
   async function handleCreatePlan() {
     if (!planForm.name.trim()) {
@@ -207,7 +195,7 @@ export function WorkoutPlanBuilderPage() {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('createWorkoutPlan failed', error)
-      toast.error(describeError(error, 'Failed to create plan'))
+      toast.error(getApiErrorMessage(error, 'Failed to create plan'))
     }
   }
 
@@ -444,10 +432,17 @@ export function WorkoutPlanBuilderPage() {
                 />
               </div>
               <div className="min-h-0 flex-1 space-y-1.5 overflow-auto pr-1">
+                {isError ? (
+                  <ExerciseLibraryUnavailableBanner
+                    error={error}
+                    onRetry={() => void refetch()}
+                    isRetrying={isFetching}
+                  />
+                ) : null}
                 {library.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center px-4 text-center text-xs text-slate-500">
                     <Search size={20} className="mb-2 opacity-50" />
-                    No exercises match your search.
+                    {isError ? 'Library unavailable — days and exercises already on this plan are kept.' : 'No exercises match your search.'}
                   </div>
                 ) : (
                   library.map((item) => (

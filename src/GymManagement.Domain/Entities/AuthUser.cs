@@ -9,6 +9,8 @@ namespace GymManagement.Domain.Entities
     {
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
+        /// <summary>Account appearance preference, shared across devices.</summary>
+        public string Theme { get; set; } = "dark";
 
         public int? UserId { get; set; }
         public User? User { get; set; }

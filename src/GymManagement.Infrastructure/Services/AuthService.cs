@@ -678,6 +678,28 @@ namespace GymManagement.Infrastructure.Services
             };
         }
 
+        public async Task<AccountPreferencesDto?> GetAccountPreferencesAsync(int authUserId)
+        {
+            var account = await _unitOfWork.AuthUsers.FirstOrDefaultAsync(a => a.Id == authUserId);
+            return account == null ? null : new AccountPreferencesDto { Theme = account.Theme };
+        }
+
+        public async Task<AccountPreferencesDto?> UpdateAccountPreferencesAsync(int authUserId, UpdateAccountPreferencesDto dto)
+        {
+            ArgumentNullException.ThrowIfNull(dto);
+            if (dto.Theme is not ("light" or "dark"))
+                throw new ArgumentException("Theme must be light or dark.");
+
+            var account = await _unitOfWork.AuthUsers.FirstOrDefaultAsync(a => a.Id == authUserId);
+            if (account == null)
+                return null;
+
+            // The repository returns a tracked row; save only the changed preference.
+            account.Theme = dto.Theme;
+            await _unitOfWork.SaveChangesAsync();
+            return new AccountPreferencesDto { Theme = account.Theme };
+        }
+
         /// <inheritdoc />
         public async Task ChangePasswordAsync(int authUserId, ChangePasswordDto dto)
         {

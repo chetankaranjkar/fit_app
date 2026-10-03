@@ -164,7 +164,7 @@ class _PrefSwitchRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: AppType.caption1.copyWith(
+                  style: AppType.caption.copyWith(
                     color: AppColors.resolveTextSecondary(context),
                   ),
                 ),

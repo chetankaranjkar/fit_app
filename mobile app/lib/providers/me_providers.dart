@@ -1,7 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/app_config.dart';
+import '../core/external_links.dart';
+import '../features/profile/in_app_web_types.dart';
 import '../models/me_models.dart';
+import '../models/online_payment_models.dart';
+import '../models/support_models.dart';
 import '../services/me_service.dart';
+import '../services/online_payment_service.dart';
+import '../services/support_service.dart';
 
 final dashboardProvider = FutureProvider.autoDispose<MeDashboard>((ref) async {
   return MeService.instance.getDashboard();
@@ -29,6 +36,11 @@ final invoicesProvider = FutureProvider.autoDispose<List<MeInvoiceSummary>>((ref
 
 final billingAccessProvider = FutureProvider.autoDispose<MeBillingAccess>((ref) async {
   return MeService.instance.getBillingAccess();
+});
+
+final onlinePaymentSummaryProvider =
+    FutureProvider.autoDispose<MemberOnlinePaymentSummary>((ref) async {
+  return OnlinePaymentService.instance.getSummary();
 });
 
 final workoutPlansProvider = FutureProvider.autoDispose<List<MeWorkoutPlanSummary>>((ref) async {
@@ -61,3 +73,26 @@ final workoutSessionHistoryProvider =
 final progressPhotosProvider = FutureProvider.autoDispose<List<MeProgressPhoto>>((ref) async {
   return MeService.instance.getProgressPhotos();
 });
+
+final memberSupportProvider = FutureProvider.autoDispose<MemberSupport>((ref) async {
+  return SupportService.instance.getSupport();
+});
+
+final helpArticlesProvider = FutureProvider.autoDispose<List<HelpArticleSummary>>((ref) async {
+  return SupportService.instance.getArticles();
+});
+
+/// Compile-time legal URLs. Tests override this instead of dart-defines.
+final compileTimeLegalLinksProvider = Provider<ResolvedLegalLinks>((ref) {
+  return ResolvedLegalLinks(
+    helpCenterUrl: AppConfig.helpCenterUrl,
+    privacyPolicyUrl: AppConfig.privacyPolicyUrl,
+  );
+});
+
+final externalLinkOpenerProvider = Provider<ExternalLinkOpener>((ref) {
+  return const ExternalLinkOpener();
+});
+
+/// Optional test double for the in-app browser (avoids a real WebView in widget tests).
+final inAppWebEmbedBuilderProvider = Provider<InAppWebEmbedBuilder?>((ref) => null);

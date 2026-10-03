@@ -2,24 +2,18 @@ import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EnterpriseDataGrid, RowActionsMenu, type DataGridColumnDef } from '../data-grid'
 import { MembershipStatusBadge } from '../billing/MembershipStatusBadge'
+import { StandingFactValue } from './MembershipStandingPanel'
 import {
   getMembershipCollectPaymentPath,
   memberMembershipHistoryPath,
-  membershipStatusClickTitle,
 } from '../../lib/membershipPaymentNavigation'
 import {
-  membershipDaysLeftClass,
-  membershipDaysLeftLabel,
-  membershipPaymentClass,
-  membershipPaymentSummary,
-} from '../../lib/userMembershipListUtils'
-import type { MembershipStatus, UserMembership } from '../../types/userMembership'
-
-function formatDate(iso: string) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString()
-}
+  COLLECT_OUTSTANDING_LABEL,
+  RENEW_MEMBERSHIP_LABEL,
+  STANDING_TONE_TEXT,
+  standingFromUserMembership,
+} from '../../lib/membershipStanding'
+import type { UserMembership } from '../../types/userMembership'
 
 type UserMembershipsGridProps = {
   memberships: UserMembership[]
@@ -67,10 +61,9 @@ export function UserMembershipsGrid({
     return () => navigate(memberMembershipHistoryPath(m.userId))
   }
 
-  const membershipStatusTitle = (status: MembershipStatus) => {
-    const collectTitle = membershipStatusClickTitle(status)
-    if (collectTitle) return collectTitle
-    if (status === 'Paused') return 'Edit membership'
+  const membershipStatusTitle = (m: UserMembership) => {
+    if (getMembershipCollectPaymentPath(m, returnTo)) return COLLECT_OUTSTANDING_LABEL
+    if (m.status === 'Paused') return 'Edit membership'
     return 'Open membership history'
   }
 
@@ -129,41 +122,44 @@ export function UserMembershipsGrid({
         accessorFn: (m) => m.planName ?? `Plan #${m.planId}`,
       },
       {
-        id: 'period',
-        header: 'Period',
-        minWidth: 180,
-        width: 190,
-        hideBelow: 'lg',
+        id: 'dates',
+        header: 'Membership dates',
+        minWidth: 190,
+        width: 200,
+        sortable: true,
         accessorFn: (m) => m.endDate,
-        cell: ({ row }) => (
-          <span className="text-slate-300">
-            {formatDate(row.startDate)} – {formatDate(row.endDate)}
-          </span>
-        ),
+        cell: ({ row }) => <StandingFactValue fact={standingFromUserMembership(row).dates} compact />,
       },
       {
-        id: 'daysLeft',
-        header: 'Timeline',
-        minWidth: 110,
-        width: 120,
-        sortable: true,
-        accessorFn: (m) => m.daysRemaining ?? 0,
-        cell: ({ row }) => (
-          <span className={`text-xs font-medium ${membershipDaysLeftClass(row)}`}>
-            {membershipDaysLeftLabel(row)}
-          </span>
-        ),
+        id: 'access',
+        header: 'Gym access',
+        minWidth: 150,
+        width: 170,
+        hideBelow: 'md',
+        accessorFn: (m) => (standingFromUserMembership(m).access.allowed ? 1 : 0),
+        cell: ({ row }) => <StandingFactValue fact={standingFromUserMembership(row).access} compact />,
       },
       {
         id: 'payment',
-        header: 'Payment',
-        minWidth: 130,
-        width: 150,
+        header: 'Payment status',
+        minWidth: 120,
+        width: 130,
         hideBelow: 'md',
+        accessorFn: (m) => standingFromUserMembership(m).payment.label,
+        cell: ({ row }) => <StandingFactValue fact={standingFromUserMembership(row).payment} compact />,
+      },
+      {
+        id: 'outstanding',
+        header: 'Outstanding',
+        minWidth: 110,
+        width: 120,
+        align: 'right',
+        sortable: true,
         accessorFn: (m) => m.pendingAmount ?? 0,
-        cell: ({ row }) => (
-          <span className={`text-xs ${membershipPaymentClass(row)}`}>{membershipPaymentSummary(row)}</span>
-        ),
+        cell: ({ row }) => {
+          const fact = standingFromUserMembership(row).outstanding
+          return <span className={`text-xs font-medium tabular-nums ${STANDING_TONE_TEXT[fact.tone]}`}>{fact.label}</span>
+        },
       },
       {
         id: 'status',
@@ -176,7 +172,7 @@ export function UserMembershipsGrid({
           <MembershipStatusBadge
             status={row.status}
             onClick={membershipStatusAction(row)}
-            title={membershipStatusTitle(row.status)}
+            title={membershipStatusTitle(row)}
           />
         ),
       },
@@ -193,9 +189,10 @@ export function UserMembershipsGrid({
               { id: 'details', label: 'View details', onClick: onOpenDetail },
               {
                 id: 'collect',
-                label: 'Collect payment',
+                label: COLLECT_OUTSTANDING_LABEL,
                 variant: 'success',
-                hidden: (m) => !getMembershipCollectPaymentPath(m, returnTo),
+                disabled: (m) => !getMembershipCollectPaymentPath(m, returnTo),
+                disabledReason: (m) => standingFromUserMembership(m).collect.reason,
                 onClick: (m) => {
                   const path = getMembershipCollectPaymentPath(m, returnTo)
                   if (path) navigate(path)
@@ -203,8 +200,9 @@ export function UserMembershipsGrid({
               },
               {
                 id: 'renew',
-                label: 'Renew membership',
-                hidden: (m) => m.status !== 'Expired',
+                label: RENEW_MEMBERSHIP_LABEL,
+                disabled: (m) => !standingFromUserMembership(m).renew.allowed,
+                disabledReason: (m) => standingFromUserMembership(m).renew.reason,
                 onClick: onRenew,
               },
               {

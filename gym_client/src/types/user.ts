@@ -1,4 +1,5 @@
 import type { PendingMembershipPaymentRedirect } from './membershipPayment'
+import type { MembershipStatus } from './userMembership'
 
 /** Backend Role enum: 1 = User (Member), 2 = Instructor, 3 = Admin. API may send number or string. */
 export type UserRole = 1 | 2 | 3
@@ -69,6 +70,16 @@ export interface User {
   isPaymentOverdue?: boolean
   openMembershipPaymentId?: number | null
   openMembershipId?: number | null
+  /** Sum of open balances across the member's memberships (list endpoints). */
+  outstandingBalance?: number | null
+  /** Membership summarised in the directory: current, else lapsed, else latest (list endpoints). */
+  membershipId?: number | null
+  membershipStatus?: MembershipStatus | null
+  membershipPlanName?: string | null
+  membershipStartDate?: string | null
+  membershipEndDate?: string | null
+  /** Billing status of `membershipId`: Paid, Partial, Pending, Overdue. */
+  membershipBillingStatus?: string | null
 }
 
 export interface PagedUsersResponse {
@@ -120,6 +131,8 @@ export interface CreateUserDto {
   instructorHireDate?: string | null
   /** User type IDs (e.g. Admin, Trainer, Staff, Member). A user can have many. */
   userTypeIds?: number[]
+  /** CSV line number (1-based, including header) for bulk import. Ignored by single create. */
+  sourceRowNumber?: number
 }
 
 export interface UpdateUserDto {

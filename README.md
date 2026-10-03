@@ -68,14 +68,15 @@ src/
 ```
 
 ### Frontend (React + TypeScript)
-- **React 18** with TypeScript
+- **React 19** with TypeScript (`gym_client/package.json`)
 - **Vite** for build tooling
+- **TanStack Query** for server state
 - **React Router** for navigation
 - **Axios** for API communication
 
 **Frontend Structure:**
 ```
-frontend/
+gym_client/
 ├── src/
 │   ├── pages/          # Page components
 │   ├── services/       # API service layer

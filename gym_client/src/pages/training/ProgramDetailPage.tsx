@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../../components/layout/DashboardSubpageShell'
 import { Button } from '../../components/ui/Button'
-import { exercisesService } from '../../services/exercises.service'
+import { TrainingJourneyNav } from '../../components/training/TrainingJourneyNav'
+import { useExercisePickerLibrary } from '../../hooks/useExercisePickerLibrary'
 import { programsService } from '../../services/workoutPlans.service'
 import type { CreateWorkoutPlanDto, ProgramWeekDto } from '../../types/workoutPlan'
 import { PlanWarmupStretchTab } from './program/PlanWarmupStretchTab'
@@ -110,13 +111,13 @@ export function ProgramDetailPage() {
     enabled: Number.isInteger(id) && id > 0,
   })
 
-  const { data: exerciseLibrary = [] } = useQuery({
-    queryKey: ['exercises-picker'],
-    queryFn: async () => {
-      const { data } = await exercisesService.getPaged({ page: 1, pageSize: 200 })
-      return data.items ?? []
-    },
-  })
+  const {
+    data: exerciseLibrary = [],
+    isError: exerciseLibraryError,
+    error: exerciseLibraryErr,
+    refetch: refetchExerciseLibrary,
+    isFetching: exerciseLibraryFetching,
+  } = useExercisePickerLibrary()
 
   const [localWeeks, setLocalWeeks] = useState<ProgramWeekDto[] | null>(null)
   const [localWarmups, setLocalWarmups] = useState<WorkoutPlanWarmup[] | null>(null)
@@ -275,7 +276,7 @@ export function ProgramDetailPage() {
   return (
     <DashboardLayout userName={userName}>
       <DashboardSubpageShell
-        eyebrow="Training · Programs"
+        eyebrow="Training · Plan"
         titleGradient={program?.name ?? 'Program'}
         subtitle={program?.description ?? 'Loading program details…'}
         showExport={false}
@@ -288,6 +289,7 @@ export function ProgramDetailPage() {
             : undefined
         }
       >
+        <TrainingJourneyNav />
         <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
           <Link
             to="/dashboard/training/programs"
@@ -484,6 +486,9 @@ export function ProgramDetailPage() {
                     isSaving={saveStructureMutation.isPending}
                     aiSuggest={aiSuggest}
                     exerciseLibrary={exerciseLibrary}
+                    libraryError={exerciseLibraryError ? exerciseLibraryErr : null}
+                    onRetryLibrary={() => void refetchExerciseLibrary()}
+                    libraryRetrying={exerciseLibraryFetching}
                     workoutsPerWeek={program.workoutsPerWeek ?? 4}
                     orphanExercises={orphanExercises}
                   />

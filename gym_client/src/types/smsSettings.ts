@@ -8,6 +8,8 @@ export type SmsChannelSettings = {
   sendPaymentReceipts: boolean
   sendMembershipExpiryReminders: boolean
   isConfigured: boolean
+  readiness?: string
+  blockingReasons?: string[]
 }
 
 export type SmsSettings = {

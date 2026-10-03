@@ -18,6 +18,8 @@ function normalizeChannel(raw: Record<string, unknown> | undefined | null): SmsC
       r.sendMembershipExpiryReminders ?? r.SendMembershipExpiryReminders ?? true,
     ),
     isConfigured: Boolean(r.isConfigured ?? r.IsConfigured),
+    readiness: String(r.readiness ?? r.Readiness ?? ''),
+    blockingReasons: ((r.blockingReasons ?? r.BlockingReasons ?? []) as unknown[]).map(String),
   }
 }
 

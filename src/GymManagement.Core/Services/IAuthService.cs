@@ -37,6 +37,9 @@ namespace GymManagement.Core.Services
         /// <summary>Account email and whether a current password is required to set a new one.</summary>
         Task<AccountAuthInfoDto?> GetAccountAuthInfoAsync(int authUserId);
 
+        Task<AccountPreferencesDto?> GetAccountPreferencesAsync(int authUserId);
+        Task<AccountPreferencesDto?> UpdateAccountPreferencesAsync(int authUserId, UpdateAccountPreferencesDto dto);
+
         /// <summary>Updates password hash for the authenticated account (BCrypt).</summary>
         Task ChangePasswordAsync(int authUserId, ChangePasswordDto dto);
 

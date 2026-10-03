@@ -22,7 +22,10 @@ import {
   programFormToPayload,
   type ProgramFormState,
 } from './program/ProgramWizard'
-import { exercisesService } from '../../services/exercises.service'
+import { TrainingEmptyState } from '../../components/training/TrainingEmptyState'
+import { TrainingJourneyNav } from '../../components/training/TrainingJourneyNav'
+import { useExercisePickerLibrary } from '../../hooks/useExercisePickerLibrary'
+import { getApiErrorMessage } from '../../lib/apiErrors'
 import { trainersService } from '../../services/trainers.service'
 import { programsService } from '../../services/workoutPlans.service'
 import { workoutCategoriesService } from '../../services/workoutCategories.service'
@@ -67,13 +70,7 @@ export function ProgramsPage() {
     },
   })
 
-  const { data: exercises = [] } = useQuery({
-    queryKey: ['exercises-picker'],
-    queryFn: async () => {
-      const { data } = await exercisesService.getPaged({ page: 1, pageSize: 150 })
-      return data.items ?? []
-    },
-  })
+  const { data: exercises = [] } = useExercisePickerLibrary()
 
   const { data: categories = [] } = useQuery({
     queryKey: ['workout-categories'],
@@ -98,7 +95,7 @@ export function ProgramsPage() {
       void queryClient.invalidateQueries({ queryKey: ['programs'] })
       handleCloseModal()
     },
-    onError: (error: Error) => setFormError(error.message || 'Failed to update program'),
+    onError: (error: Error) => setFormError(getApiErrorMessage(error, 'Failed to update program')),
   })
 
   const deleteMutation = useMutation({
@@ -110,7 +107,7 @@ export function ProgramsPage() {
     },
     onError: (error: Error) => {
       deleteConfirm.close()
-      setPageError(error.message || 'Failed to delete program. It may be assigned to members.')
+      setPageError(getApiErrorMessage(error, 'Failed to delete program. It may be assigned to members.'))
     },
   })
 
@@ -192,10 +189,11 @@ export function ProgramsPage() {
       <DashboardSubpageShell
         eyebrow="Training"
         titleGradient="programs"
-        subtitle="Program management · week-based templates, assignments, and progression-ready structure."
+        subtitle="Plan step · create reusable workout programs, then assign them to members."
         showExport={false}
         primaryAction={{ label: '+ New program', onClick: () => navigate('/dashboard/training/programs/new') }}
       >
+        <TrainingJourneyNav />
         {pageError && (
           <div
             role="alert"
@@ -342,16 +340,12 @@ export function ProgramsPage() {
           ) : filtered.length === 0 ? (
             <div className="px-6 py-8 text-sm text-slate-400">
               {programs.length === 0 ? (
-                <>
-                  <p>No programs yet.</p>
-                  <Button
-                    className="mt-3"
-                    size="sm"
-                    onClick={() => navigate('/dashboard/training/programs/new')}
-                  >
-                    Create your first program
-                  </Button>
-                </>
+                <TrainingEmptyState
+                  title="No workout plans yet"
+                  body="Create a program template first. After it is saved, assign it to a member with an active membership."
+                  actionLabel="Create a plan"
+                  to="/dashboard/training/programs/new"
+                />
               ) : (
                 <p>No programs match the filters.</p>
               )}

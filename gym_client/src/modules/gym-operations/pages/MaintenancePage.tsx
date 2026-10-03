@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { ModulePageShell } from '../components/ModulePageShell'
@@ -10,6 +11,9 @@ import {
 } from '../hooks/useGymOperations'
 import { useStaggerAnimation } from '../hooks/useStaggerAnimation'
 import { formatDateTime, formatINR } from '../utils/format'
+import { ServiceAlertBadge } from '../components/ServiceAlertBadge'
+import { getApiErrorMessage } from '../../../lib/apiErrors'
+import { serviceUrgency } from '../../../lib/opsWorkStatus'
 import type { MaintenanceLog, MaintenanceType } from '../types'
 
 const TYPE_STYLES: Record<MaintenanceType, { label: string; cls: string }> = {
@@ -20,16 +24,22 @@ const TYPE_STYLES: Record<MaintenanceType, { label: string; cls: string }> = {
 
 export function MaintenancePage() {
   const { data = [], isLoading } = useMaintenance()
-  const [addOpen, setAddOpen] = useState(false)
+  const [searchParams] = useSearchParams()
+  const preselectId = searchParams.get('equipmentId') ?? ''
+  const [addOpen, setAddOpen] = useState(Boolean(preselectId))
+  const [serviceFilter, setServiceFilter] = useState<'ALL' | 'OVERDUE'>('ALL')
   const listRef = useRef<HTMLOListElement>(null)
 
-  const sorted = useMemo(
-    () =>
-      [...data].sort(
-        (a, b) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime(),
-      ),
-    [data],
-  )
+  const sorted = useMemo(() => {
+    const list = [...data].sort((a, b) => {
+      const aOver = serviceUrgency(a.nextServiceDate) === 'overdue' ? 0 : 1
+      const bOver = serviceUrgency(b.nextServiceDate) === 'overdue' ? 0 : 1
+      if (aOver !== bOver) return aOver - bOver
+      return new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime()
+    })
+    if (serviceFilter !== 'OVERDUE') return list
+    return list.filter((l) => serviceUrgency(l.nextServiceDate) === 'overdue')
+  }, [data, serviceFilter])
 
   useStaggerAnimation(listRef, 'li[data-row]', [sorted.length, isLoading])
 
@@ -69,8 +79,27 @@ export function MaintenancePage() {
           <div className="shrink-0 border-b border-white/5 px-6 py-5">
             <h2 className="text-base font-semibold text-white">Activity timeline</h2>
             <p className="text-xs text-slate-400">
-              {sorted.length} entries · latest first
+              {sorted.length} entries · overdue follow-up first
             </p>
+            <div className="mt-3">
+              <label className="sr-only" htmlFor="maintenance-service-filter">
+                Next-service filter
+              </label>
+              <select
+                id="maintenance-service-filter"
+                aria-label="Next-service filter"
+                value={serviceFilter}
+                onChange={(e) => setServiceFilter(e.target.value as 'ALL' | 'OVERDUE')}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200"
+              >
+                <option value="ALL" className="bg-slate-900">
+                  All logs
+                </option>
+                <option value="OVERDUE" className="bg-slate-900">
+                  Overdue next service
+                </option>
+              </select>
+            </div>
           </div>
 
           {sorted.length === 0 && !isLoading ? (
@@ -134,15 +163,21 @@ export function MaintenancePage() {
         </aside>
       </div>
 
-      <AddMaintenanceModal open={addOpen} onClose={() => setAddOpen(false)} />
+      <AddMaintenanceModal
+        key={`${preselectId}:${addOpen ? 'open' : 'closed'}`}
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        initialEquipmentId={preselectId}
+      />
     </ModulePageShell>
   )
 }
 
 function TimelineEntry({ log }: { log: MaintenanceLog }) {
   const style = TYPE_STYLES[log.type]
+  const overdue = serviceUrgency(log.nextServiceDate) === 'overdue'
   return (
-    <li data-row className="relative pl-12">
+    <li data-row data-testid="maintenance-log" data-overdue={overdue ? 'true' : 'false'} className="relative pl-12">
       <span
         aria-hidden
         className="absolute left-3 top-2 flex size-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500 ring-4 ring-[#0b0b1a]"
@@ -171,7 +206,7 @@ function TimelineEntry({ log }: { log: MaintenanceLog }) {
             </span>
           )}
           {log.nextServiceDate && (
-            <span>
+            <span className="inline-flex items-center gap-2">
               Next service:{' '}
               <span className="text-slate-200">
                 {new Date(log.nextServiceDate).toLocaleDateString('en-IN', {
@@ -180,6 +215,7 @@ function TimelineEntry({ log }: { log: MaintenanceLog }) {
                   year: 'numeric',
                 })}
               </span>
+              <ServiceAlertBadge nextServiceDate={log.nextServiceDate} />
             </span>
           )}
         </div>
@@ -191,14 +227,16 @@ function TimelineEntry({ log }: { log: MaintenanceLog }) {
 function AddMaintenanceModal({
   open,
   onClose,
+  initialEquipmentId,
 }: {
   open: boolean
   onClose: () => void
+  initialEquipmentId?: string
 }) {
   const { data: equipment = [] } = useEquipment()
   const createMut = useCreateMaintenance()
   const todayIso = () => new Date().toISOString().slice(0, 10)
-  const [equipmentId, setEquipmentId] = useState<string>('')
+  const [equipmentId, setEquipmentId] = useState<string>(initialEquipmentId ?? '')
   const [type, setType] = useState<MaintenanceType>('ROUTINE')
   const [performedAt, setPerformedAt] = useState<string>(todayIso)
   const [performedBy, setPerformedBy] = useState('')
@@ -206,23 +244,6 @@ function AddMaintenanceModal({
   const [description, setDescription] = useState('')
   const [nextServiceDate, setNextServiceDate] = useState('')
   const [error, setError] = useState<string | null>(null)
-
-  const reset = () => {
-    setEquipmentId('')
-    setType('ROUTINE')
-    setPerformedAt(todayIso())
-    setPerformedBy('')
-    setCost('')
-    setDescription('')
-    setNextServiceDate('')
-    setError(null)
-  }
-
-  // Reset form state every time the modal opens so stale input from a
-  // previous session doesn't bleed into a new entry.
-  useEffect(() => {
-    if (open) reset()
-  }, [open])
 
   const selected = equipment.find((e) => e.id === equipmentId)
   const valid =
@@ -257,11 +278,10 @@ function AddMaintenanceModal({
       },
       {
         onSuccess: () => {
-          reset()
           onClose()
         },
-        onError: () => {
-          setError('Could not save. Please try again.')
+        onError: (err) => {
+          setError(getApiErrorMessage(err, 'Could not save. Please try again.'))
         },
       },
     )
@@ -274,6 +294,7 @@ function AddMaintenanceModal({
           <label className="mb-1 block text-xs font-medium text-slate-300">Equipment</label>
           <select
             required
+            aria-label="Equipment"
             value={equipmentId}
             onChange={(e) => setEquipmentId(e.target.value)}
             className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/20"

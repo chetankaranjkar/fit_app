@@ -116,6 +116,9 @@ type Props = {
   exerciseLibrary: Exercise[]
   workoutsPerWeek?: number
   orphanExercises?: WorkoutPlanExercise[]
+  libraryError?: unknown
+  onRetryLibrary?: () => void
+  libraryRetrying?: boolean
 }
 
 export function WeekScheduleTab({
@@ -127,6 +130,9 @@ export function WeekScheduleTab({
   exerciseLibrary,
   workoutsPerWeek = 4,
   orphanExercises = [],
+  libraryError,
+  onRetryLibrary,
+  libraryRetrying,
 }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [activeWeekIndex, setActiveWeekIndex] = useState(0)
@@ -380,6 +386,9 @@ export function WeekScheduleTab({
                 <DayExercisePanel
                   day={activeDay}
                   exerciseLibrary={exerciseLibrary}
+                  libraryError={libraryError}
+                  onRetryLibrary={onRetryLibrary}
+                  libraryRetrying={libraryRetrying}
                   onDayChange={(next) => updateDay(activeWeekIndex, activeDay.id, next)}
                 />
               </div>

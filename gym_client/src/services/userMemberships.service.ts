@@ -57,6 +57,7 @@ export function normalizeUserMembership(raw: Record<string, unknown>): UserMembe
     paymentStatus,
     isFullyPaid,
     hasCompletedPayments: Boolean(raw.hasCompletedPayments ?? raw.HasCompletedPayments ?? false),
+    nextDueDate: (raw.nextDueDate ?? raw.NextDueDate ?? null) as string | null,
   }
 }
 
@@ -114,6 +115,7 @@ function normalizeExpiringQueueItem(raw: Record<string, unknown>): ExpiringMembe
     pendingAmount,
     paymentStatus,
     isFullyPaid,
+    nextDueDate: (raw.nextDueDate ?? raw.NextDueDate ?? null) as string | null,
   }
 }
 

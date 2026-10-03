@@ -6,6 +6,7 @@ import { CalendarDays, Clock, Dumbbell, Layers, Save, Search, X } from 'lucide-r
 import { exercisesService } from '../../services/exercises.service'
 import { workoutPlansService } from '../../services/workoutPlans.service'
 import type { CreateWorkoutPlanDto, WorkoutType } from '../../types/workoutPlan'
+import { ExerciseLibraryUnavailableBanner } from '../../components/training/ExerciseLibraryUnavailableBanner'
 import { ExerciseCard } from './components/ExerciseCard'
 import { StudioRightPanel } from './components/StudioRightPanel'
 import { WorkoutCanvas } from './components/WorkoutCanvas'
@@ -20,7 +21,7 @@ export function WorkoutStudioPage() {
   const [selectedExerciseName, setSelectedExerciseName] = useState<string | null>(null)
   const [selectedClientKey, setSelectedClientKey] = useState<string | null>(null)
   const [aiSourceLabel, setAiSourceLabel] = useState<'openai' | 'huggingface' | 'fallback' | null>(null)
-  const { data: library = [], isLoading } = useExerciseLibrary(search)
+  const { data: library = [], isLoading, isError, error, refetch, isFetching } = useExerciseLibrary(search)
   const { data: workouts = [] } = useWorkouts()
   const {
     activeWorkout,
@@ -316,7 +317,14 @@ export function WorkoutStudioPage() {
               />
             </div>
             <div className="min-h-0 flex-1 space-y-1.5 overflow-auto pr-1">
-              {isLoading ? (
+              {isError ? (
+                <ExerciseLibraryUnavailableBanner
+                  error={error}
+                  onRetry={() => void refetch()}
+                  isRetrying={isFetching}
+                />
+              ) : null}
+              {isLoading && library.length === 0 ? (
                 <div className="space-y-1.5">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="h-12 animate-pulse rounded-xl bg-slate-800/60" />
@@ -325,7 +333,7 @@ export function WorkoutStudioPage() {
               ) : library.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center px-4 text-center text-xs text-slate-500">
                   <Search size={20} className="mb-2 opacity-50" />
-                  No exercises match your search.
+                  {isError ? 'Library unavailable — canvas exercises are kept.' : 'No exercises match your search.'}
                 </div>
               ) : (
                 library.map((item) => (

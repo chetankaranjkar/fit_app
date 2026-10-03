@@ -71,6 +71,9 @@ public sealed class MemberPushNotificationService : IMemberPushNotificationServi
                     Data = new Dictionary<string, string>
                     {
                         ["type"] = notificationType ?? string.Empty,
+                        ["userId"] = userId.ToString(),
+                        ["title"] = title,
+                        ["body"] = TrimForPush(body),
                     },
                 };
                 await FirebaseMessaging.DefaultInstance

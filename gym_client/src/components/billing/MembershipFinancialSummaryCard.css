@@ -1,0 +1,161 @@
+.membership-financial-summary {
+  --financial-accent: #fcd34d;
+  --financial-tint: rgb(245 158 11 / 0.1);
+  --financial-accent-border: rgb(245 158 11 / 0.25);
+  --financial-paid: #6ee7b7;
+  border: 1px solid var(--dashboard-border, rgb(255 255 255 / 0.1));
+  border-radius: 16px;
+  padding: 20px;
+  background: var(--dashboard-surface, #111127);
+  color: var(--dashboard-text, #f1f5f9);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.04);
+}
+
+.membership-financial-summary[data-balance-tone='emerald'] {
+  --financial-accent: #6ee7b7;
+  --financial-tint: rgb(16 185 129 / 0.1);
+  --financial-accent-border: rgb(16 185 129 / 0.25);
+}
+
+.membership-financial-summary[data-balance-tone='rose'] {
+  --financial-accent: #fda4af;
+  --financial-tint: rgb(244 63 94 / 0.1);
+  --financial-accent-border: rgb(244 63 94 / 0.25);
+}
+
+html.dashboard-app[data-theme='light'] .membership-financial-summary {
+  --financial-accent: #854d0e;
+  --financial-tint: #fffbeb;
+  --financial-accent-border: #fde68a;
+  --financial-paid: #047857;
+}
+
+html.dashboard-app[data-theme='light'] .membership-financial-summary[data-balance-tone='emerald'] {
+  --financial-accent: #047857;
+  --financial-tint: #ecfdf5;
+  --financial-accent-border: #a7f3d0;
+}
+
+html.dashboard-app[data-theme='light'] .membership-financial-summary[data-balance-tone='rose'] {
+  --financial-accent: #be123c;
+  --financial-tint: #fff1f2;
+  --financial-accent-border: #fecdd3;
+}
+
+.membership-financial-summary__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.membership-financial-summary__header h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.membership-financial-summary__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--financial-accent-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: var(--financial-tint);
+  color: var(--financial-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.membership-financial-summary__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.membership-financial-summary__totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.membership-financial-summary__metric {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--dashboard-border, rgb(255 255 255 / 0.1));
+  border-radius: 12px;
+  background: var(--dashboard-surface-muted, #18182c);
+}
+
+.membership-financial-summary dt {
+  color: var(--dashboard-muted, #94a3b8);
+  font-size: 12px;
+}
+
+.membership-financial-summary dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.membership-financial-summary__metric dd {
+  margin-top: 8px;
+  font-size: clamp(18px, 1.6vw, 26px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.membership-financial-summary__metric--paid dd {
+  color: var(--financial-paid);
+}
+
+.membership-financial-summary__metric--balance {
+  background: var(--financial-tint);
+  border-color: var(--financial-accent-border);
+}
+
+.membership-financial-summary__metric--balance dt,
+.membership-financial-summary__metric--balance dd {
+  color: var(--financial-accent);
+}
+
+.membership-financial-summary__breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--dashboard-border, rgb(255 255 255 / 0.1));
+}
+
+.membership-financial-summary__breakdown dd {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 639px) {
+  .membership-financial-summary { padding: 16px; }
+  .membership-financial-summary__totals { grid-template-columns: 1fr; }
+  .membership-financial-summary__metric {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+  }
+  .membership-financial-summary__metric dd { margin-top: 0; text-align: right; }
+  .membership-financial-summary__breakdown { grid-template-columns: 1fr; gap: 8px; }
+  .membership-financial-summary__breakdown > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .membership-financial-summary__breakdown dd { margin-top: 0; text-align: right; }
+}

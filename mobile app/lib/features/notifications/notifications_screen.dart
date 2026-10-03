@@ -14,6 +14,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/premium_background.dart';
 import '../../widgets/skeleton_shimmer.dart';
+import 'notification_destination.dart';
 
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
@@ -31,13 +32,12 @@ class NotificationsScreen extends ConsumerWidget {
             child: notifications.when(
               loading: () => const Center(child: SkeletonBlock(height: 220)),
               error: (e, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Text(
-                    e.toString(),
-                    textAlign: TextAlign.center,
-                    style: AppType.body.copyWith(color: AppColors.resolveTextSecondary(context)),
-                  ),
+                child: ErrorStateView(
+                  message: e.toString(),
+                  onRetry: () {
+                    ref.invalidate(notificationsProvider);
+                    ref.invalidate(dashboardProvider);
+                  },
                 ),
               ),
               data: (rows) => CustomScrollView(
@@ -49,9 +49,9 @@ class NotificationsScreen extends ConsumerWidget {
                     trailing: rows.any((n) => !n.isRead)
                         ? CupertinoButton(
                             padding: EdgeInsets.zero,
-                            onPressed: () => ref.refresh(notificationsProvider),
+                            onPressed: () => _markAllRead(context, ref),
                             child: Text(
-                              'Refresh',
+                              'Mark all read',
                               style: AppType.callout.copyWith(color: AppColors.accent),
                             ),
                           )
@@ -109,6 +109,29 @@ class NotificationsScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _markAllRead(BuildContext context, WidgetRef ref) async {
+    try {
+      await MeService.instance.markAllNotificationsRead();
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(dashboardProvider);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('Could not mark all as read'),
+          content: Text(e.message),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   Future<void> _openNotification(
     BuildContext context,
     WidgetRef ref,
@@ -125,13 +148,18 @@ class NotificationsScreen extends ConsumerWidget {
     }
 
     if (!context.mounted) return;
-    if (notification.isWorkoutToday) {
-      context.go('/workouts');
+    final route = NotificationDestination.resolve(
+      type: notification.type,
+      title: notification.title,
+      body: notification.displayMessage,
+      createdAt: notification.createdAt,
+      notificationId: notification.id,
+    );
+    if (route.isDetail) {
+      context.push(route.location, extra: route.extra);
       return;
     }
-    if (notification.isMembershipExpiring || notification.isPaymentDue) {
-      context.go('/membership');
-    }
+    context.go(route.location);
   }
 }
 
@@ -201,9 +229,18 @@ class _NotificationCard extends StatelessWidget {
   }
 
   IconData _iconFor(MeNotification notification) {
-    if (notification.isWorkoutToday) return CupertinoIcons.flame_fill;
-    if (notification.isPaymentDue) return CupertinoIcons.money_dollar_circle_fill;
-    if (notification.isMembershipExpiring) return CupertinoIcons.exclamationmark_circle_fill;
-    return CupertinoIcons.bell_fill;
+    final target = NotificationDestination.targetForType(notification.type);
+    return switch (target) {
+      MemberNotificationTarget.workouts => CupertinoIcons.flame_fill,
+      MemberNotificationTarget.pay || MemberNotificationTarget.membership =>
+        notification.isPaymentDue
+            ? CupertinoIcons.money_dollar_circle_fill
+            : CupertinoIcons.exclamationmark_circle_fill,
+      MemberNotificationTarget.diet => CupertinoIcons.leaf_arrow_circlepath,
+      MemberNotificationTarget.health => CupertinoIcons.heart_fill,
+      MemberNotificationTarget.progress => CupertinoIcons.chart_bar_fill,
+      MemberNotificationTarget.scanner => CupertinoIcons.qrcode_viewfinder,
+      _ => CupertinoIcons.bell_fill,
+    };
   }
 }

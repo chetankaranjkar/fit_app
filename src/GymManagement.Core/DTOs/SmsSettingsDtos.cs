@@ -16,6 +16,9 @@ public sealed class SmsChannelSettingsDto
     public bool SendPaymentReceipts { get; set; } = true;
     public bool SendMembershipExpiryReminders { get; set; } = true;
     public bool IsConfigured { get; set; }
+    /// <summary>Disabled, Unconfigured, or Ready.</summary>
+    public string Readiness { get; set; } = "Unconfigured";
+    public List<string> BlockingReasons { get; set; } = new();
 }
 
 public class SmsSettingsDto

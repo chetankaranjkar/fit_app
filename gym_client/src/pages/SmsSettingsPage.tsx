@@ -9,6 +9,8 @@ import { Input } from '../components/ui/Input'
 import { authService } from '../services/auth.service'
 import { smsSettingsService } from '../services/smsSettings.service'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import { deriveChannelReadiness } from '../lib/notificationStatus'
+import { ChannelReadinessBadge } from '../components/notifications/ChannelReadinessBadge'
 import type {
   SmsChannelSettings,
   TextChannel,
@@ -86,7 +88,8 @@ type ChannelCardProps = {
   onClearAuth: () => void
   onTest: (toPhone: string) => void
   testPending: boolean
-  isConfigured: boolean
+  readiness: string
+  blockingReasons: string[]
 }
 
 function ChannelCard({
@@ -102,14 +105,15 @@ function ChannelCard({
   onClearAuth,
   onTest,
   testPending,
-  isConfigured,
+  readiness,
+  blockingReasons,
 }: ChannelCardProps) {
   const [testTo, setTestTo] = useState('')
   const accent = channel === 'whatsapp' ? 'text-green-200' : 'text-sky-200'
   const ring = channel === 'whatsapp' ? 'border-green-400/20' : 'border-sky-400/20'
 
   return (
-    <div className={`rounded-2xl border ${ring} bg-black/20 p-5`}>
+    <div className={`rounded-2xl border ${ring} bg-black/20 p-5`} data-testid={`${channel}-channel-card`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -120,14 +124,15 @@ function ChannelCard({
           </div>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">{description}</p>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-            isConfigured ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/5 text-slate-500'
-          }`}
-        >
-          {isConfigured ? 'Configured' : 'Not set'}
-        </span>
+        <ChannelReadinessBadge readiness={readiness} />
       </div>
+      {blockingReasons.length > 0 ? (
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-amber-200/90">
+          {blockingReasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : null}
 
       <div className="mt-4 space-y-4">
         <label className="flex items-center gap-3 text-sm text-slate-200">
@@ -167,6 +172,11 @@ function ChannelCard({
             placeholder="Bearer xxxxx"
           />
         </div>
+        <p className="text-xs text-slate-500">
+          {form.hasAuthHeaderConfigured
+            ? 'Authorization header: configured (masked).'
+            : 'Authorization header: empty.'}
+        </p>
         {form.hasAuthHeaderConfigured && (
           <button
             type="button"
@@ -341,7 +351,8 @@ export function SmsSettingsPage() {
                   onClearAuth={() => clearAuth('sms')}
                   onTest={(to) => runTest('sms', to)}
                   testPending={testMutation.isPending && testingChannel === 'sms'}
-                  isConfigured={Boolean(data?.sms.isConfigured)}
+                  readiness={deriveChannelReadiness(data?.sms.readiness, smsForm.enabled, Boolean(data?.sms.isConfigured))}
+                  blockingReasons={data?.sms.blockingReasons ?? []}
                 />
 
                 <ChannelCard
@@ -357,7 +368,12 @@ export function SmsSettingsPage() {
                   onClearAuth={() => clearAuth('whatsapp')}
                   onTest={(to) => runTest('whatsapp', to)}
                   testPending={testMutation.isPending && testingChannel === 'whatsapp'}
-                  isConfigured={Boolean(data?.whatsApp.isConfigured)}
+                  readiness={deriveChannelReadiness(
+                    data?.whatsApp.readiness,
+                    waForm.enabled,
+                    Boolean(data?.whatsApp.isConfigured),
+                  )}
+                  blockingReasons={data?.whatsApp.blockingReasons ?? []}
                 />
 
                 <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">

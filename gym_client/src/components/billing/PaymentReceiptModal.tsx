@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Modal } from '../ui/Modal'
+import { Modal, modalActionBarClass } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { formatInr } from '../../lib/formatInr'
 import { getApiErrorMessage } from '../../lib/apiErrors'
@@ -202,7 +202,7 @@ export function PaymentReceiptModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Payment receipt" size="md">
+    <Modal open={open} onClose={onClose} title="Payment receipt">
       <div
         ref={printRef}
         className="space-y-4 rounded-xl border border-white/10 bg-white p-4 text-sm text-slate-800 shadow-inner"
@@ -255,7 +255,7 @@ export function PaymentReceiptModal({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className={modalActionBarClass}>
         <Button type="button" variant="secondary" onClick={handlePrint}>
           Print receipt
         </Button>
@@ -307,7 +307,7 @@ export function PaymentReceiptModal({
           </Button>
         )}
 
-        <Button type="button" onClick={onClose}>
+        <Button type="button" onClick={onClose} className="sm:ml-auto">
           Close
         </Button>
       </div>

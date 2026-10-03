@@ -4,6 +4,7 @@ using GymManagement.Core.Exceptions;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Interfaces.Caching;
 using GymManagement.Core.Services;
+using GymManagement.Core.Validation;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -556,6 +557,9 @@ namespace GymManagement.Infrastructure.Services
 
                     membershipId = header.MembershipId;
 
+                    if (!UserMembershipRules.AllowsPaymentCollection(header.Membership.Status))
+                        throw new BadRequestException(UserMembershipRules.PaymentCollectionClosedMessage);
+
                     if (!string.IsNullOrWhiteSpace(dto.CouponCode))
                         throw new BadRequestException("Apply coupons using the apply-coupon endpoint before recording payment.");
 
@@ -619,14 +623,15 @@ namespace GymManagement.Infrastructure.Services
                     {
                         header.PaymentStatus = MembershipPaymentStatus.Paid;
                         header.NextDueDate = null;
-                        header.Membership.Status = MembershipStatus.Active;
                     }
                     else
                     {
                         header.PaymentStatus = MembershipPaymentStatus.Partial;
                         header.NextDueDate = dto.NextDueDate!.Value.Date;
-                        header.Membership.Status = MembershipStatus.PartialPayment;
                     }
+                    header.Membership.Status = UserMembershipRules.StatusAfterPayment(
+                        header.Membership.Status,
+                        isFullSettlement);
 
                     _db.MembershipPayments.Update(header);
                     _db.UserMemberships.Update(header.Membership);

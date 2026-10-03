@@ -259,6 +259,9 @@ const SecurityPage = lazy(() =>
 const EmailSettingsPage = lazy(() =>
   import('../pages/EmailSettingsPage').then((m) => ({ default: m.EmailSettingsPage })),
 )
+const NotificationChannelsPage = lazy(() =>
+  import('../pages/NotificationChannelsPage').then((m) => ({ default: m.NotificationChannelsPage })),
+)
 const NotificationTemplatesPage = lazy(() =>
   import('../pages/NotificationTemplatesPage').then((m) => ({ default: m.NotificationTemplatesPage })),
 )
@@ -388,6 +391,7 @@ const router = createBrowserRouter([
               { path: '/dashboard/personal-training/sessions', element: withSuspense(<PtSessionsPage />) },
               { path: '/dashboard/personal-training/reports', element: withSuspense(<PtReportsPage />) },
               { path: '/dashboard/roles', element: withSuspense(<RolesPage />) },
+              { path: '/dashboard/settings/notifications', element: withSuspense(<NotificationChannelsPage />) },
               { path: '/dashboard/settings/notification-templates', element: withSuspense(<NotificationTemplatesPage />) },
               { path: '/dashboard/settings/email', element: withSuspense(<EmailSettingsPage />) },
               { path: '/dashboard/settings/sms', element: withSuspense(<SmsSettingsPage />) },

@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -20,6 +19,7 @@ import '../../widgets/progress_ring.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
 import '../../widgets/skeleton_shimmer.dart';
+import 'billing_pay_card.dart';
 
 class MembershipScreen extends ConsumerWidget {
   const MembershipScreen({super.key});
@@ -28,7 +28,6 @@ class MembershipScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final membership = ref.watch(membershipProvider);
     final invoices = ref.watch(invoicesProvider);
-    final billingAccess = ref.watch(billingAccessProvider);
     return CupertinoPageScaffold(
       backgroundColor: AppColors.resolveBg(context),
       child: Stack(
@@ -48,6 +47,7 @@ class MembershipScreen extends ConsumerWidget {
                 ref.invalidate(membershipProvider);
                 ref.invalidate(invoicesProvider);
                 ref.invalidate(billingAccessProvider);
+                ref.invalidate(onlinePaymentSummaryProvider);
                 await ref.read(membershipProvider.future);
               },
             ),
@@ -70,13 +70,7 @@ class MembershipScreen extends ConsumerWidget {
                         : _MembershipDetail(membership: data),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  billingAccess.when(
-                    loading: () => const SizedBox.shrink(),
-                    error: (_, __) => const SizedBox.shrink(),
-                    data: (access) => access.hasPendingBalance
-                        ? _PendingBillingCard(access: access)
-                        : const SizedBox.shrink(),
-                  ),
+                  const BillingPaySection(),
                   const SizedBox(height: AppSpacing.xl),
                   invoices.when(
                     loading: () => const SkeletonBlock(height: 140),
@@ -428,81 +422,6 @@ class _InvoiceCardState extends State<_InvoiceCard> {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PendingBillingCard extends StatelessWidget {
-  const _PendingBillingCard({required this.access});
-
-  final MeBillingAccess access;
-
-  Future<void> _showPayInfo(BuildContext context) async {
-    await showCupertinoDialog<void>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Pay membership'),
-        content: Text(
-          access.message ??
-              'Your balance is ${Fmt.currency(access.pendingAmount ?? 0)}. '
-              'Complete payment on the member web portal or at the front desk.',
-        ),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(CupertinoIcons.money_dollar_circle_fill, color: AppColors.orange, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Payment due',
-                style: AppType.headline.copyWith(
-                  color: AppColors.resolveText(context),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            Fmt.currency(access.pendingAmount ?? 0),
-            style: AppType.title2.copyWith(
-              color: AppColors.orange,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          if (access.nextDueDate != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Due ${Fmt.date(access.nextDueDate!)}',
-              style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: CupertinoButton.filled(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              onPressed: () => _showPayInfo(context),
-              child: const Text('Renew / pay'),
-            ),
-          ),
         ],
       ),
     );

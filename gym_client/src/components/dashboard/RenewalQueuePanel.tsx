@@ -1,18 +1,16 @@
 import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { GlassPanel } from './premium/GlassPanel'
 import { MemberMembershipsModal } from '../users/MemberMembershipsModal'
-import { userMembershipsService } from '../../services/userMemberships.service'
 import { usersService } from '../../services/users.service'
-import { RENEWAL_QUEUE_QUERY_KEY } from '../../lib/dashboardQueryKeys'
+import { RENEWAL_QUEUE_PAGE_SIZE, RENEWAL_QUEUE_WITHIN_DAYS, useRenewalQueueQuery } from './useRenewalQueueQuery'
 import { collectPaymentPath, memberProfilePath } from '../../lib/membershipPaymentNavigation'
 import { formatInr } from '../../lib/formatInr'
 import type { ExpiringMembershipQueueItem } from '../../types/userMembership'
 import type { User } from '../../types/user'
 
-const QUEUE_WITHIN_DAYS = 14
-const QUEUE_PAGE_SIZE = 12
+const QUEUE_WITHIN_DAYS = RENEWAL_QUEUE_WITHIN_DAYS
+const QUEUE_PAGE_SIZE = RENEWAL_QUEUE_PAGE_SIZE
 
 function formatEndDate(iso: string) {
   const d = new Date(iso)
@@ -89,21 +87,7 @@ export function RenewalQueuePanel({ enabled }: { enabled: boolean }) {
   const [membershipModalOpen, setMembershipModalOpen] = useState(false)
   const [openingUserId, setOpeningUserId] = useState<number | null>(null)
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: [...RENEWAL_QUEUE_QUERY_KEY, QUEUE_WITHIN_DAYS, search],
-    queryFn: () =>
-      userMembershipsService.getExpiringQueue({
-        withinDays: QUEUE_WITHIN_DAYS,
-        page: 1,
-        pageSize: QUEUE_PAGE_SIZE,
-        search: search.trim() || undefined,
-      }),
-    enabled,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
-  })
+  const { data, isLoading, isError, refetch, isFetching } = useRenewalQueueQuery(enabled, search)
 
   const openMemberships = useCallback(async (item: ExpiringMembershipQueueItem) => {
     if (openingUserId != null) return

@@ -27,9 +27,20 @@ public sealed class EmailTransportService : IEmailTransportService
         IReadOnlyList<string>? attachmentPaths,
         CancellationToken ct = default)
     {
+        var settings = await _settings.GetAsync(ct);
+        if (!settings.Enabled)
+            throw new InvalidOperationException("Email is disabled.");
+        if (!settings.IsConfigured)
+        {
+            var reason = settings.BlockingReasons.Count > 0
+                ? string.Join(". ", settings.BlockingReasons) + "."
+                : "Email is unconfigured. Save SMTP settings first.";
+            throw new InvalidOperationException(reason);
+        }
+
         var cfg = await _settings.GetSmtpConfigAsync(ct);
         if (!cfg.IsConfigured)
-            throw new InvalidOperationException("Email is not configured. Save SMTP settings first.");
+            throw new InvalidOperationException("Email is unconfigured. Save SMTP settings first.");
 
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(cfg.FromDisplayName ?? cfg.FromAddress, cfg.FromAddress));
@@ -53,10 +64,25 @@ public sealed class EmailTransportService : IEmailTransportService
         using var client = new SmtpClient();
         var secureSocket = cfg.UseStartTls ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto;
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        await client.ConnectAsync(cfg.Host, cfg.Port, secureSocket, ct);
-        await client.AuthenticateAsync(cfg.Username, cfg.Password, ct);
-        await client.SendAsync(message, ct);
-        await client.DisconnectAsync(true, ct);
+        try
+        {
+            await client.ConnectAsync(cfg.Host, cfg.Port, secureSocket, ct);
+            await client.AuthenticateAsync(cfg.Username, cfg.Password, ct);
+            await client.SendAsync(message, ct);
+            await client.DisconnectAsync(true, ct);
+        }
+        catch (AuthenticationException)
+        {
+            throw new InvalidOperationException("SMTP authentication failed. Check username and app password.");
+        }
+        catch (SmtpCommandException)
+        {
+            throw new InvalidOperationException("SMTP host rejected the message. Check host, port, and from address.");
+        }
+        catch (SmtpProtocolException)
+        {
+            throw new InvalidOperationException("SMTP connection failed. Check host, port, and STARTTLS.");
+        }
         sw.Stop();
         _logger.LogInformation(
             "Email sent to {Recipient} in {DurationMs}ms via {Host}.",

@@ -22,6 +22,8 @@ Quick pointers to implementation files referenced in the knowledge base. Paths a
 | Migration (Members/Staff) | `src/GymManagement.Infrastructure/Migrations/20260525130244_AddMembersAndStaffProfiles.cs` |
 | Trainer employee codes | `src/GymManagement.Infrastructure/Services/TrainerEmployeeCodeGenerator.cs` |
 | Staff employee codes | `src/GymManagement.Infrastructure/Services/StaffEmployeeCodeGenerator.cs` |
+| Trainer Today API | `src/GymManagement.Infrastructure/Services/TrainerTodayService.cs`, `src/GymManagement.Core/Scheduling/TrainerDayRules.cs` |
+| Razorpay | `src/GymManagement.Infrastructure/Services/RazorpayOnlinePaymentService.cs`, `src/GymManagement.Core/Validation/RazorpayPaymentRules.cs` |
 
 ---
 
@@ -30,6 +32,10 @@ Quick pointers to implementation files referenced in the knowledge base. Paths a
 | Area | Path |
 |------|------|
 | Members list | `pages/UsersPage.tsx` |
+| CSV member import | `components/users/MemberCsvImportModal.tsx`, `lib/membersCsv.ts` |
+| Member onboarding | `components/users/UserOnboardingChecklist.tsx`, `lib/memberOnboarding.ts` |
+| Membership standing | `lib/membershipStanding.ts`, `components/memberships/MembershipStandingPanel.tsx` |
+| Member portal | `pages/member/MemberPortalPage.tsx` |
 | Member detail | `pages/UserDetailPage.tsx` |
 | Trainers list | `pages/TrainersPage.tsx` |
 | Trainer detail + edit modal | `pages/TrainerDetailPage.tsx` |
@@ -41,7 +47,31 @@ Quick pointers to implementation files referenced in the knowledge base. Paths a
 | Users HTTP | `services/users.service.ts` |
 | Trainers HTTP | `services/trainers.service.ts` |
 | File upload | `services/fileUpload.service.ts` |
+| Daily work list | `lib/dailyWorkList.ts`, `components/dashboard/DailyWorkListPanel.tsx` |
+| Trainer Today UI | `components/dashboard/trainer/` |
 | Legacy mock trainers UI (avoid) | `modules/trainers-management/` |
+
+---
+
+## Tests
+
+| Area | Path |
+|------|------|
+| Core unit tests | `tests/GymManagement.Core.Tests/` (onboarding, billing totals, import, Razorpay, trainer day, notification readiness, …) |
+| Web Playwright | `gym_client/tests/e2e/` (navigation, onboarding, standing, payment, daily work, trainer dashboard, training journey, CSV, notifications, ops-work) |
+| Flutter tests | `mobile app/test/` (`flutter test`) |
+| Flutter analyze | `mobile app/` (`flutter analyze`, `analysis_options.yaml`) |
+
+---
+
+## Mobile (`mobile app/`)
+
+| Area | Path |
+|------|------|
+| API host | `lib/core/app_config.dart` (`API_BASE_URL`) |
+| Android signing | `android/app/build.gradle.kts` (`key.properties` local only) |
+| PR CI | `.github/workflows/ci.yml` (`flutter-checks`) |
+| Manual APK | `.github/workflows/mobile-app-android-apk.yml` |
 
 ---
 
@@ -50,4 +80,5 @@ Quick pointers to implementation files referenced in the knowledge base. Paths a
 | Area | Path |
 |------|------|
 | This folder | `docs/knowledge-base/` |
-| Deployment | `DEPLOYMENT.md` (repo root) |
+| Product backlog | `docs/PRODUCT_BACKLOG.md` |
+| Deployment | `deploy/DEPLOYMENT.md`, `docs/RELEASE_PROCESS.md` |

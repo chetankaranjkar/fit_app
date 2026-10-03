@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
+import '../theme/app_a11y.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
@@ -82,7 +83,10 @@ class _AppTextFieldState extends State<AppTextField> {
               textInputAction: widget.textInputAction,
               onSubmitted: widget.onSubmitted,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              style: AppType.body.copyWith(color: AppColors.resolveText(context)),
+              style: AppA11y.applyTextStyle(
+                context,
+                AppType.body.copyWith(color: AppColors.resolveText(context)),
+              ),
               placeholderStyle: AppType.body.copyWith(
                 color: AppColors.resolveTextSecondary(context),
               ),

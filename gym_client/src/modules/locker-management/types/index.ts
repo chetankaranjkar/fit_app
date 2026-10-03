@@ -89,7 +89,7 @@ export const DEFAULT_ACCESS_LOG_FILTERS: AccessLogFilters = {
 
 export interface MaintenanceFilters {
   query: string
-  status: MaintenanceStatus | 'ALL'
+  status: MaintenanceStatus | 'ALL' | 'OVERDUE'
 }
 
 export const DEFAULT_MAINTENANCE_FILTERS: MaintenanceFilters = {

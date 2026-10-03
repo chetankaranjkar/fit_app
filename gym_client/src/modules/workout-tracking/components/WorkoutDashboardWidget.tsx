@@ -18,7 +18,7 @@ export function WorkoutDashboardWidget() {
 
   if (loadingMember || isLoading || !dash) {
     return (
-      <GlassPanel role="member" title="Workout stats" subtitle="Loading…">
+      <GlassPanel role="member" title="Recorded workout stats" subtitle="Loading recorded sessions…">
         <div className="h-20 animate-pulse rounded-xl bg-white/5" />
       </GlassPanel>
     )
@@ -29,7 +29,7 @@ export function WorkoutDashboardWidget() {
     : '—'
 
   return (
-    <GlassPanel role="member" title="Workout stats" subtitle="Your training consistency">
+    <GlassPanel role="member" title="Recorded workout stats" subtitle="Completed sessions on file — not assigned plan days">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3">
           <p className="flex items-center gap-1.5 text-xs text-orange-200/80">

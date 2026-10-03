@@ -49,10 +49,47 @@ public sealed class NotificationHistoryDto
     public string? Subject { get; set; }
     public string Message { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    /// <summary>Queued, Retrying, Sent, Failed, or Skipped.</summary>
+    public string DisplayStatus { get; set; } = string.Empty;
     public DateTime? SentDate { get; set; }
     public string? ErrorMessage { get; set; }
     public int RetryCount { get; set; }
     public DateTime CreatedDate { get; set; }
+}
+
+public sealed class NotificationOutboxDto
+{
+    public int Id { get; set; }
+    public string TemplateCode { get; set; } = string.Empty;
+    public string Channel { get; set; } = string.Empty;
+    public string Recipient { get; set; } = string.Empty;
+    public string? Subject { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string DisplayStatus { get; set; } = string.Empty;
+    public int RetryCount { get; set; }
+    public int MaxRetries { get; set; }
+    public DateTime? ScheduledForUtc { get; set; }
+    public DateTime? ProcessedAtUtc { get; set; }
+    public string? ErrorMessage { get; set; }
+    public DateTime CreatedDate { get; set; }
+}
+
+public sealed class NotificationChannelStatusDto
+{
+    public string Channel { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public string Readiness { get; set; } = string.Empty;
+    public List<string> BlockingReasons { get; set; } = new();
+    public string Summary { get; set; } = string.Empty;
+    public string? SettingsPath { get; set; }
+    public bool SecretConfigured { get; set; }
+}
+
+public sealed class NotificationChannelsOverviewDto
+{
+    public List<NotificationChannelStatusDto> Channels { get; set; } = new();
+    public string MemberOptInNote { get; set; } =
+        "Outbound email and SMS/WhatsApp send only when the member has opted in. In-app dashboard alerts do not use those opt-ins. Push needs gym Firebase Admin credentials plus a device token from the mobile app.";
 }
 
 public sealed class NotificationTemplateQueryDto

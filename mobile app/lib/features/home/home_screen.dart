@@ -8,11 +8,11 @@ import '../../models/me_models.dart';
 import '../../providers/me_providers.dart';
 import '../../providers/ui_banner_provider.dart';
 import '../../services/me_service.dart';
-import '../../animations/app_motion.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/app_icon_button.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/section_header.dart';
@@ -24,6 +24,7 @@ import '../workouts/widgets/workout_dashboard_card.dart';
 import '../../providers/sync_status_provider.dart';
 import '../../providers/workout_tracking_providers.dart';
 import '../../widgets/sync_status_chip.dart';
+import 'home_today_actions.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -43,10 +44,10 @@ class HomeScreen extends ConsumerWidget {
             child: CustomScrollView(
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               slivers: [
-                CupertinoSliverNavigationBar(
-                  largeTitle: const Text('Today'),
+                const CupertinoSliverNavigationBar(
+                  largeTitle: Text('Today'),
                   border: null,
-                  trailing: const SyncStatusChip(),
+                  trailing: SyncStatusChip(),
                 ),
                 CupertinoSliverRefreshControl(
                   onRefresh: () async {
@@ -54,6 +55,10 @@ class HomeScreen extends ConsumerWidget {
                     ref.invalidate(dashboardProvider);
                     ref.invalidate(workoutTrackingDashboardProvider);
                     ref.invalidate(activeWorkoutProvider);
+                    ref.invalidate(billingAccessProvider);
+                    ref.invalidate(onlinePaymentSummaryProvider);
+                    ref.invalidate(workoutPlansProvider);
+                    ref.invalidate(todayAssignedTemplateProvider);
                     invalidateSyncStatus(ref);
                   },
                 ),
@@ -77,25 +82,23 @@ class HomeScreen extends ConsumerWidget {
                       delegate: SliverChildListDelegate([
                         _Greeting(profile: data.profile),
                         const SizedBox(height: AppSpacing.lg),
-                        if (data.membership != null) ...[
-                          _MembershipCard(membership: data.membership!),
-                          const SizedBox(height: AppSpacing.lg),
-                        ],
+                        HomeTodayActions(dashboard: data),
+                        const SizedBox(height: AppSpacing.lg),
                         _StatsRow(attendance: data.attendance, metric: data.latestBodyMetric),
                         const SizedBox(height: AppSpacing.lg),
-                        const WorkoutDashboardCard(),
+                        const WorkoutDashboardCard(showSessionCta: false),
                         const SizedBox(height: AppSpacing.xl),
                         SectionHeader(
                           title: 'This week',
-                          action: 'See all',
+                          action: 'Progress',
                           onActionTap: () => context.go('/progress'),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         _AttendanceStrip(summary: data.attendance),
                         const SizedBox(height: AppSpacing.xl),
                         SectionHeader(
-                          title: 'Upcoming',
-                          action: data.upcomingSchedule.isEmpty ? null : 'Explore',
+                          title: 'Schedule',
+                          action: 'Workouts',
                           onActionTap: () => context.go('/workouts'),
                         ),
                         const SizedBox(height: AppSpacing.md),
@@ -104,7 +107,7 @@ class HomeScreen extends ConsumerWidget {
                         else
                           Column(
                             children: [
-                              for (final s in data.upcomingSchedule.take(3))
+                              for (final s in data.upcomingSchedule.take(2))
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: AppSpacing.md),
                                   child: _ScheduleTile(schedule: s),
@@ -112,31 +115,10 @@ class HomeScreen extends ConsumerWidget {
                             ],
                           ),
                         const SizedBox(height: AppSpacing.xl),
-                        SectionHeader(
-                          title: 'Recent activity',
-                          action: data.recentNotifications.isEmpty ? null : 'View all',
-                          onActionTap: () => context.push('/notifications'),
+                        _NotificationsLink(
+                          notifications: data.recentNotifications,
+                          onTap: () => context.push('/notifications'),
                         ),
-                        const SizedBox(height: AppSpacing.md),
-                        if (data.recentNotifications.isEmpty)
-                          GlassCard(
-                            child: Text(
-                              'No notifications yet. We will keep you posted.',
-                              style: AppType.body.copyWith(
-                                color: AppColors.resolveTextSecondary(context),
-                              ),
-                            ),
-                          )
-                        else
-                          Column(
-                            children: [
-                              for (final n in data.recentNotifications.take(4))
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                                  child: _NotificationTile(notification: n),
-                                ),
-                            ],
-                          ),
                       ]),
                     ),
                   ),
@@ -154,13 +136,6 @@ class HomeScreen extends ConsumerWidget {
                 onDismiss: () => ref.read(checkInBannerProvider.notifier).state = null,
               ),
             ),
-          Positioned(
-            right: AppSpacing.lg,
-            bottom: ShellLayoutMetrics.fabBottomOffset(context),
-            child: _ScanAttendanceFab(
-              onTap: () => context.push('/scanner'),
-            ),
-          ),
         ],
       ),
     );
@@ -198,14 +173,12 @@ class _CheckInSuccessBanner extends StatelessWidget {
               ],
             ),
           ),
-          CupertinoButton(
-            padding: EdgeInsets.zero,
+          AppIconButton(
+            icon: CupertinoIcons.xmark_circle_fill,
+            semanticLabel: 'Dismiss check-in banner',
             onPressed: onDismiss,
-            child: Icon(
-              CupertinoIcons.xmark_circle_fill,
-              color: AppColors.resolveTextSecondary(context),
-              size: 22,
-            ),
+            color: AppColors.resolveTextSecondary(context),
+            size: 22,
           ),
         ],
       ),
@@ -216,61 +189,50 @@ class _CheckInSuccessBanner extends StatelessWidget {
   }
 }
 
-class _ScanAttendanceFab extends StatelessWidget {
-  const _ScanAttendanceFab({required this.onTap});
+class _NotificationsLink extends StatelessWidget {
+  const _NotificationsLink({required this.notifications, required this.onTap});
+
+  final List<MeNotification> notifications;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final unread = notifications.where((n) => !n.isRead).length;
+    final subtitle = notifications.isEmpty
+        ? 'No updates yet'
+        : unread > 0
+            ? '$unread unread · tap to open'
+            : '${notifications.length} recent · tap to open';
     return PressScale(
       onTap: onTap,
-      child: Container(
-        height: 58,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: AppColors.primaryGradient,
-          border: Border.all(color: AppColors.gold.withValues(alpha: 0.45), width: 0.9),
-          boxShadow: [
-            ...AppColors.orangeGlow(opacity: 0.52, blur: 26),
-            BoxShadow(
-              color: AppColors.neonPurple.withValues(alpha: 0.22),
-              blurRadius: 28,
-              spreadRadius: 1,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
+      child: GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: CupertinoColors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                CupertinoIcons.qrcode_viewfinder,
-                size: 17,
-                color: CupertinoColors.white,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Scan Attendance',
-              style: AppType.callout.copyWith(
-                color: CupertinoColors.white,
-                fontWeight: FontWeight.w700,
+            const Icon(CupertinoIcons.bell, color: AppColors.accent, size: 20),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Notifications',
+                    style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
+                  ),
+                  Text(
+                    subtitle,
+                    style: AppType.footnote.copyWith(
+                      color: AppColors.resolveTextSecondary(context),
+                    ),
+                  ),
+                ],
               ),
             ),
+            Icon(CupertinoIcons.chevron_right, size: 16, color: AppColors.resolveTextSecondary(context)),
           ],
         ),
       ),
-    )
-        .animate(onPlay: (controller) => controller.repeat(reverse: true))
-        .scaleXY(begin: 1, end: 1.03, duration: AppFx.ambient, curve: AppFx.ambientCurve);
+    );
   }
 }
 
@@ -333,181 +295,6 @@ class _Greeting extends StatelessWidget {
   }
 }
 
-/// Premium gold-style membership card.
-class _MembershipCard extends StatelessWidget {
-  const _MembershipCard({required this.membership});
-  final MeMembership membership;
-
-  @override
-  Widget build(BuildContext context) {
-    final daysRemaining = membership.daysRemaining;
-    final isExpiring = membership.isExpiringSoon;
-    final cardGradient = isExpiring
-        ? const LinearGradient(
-            colors: [Color(0xFF3D1800), Color(0xFF7A3000), Color(0xFF3D1800)],
-            stops: [0.0, 0.55, 1.0],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          )
-        : AppColors.goldGradient;
-    final goldColor = isExpiring ? AppColors.orange : AppColors.gold;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: cardGradient,
-          borderRadius: BorderRadius.circular(AppRadius.xl),
-          boxShadow: [
-            BoxShadow(
-              color: goldColor.withValues(alpha: 0.35),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Shimmer highlight overlay
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: AppColors.goldShimmer,
-                  borderRadius: BorderRadius.circular(AppRadius.xl),
-                ),
-              ),
-            ),
-            // Decorative circles for premium card texture
-            Positioned(
-              top: -28,
-              right: -28,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: goldColor.withValues(alpha: 0.08),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -40,
-              right: 40,
-              child: Container(
-                width: 150,
-                height: 150,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: goldColor.withValues(alpha: 0.05),
-                ),
-              ),
-            ),
-            // Card content
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(CupertinoIcons.creditcard_fill, color: goldColor, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        membership.status.toUpperCase(),
-                        style: AppType.caption.copyWith(
-                          color: goldColor,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: goldColor.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                          border: Border.all(
-                            color: goldColor.withValues(alpha: 0.4),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: Text(
-                          'MEMBER',
-                          style: AppType.caption.copyWith(
-                            color: goldColor,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    membership.planName,
-                    style: AppType.title2.copyWith(
-                      color: CupertinoColors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Valid till ${Fmt.date(membership.endDate)}',
-                    style: AppType.footnote.copyWith(
-                      color: CupertinoColors.white.withValues(alpha: 0.65),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        daysRemaining < 0 ? '0' : daysRemaining.toString(),
-                        style: AppType.metric.copyWith(
-                          color: CupertinoColors.white,
-                          fontSize: 36,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          daysRemaining == 1 ? 'day left' : 'days left',
-                          style: AppType.callout.copyWith(
-                            color: CupertinoColors.white.withValues(alpha: 0.7),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      if (isExpiring)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: AppColors.danger.withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                          ),
-                          child: Text(
-                            'Expiring soon',
-                            style: AppType.caption.copyWith(
-                              color: CupertinoColors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _StatsRow extends StatelessWidget {
   const _StatsRow({required this.attendance, required this.metric});
@@ -679,7 +466,7 @@ class _ScheduleTile extends StatelessWidget {
                     [
                       if (schedule.dayOfWeek != null) schedule.dayOfWeek,
                       if (schedule.startTime != null) schedule.startTime,
-                      if (schedule.trainerName != null) 'with \${schedule.trainerName}',
+                      if (schedule.trainerName != null) 'with ${schedule.trainerName}',
                     ].whereType<String>().join(' · '),
                     style: AppType.footnote.copyWith(
                       color: AppColors.resolveTextSecondary(context),
@@ -692,70 +479,6 @@ class _ScheduleTile extends StatelessWidget {
                 size: 16, color: AppColors.resolveTextSecondary(context)),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _NotificationTile extends StatelessWidget {
-  const _NotificationTile({required this.notification});
-  final MeNotification notification;
-
-  @override
-  Widget build(BuildContext context) {
-    final urgent = notification.isMembershipExpiring && !notification.isRead;
-    return GlassCard(
-      tint: urgent ? AppColors.gold.withValues(alpha: 0.12) : null,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            margin: const EdgeInsets.only(top: 5, right: 10),
-            decoration: BoxDecoration(
-              gradient: notification.isRead ? null : AppColors.primaryGradient,
-              color: notification.isRead ? CupertinoColors.transparent : null,
-              shape: BoxShape.circle,
-              boxShadow: notification.isRead
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: AppColors.accent.withValues(alpha: 0.5),
-                        blurRadius: 6,
-                      ),
-                    ],
-            ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  notification.title,
-                  style: AppType.headline
-                      .copyWith(color: AppColors.resolveText(context)),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  notification.displayMessage,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppType.subhead.copyWith(
-                    color: AppColors.resolveTextSecondary(context),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  Fmt.relative(notification.createdAt),
-                  style: AppType.caption.copyWith(
-                    color: AppColors.resolveTextSecondary(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

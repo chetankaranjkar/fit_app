@@ -1096,7 +1096,13 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.Amount).HasPrecision(12, 2);
                 entity.Property(e => e.Currency).IsRequired().HasMaxLength(8);
                 entity.Property(e => e.Status).IsRequired().HasConversion<string>().HasMaxLength(20);
+                entity.Property(e => e.CapturedAmount).HasPrecision(12, 2);
+                entity.Property(e => e.StatusReason).HasMaxLength(300);
                 entity.HasIndex(e => e.GatewayOrderId).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => e.GatewayPaymentId)
+                    .IsUnique()
+                    .HasFilter("[GatewayPaymentId] IS NOT NULL AND [IsDeleted] = 0");
+                entity.HasIndex(e => new { e.Status, e.CreatedDate });
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.MembershipPaymentId);
                 entity.HasOne(e => e.MembershipPayment)
@@ -1617,6 +1623,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
                 entity.HasIndex(e => e.Email).IsUnique().HasFilter("[IsDeleted] = 0");
                 entity.Property(e => e.PasswordHash).IsRequired();
+                entity.Property(e => e.Theme).IsRequired().HasMaxLength(5).HasDefaultValue("dark");
                 entity.Property(e => e.RefreshToken);
                 entity.Property(e => e.RefreshTokenExpiry);
                 entity.Property(e => e.PreviousRefreshTokenHash).HasMaxLength(128);

@@ -1,4 +1,5 @@
 import { getSafeDashboardReturnPath } from './safeReturnPath'
+import { COLLECT_OUTSTANDING_LABEL, deriveMembershipStanding } from './membershipStanding'
 import type { ActiveMembershipConflict } from '../types/activeMembershipConflict'
 import type { MembershipStatus, UserMembership } from '../types/userMembership'
 
@@ -57,24 +58,19 @@ export function conflictCollectPaymentPath(
   return collectPaymentPath(conflict.membershipId, conflict.userId, returnTo)
 }
 
+/** Collect path only when the membership has an outstanding balance and its billing is open. */
 export function getMembershipCollectPaymentPath(
-  m: Pick<UserMembership, 'id' | 'userId' | 'status'>,
+  m: Pick<UserMembership, 'id' | 'userId' | 'status' | 'pendingAmount' | 'paymentStatus' | 'membershipPaymentId'>,
   returnTo?: string | null,
 ): string | null {
-  if (!membershipStatusOpensCollectPayment(m.status)) return null
   if (m.id <= 0 || m.userId <= 0) return null
+  const hasBillingRecord = m.membershipPaymentId != null || m.paymentStatus != null
+  const outstanding = hasBillingRecord ? (m.pendingAmount ?? 0) : null
+  const rule = deriveMembershipStanding({ status: m.status, outstanding, billingStatus: m.paymentStatus }).collect
+  if (!rule.allowed) return null
   return collectPaymentPath(m.id, m.userId, returnTo ?? memberProfilePath(m.userId))
 }
 
 export function membershipStatusClickTitle(status: MembershipStatus): string | undefined {
-  switch (status) {
-    case 'PartialPayment':
-      return 'Collect remaining amount'
-    case 'ActivePendingPayment':
-      return 'Open payment collection'
-    case 'Expired':
-      return 'Collect renewal payment'
-    default:
-      return undefined
-  }
+  return membershipStatusOpensCollectPayment(status) ? COLLECT_OUTSTANDING_LABEL : undefined
 }

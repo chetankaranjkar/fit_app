@@ -15,6 +15,8 @@ export type EmailSettings = {
   sendDietAssignments: boolean
   isConfigured: boolean
   passwordNeedsReentry: boolean
+  readiness?: string
+  blockingReasons?: string[]
   updatedDateUtc: string | null
 }
 

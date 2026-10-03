@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { ExerciseLibraryUnavailableBanner } from '../../../components/training/ExerciseLibraryUnavailableBanner'
 import { Input } from '../../../components/ui/Input'
 import type { Exercise } from '../../../types/exercise'
 import type { ProgramDayDto, WorkoutPlanExercise } from '../../../types/workoutPlan'
@@ -8,9 +9,19 @@ type Props = {
   day: ProgramDayDto
   exerciseLibrary: Exercise[]
   onDayChange: (next: ProgramDayDto) => void
+  libraryError?: unknown
+  onRetryLibrary?: () => void
+  libraryRetrying?: boolean
 }
 
-export function DayExercisePanel({ day, exerciseLibrary, onDayChange }: Props) {
+export function DayExercisePanel({
+  day,
+  exerciseLibrary,
+  onDayChange,
+  libraryError,
+  onRetryLibrary,
+  libraryRetrying,
+}: Props) {
   const [search, setSearch] = useState('')
 
   const exerciseById = useMemo(
@@ -109,6 +120,15 @@ export function DayExercisePanel({ day, exerciseLibrary, onDayChange }: Props) {
             placeholder="Search exercise or body part…"
           />
           <div className="mt-2 max-h-52 space-y-1 overflow-y-auto pr-1">
+            {libraryError && onRetryLibrary ? (
+              <div className="mb-2">
+                <ExerciseLibraryUnavailableBanner
+                  error={libraryError}
+                  onRetry={onRetryLibrary}
+                  isRetrying={libraryRetrying}
+                />
+              </div>
+            ) : null}
             {pickerResults.map((exercise) => (
               <button
                 key={exercise.id}
@@ -127,7 +147,7 @@ export function DayExercisePanel({ day, exerciseLibrary, onDayChange }: Props) {
                 </span>
               </button>
             ))}
-            {pickerResults.length === 0 && (
+            {pickerResults.length === 0 && !libraryError && (
               <p className="px-3 py-6 text-center text-xs text-slate-500">
                 {exerciseLibrary.length === 0
                   ? 'No exercises in the library.'

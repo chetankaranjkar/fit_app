@@ -23,21 +23,32 @@ class WorkoutPendingQueue {
     required int workoutPlanId,
     int? durationMinutes,
     required List<MeWorkoutSetEntry> sets,
+    int? memberId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final list = await _readRaw(prefs);
     list.add({
       'workoutPlanId': workoutPlanId,
       if (durationMinutes != null) 'durationMinutes': durationMinutes,
+      if (memberId != null) 'memberId': memberId,
       'sets': sets.map((e) => e.toJson()).toList(),
       'queuedAt': DateTime.now().toUtc().toIso8601String(),
     });
     await prefs.setString(_prefsKey, jsonEncode(list));
   }
 
-  Future<int> pendingCount() async {
+  Future<int> pendingCount({int? memberId}) async {
     final prefs = await SharedPreferences.getInstance();
-    return (await _readRaw(prefs)).length;
+    final list = await _readRaw(prefs);
+    if (memberId == null) return list.length;
+    return list.where((e) => _itemMemberId(e) == memberId).length;
+  }
+
+  int? _itemMemberId(Map<String, dynamic> item) {
+    final v = item['memberId'];
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return null;
   }
 
   Future<void> _writeAll(SharedPreferences prefs, List<Map<String, dynamic>> list) async {
@@ -51,8 +62,9 @@ class WorkoutPendingQueue {
   /// Attempts each pending completion; removes entries that succeed.
   /// Returns number successfully synced.
   Future<int> drain(
-    Future<void> Function(int workoutPlanId, int? durationMinutes, List<MeWorkoutSetEntry> sets) submit,
-  ) async {
+    Future<void> Function(int workoutPlanId, int? durationMinutes, List<MeWorkoutSetEntry> sets) submit, {
+    int? memberId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final list = await _readRaw(prefs);
     if (list.isEmpty) return 0;
@@ -61,6 +73,15 @@ class WorkoutPendingQueue {
     final remaining = <Map<String, dynamic>>[];
 
     for (final item in list) {
+      final itemMember = _itemMemberId(item);
+      if (memberId != null && itemMember != null && itemMember != memberId) {
+        remaining.add(item);
+        continue;
+      }
+      if (memberId != null && itemMember == null) {
+        remaining.add(item);
+        continue;
+      }
       final planId = item['workoutPlanId'] as int? ?? (item['workoutPlanId'] as num?)?.toInt();
       if (planId == null || planId <= 0) {
         continue;

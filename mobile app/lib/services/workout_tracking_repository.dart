@@ -6,6 +6,7 @@ import '../models/workout_tracking_models.dart';
 import '../workout_sync/models/local_workout_snapshot.dart';
 import '../workout_sync/offline/offline_workout_repository.dart';
 import '../workout_sync/sync/workout_sync_bootstrap.dart';
+import '../workout_sync/recovery/session_conflict_policy.dart';
 import '../workout_sync/recovery/session_recovery_service.dart';
 import '../workout_sync/sync/session_autosave_service.dart';
 import '../workout_sync/sync/sync_manager.dart';
@@ -27,6 +28,10 @@ class WorkoutTrackingRepository {
 
   Future<void> _ensureReady() async {
     await WorkoutSyncBootstrap.ensureStarted();
+  }
+
+  Future<void> _bindMember(int memberId) async {
+    await _sync.bindMember(memberId);
   }
 
   static bool _isOfflineError(Object e) =>
@@ -55,6 +60,7 @@ class WorkoutTrackingRepository {
     required int workoutPlanId,
   }) async {
     await _ensureReady();
+    await _bindMember(memberId);
     final restored = await _recovery.restoreWorkoutSession(memberId);
     if (restored != null) return restored.session;
 
@@ -71,6 +77,7 @@ class WorkoutTrackingRepository {
 
   Future<LocalWorkoutSnapshot?> restoreSnapshot(int memberId) async {
     await _ensureReady();
+    await _bindMember(memberId);
     return _recovery.restoreWorkoutSession(memberId);
   }
 
@@ -79,6 +86,7 @@ class WorkoutTrackingRepository {
     required int workoutPlanId,
   }) async {
     await _ensureReady();
+    await _bindMember(memberId);
     final existing = await _recovery.restoreActiveSession(memberId);
     if (existing != null) return existing;
 
@@ -97,6 +105,7 @@ class WorkoutTrackingRepository {
 
   Future<ActiveWorkoutSession?> getActive(int memberId) async {
     await _ensureReady();
+    await _bindMember(memberId);
     final snap = await _recovery.restoreWorkoutSession(memberId);
     return snap?.session;
   }
@@ -153,7 +162,7 @@ class WorkoutTrackingRepository {
       );
     } catch (e) {
       if (!_isOfflineError(e)) rethrow;
-      final base = (await _offline.loadSession()) ?? session;
+      final base = (await _offline.loadSession(memberId: session.memberId)) ?? session;
       return _logSetOffline(
         session: base.copyWith(isOffline: true),
         setId: workoutSessionExerciseId,
@@ -180,7 +189,7 @@ class WorkoutTrackingRepository {
     }
     try {
       final result = await _api.complete(session.sessionId);
-      await _offline.clearSnapshot();
+      await _offline.clearSnapshot(memberId: session.memberId);
       return result;
     } catch (e) {
       if (!_isOfflineError(e)) rethrow;
@@ -197,19 +206,20 @@ class WorkoutTrackingRepository {
 
   Future<ActiveWorkoutSession?> reloadSession(ActiveWorkoutSession current) async {
     await _ensureReady();
-    if (current.isOffline || current.sessionId <= 0) {
-      return _offline.loadSession();
+      if (current.isOffline || current.sessionId <= 0) {
+      return _offline.loadSession(memberId: current.memberId);
     }
     try {
       final online = await _api.getActive(current.memberId);
       if (online != null) {
-        final merged = await _mergeWithLocalIfAhead(online, current.memberId);
+        final local = await _offline.loadSnapshot(memberId: current.memberId);
+        final merged = SessionConflictPolicy.mergeLive(online, local, current.memberId);
         await _mirrorSnapshot(merged);
         return merged;
       }
-      return _offline.loadSession();
+      return _offline.loadSession(memberId: current.memberId);
     } catch (e) {
-      if (_isOfflineError(e)) return _offline.loadSession();
+      if (_isOfflineError(e)) return _offline.loadSession(memberId: current.memberId);
       rethrow;
     }
   }
@@ -236,12 +246,12 @@ class WorkoutTrackingRepository {
 
   Future<void> _mirrorSnapshot(ActiveWorkoutSession session) async {
     if (session.status == 'Completed' && !session.pendingCompleteSync) {
-      await _offline.clearSnapshot();
+      await _offline.clearSnapshot(memberId: session.memberId);
       return;
     }
-    final existing = await _offline.loadSnapshot();
+    final existing = await _offline.loadSnapshot(memberId: session.memberId);
     await _offline.saveSnapshot(LocalWorkoutSnapshot(
-      session: session.copyWith(isOffline: false),
+      session: session,
       currentExerciseIndex: existing?.currentExerciseIndex ?? 0,
       elapsedSeconds: existing?.elapsedSeconds ?? 0,
       scrollOffset: existing?.scrollOffset ?? 0,
@@ -249,32 +259,6 @@ class WorkoutTrackingRepository {
       lastSyncedAt: session.lastSyncedAt ?? DateTime.now().toUtc(),
       pendingActions: existing?.pendingActions ?? const [],
     ));
-  }
-
-  Future<ActiveWorkoutSession> _mergeWithLocalIfAhead(
-    ActiveWorkoutSession server,
-    int memberId,
-  ) async {
-    final local = await _offline.loadSnapshot();
-    if (local == null ||
-        local.session.memberId != memberId ||
-        local.session.pendingCompleteSync) {
-      return server;
-    }
-    if (local.session.sessionId > 0 &&
-        server.sessionId > 0 &&
-        local.session.sessionId != server.sessionId) {
-      return server;
-    }
-    if (local.session.completedSets > server.completedSets) {
-      return local.session.copyWith(
-        sessionId: server.sessionId > 0 ? server.sessionId : local.session.sessionId,
-        isOffline: false,
-        lastSyncedAt: server.lastSyncedAt,
-        serverTimeUtc: server.serverTimeUtc,
-      );
-    }
-    return server;
   }
 
   Future<ActiveWorkoutSession> _startOffline({

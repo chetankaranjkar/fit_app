@@ -5,27 +5,20 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 
 import '../../../models/me_models.dart';
+import '../../../theme/app_a11y.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/fitness_text.dart';
 import '../../../widgets/glass_card.dart';
+import '../diet_assigned_foods.dart';
 
 class DietNutritionHero extends StatelessWidget {
   const DietNutritionHero({super.key, required this.plan});
 
   final MeDietPlan plan;
 
-  int _score() {
-    var s = 72;
-    if (plan.proteinGrams != null && plan.proteinGrams! > 0) s += 8;
-    if (plan.carbsGrams != null && plan.carbsGrams! > 0) s += 8;
-    if (plan.fatsGrams != null && plan.fatsGrams! > 0) s += 6;
-    return math.min(98, s);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final score = _score() / 100.0;
     final p = plan.proteinGrams ?? 0;
     final c = plan.carbsGrams ?? 0;
     final f = plan.fatsGrams ?? 0;
@@ -34,89 +27,46 @@ class DietNutritionHero extends StatelessWidget {
     final cPct = c / totalMacro;
     final fPct = f / totalMacro;
 
-    return GlassCard(
+    final card = GlassCard(
       radius: 28,
       padding: const EdgeInsets.all(AppSpacing.lg),
       tint: AppColors.neonCyan.withValues(alpha: 0.05),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('NUTRITION OS', style: FitnessText.label(context)),
-                    const SizedBox(height: 4),
-                    Text(
-                      plan.planName,
-                      style: FitnessText.display(context, size: 24),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      plan.goalType,
-                      style: FitnessText.body(context),
-                    ),
-                  ],
-                ),
-              ),
-              CircularPercentIndicator(
-                radius: 40,
-                lineWidth: 6,
-                percent: score.clamp(0.0, 1.0),
-                animation: true,
-                circularStrokeCap: CircularStrokeCap.round,
-                backgroundColor: CupertinoColors.white.withValues(alpha: 0.08),
-                linearGradient: const LinearGradient(
-                  colors: [AppColors.neonCyan, AppColors.neonBlue, AppColors.neonPurple],
-                ),
-                center: Text(
-                  '${(score * 100).round()}',
-                  style: FitnessText.metric(context, size: 15),
-                ),
-              ).animate().scale(begin: const Offset(0.9, 0.9), curve: Curves.easeOutBack),
-            ],
+          Text(DietCopy.assignedDiet.toUpperCase(), style: FitnessText.label(context)),
+          const SizedBox(height: 4),
+          Text(
+            plan.planName,
+            style: FitnessText.display(context, size: 24),
           ),
+          const SizedBox(height: 4),
+          Text(plan.goalType, style: FitnessText.body(context)),
           const SizedBox(height: AppSpacing.lg),
-          _MacroRingRow(
-            label: 'Calories',
-            value: '${plan.calories}',
-            sub: 'kcal target',
-            percent: 1.0,
-            colors: const [AppColors.accent, AppColors.gold],
-          ),
+          _PlannedCalorieRow(calories: plan.calories),
           const SizedBox(height: AppSpacing.md),
           if (p + c + f > 0) ...[
-            _MacroBar(label: 'Protein', grams: p, pct: pPct, color: AppColors.neonCyan),
+            _MacroBar(label: 'Protein (planned)', grams: p, pct: pPct, color: AppColors.neonCyan),
             const SizedBox(height: AppSpacing.sm),
-            _MacroBar(label: 'Carbs', grams: c, pct: cPct, color: AppColors.neonBlueLite),
+            _MacroBar(label: 'Carbs (planned)', grams: c, pct: cPct, color: AppColors.neonBlueLite),
             const SizedBox(height: AppSpacing.sm),
-            _MacroBar(label: 'Fats', grams: f, pct: fPct, color: AppColors.neonPurpleLite),
+            _MacroBar(label: 'Fats (planned)', grams: f, pct: fPct, color: AppColors.neonPurpleLite),
           ],
         ],
       ),
-    ).animate().fadeIn(duration: 380.ms).slideY(begin: 0.04, end: 0);
+    );
+    return AppA11y.maybeAnimate(
+      context,
+      card,
+      (w) => w.animate().fadeIn(duration: 380.ms).slideY(begin: 0.04, end: 0),
+    );
   }
 }
 
-class _MacroRingRow extends StatelessWidget {
-  const _MacroRingRow({
-    required this.label,
-    required this.value,
-    required this.sub,
-    required this.percent,
-    required this.colors,
-  });
+class _PlannedCalorieRow extends StatelessWidget {
+  const _PlannedCalorieRow({required this.calories});
 
-  final String label;
-  final String value;
-  final String sub;
-  final double percent;
-  final List<Color> colors;
+  final int calories;
 
   @override
   Widget build(BuildContext context) {
@@ -125,24 +75,21 @@ class _MacroRingRow extends StatelessWidget {
         CircularPercentIndicator(
           radius: 32,
           lineWidth: 5,
-          percent: percent.clamp(0.0, 1.0),
-          animation: true,
+          percent: 1.0,
+                      animation: !AppA11y.reduceMotion(context),
           circularStrokeCap: CircularStrokeCap.round,
           backgroundColor: CupertinoColors.white.withValues(alpha: 0.06),
-          linearGradient: LinearGradient(colors: colors),
-          center: Icon(CupertinoIcons.flame_fill, size: 18, color: colors.first),
+          linearGradient: const LinearGradient(colors: [AppColors.accent, AppColors.gold]),
+          center: const Icon(CupertinoIcons.flame_fill, size: 18, color: AppColors.accent),
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label.toUpperCase(), style: FitnessText.label(context)),
-              Text(
-                value,
-                style: FitnessText.metric(context, size: 26),
-              ),
-              Text(sub, style: FitnessText.body(context)),
+              Text(DietCopy.plannedDailyTarget.toUpperCase(), style: FitnessText.label(context)),
+              Text('$calories', style: FitnessText.metric(context, size: 26)),
+              Text('kcal assigned', style: FitnessText.body(context)),
             ],
           ),
         ),
@@ -171,8 +118,8 @@ class _MacroBar extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(label, style: FitnessText.chip(context)),
-            const Spacer(),
+            Expanded(child: Text(label, style: FitnessText.chip(context))),
+            const SizedBox(width: 8),
             Text('$grams g', style: FitnessText.chip(context, color: color)),
           ],
         ),
@@ -191,9 +138,6 @@ class _MacroBar extends StatelessWidget {
                   height: 10,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.55)]),
-                    boxShadow: [
-                      BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 12),
-                    ],
                   ),
                 ),
               ),

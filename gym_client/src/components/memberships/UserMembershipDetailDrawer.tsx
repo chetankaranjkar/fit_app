@@ -1,30 +1,17 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { SlideOverPanel } from '../ui/SlideOverPanel'
 import { Button } from '../ui/Button'
 import { MembershipStatusBadge } from '../billing/MembershipStatusBadge'
 import { MembershipAuditTrail } from './MembershipAuditTrail'
+import { MembershipStandingPanel } from './MembershipStandingPanel'
 import { membershipPaymentsService } from '../../services/membershipPayments.service'
 import { userMembershipsService } from '../../services/userMemberships.service'
 import { authService } from '../../services/auth.service'
 import { formatInr } from '../../lib/formatInr'
-import {
-  collectPaymentPath,
-  getMembershipCollectPaymentPath,
-  memberMembershipHistoryPath,
-} from '../../lib/membershipPaymentNavigation'
-import {
-  membershipDaysLeftClass,
-  membershipDaysLeftLabel,
-  membershipPaymentSummary,
-} from '../../lib/userMembershipListUtils'
+import { collectPaymentPath, memberMembershipHistoryPath } from '../../lib/membershipPaymentNavigation'
+import { deriveMembershipStanding } from '../../lib/membershipStanding'
 import type { UserMembership } from '../../types/userMembership'
-
-function formatDate(iso: string) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString()
-}
 
 type UserMembershipDetailDrawerProps = {
   membership: UserMembership | null
@@ -47,7 +34,6 @@ export function UserMembershipDetailDrawer({
   onRequestVoid,
   onRevertLastRenewal,
 }: UserMembershipDetailDrawerProps) {
-  const navigate = useNavigate()
   const canViewAudit = authService.canViewMembershipAudit()
 
   const { data: revertPreview } = useQuery({
@@ -67,7 +53,19 @@ export function UserMembershipDetailDrawer({
 
   if (!membership) return null
 
-  const collectPath = getMembershipCollectPaymentPath(membership, returnTo)
+  const outstanding = financial?.outstandingBalance ?? membership.pendingAmount ?? (membership.isFullyPaid ? 0 : null)
+  const standing = deriveMembershipStanding({
+    status: membership.status,
+    planName: membership.planName,
+    startDate: membership.startDate,
+    endDate: membership.endDate,
+    outstanding,
+    billingStatus: membership.paymentStatus,
+    isOverdue: financial?.isOverdue,
+  })
+  const collectPath = standing.collect.allowed
+    ? collectPaymentPath(membership.id, membership.userId, returnTo)
+    : null
   const memberName = membership.userName ?? financial?.memberName ?? `User #${membership.userId}`
   const memberPhoto = financial?.memberPhotoUrl
 
@@ -79,21 +77,8 @@ export function UserMembershipDetailDrawer({
       subtitle={`${memberName} · ${membership.planName ?? 'Plan'}`}
       footer={
         <div className="flex flex-wrap gap-2">
-          {collectPath ? (
-            <Button type="button" className="flex-1" onClick={() => navigate(collectPath)}>
-              Collect payment
-            </Button>
-          ) : null}
-          {membership.status === 'Expired' ||
-          membership.status === 'Active' ||
-          membership.status === 'ActivePendingPayment' ||
-          membership.status === 'PartialPayment' ? (
-            <Button type="button" variant="secondary" className="flex-1" onClick={() => onRenew(membership)}>
-              Renew
-            </Button>
-          ) : null}
           <Button type="button" variant="secondary" onClick={() => onEdit(membership)}>
-            Edit
+            Edit membership
           </Button>
         </div>
       }
@@ -119,48 +104,32 @@ export function UserMembershipDetailDrawer({
           </div>
         </div>
 
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-slate-500">Plan</dt>
-            <dd className="font-medium text-slate-100">{membership.planName ?? `Plan #${membership.planId}`}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Timeline</dt>
-            <dd className={`font-medium ${membershipDaysLeftClass(membership)}`}>
-              {membershipDaysLeftLabel(membership)}
-            </dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-slate-500">Period</dt>
-            <dd className="font-medium text-slate-100">
-              {formatDate(membership.startDate)} – {formatDate(membership.endDate)}
-            </dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-slate-500">Payment</dt>
-            <dd className="font-medium text-slate-100">{membershipPaymentSummary(membership)}</dd>
-          </div>
-        </dl>
+        <MembershipStandingPanel
+          standing={standing}
+          canManage={authService.canPaymentsAccess()}
+          collect={collectPath ? { to: collectPath } : undefined}
+          renew={{ onClick: () => onRenew(membership) }}
+          resolve={{ onClick: () => onEdit(membership) }}
+          className="[&_dl]:lg:grid-cols-2"
+        />
 
         <section className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Billing summary</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Billing breakdown</h3>
           {financialLoading ? (
             <p className="mt-2 text-sm text-slate-500">Loading billing…</p>
           ) : (
-            <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-slate-500">Membership fee</dt>
                 <dd className="tabular-nums text-slate-100">{formatInr(financial?.membershipFee ?? 0)}</dd>
               </div>
               <div>
+                <dt className="text-slate-500">Net payable</dt>
+                <dd className="tabular-nums text-slate-100">{formatInr(financial?.netPayableAmount ?? 0)}</dd>
+              </div>
+              <div>
                 <dt className="text-slate-500">Total paid</dt>
                 <dd className="tabular-nums text-emerald-300">{formatInr(financial?.totalPaid ?? 0)}</dd>
-              </div>
-              <div className="sm:col-span-2">
-                <dt className="text-slate-500">Outstanding</dt>
-                <dd className="tabular-nums text-amber-200">
-                  {formatInr(financial?.outstandingBalance ?? membership.pendingAmount ?? 0)}
-                </dd>
               </div>
             </dl>
           )}

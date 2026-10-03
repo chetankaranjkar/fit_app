@@ -1,16 +1,14 @@
+import { serviceDaysUntil, serviceUrgency } from '../../../lib/opsWorkStatus'
+
 /**
  * Shows a warning badge when `nextServiceDate` is in the past or within the
- * next 7 days. Used on Equipment rows to implement the "Service Alert" smart
- * feature (Phase 5).
+ * next 7 calendar days. Used on Equipment rows (service-alert smart feature).
  */
 export function ServiceAlertBadge({ nextServiceDate }: { nextServiceDate?: string }) {
-  if (!nextServiceDate) return null
-  const due = new Date(nextServiceDate).getTime()
-  const now = Date.now()
-  const DAY_MS = 86400000
-  const diffDays = Math.round((due - now) / DAY_MS)
-
-  if (diffDays > 7) {
+  if (!nextServiceDate) return <span className="text-[11px] text-slate-500">No due date</span>
+  const urgency = serviceUrgency(nextServiceDate)
+  const diffDays = serviceDaysUntil(nextServiceDate)
+  if (diffDays == null || urgency === 'scheduled') {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
         <svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -21,12 +19,12 @@ export function ServiceAlertBadge({ nextServiceDate }: { nextServiceDate?: strin
             d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
           />
         </svg>
-        Next service in {diffDays}d
+        Due {diffDays != null ? `in ${diffDays}d` : '—'}
       </span>
     )
   }
 
-  const overdue = diffDays < 0
+  const overdue = urgency === 'overdue'
   const cls = overdue
     ? 'bg-rose-500/10 text-rose-300 border-rose-400/30'
     : 'bg-amber-500/10 text-amber-300 border-amber-400/25'
@@ -39,6 +37,8 @@ export function ServiceAlertBadge({ nextServiceDate }: { nextServiceDate?: strin
 
   return (
     <span
+      data-testid="service-urgency"
+      data-urgency={urgency}
       className={[
         'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold',
         cls,

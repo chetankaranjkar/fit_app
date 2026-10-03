@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 
 import '../../../models/me_models.dart';
+import '../../../theme/app_a11y.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/fitness_text.dart';
@@ -29,9 +30,9 @@ class WorkoutCommandHero extends StatelessWidget {
         ? WorkoutDerivedMetrics.estimatedSessionKcal(featuredPlan!)
         : 0;
     final duration = featuredPlan?.durationMinutes ?? 0;
-    final first = profile.firstName.isNotEmpty ? profile.firstName : 'Athlete';
+    final first = profile.firstName.isNotEmpty ? profile.firstName : 'there';
 
-    return ClipRRect(
+    final hero = ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: Stack(
         children: [
@@ -61,11 +62,11 @@ class WorkoutCommandHero extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('COMMAND CENTER', style: FitnessText.label(context)),
+                          Text('TODAY\'S WORKOUT', style: FitnessText.label(context)),
                           const SizedBox(height: 4),
                           Text(
-                            'Hey $first — stay relentless.',
-                            style: FitnessText.display(context, size:26),
+                            'Hi $first',
+                            style: FitnessText.display(context, size: 26),
                           ),
                         ],
                       ),
@@ -74,7 +75,7 @@ class WorkoutCommandHero extends StatelessWidget {
                       radius: 44,
                       lineWidth: 7,
                       percent: pct.clamp(0.0, 1.0),
-                      animation: true,
+                      animation: !AppA11y.reduceMotion(context),
                       animateFromLastPercent: true,
                       circularStrokeCap: CircularStrokeCap.round,
                       backgroundColor: CupertinoColors.white.withValues(alpha: 0.08),
@@ -89,11 +90,7 @@ class WorkoutCommandHero extends StatelessWidget {
                           color: CupertinoColors.white,
                         ),
                       ),
-                    ).animate().fadeIn(duration: 400.ms).scale(
-                          begin: const Offset(0.92, 0.92),
-                          curve: Curves.easeOutBack,
-                          duration: 500.ms,
-                        ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -126,10 +123,15 @@ class WorkoutCommandHero extends StatelessWidget {
           ),
         ],
       ),
-    )
-        .animate()
-        .fadeIn(duration: 350.ms)
-        .slideY(begin: 0.06, end: 0, curve: Curves.easeOutCubic, duration: 400.ms);
+    );
+    return AppA11y.maybeAnimate(
+      context,
+      hero,
+      (w) => w
+          .animate()
+          .fadeIn(duration: 350.ms)
+          .slideY(begin: 0.06, end: 0, curve: Curves.easeOutCubic, duration: 400.ms),
+    );
   }
 }
 

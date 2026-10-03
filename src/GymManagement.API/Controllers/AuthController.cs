@@ -183,6 +183,35 @@ namespace GymManagement.API.Controllers
             return Ok(info);
         }
 
+        /// <summary>Read the authenticated account's appearance preference.</summary>
+        [Authorize]
+        [HttpGet("preferences")]
+        [ProducesResponseType(typeof(AccountPreferencesDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<ActionResult<AccountPreferencesDto>> GetPreferences()
+        {
+            var accountId = HttpContext.GetJwtAuthUserId();
+            if (accountId == null)
+                return Unauthorized();
+            var result = await _authService.GetAccountPreferencesAsync(accountId.Value);
+            return result == null ? Unauthorized() : Ok(result);
+        }
+
+        /// <summary>Save light/dark mode for the authenticated account only.</summary>
+        [Authorize]
+        [HttpPut("preferences")]
+        [ProducesResponseType(typeof(AccountPreferencesDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<ActionResult<AccountPreferencesDto>> UpdatePreferences([FromBody] UpdateAccountPreferencesDto dto)
+        {
+            var accountId = HttpContext.GetJwtAuthUserId();
+            if (accountId == null)
+                return Unauthorized();
+            var result = await _authService.UpdateAccountPreferencesAsync(accountId.Value, dto);
+            return result == null ? Unauthorized() : Ok(result);
+        }
+
         /// <summary>Change password for the authenticated <c>AuthUsers</c> row.</summary>
         [Authorize]
         [HttpPost("change-password")]

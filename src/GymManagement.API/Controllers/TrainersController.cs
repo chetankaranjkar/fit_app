@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
+using GymManagement.API.Services;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
 
 namespace GymManagement.API.Controllers
 {
@@ -18,11 +20,16 @@ namespace GymManagement.API.Controllers
     {
         private readonly ITrainerService _trainerService;
         private readonly IUserInstructorService _userInstructorService;
+        private readonly ApplicationDbContext _db;
 
-        public TrainersController(ITrainerService trainerService, IUserInstructorService userInstructorService)
+        public TrainersController(
+            ITrainerService trainerService,
+            IUserInstructorService userInstructorService,
+            ApplicationDbContext db)
         {
             _trainerService = trainerService;
             _userInstructorService = userInstructorService;
+            _db = db;
         }
 
         [HttpGet("stats")]
@@ -101,10 +108,12 @@ namespace GymManagement.API.Controllers
         }
 
         [HttpGet("{id}/clients")]
-        public async Task<ActionResult<IEnumerable<TrainerAssignedClientDto>>> GetAssignedClients(int id)
+        public async Task<ActionResult<IEnumerable<TrainerAssignedClientDto>>> GetAssignedClients(int id, CancellationToken cancellationToken)
         {
             if (await _trainerService.GetTrainerByIdAsync(id) == null)
                 return NotFound();
+            if (!await UserDirectoryScope.CanAccessTrainerProfileAsync(HttpContext, _db, id, cancellationToken))
+                return Forbid();
 
             var clients = await _userInstructorService.GetTrainerAssignedClientsAsync(id);
             return Ok(clients);

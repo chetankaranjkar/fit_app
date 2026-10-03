@@ -73,7 +73,7 @@ class LoginResponse {
       email: (json['email'] ?? json['Email'] ?? '').toString(),
       username: (json['username'] ?? json['Username'] ?? '').toString(),
       fullName: (json['fullName'] ?? json['FullName'] ?? '').toString(),
-      userId: (json['userId'] ?? json['UserId']) as int?,
+      userId: _readInt(json['userId'] ?? json['UserId']),
       trainerId: (json['trainerId'] ?? json['TrainerId']) as int?,
       appRoles: roles,
       sessionId: (json['sessionId'] ?? json['SessionId'])?.toString(),
@@ -86,6 +86,13 @@ class LoginResponse {
     if (raw is Map<String, dynamic>) return SecurityAlertInfo.fromJson(raw);
     if (raw is Map) return SecurityAlertInfo.fromJson(Map<String, dynamic>.from(raw));
     return null;
+  }
+
+  static int? _readInt(Object? value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
   }
 
   Map<String, dynamic> toJson() => {

@@ -45,8 +45,12 @@ export function MemberBottomNav() {
   const { pathname } = useLocation()
   const items = ROLE_NAV.member
 
-  const isActive = (path: string) =>
-    path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(path)
+  const isActive = (path: string) => {
+    if (path === '/dashboard' || path === '/dashboard/member/portal') {
+      return pathname === '/dashboard' || pathname === '/dashboard/member/portal'
+    }
+    return pathname.startsWith(path)
+  }
 
   return (
     <nav
@@ -66,7 +70,7 @@ export function MemberBottomNav() {
                 onMouseEnter={() => prefetchRoute(item.path)}
                 className={[
                   'flex flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[10px] font-medium transition-all duration-200',
-                  active ? 'text-orange-400' : 'text-slate-500 hover:text-slate-300',
+                  active ? 'text-orange-400' : 'text-slate-400 hover:text-slate-200',
                 ].join(' ')}
               >
                 <span className={active ? 'drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]' : ''}>{icon}</span>

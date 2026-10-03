@@ -211,6 +211,28 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   AppleGroupedSection(
+                    header: 'Health & nutrition',
+                    children: [
+                      _ActionRow(
+                        icon: CupertinoIcons.heart,
+                        label: 'Health profile',
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/profile/health');
+                        },
+                      ),
+                      _ActionRow(
+                        icon: CupertinoIcons.cube_box,
+                        label: 'Assigned supplements',
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/profile/supplements');
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  AppleGroupedSection(
                     header: 'Preferences',
                     children: [
                       _ActionRow(
@@ -223,14 +245,22 @@ class ProfileScreen extends ConsumerWidget {
                         context.push('/profile/notifications');
                       }),
                       _ActionRow(
+                        key: const Key('profile-privacy'),
                         icon: CupertinoIcons.lock,
                         label: 'Privacy',
-                        onTap: () {},
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/profile/privacy');
+                        },
                       ),
                       _ActionRow(
+                        key: const Key('profile-help'),
                         icon: CupertinoIcons.question_circle,
                         label: 'Help & support',
-                        onTap: () {},
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.push('/profile/help');
+                        },
                       ),
                     ],
                   ),
@@ -317,6 +347,7 @@ class _Row extends StatelessWidget {
 
 class _ActionRow extends StatelessWidget {
   const _ActionRow({
+    super.key,
     required this.icon,
     required this.label,
     required this.onTap,

@@ -7,9 +7,12 @@ export const MEMBERSHIP_PAYMENTS_DASHBOARD_QUERY_KEY = ['membership-payments-das
 
 export const RENEWAL_QUEUE_QUERY_KEY = ['renewal-queue'] as const
 
+export const DAILY_WORK_QUERY_KEY = ['daily-work'] as const
+
 /** Call after payments, membership changes, or anything that affects dashboard KPIs. */
 export function invalidateDashboardQueries(queryClient: QueryClient) {
   void queryClient.invalidateQueries({ queryKey: ADMIN_DASHBOARD_KPIS_QUERY_KEY })
   void queryClient.invalidateQueries({ queryKey: MEMBERSHIP_PAYMENTS_DASHBOARD_QUERY_KEY })
   void queryClient.invalidateQueries({ queryKey: RENEWAL_QUEUE_QUERY_KEY })
+  void queryClient.invalidateQueries({ queryKey: DAILY_WORK_QUERY_KEY })
 }

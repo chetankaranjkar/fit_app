@@ -96,4 +96,11 @@ public class NotificationTemplatesController : ControllerBase
         [FromQuery] int take = 50,
         CancellationToken ct = default) =>
         Ok(await _history.ListAsync(memberId, take, ct));
+
+    [HttpGet("outbox")]
+    [HasPermissionOrAdmin(PermissionCodes.Config)]
+    public async Task<ActionResult<IReadOnlyList<NotificationOutboxDto>>> Outbox(
+        [FromQuery] int take = 50,
+        CancellationToken ct = default) =>
+        Ok(await _outbox.ListRecentAsync(take, ct));
 }

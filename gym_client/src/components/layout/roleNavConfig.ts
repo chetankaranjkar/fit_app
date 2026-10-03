@@ -5,6 +5,8 @@ import {
   canAccessTrainingNav,
   getStaffFrontDeskNavLinks,
 } from '../../features/auth/navPermissions'
+import { getTrainingNavNodes, pruneTrainingNavNodes } from '../../features/auth/trainingNav'
+import type { NavSectionId } from '../../features/auth/navSections'
 
 export type NavIcon =
   | 'dashboard'
@@ -26,26 +28,33 @@ export type NavItem = {
   path: string
   label: string
   icon: NavIcon
+  /** Sidebar heading; omit for flat menus (member). */
+  section?: NavSectionId
 }
+
+export type NavGroupChild =
+  | { kind?: 'link'; path: string; label: string }
+  | { kind: 'heading'; label: string; path?: never }
 
 export type NavGroup = {
   id: string
   label: string
   icon: NavIcon
-  children: { path: string; label: string }[]
+  section?: NavSectionId
+  children: NavGroupChild[]
 }
 
 /** Top-level links per role (admin uses full SidebarNav instead). */
 export const ROLE_NAV: Record<DashboardRole, NavItem[]> = {
   admin: [],
   trainer: [
-    { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { path: '/dashboard/users', label: 'Members', icon: 'users' },
-    { path: '/dashboard/attendance', label: 'Attendance', icon: 'attendance' },
-    { path: '/dashboard/access/scan', label: 'Check-in', icon: 'scan' },
+    { path: '/dashboard', label: 'Dashboard', icon: 'dashboard', section: 'overview' },
+    { path: '/dashboard/users', label: 'Members', icon: 'users', section: 'members' },
+    { path: '/dashboard/attendance', label: 'Attendance', icon: 'attendance', section: 'attendance' },
+    { path: '/dashboard/access/scan', label: 'Check-in', icon: 'scan', section: 'attendance' },
   ],
   member: [
-    { path: '/dashboard', label: 'Home', icon: 'dashboard' },
+    { path: '/dashboard/member/portal', label: 'Home', icon: 'dashboard' },
     { path: '/dashboard/member/workouts', label: 'Workouts', icon: 'workouts' },
     { path: '/dashboard/member/diet', label: 'Diet', icon: 'diet' },
     { path: '/dashboard/member/progress', label: 'Progress', icon: 'progress' },
@@ -64,20 +73,14 @@ export const ROLE_NAV_GROUPS: Record<DashboardRole, NavGroup[]> = {
       id: 'training',
       label: 'Training',
       icon: 'workouts',
-      children: [
-        { path: '/dashboard/training/body-parts', label: 'Body parts' },
-        { path: '/dashboard/training/exercises', label: 'Exercises' },
-        { path: '/dashboard/training/warmups', label: 'Warmups' },
-        { path: '/dashboard/training/stretches', label: 'Stretches' },
-        { path: '/dashboard/training/workout-categories', label: 'Workout categories' },
-        { path: '/dashboard/training/programs', label: 'Programs' },
-        { path: '/dashboard/training/workout-assignments', label: 'Assignments' },
-      ],
+      section: 'coaching',
+      children: pruneTrainingNavNodes(getTrainingNavNodes({ includeMonitor: false })),
     },
     {
       id: 'diet',
       label: 'Diet',
       icon: 'diet',
+      section: 'coaching',
       children: [
         { path: '/dashboard/diet-plans', label: 'Diet dashboard' },
         { path: '/dashboard/diet-plans/list', label: 'All diet plans' },
@@ -114,6 +117,7 @@ export function getOtherNavItems(): NavItem[] {
     path: link.path,
     label: link.label,
     icon: staffPathIcon(link.path),
+    section: link.section,
   }))
 }
 
@@ -127,5 +131,9 @@ export function getTrainerNavItems(): NavItem[] {
 
 export function getTrainerNavGroups(): NavGroup[] {
   if (!canAccessTrainingNav()) return []
-  return ROLE_NAV_GROUPS.trainer
+  return ROLE_NAV_GROUPS.trainer.map((group) =>
+    group.id === 'training'
+      ? { ...group, children: pruneTrainingNavNodes(getTrainingNavNodes({ includeMonitor: false })) }
+      : group,
+  )
 }

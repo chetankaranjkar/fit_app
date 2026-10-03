@@ -1,5 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { TrainingEmptyState } from '../../components/training/TrainingEmptyState'
+import { TrainingJourneyNav } from '../../components/training/TrainingJourneyNav'
+import { TRAINING_JOURNEY_PATHS } from '../../features/auth/trainingNav'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
@@ -27,9 +30,10 @@ export function WorkoutAdminMonitoringPage() {
           </Link>
           <h1 className="mt-2 text-2xl font-bold text-white">Workout sync health</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Active live sessions and recent completions across all members.
+            Monitor step · gym-wide live sessions and today&apos;s completions. Coach-scoped review is a separate step.
           </p>
         </header>
+        <TrainingJourneyNav />
 
         <div className="grid gap-4 sm:grid-cols-2">
           <HeroStat
@@ -46,10 +50,20 @@ export function WorkoutAdminMonitoringPage() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <GlassPanel role="admin" title="Active sessions">
-            <SessionList items={data?.activeSessions} empty="No in-progress workouts." />
+            <SessionList
+              items={data?.activeSessions}
+              empty="No in-progress workouts."
+              emptyActionLabel="Open review"
+              emptyTo={TRAINING_JOURNEY_PATHS.review}
+            />
           </GlassPanel>
           <GlassPanel role="admin" title="Recently completed">
-            <SessionList items={data?.recentCompleted} empty="No completions yet today." />
+            <SessionList
+              items={data?.recentCompleted}
+              empty="No completions yet today."
+              emptyActionLabel="Assign a plan"
+              emptyTo={TRAINING_JOURNEY_PATHS.assign}
+            />
           </GlassPanel>
         </div>
       </DashboardPageContent>
@@ -60,12 +74,16 @@ export function WorkoutAdminMonitoringPage() {
 function SessionList({
   items,
   empty,
+  emptyActionLabel,
+  emptyTo,
 }: {
   items?: { sessionId: number; memberName: string; planName?: string | null; status: string; completionPercent?: number | null }[]
   empty: string
+  emptyActionLabel: string
+  emptyTo: string
 }) {
   if (!items?.length) {
-    return <p className="py-6 text-center text-sm text-slate-500">{empty}</p>
+    return <TrainingEmptyState title={empty} body="When members train from an assigned plan, sessions appear here." actionLabel={emptyActionLabel} to={emptyTo} />
   }
   return (
     <ul className="divide-y divide-white/5">

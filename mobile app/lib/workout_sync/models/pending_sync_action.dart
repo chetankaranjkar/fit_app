@@ -14,7 +14,10 @@ class PendingSyncAction {
     this.lastError,
     this.memberId,
     this.sessionId,
+    this.idempotencyKey,
   });
+
+  static const _unset = Object();
 
   final String id;
   final PendingSyncActionType type;
@@ -25,11 +28,38 @@ class PendingSyncAction {
   final String? lastError;
   final int? memberId;
   final int? sessionId;
+  final String? idempotencyKey;
+
+  String get effectiveKey =>
+      idempotencyKey ??
+      deriveKey(
+        type: type,
+        payload: payload,
+        sessionId: sessionId,
+      );
+
+  static String deriveKey({
+    required PendingSyncActionType type,
+    required Map<String, dynamic> payload,
+    int? sessionId,
+  }) {
+    switch (type) {
+      case PendingSyncActionType.logSet:
+        final setId = payload['workoutSessionExerciseId'];
+        return 'logSet:${sessionId ?? 0}:$setId';
+      case PendingSyncActionType.completeWorkout:
+        final sid = payload['sessionId'] ?? sessionId ?? 0;
+        return 'complete:$sid';
+      case PendingSyncActionType.updateExercise:
+        return 'update:${sessionId ?? 0}:${payload['workoutSessionExerciseId']}';
+    }
+  }
 
   PendingSyncAction copyWith({
     int? retryCount,
     PendingSyncStatus? syncStatus,
-    String? lastError,
+    Object? lastError = _unset,
+    String? idempotencyKey,
   }) =>
       PendingSyncAction(
         id: id,
@@ -38,9 +68,10 @@ class PendingSyncAction {
         createdAt: createdAt,
         retryCount: retryCount ?? this.retryCount,
         syncStatus: syncStatus ?? this.syncStatus,
-        lastError: lastError,
+        lastError: identical(lastError, _unset) ? this.lastError : lastError as String?,
         memberId: memberId,
         sessionId: sessionId,
+        idempotencyKey: idempotencyKey ?? this.idempotencyKey,
       );
 
   Map<String, dynamic> toJson() => {
@@ -53,6 +84,7 @@ class PendingSyncAction {
         if (lastError != null) 'lastError': lastError,
         if (memberId != null) 'memberId': memberId,
         if (sessionId != null) 'sessionId': sessionId,
+        if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
       };
 
   factory PendingSyncAction.fromJson(Map<String, dynamic> json) {
@@ -68,6 +100,7 @@ class PendingSyncAction {
       lastError: json['lastError'] as String?,
       memberId: json['memberId'] as int?,
       sessionId: json['sessionId'] as int?,
+      idempotencyKey: json['idempotencyKey'] as String?,
     );
   }
 

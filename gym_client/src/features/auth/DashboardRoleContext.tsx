@@ -15,6 +15,7 @@ import {
   type DashboardRole,
   getAvailablePersonas,
   getDefaultPersona,
+  getPersonaHomePath,
   getPersonaLabel,
   isPathAllowedForRole,
   persistActivePersona,
@@ -92,7 +93,7 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isPathAllowedForRole(location.pathname, activePersona)) {
-      navigate('/dashboard', { replace: true })
+      navigate(getPersonaHomePath(activePersona), { replace: true })
     }
   }, [activePersona, location.pathname, navigate])
 
@@ -103,7 +104,7 @@ export function DashboardRoleProvider({ children }: { children: ReactNode }) {
       persistActivePersona(user?.userId, persona)
       void queryClient.invalidateQueries()
       if (!isPathAllowedForRole(location.pathname, persona)) {
-        navigate('/dashboard', { replace: true })
+        navigate(getPersonaHomePath(persona), { replace: true })
       }
     },
     [availablePersonas, location.pathname, navigate, queryClient, user?.userId],

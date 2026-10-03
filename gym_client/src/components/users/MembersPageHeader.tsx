@@ -19,14 +19,14 @@ export function MembersPageHeader({
 }: MembersPageHeaderProps) {
   return (
     <header
-      className="flex min-h-[56px] shrink-0 items-center justify-between gap-3 py-1.5 sm:py-2"
+      className="flex min-h-[56px] shrink-0 flex-col items-stretch justify-between gap-3 py-1.5 sm:flex-row sm:items-center sm:py-2"
       data-walkthrough="members-header"
     >
       <div className="min-w-0">
         <h1 className="truncate text-lg font-bold leading-tight tracking-tight text-white sm:text-xl">{title}</h1>
         <p className="truncate text-xs text-slate-400">{subtitle}</p>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-start gap-1.5 sm:justify-end sm:gap-2">
         {onTour ? (
           <button
             type="button"

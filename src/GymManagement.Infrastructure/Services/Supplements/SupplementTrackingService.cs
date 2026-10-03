@@ -30,7 +30,7 @@ public class SupplementTrackingService : ISupplementTrackingService
 
         return await _context.UserInstructors.AsNoTracking()
             .AnyAsync(
-                ui => !ui.IsDeleted && ui.UserId == targetUserId &&
+                ui => !ui.IsDeleted && ui.IsActive && !ui.EndDate.HasValue && ui.UserId == targetUserId &&
                       _context.Trainers.Any(t => t.Id == ui.TrainerId && t.UserId == requestingUserId && !t.IsDeleted),
                 cancellationToken);
     }

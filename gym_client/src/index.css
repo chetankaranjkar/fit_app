@@ -37,6 +37,27 @@ html {
   color-scheme: dark;
 }
 
+.skip-to-content {
+  position: absolute;
+  left: 1rem;
+  top: 0;
+  z-index: 400;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transform: translateY(-120%);
+  transition: transform 0.15s ease;
+}
+
+.skip-to-content:focus {
+  transform: translateY(0.5rem);
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
 body {
   font-family: var(--font-sans);
   font-feature-settings: "ss01", "cv11";

@@ -34,11 +34,10 @@ import {
 } from '../services/userMemberships.service'
 import { userDietPlansService } from '../services/userDietPlans.service'
 import { memberHasDietAssignment, primaryDietAssignment } from '../lib/userDietPlanUtils'
-import {
-  UserOnboardingChecklist,
-  type OnboardingStep,
-} from '../components/users/UserOnboardingChecklist'
+import { UserOnboardingChecklist } from '../components/users/UserOnboardingChecklist'
 import { MemberOnboardingBillingActions } from '../components/users/MemberOnboardingBillingActions'
+import { buildMemberOnboardingSteps, getNextOnboardingStep } from '../lib/memberOnboarding'
+import { canAccessPaymentsNav, canAccessTrainingNav } from '../features/auth/navPermissions'
 import { DietAssignmentsSection } from '../components/users/DietAssignmentsSection'
 import { MemberReportExports } from '../components/users/MemberReportExports'
 import { TrainerHealthAlertPanel } from '../modules/health-profile/components/TrainerHealthAlertPanel'
@@ -165,6 +164,7 @@ function roleLabelsFromUser(user: User): string[] {
 
 interface TabDef {
   id: TabId
+  label?: string
   icon: ReactNode
 }
 
@@ -187,6 +187,7 @@ const TABS_META: TabDef[] = [
   },
   {
     id: 'Graph',
+    label: 'Progress',
     icon: (
       <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l5-5 4 4 7-8m0 0v5m0-5h-5" />
@@ -227,6 +228,7 @@ const TABS_META: TabDef[] = [
   },
   {
     id: 'In Action',
+    label: 'Attendance',
     icon: (
       <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -251,6 +253,7 @@ const TAB_FROM_SEARCH_PARAM: Record<string, TabId> = {
   metrics: 'Body Metrics',
   'body-metrics': 'Body Metrics',
   graph: 'Graph',
+  progress: 'Graph',
   payments: 'Payment History',
   'payment-history': 'Payment History',
   membership: 'Membership History',
@@ -261,6 +264,7 @@ const TAB_FROM_SEARCH_PARAM: Record<string, TabId> = {
   'trainer-history': 'Trainer',
   'coach-history': 'Trainer',
   action: 'In Action',
+  attendance: 'In Action',
   'in-action': 'In Action',
 }
 
@@ -428,6 +432,7 @@ export function UserDetailPage() {
     queryFn: () => usersService.getProfileSummary(id!).then((r) => r.data),
     enabled: userIdReady && loadSecondary,
     staleTime: 30_000,
+    refetchOnMount: 'always',
   })
 
   const { data: details = [], isLoading: detailsLoading } = useQuery({
@@ -1409,65 +1414,34 @@ export function UserDetailPage() {
     return false
   }
 
-  const handleOpenManageMembershipsForTraining = () => {
-    toast.error(MEMBER_ACTIVE_MEMBERSHIP_REQUIRED)
-    handleOpenManageMemberships()
-  }
-
-  const onboardingSteps: OnboardingStep[] = [
-    {
-      id: 'profile',
-      label: 'Profile',
-      done: profileComplete,
-      hint: 'Name, email, and phone on file.',
-      action: !profileComplete && !viewMode ? { label: 'Edit profile', onClick: handleOpenEditProfile } : undefined,
+  const onboardingSteps = buildMemberOnboardingSteps({
+    summary: profileSummary,
+    profileComplete,
+    hasActiveMembership,
+    canAssignTrainingServices,
+    hasWorkoutAssignment,
+    hasDietAssignment,
+    hasAnyDietAssignment,
+    primaryDietPlanName,
+    coachName:
+      user?.assignedTrainerName ??
+      (user?.assignedTrainerId ? `Trainer #${user.assignedTrainerId}` : null),
+    can: {
+      editProfile: !viewMode,
+      manageBilling: canAccessPaymentsNav(),
+      assignCoach: !viewMode,
+      assignTraining: !viewMode && canAccessTrainingNav(),
     },
-    {
-      id: 'membership',
-      label: 'Membership',
-      done: hasActiveMembership,
-      hint: 'Active gym membership plan.',
-      action: !hasActiveMembership
-        ? {
-            label: 'Manage memberships',
-            onClick: handleOpenManageMemberships,
-          }
-        : undefined,
+    actions: {
+      editProfile: handleOpenEditProfile,
+      manageMemberships: handleOpenManageMemberships,
+      collectPaymentHref: (membershipId) =>
+        collectPaymentPath(membershipId, id, memberProfilePath(id)),
+      assignCoach: handleOpenAssignCoach,
+      assignWorkout: handleOpenAssignWorkout,
+      assignDiet: handleAssignDiet,
     },
-    {
-      id: 'workout',
-      label: 'Workout',
-      done: hasWorkoutAssignment,
-      hint: canAssignTrainingServices
-        ? 'Assigned workout plan from a trainer.'
-        : 'Requires an active membership before assigning a workout plan.',
-      action:
-        !hasWorkoutAssignment && !viewMode
-          ? !canAssignTrainingServices
-            ? { label: 'Manage memberships', onClick: handleOpenManageMembershipsForTraining }
-            : { label: 'Assign workout', onClick: handleOpenAssignWorkout }
-          : undefined,
-    },
-    {
-      id: 'diet',
-      label: 'Diet',
-      done: hasDietAssignment,
-      hint: hasDietAssignment
-        ? primaryDietPlanName
-          ? `Assigned: ${primaryDietPlanName}`
-          : 'Nutrition plan assigned to this member.'
-        : hasAnyDietAssignment
-          ? 'Diet assignment exists but is inactive or outside its date range.'
-          : canAssignTrainingServices
-            ? 'Nutrition plan assigned to this member.'
-            : 'Requires an active membership before assigning a diet plan.',
-      action: !hasDietAssignment
-        ? !canAssignTrainingServices
-          ? { label: 'Manage memberships', onClick: handleOpenManageMembershipsForTraining }
-          : { label: 'Assign diet plan', onClick: handleAssignDiet }
-        : undefined,
-    },
-  ]
+  })
 
   const chartData = logs
     .slice()
@@ -1517,20 +1491,46 @@ export function UserDetailPage() {
           heroStatsLoading={heroStatsLoading}
           onEditProfile={handleOpenEditProfile}
           onSwitchToEdit={() => navigate(`/dashboard/users/${id}`)}
+          membershipSummary={
+            <dl className="grid grid-cols-2 gap-3 border-t border-white/10 pt-4 lg:grid-cols-4">
+              {[
+                ['Membership', profileSummary?.currentMembershipPlanName ?? 'No current plan'],
+                ['Expiry', profileSummary?.currentMembershipEndDate ? formatDate(profileSummary.currentMembershipEndDate) : profileSummary?.lapsedMembershipEndDate ? `Expired ${formatDate(profileSummary.lapsedMembershipEndDate)}` : '—'],
+                ['Personal coach', user.assignedTrainerName ?? (user.assignedTrainerId ? `Trainer #${user.assignedTrainerId}` : 'Unassigned')],
+                ['Payment status', profileSummary?.isPaymentOverdue ? 'Overdue' : profileSummary?.hasOpenBalance ? 'Balance due' : profileSummary?.currentMembershipId ? 'No open balance' : 'No current membership'],
+              ].map(([label, value]) => (
+                <div key={label} className="min-w-0">
+                  <dt className="text-xs text-slate-400">{label}</dt>
+                  <dd className={`mt-1 text-sm font-semibold ${label === 'Payment status' && profileSummary?.hasOpenBalance ? 'text-amber-200' : 'text-slate-100'}`}>
+                    {!loadSecondary || (!profileSummary && profileSummaryFetching) ? 'Loading…' : !profileSummary ? 'Unavailable' : value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          }
         />
 
         {loadSecondary ? (
           <UserOnboardingChecklist
             steps={onboardingSteps}
             loading={onboardingLoading}
-            aside={<MemberOnboardingBillingActions user={user} userId={id} />}
+            aside={
+              <MemberOnboardingBillingActions
+                user={user}
+                userId={id}
+                openMembershipId={profileSummary?.openMembershipId}
+                isPaymentOverdue={profileSummary?.isPaymentOverdue}
+                compact
+                showCollectAction={getNextOnboardingStep(onboardingSteps)?.id !== 'payment'}
+              />
+            }
           />
         ) : (
           <div className="glass-card h-28 animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.03]" />
         )}
 
         {/* TAB BAR */}
-        <div className="flex flex-wrap gap-2 overflow-x-auto">
+        <div className="flex min-w-0 gap-2 overflow-x-auto pb-2" aria-label="Member sections">
           {TABS_META.map((tab) => {
             const active = activeTab === tab.id
             return (
@@ -1538,6 +1538,7 @@ export function UserDetailPage() {
                 key={tab.id}
                 type="button"
                 onClick={() => handleSelectTab(tab.id)}
+                aria-pressed={active}
                 className={`group inline-flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
                   active
                     ? 'border-transparent bg-[linear-gradient(135deg,#3b82f6_0%,#8b5cf6_50%,#a855f7_100%)] text-white shadow-lg shadow-blue-500/20'
@@ -1547,7 +1548,7 @@ export function UserDetailPage() {
                 <span className={`${active ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
                   {tab.icon}
                 </span>
-                {tab.id}
+                {tab.label ?? tab.id}
               </button>
             )
           })}
@@ -2467,6 +2468,7 @@ function ProfileHero({
   heroStatsLoading = false,
   onEditProfile,
   onSwitchToEdit,
+  membershipSummary,
 }: {
   user: User
   displayName: string
@@ -2476,6 +2478,7 @@ function ProfileHero({
   heroStatsLoading?: boolean
   onEditProfile: () => void
   onSwitchToEdit: () => void
+  membershipSummary: ReactNode
 }) {
   const [imgError, setImgError] = useState(false)
   const showImage = user.profilePictureUrl && !imgError
@@ -2487,26 +2490,26 @@ function ProfileHero({
       {/* Background blobs */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-20 -top-20 size-72 rounded-full bg-gradient-to-br from-blue-500/30 via-violet-500/20 to-purple-500/20 blur-3xl"
+        className="pointer-events-none absolute -right-20 -top-20 size-72 rounded-full bg-blue-500/10 blur-3xl"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -left-10 -bottom-20 size-72 rounded-full bg-gradient-to-tr from-fuchsia-500/20 via-purple-500/15 to-transparent blur-3xl"
+        className="pointer-events-none absolute -left-10 -bottom-20 size-72 rounded-full bg-violet-500/5 blur-3xl"
       />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-400/60 to-transparent"
       />
 
-      <div className="relative flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-start">
+      <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:p-6">
         {/* Avatar */}
         <div className="flex shrink-0 justify-center">
           <div className="relative">
             <div
               aria-hidden
-              className="absolute -inset-2 rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500 opacity-60 blur-lg"
+              className="absolute -inset-1 rounded-full bg-blue-500/15 blur-md"
             />
-            <div className="relative size-32 overflow-hidden rounded-full border-[3px] border-white/20 bg-[linear-gradient(135deg,#1e1b4b,#4c1d95)] ring-4 ring-white/5 sm:size-36">
+            <div className="relative size-20 overflow-hidden rounded-full border-2 border-white/20 bg-[linear-gradient(135deg,#1e1b4b,#4c1d95)] sm:size-24">
               {showImage ? (
                 <img
                   src={user.profilePictureUrl!}
@@ -2544,12 +2547,12 @@ function ProfileHero({
                 {user.isActive ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-200 ring-1 ring-emerald-400/30">
                     <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
-                    Active
+                    Account active
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-500/15 px-3 py-1 text-[11px] font-semibold text-slate-300 ring-1 ring-slate-400/20">
                     <span className="size-1.5 rounded-full bg-slate-400" />
-                    Inactive
+                    Account inactive
                   </span>
                 )}
                 {roleLabelsFromUser(user).map((name) => (
@@ -2561,7 +2564,7 @@ function ProfileHero({
                   </span>
                 ))}
               </div>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">
                 {displayName.split(' ')[0]}{' '}
                 <span className="bg-[linear-gradient(135deg,#60a5fa,#c084fc,#f472b6)] bg-clip-text text-transparent">
                   {displayName.split(' ').slice(1).join(' ') || ''}
@@ -2617,7 +2620,13 @@ function ProfileHero({
           </div>
 
           {/* Quick stats strip */}
-          <DashboardMetricsGrid cols={6} className="mt-6">
+          <div className="mt-4">{membershipSummary}</div>
+          <details className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
+            <summary className="cursor-pointer text-xs font-medium text-slate-300">
+              Fitness snapshot · {heroStatsLoading ? 'Loading…' : `${heroStats.visitsThisMonth} visits this month`}
+              {!heroStatsLoading && heroStats.latestWeight == null ? ' · No measurements yet' : ''}
+            </summary>
+          <DashboardMetricsGrid cols={6} mobileCols={2} className="mt-4">
             <HeroVital
               label="Age"
               value={heroStats.age != null ? String(heroStats.age) : '—'}
@@ -2660,6 +2669,7 @@ function ProfileHero({
               loading={heroStatsLoading}
             />
           </DashboardMetricsGrid>
+          </details>
         </div>
       </div>
     </section>
@@ -2680,16 +2690,16 @@ function HeroVital({
   loading?: boolean
 }) {
   return (
-    <div className="group relative h-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur transition sm:hover:border-white/20">
+    <div className="group relative h-full min-w-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 transition sm:hover:border-white/20">
       <div
         aria-hidden
         className={`pointer-events-none absolute -right-4 -top-4 size-14 rounded-full bg-gradient-to-br ${gradient} opacity-20 blur-xl transition-opacity group-hover:opacity-30`}
       />
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{label}</p>
-      <p className={`mt-1 text-xl font-bold text-white sm:text-2xl ${loading ? 'animate-pulse text-slate-500' : ''}`}>
+      <p className="text-xs font-medium text-slate-400">{label}</p>
+      <p className={`mt-1 text-lg font-bold text-white ${loading ? 'animate-pulse text-slate-500' : ''}`}>
         {loading ? '…' : value}
       </p>
-      <p className={`mt-0.5 truncate text-[11px] text-slate-500 ${loading ? 'animate-pulse' : ''}`}>
+      <p className={`mt-0.5 truncate text-xs text-slate-400 ${loading ? 'animate-pulse' : ''}`}>
         {loading ? 'Loading' : sublabel}
       </p>
     </div>
@@ -2788,16 +2798,6 @@ function DetailsTab({
           </p>
         </Link>
       </div>
-      <MemberSupplementsPanel
-        userId={user.id}
-        memberName={`${user.firstName} ${user.lastName}`.trim()}
-        canManage={!viewMode}
-        compact={viewMode}
-      />
-      <MemberLockerSection
-        userId={user.id}
-        memberName={`${user.firstName} ${user.lastName}`.trim()}
-      />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <InfoCard
           title="Personal"
@@ -2897,6 +2897,17 @@ function DetailsTab({
           />
         </InfoCard>
       </div>
+
+      <MemberSupplementsPanel
+        userId={user.id}
+        memberName={`${user.firstName} ${user.lastName}`.trim()}
+        canManage={!viewMode}
+        compact={viewMode}
+      />
+      <MemberLockerSection
+        userId={user.id}
+        memberName={`${user.firstName} ${user.lastName}`.trim()}
+      />
 
       {/* Measurement history */}
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.55)]">
@@ -3155,7 +3166,7 @@ function InfoCard({
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3 border-b border-white/5 pb-2 last:border-0 last:pb-0">
-      <dt className="shrink-0 text-xs text-slate-500">{label}</dt>
+      <dt className="shrink-0 text-xs text-slate-400">{label}</dt>
       <dd className="text-right text-sm text-slate-100">{value}</dd>
     </div>
   )

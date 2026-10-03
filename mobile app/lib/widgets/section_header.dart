@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
+import '../theme/app_a11y.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 
@@ -21,21 +22,26 @@ class SectionHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
-          child: Text(
+          child: AppText(
             title,
             style: AppType.title3.copyWith(
               color: AppColors.resolveText(context),
               letterSpacing: -0.35,
             ),
+            maxLines: 2,
           ),
         ),
         if (action != null)
-          CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: onActionTap,
-            child: Text(
-              action!,
-              style: AppType.callout.copyWith(color: AppColors.accent),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: AppA11y.minTouchTarget),
+            child: CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              onPressed: onActionTap,
+              child: AppText(
+                action!,
+                style: AppType.callout.copyWith(color: AppColors.accent),
+                maxLines: 2,
+              ),
             ),
           ),
       ],

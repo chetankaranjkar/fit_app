@@ -4,6 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../widgets/permission_rationale_dialog.dart';
+
 /// Requests camera access before capture flows.
 Future<bool> ensureCameraPermission(BuildContext context) async {
   if (kIsWeb) return true;
@@ -13,7 +15,11 @@ Future<bool> ensureCameraPermission(BuildContext context) async {
   if (status.isGranted) return true;
   if (!context.mounted) return false;
   if (status.isPermanentlyDenied) {
-    await _showSettingsDialog(context, title: 'Camera access', message: 'Allow camera access in Settings to take a profile photo.');
+    await showPermissionRationaleDialog(
+      context,
+      title: 'Camera access',
+      message: 'Allow camera access in Settings to take a profile photo.',
+    );
   }
   return false;
 }
@@ -43,36 +49,11 @@ Future<bool> ensureGalleryPermission(BuildContext context) async {
 
   if (!context.mounted) return false;
   if (status.isPermanentlyDenied) {
-    await _showSettingsDialog(
+    await showPermissionRationaleDialog(
       context,
       title: 'Photos access',
       message: 'Allow photo library access in Settings to choose a profile picture.',
     );
   }
   return false;
-}
-
-Future<void> _showSettingsDialog(
-  BuildContext context, {
-  required String title,
-  required String message,
-}) {
-  return showCupertinoDialog<void>(
-    context: context,
-    builder: (ctx) => CupertinoAlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('Not now')),
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          onPressed: () {
-            Navigator.pop(ctx);
-            openAppSettings();
-          },
-          child: const Text('Open Settings'),
-        ),
-      ],
-    ),
-  );
 }

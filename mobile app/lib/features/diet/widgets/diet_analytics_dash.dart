@@ -7,6 +7,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/fitness_text.dart';
 import '../../../widgets/glass_card.dart';
+import '../diet_assigned_foods.dart';
 
 class DietAnalyticsDash extends StatelessWidget {
   const DietAnalyticsDash({super.key, required this.plan, required this.metrics});
@@ -26,11 +27,6 @@ class DietAnalyticsDash extends StatelessWidget {
         spots.add(FlSpot(i.toDouble(), w.toDouble()));
       }
     }
-    if (spots.isEmpty) {
-      for (var i = 0; i < 6; i++) {
-        spots.add(FlSpot(i.toDouble(), 70 + i * 0.4));
-      }
-    }
 
     final macroSplit = [
       plan.proteinGrams ?? 0,
@@ -42,7 +38,7 @@ class DietAnalyticsDash extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('ADHERENCE ANALYTICS', style: FitnessText.label(context)),
+        Text('ASSIGNED TARGETS', style: FitnessText.label(context)),
         const SizedBox(height: AppSpacing.sm),
         GlassCard(
           radius: 26,
@@ -51,12 +47,19 @@ class DietAnalyticsDash extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Macro triangulation', style: FitnessText.title(context).copyWith(fontSize: 18)),
+              Text(DietCopy.assignedMacros, style: FitnessText.title(context).copyWith(fontSize: 18)),
+              const SizedBox(height: 4),
+              Text(DietCopy.notLoggedIntake, style: FitnessText.body(context)),
               const SizedBox(height: AppSpacing.md),
               SizedBox(
                 height: 150,
                 child: sum <= 0
-                    ? Center(child: Text('Waiting on macro targets…', style: FitnessText.body(context)))
+                    ? Center(
+                        child: Text(
+                          'No assigned macro targets on this plan.',
+                          style: FitnessText.body(context),
+                        ),
+                      )
                     : PieChart(
                         PieChartData(
                           sectionsSpace: 2,
@@ -101,71 +104,38 @@ class DietAnalyticsDash extends StatelessWidget {
                       ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Weight telemetry',
-                      style: FitnessText.title(context).copyWith(fontSize: 18),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      color: AppColors.danger.withValues(alpha: 0.12),
-                      border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
-                    ),
-                    child: Text(
-                      'Cheat pulse',
-                      style: FitnessText.label(context).copyWith(color: AppColors.danger),
-                    ),
-                  ),
-                ],
-              ),
+              Text(DietCopy.recordedWeighIns, style: FitnessText.title(context).copyWith(fontSize: 18)),
               const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Orange markers flag high-sodium days — keep variance under 10%.',
-                style: FitnessText.body(context),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              SizedBox(
-                height: 120,
-                child: LineChart(
-                  LineChartData(
-                    gridData: FlGridData(
-                      show: true,
-                      drawVerticalLine: false,
-                      getDrawingHorizontalLine: (_) => FlLine(
-                        color: AppColors.resolveBorder(context).withValues(alpha: 0.28),
-                        strokeWidth: 0.7,
-                      ),
-                    ),
-                    borderData: FlBorderData(show: false),
-                    titlesData: const FlTitlesData(show: false),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: spots,
-                        isCurved: true,
-                        color: AppColors.gold,
-                        barWidth: 3,
-                        dotData: FlDotData(
-                          show: true,
-                          getDotPainter: (a, b, c, d) {
-                            final isCheat = d.toInt() % 3 == 0;
-                            return FlDotCirclePainter(
-                              radius: isCheat ? 5 : 3,
-                              color: isCheat ? AppColors.danger : AppColors.gold,
-                              strokeWidth: 0,
-                            );
-                          },
+              if (spots.isEmpty)
+                Text(DietCopy.noRecordedWeighIns, style: FitnessText.body(context))
+              else
+                SizedBox(
+                  height: 120,
+                  child: LineChart(
+                    LineChartData(
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        getDrawingHorizontalLine: (_) => FlLine(
+                          color: AppColors.resolveBorder(context).withValues(alpha: 0.28),
+                          strokeWidth: 0.7,
                         ),
                       ),
-                    ],
+                      borderData: FlBorderData(show: false),
+                      titlesData: const FlTitlesData(show: false),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: spots,
+                          isCurved: true,
+                          color: AppColors.gold,
+                          barWidth: 3,
+                          dotData: const FlDotData(show: true),
+                        ),
+                      ],
+                    ),
+                    duration: const Duration(milliseconds: 400),
                   ),
-                  duration: const Duration(milliseconds: 400),
                 ),
-              ),
             ],
           ),
         ),

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -266,8 +266,19 @@ export function ReceptionCrmPage() {
   const canTrainer = authService.hasPermission('LEADS_TRAINER')
   const canConvert = authService.hasPermission('CREATE_MEMBER')
 
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedId, setSelectedId] = useState<number | null>(() => {
+    const id = Number.parseInt(searchParams.get('lead') ?? '', 10)
+    return Number.isInteger(id) && id > 0 ? id : null
+  })
   const [newLeadOpen, setNewLeadOpen] = useState(false)
+
+  useEffect(() => {
+    if (!searchParams.has('lead')) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('lead')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
   const [followOpen, setFollowOpen] = useState(false)
   const [trialOpen, setTrialOpen] = useState(false)
   const [convertOpen, setConvertOpen] = useState(false)

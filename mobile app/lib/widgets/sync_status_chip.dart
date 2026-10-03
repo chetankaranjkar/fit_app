@@ -20,7 +20,15 @@ class SyncStatusChip extends ConsumerWidget {
     return async.when(
       loading: () => const _ChipSkeleton(),
       error: (_, __) => const SizedBox.shrink(),
-      data: (status) => _SyncChip(status: status, compact: compact),
+      data: (status) => GestureDetector(
+        onTap: status.canRetry
+            ? () async {
+                await SyncManager.instance.retryFailed(reason: 'chip');
+                invalidateSyncStatus(ref);
+              }
+            : null,
+        child: _SyncChip(status: status, compact: compact),
+      ),
     );
   }
 }
@@ -108,7 +116,7 @@ class _SyncChip extends StatelessWidget {
       case WorkoutSyncDisplayState.offline:
         return 'Offline';
       case WorkoutSyncDisplayState.failed:
-        return s.failedCount > 0 ? 'Failed' : 'No server';
+        return s.failedCount > 0 ? 'Sync failed — retry' : 'No server';
     }
   }
 

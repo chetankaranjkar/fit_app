@@ -12,6 +12,9 @@ interface Props {
   warmups: Warmup[]
   stretches: Stretch[]
   onWeeksChange: (weeks: WizardWeekDraft[]) => void
+  libraryError?: unknown
+  onRetryLibrary?: () => void
+  libraryRetrying?: boolean
 }
 
 function estimateDayMinutes(day: WizardDayDraft): number {
@@ -21,7 +24,17 @@ function estimateDayMinutes(day: WizardDayDraft): number {
   return lift + day.warmups.length * 2 + day.stretches.length * 2
 }
 
-export function StepTemplateBuilder({ basic, weeks, exercises, warmups, stretches, onWeeksChange }: Props) {
+export function StepTemplateBuilder({
+  basic,
+  weeks,
+  exercises,
+  warmups,
+  stretches,
+  onWeeksChange,
+  libraryError,
+  onRetryLibrary,
+  libraryRetrying,
+}: Props) {
   const [activeWeek, setActiveWeek] = useState(0)
   const [editingDay, setEditingDay] = useState<WizardDayDraft | null>(null)
 
@@ -96,6 +109,9 @@ export function StepTemplateBuilder({ basic, weeks, exercises, warmups, stretche
         <DayConfigDrawer
           day={editingDay}
           exercises={exercises}
+          libraryError={libraryError}
+          onRetryLibrary={onRetryLibrary}
+          libraryRetrying={libraryRetrying}
           warmups={warmups}
           stretches={stretches}
           onClose={() => setEditingDay(null)}

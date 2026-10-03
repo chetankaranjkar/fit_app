@@ -71,9 +71,16 @@ export function MemberPaymentBlockedHost() {
     setPayError(null)
     setPaying(true)
     try {
-      await payMembership()
-      setOpen(false)
-      window.location.reload()
+      const outcome = await payMembership()
+      if (outcome.kind === 'completed') {
+        setOpen(false)
+        window.location.reload()
+      } else if (outcome.kind === 'confirming' || outcome.kind === 'review') {
+        setOpen(false)
+        navigate('/dashboard/member/pay')
+      } else {
+        setPayError(outcome.message)
+      }
     } catch (err) {
       setPayError(getApiErrorMessage(err, 'Payment could not be completed.'))
     } finally {
@@ -116,7 +123,7 @@ export function MemberPaymentBlockedHost() {
         <div className="mt-6 flex flex-wrap gap-2">
           {onlineEnabled && pending != null && pending > 0 ? (
             <Button type="button" onClick={handlePayOnline} disabled={paying}>
-              {paying ? 'Opening checkout…' : 'Pay online now'}
+              {paying ? 'Waiting for checkout…' : 'Pay outstanding balance'}
             </Button>
           ) : null}
           <Button type="button" variant="secondary" onClick={() => navigate('/dashboard/member/pay')}>

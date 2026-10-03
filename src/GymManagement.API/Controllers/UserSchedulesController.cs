@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using GymManagement.API.Attributes;
+using GymManagement.API.Services;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
+using GymManagement.Infrastructure.Data;
 
 namespace GymManagement.API.Controllers
 {
@@ -15,31 +18,48 @@ namespace GymManagement.API.Controllers
     public class UserSchedulesController : ControllerBase
     {
         private readonly IUserScheduleService _userScheduleService;
+        private readonly ApplicationDbContext _db;
 
-        public UserSchedulesController(IUserScheduleService userScheduleService)
+        public UserSchedulesController(IUserScheduleService userScheduleService, ApplicationDbContext db)
         {
             _userScheduleService = userScheduleService;
+            _db = db;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<UserScheduleDto>>> GetAllSchedules()
+        public async Task<ActionResult<IEnumerable<UserScheduleDto>>> GetAllSchedules(CancellationToken cancellationToken)
         {
             var schedules = await _userScheduleService.GetAllSchedulesAsync();
-            return Ok(schedules);
+            if (!UserDirectoryScope.ShouldApplyCoachFilter(HttpContext))
+                return Ok(schedules);
+
+            var trainerProfileId = await UserDirectoryScope.ResolveTrainerProfileIdAsync(HttpContext, _db, cancellationToken);
+            if (!trainerProfileId.HasValue)
+                return Ok(Array.Empty<UserScheduleDto>());
+
+            var clientIds = (await _db.UserInstructors.AsNoTracking()
+                .Where(ui => !ui.IsDeleted && ui.IsActive && !ui.EndDate.HasValue && ui.TrainerId == trainerProfileId.Value)
+                .Select(ui => ui.UserId)
+                .ToListAsync(cancellationToken)).ToHashSet();
+            return Ok(schedules.Where(s => clientIds.Contains(s.UserId)).ToList());
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<UserScheduleDto>> GetSchedule(int id)
+        public async Task<ActionResult<UserScheduleDto>> GetSchedule(int id, CancellationToken cancellationToken)
         {
             var schedule = await _userScheduleService.GetScheduleByIdAsync(id);
             if (schedule == null)
                 return NotFound();
+            if (!await UserDirectoryScope.CanAccessMemberAsync(HttpContext, _db, schedule.UserId, cancellationToken))
+                return Forbid();
             return Ok(schedule);
         }
 
         [HttpGet("user/{userId}")]
-        public async Task<ActionResult<IEnumerable<UserScheduleDto>>> GetSchedulesByUser(int userId)
+        public async Task<ActionResult<IEnumerable<UserScheduleDto>>> GetSchedulesByUser(int userId, CancellationToken cancellationToken)
         {
+            if (!await UserDirectoryScope.CanAccessMemberAsync(HttpContext, _db, userId, cancellationToken))
+                return Forbid();
             var schedules = await _userScheduleService.GetSchedulesByUserIdAsync(userId);
             return Ok(schedules);
         }

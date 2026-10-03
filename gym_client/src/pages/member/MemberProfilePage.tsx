@@ -72,7 +72,7 @@ export function MemberProfilePage() {
         </GlassPanel>
         {hasMemberProfile ? <MemberNotificationPreferencesCard /> : null}
         <ChangePasswordCard />
-        <Link to="/dashboard" className="text-sm text-orange-400 hover:underline">
+        <Link to="/dashboard/member/portal" className="text-sm text-orange-400 hover:underline">
           ← Back to home
         </Link>
       </DashboardPageContent>

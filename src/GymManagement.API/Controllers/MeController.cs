@@ -8,7 +8,9 @@ using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
+using GymManagement.Core.Support;
 using GymManagement.Core.Validation;
+using Microsoft.Extensions.Configuration;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
 using GymManagement.Infrastructure.Services;
@@ -33,6 +35,7 @@ namespace GymManagement.API.Controllers
         private readonly IBodyMetricsService _bodyMetricsService;
         private readonly WebRootImageStorage _imageStorage;
         private readonly WorkoutPlanScheduleResolver _scheduleResolver;
+        private readonly IConfiguration _configuration;
 
         public MeController(
             ApplicationDbContext db,
@@ -41,7 +44,8 @@ namespace GymManagement.API.Controllers
             IMobileNumberAvailabilityService mobileAvailability,
             IBodyMetricsService bodyMetricsService,
             WebRootImageStorage imageStorage,
-            WorkoutPlanScheduleResolver scheduleResolver)
+            WorkoutPlanScheduleResolver scheduleResolver,
+            IConfiguration configuration)
         {
             _db = db;
             _membershipPaymentService = membershipPaymentService;
@@ -50,6 +54,7 @@ namespace GymManagement.API.Controllers
             _bodyMetricsService = bodyMetricsService;
             _imageStorage = imageStorage;
             _scheduleResolver = scheduleResolver;
+            _configuration = configuration;
         }
 
         /// <summary>Payment gate info for mobile / member apps (allowed while access is otherwise blocked).</summary>
@@ -81,13 +86,65 @@ namespace GymManagement.API.Controllers
             {
                 return NotFound(new { message = ex.Message });
             }
+            catch (ConflictException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
-            catch (UnauthorizedAccessException ex)
+        }
+
+        /// <summary>Outstanding balance to settle online vs renewal at reception, plus the latest checkout attempt.</summary>
+        [HttpGet("payments/razorpay/summary")]
+        public async Task<ActionResult<MemberOnlinePaymentSummaryDto>> GetOnlinePaymentSummary(
+            CancellationToken cancellationToken)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+            return Ok(await _onlinePaymentService
+                .GetMemberOnlinePaymentSummaryAsync(userId.Value, cancellationToken)
+                .ConfigureAwait(false));
+        }
+
+        /// <summary>Attempt status; re-checks Razorpay when the attempt is not final (reload, lost verify response).</summary>
+        [HttpGet("payments/razorpay/orders/{orderId}")]
+        public async Task<ActionResult<OnlinePaymentAttemptDto>> GetRazorpayOrderStatus(
+            string orderId,
+            CancellationToken cancellationToken)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+            try
             {
-                return Unauthorized(new { message = ex.Message });
+                return Ok(await _onlinePaymentService
+                    .GetRazorpayOrderStatusAsync(userId.Value, orderId, cancellationToken)
+                    .ConfigureAwait(false));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>Checkout dismissed by the member; billing is not touched.</summary>
+        [HttpPost("payments/razorpay/orders/{orderId}/cancel")]
+        public async Task<ActionResult<OnlinePaymentAttemptDto>> CancelRazorpayOrder(
+            string orderId,
+            CancellationToken cancellationToken)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+            try
+            {
+                return Ok(await _onlinePaymentService
+                    .CancelRazorpayOrderAsync(userId.Value, orderId, cancellationToken)
+                    .ConfigureAwait(false));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
             }
         }
 
@@ -115,15 +172,12 @@ namespace GymManagement.API.Controllers
             }
             catch (ArgumentException ex)
             {
+                // 400, not 401: a bad gateway signature must not trigger the client's session-expiry handling.
                 return BadRequest(new { message = ex.Message });
             }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
             }
         }
 
@@ -202,7 +256,7 @@ namespace GymManagement.API.Controllers
 
             var auth = await _db.AuthUsers.AsNoTracking().FirstOrDefaultAsync(a => a.UserId == userId.Value);
 
-            var profile = MapProfile(user, auth?.Email);
+            var profile = await BuildProfileDtoAsync(user, auth?.Email);
 
             var membership = await GetActiveMembershipAsync(userId.Value);
             var attendance = await BuildAttendanceSummaryAsync(userId.Value);
@@ -221,6 +275,75 @@ namespace GymManagement.API.Controllers
             });
         }
 
+        /// <summary>
+        /// Gym contact fields that are actually stored, plus help/privacy URLs from web config when they are real HTTP(S) URLs.
+        /// </summary>
+        [HttpGet("support")]
+        public async Task<ActionResult<MeSupportDto>> GetSupport(CancellationToken cancellationToken)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            var settings = await _db.GymSettings.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == 1, cancellationToken);
+
+            var orgId = await _db.Users.AsNoTracking()
+                .Where(u => u.Id == userId.Value)
+                .Select(u => u.OrganizationId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            string? orgName = null;
+            if (orgId is int oid)
+            {
+                orgName = await _db.Organizations.AsNoTracking()
+                    .Where(o => o.Id == oid)
+                    .Select(o => o.Name)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
+            if (string.IsNullOrWhiteSpace(orgName))
+            {
+                orgName = await _db.Organizations.AsNoTracking()
+                    .OrderBy(o => o.Id)
+                    .Select(o => o.Name)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
+            var branchQuery = _db.Branches.AsNoTracking().Where(b => b.IsActive);
+            if (orgId is int orgFilter)
+                branchQuery = branchQuery.Where(b => b.OrganizationId == null || b.OrganizationId == orgFilter);
+
+            var branches = await branchQuery
+                .OrderBy(b => b.Id)
+                .Select(b => new { b.ContactNumber, b.Address })
+                .ToListAsync(cancellationToken);
+
+            var branch = branches.FirstOrDefault(b =>
+                    !string.IsNullOrWhiteSpace(b.ContactNumber) || !string.IsNullOrWhiteSpace(b.Address))
+                ?? branches.FirstOrDefault();
+
+            var snapshot = MemberSupportComposer.Compose(
+                settings?.GymName,
+                orgName,
+                settings?.EmailFromAddress,
+                settings?.WhatsAppSenderId,
+                branch?.ContactNumber,
+                branch?.Address,
+                _configuration["ClientApp:PublicBaseUrl"],
+                _configuration["ClientApp:PrivacyPolicyUrl"]);
+
+            return Ok(new MeSupportDto
+            {
+                GymName = snapshot.GymName,
+                Email = snapshot.Email,
+                Phone = snapshot.Phone,
+                Address = snapshot.Address,
+                WhatsApp = snapshot.WhatsApp,
+                HelpCenterUrl = snapshot.HelpCenterUrl,
+                PrivacyPolicyUrl = snapshot.PrivacyPolicyUrl,
+            });
+        }
+
         /// <summary>Profile of the authenticated user.</summary>
         [HttpGet("profile")]
         public async Task<ActionResult<MeProfileDto>> GetProfile()
@@ -232,7 +355,7 @@ namespace GymManagement.API.Controllers
             if (user == null) return NotFound();
 
             var auth = await _db.AuthUsers.AsNoTracking().FirstOrDefaultAsync(a => a.UserId == userId.Value);
-            return Ok(MapProfile(user, auth?.Email));
+            return Ok(await BuildProfileDtoAsync(user, auth?.Email));
         }
 
         /// <summary>Update editable profile fields for the authenticated member.</summary>
@@ -282,7 +405,7 @@ namespace GymManagement.API.Controllers
             await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
             var auth = await _db.AuthUsers.AsNoTracking().FirstOrDefaultAsync(a => a.UserId == userId.Value, cancellationToken);
-            return Ok(MapProfile(user, auth?.Email));
+            return Ok(await BuildProfileDtoAsync(user, auth?.Email, cancellationToken));
         }
 
         /// <summary>Active or most-recent membership.</summary>
@@ -373,6 +496,21 @@ namespace GymManagement.API.Controllers
                 .ToListAsync();
 
             return Ok(notifications.Select(MapNotification).ToList());
+        }
+
+        /// <summary>Mark every unread in-app notification as read for the logged-in member.</summary>
+        [HttpPost("notifications/read-all")]
+        public async Task<IActionResult> MarkAllNotificationsRead()
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            await _db.Notifications
+                .Where(n => n.UserId == userId.Value && !n.IsRead)
+                .ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true))
+                .ConfigureAwait(false);
+
+            return NoContent();
         }
 
         /// <summary>Mark a notification as read (must belong to the logged-in member).</summary>
@@ -696,6 +834,7 @@ namespace GymManagement.API.Controllers
                 CarbsGrams = plan.CarbsGrams,
                 FatsGrams = plan.FatsGrams,
                 Description = plan.Description,
+                AssignmentNotes = assignment.Notes,
                 StartDate = assignment.StartDate,
                 EndDate = assignment.EndDate,
                 Meals = plan.DietMeals
@@ -1256,8 +1395,23 @@ namespace GymManagement.API.Controllers
             return rows.Select(MapNotification).ToList();
         }
 
-        private static MeProfileDto MapProfile(User user, string? email)
+        private async Task<MeProfileDto> BuildProfileDtoAsync(
+            User user,
+            string? email,
+            CancellationToken cancellationToken = default)
         {
+            var detail = await _db.UserDetails.AsNoTracking()
+                .Where(d => d.UserId == user.Id && !d.IsDeleted)
+                .OrderByDescending(d => d.MeasurementDate)
+                .ThenByDescending(d => d.Id)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+            return MapProfile(user, email, detail);
+        }
+
+        private static MeProfileDto MapProfile(User user, string? email, UserDetail? detail = null)
+        {
+            decimal? heightCm = detail != null && detail.Height > 0 ? detail.Height : null;
             return new MeProfileDto
             {
                 UserId = user.Id,
@@ -1270,7 +1424,10 @@ namespace GymManagement.API.Controllers
                 DateOfBirth = user.DateOfBirth == default ? null : user.DateOfBirth,
                 ProfilePictureUrl = user.ProfilePictureUrl,
                 RegistrationDate = user.RegistrationDate,
-                PreferredGymTime = user.PreferredGymTime
+                PreferredGymTime = user.PreferredGymTime,
+                TargetWeightKg = detail?.TargetWeight is > 0 ? detail.TargetWeight : null,
+                AssignedGoalType = string.IsNullOrWhiteSpace(detail?.GoalType) ? null : detail!.GoalType,
+                HeightCm = heightCm
             };
         }
 

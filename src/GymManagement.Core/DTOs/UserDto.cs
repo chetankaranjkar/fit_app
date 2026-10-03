@@ -81,6 +81,22 @@ namespace GymManagement.Core.DTOs
         public int? OpenMembershipPaymentId { get; set; }
 
         public int? OpenMembershipId { get; set; }
+
+        /// <summary>Sum of open balances across the member's memberships (list endpoints).</summary>
+        public decimal? OutstandingBalance { get; set; }
+
+        /// <summary>
+        /// Membership summarised in the directory (<c>MemberOnboardingRules.ResolveDisplayMembership</c>).
+        /// List endpoints only.
+        /// </summary>
+        public int? MembershipId { get; set; }
+        public string? MembershipStatus { get; set; }
+        public string? MembershipPlanName { get; set; }
+        public DateTime? MembershipStartDate { get; set; }
+        public DateTime? MembershipEndDate { get; set; }
+
+        /// <summary>Billing status (Paid, Partial, Pending, Overdue) of <see cref="MembershipId"/>.</summary>
+        public string? MembershipBillingStatus { get; set; }
     }
 
     public class CreateUserDto
@@ -125,6 +141,8 @@ namespace GymManagement.Core.DTOs
         public DateTime? InstructorHireDate { get; set; }
         /// <summary>User type IDs (e.g. Admin, Instructor, Staff). A user can have many.</summary>
         public List<int> UserTypeIds { get; set; } = new();
+        /// <summary>CSV line number (1-based, including header) for bulk import preview/errors. Ignored by single create.</summary>
+        public int? SourceRowNumber { get; set; }
     }
 
     public class UpdateUserDto

@@ -1,4 +1,6 @@
+using GymManagement.API.Attributes;
 using GymManagement.API.Middleware;
+using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs.WorkoutTracking;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
@@ -200,6 +202,7 @@ public sealed class WorkoutTrackingController : ControllerBase
     }
 
     [HttpGet("admin/monitoring")]
+    [HasPermissionOrAdmin(PermissionCodes.UsersAccess)]
     [ProducesResponseType(typeof(WorkoutAdminMonitoringDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<WorkoutAdminMonitoringDto>> AdminMonitoring(
         [FromQuery] int take = 50,

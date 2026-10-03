@@ -1,7 +1,9 @@
 # Session handoff — pick up tomorrow
 
+> **Historical snapshot (28 Jun 2026).** Notification engine and related files are in the tree now. Do **not** treat the “uncommitted” list or PRODUCT_BACKLOG checkboxes quoted below as current. Current scheduled work and evidence labels: [PRODUCT_BACKLOG.md](./PRODUCT_BACKLOG.md) (updated 2026-10-03).
+
 **Date:** 28 Jun 2026
-**Branch state:** work is **uncommitted** (see "Uncommitted changes" below — commit before deploying).
+**Branch state (as of that session):** work was **uncommitted** at the time — this is no longer a live git status.
 
 ---
 

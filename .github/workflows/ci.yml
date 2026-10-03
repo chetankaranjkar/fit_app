@@ -56,6 +56,32 @@ jobs:
       - name: Production build (vite)
         run: npm run build
 
+  flutter-checks:
+    name: Flutter Analyze + Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "mobile app"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.41.9"
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
   e2e-smoke:
     name: Smoke E2E
     runs-on: ubuntu-latest

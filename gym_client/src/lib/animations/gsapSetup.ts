@@ -5,11 +5,16 @@ import type { LocomotiveScroll } from 'locomotive-scroll'
 // Register GSAP plugins
 gsap.registerPlugin(ScrollTrigger)
 
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
 /**
  * Integrates GSAP ScrollTrigger with Locomotive Scroll v5
  * Locomotive Scroll v5 uses Lenis underneath for smooth scrolling
  */
 export function setupScrollTrigger(locomotiveScroll: LocomotiveScroll, fallbackScrollerEl?: HTMLElement | null) {
+  if (prefersReducedMotion()) return
   // Get the scroller element
   const scrollerEl =
     ((locomotiveScroll as unknown as { el?: HTMLElement }).el ?? fallbackScrollerEl ?? null)
@@ -81,6 +86,9 @@ export function createScrollAnimation(
   animation: gsap.TweenVars,
   options: ScrollTrigger.Vars & { scroller?: LocomotiveScroll | string } = {}
 ) {
+  if (prefersReducedMotion()) {
+    return gsap.set(targets, animation)
+  }
   const defaultOptions: ScrollTrigger.Vars = {
     trigger: targets,
     start: 'top 80%',
@@ -104,6 +112,7 @@ export function createParallax(
   distance: number,
   options: ScrollTrigger.Vars = {}
 ) {
+  if (prefersReducedMotion()) return
   return gsap.to(targets, {
     y: distance,
     ease: 'none',
@@ -130,6 +139,10 @@ export function animateOnScroll(
 ) {
   const elements = document.querySelectorAll<HTMLElement>(selector)
   if (!elements.length) return []
+  if (prefersReducedMotion()) {
+    gsap.set(elements, { opacity: 1, y: 0 })
+    return []
+  }
 
   gsap.fromTo(elements,
     { opacity: 0, y: 50 },
@@ -160,6 +173,10 @@ export function animateValueOnScroll(
   duration: number = 2,
   options: ScrollTrigger.Vars = {}
 ) {
+  if (prefersReducedMotion()) {
+    element.textContent = end.toLocaleString()
+    return
+  }
   const obj = { value: start }
 
   return gsap.to(obj, {

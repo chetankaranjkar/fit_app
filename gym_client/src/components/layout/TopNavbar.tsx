@@ -9,11 +9,13 @@ import { meService } from '../../services/me.service'
 import type { MeNotification } from '../../services/me.service'
 import type { DashboardAlert } from '../../services/dashboard.service'
 import { GlobalSearch } from './GlobalSearch'
+import { ThemeToggle } from './ThemeToggle'
 
 interface TopNavbarProps {
   userName: string
   userAvatarUrl?: string | null
   onToggleSidebar?: () => void
+  sidebarOpen?: boolean
   onSessionIndicatorClick?: () => void
   /** Optional title shown left-side on small screens (sidebar collapses) */
   title?: string
@@ -28,6 +30,7 @@ export function TopNavbar({
   userName,
   userAvatarUrl,
   onToggleSidebar,
+  sidebarOpen = false,
   onSessionIndicatorClick,
   title = 'Dashboard',
 }: TopNavbarProps) {
@@ -160,7 +163,9 @@ export function TopNavbar({
           type="button"
           onClick={onToggleSidebar}
           className="inline-flex size-9 items-center justify-center rounded-lg text-slate-300 transition hover:bg-white/5 hover:text-white lg:hidden"
-          aria-label="Toggle sidebar"
+          aria-label={sidebarOpen ? 'Close navigation' : 'Open navigation'}
+          aria-expanded={sidebarOpen}
+          aria-controls="dashboard-mobile-nav"
         >
           <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -179,6 +184,7 @@ export function TopNavbar({
       ) : null}
 
       <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+        <ThemeToggle />
         {expiryLabel && (
           <button
             type="button"
@@ -230,6 +236,7 @@ export function TopNavbar({
           {notificationsOpen ? (
             <div
               role="dialog"
+              aria-modal="true"
               aria-label="Notifications"
               className="absolute right-0 top-full z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.97)] shadow-2xl shadow-black/40 backdrop-blur-xl"
             >

@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useLayoutEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { RoleSidebar } from './RoleSidebar'
 import { SidebarNav } from './SidebarNav'
@@ -44,7 +44,7 @@ export function DashboardLayout({
           ? ['bg-cyan-500/18', 'bg-teal-500/12', 'bg-blue-400/10']
           : ['bg-blue-500/20', 'bg-purple-500/15', 'bg-cyan-400/10']
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.classList.add('dashboard-app')
     document.body.classList.add('dashboard-app')
     return () => {
@@ -56,6 +56,15 @@ export function DashboardLayout({
   useEffect(() => {
     setMobileOpen(false)
   }, [pathname])
+
+  useEffect(() => {
+    if (!mobileOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [mobileOpen])
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -69,6 +78,16 @@ export function DashboardLayout({
 
   return (
     <div className="relative flex h-dvh max-h-dvh w-full max-w-[100vw] overflow-hidden text-slate-100">
+      <a
+        href="#dashboard-main"
+        className="skip-to-content"
+        onClick={(e) => {
+          e.preventDefault()
+          document.getElementById('dashboard-main')?.focus()
+        }}
+      >
+        Skip to main content
+      </a>
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className={`absolute -top-32 left-10 size-72 rounded-full blur-3xl animate-float-slow ${orbClasses[0]}`} />
         <div
@@ -107,12 +126,17 @@ export function DashboardLayout({
           <TopNavbar
             userName={userName || 'User'}
             userAvatarUrl={userAvatarUrl}
-            onToggleSidebar={() => setMobileOpen((o) => !o)}
+            onToggleSidebar={
+              dashboardRole === 'member' ? undefined : () => setMobileOpen((o) => !o)
+            }
+            sidebarOpen={mobileOpen}
             onSessionIndicatorClick={openSessionWarning}
           />
         </header>
 
         <main
+          id="dashboard-main"
+          tabIndex={-1}
           className={[
             'dashboard-scroll-area min-h-0 min-w-0 w-full max-w-full flex-1 px-4 py-4 sm:px-6 sm:py-5 lg:px-8',
             lockViewport ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden',

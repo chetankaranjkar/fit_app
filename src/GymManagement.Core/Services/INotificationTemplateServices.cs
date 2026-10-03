@@ -44,6 +44,12 @@ public interface INotificationOutboxService
 {
     Task<int> EnqueueAsync(EnqueueNotificationRequest request, CancellationToken ct = default);
     Task ProcessPendingAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<NotificationOutboxDto>> ListRecentAsync(int take, CancellationToken ct = default);
+}
+
+public interface INotificationChannelStatusService
+{
+    Task<NotificationChannelsOverviewDto> GetOverviewAsync(CancellationToken ct = default);
 }
 
 public interface INotificationHistoryService

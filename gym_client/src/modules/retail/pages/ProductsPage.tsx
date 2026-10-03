@@ -129,6 +129,18 @@ export function ProductsPage() {
         ),
       },
       {
+        id: 'threshold',
+        header: 'Reorder at',
+        minWidth: 90,
+        width: 100,
+        hideBelow: 'lg',
+        align: 'right',
+        accessorFn: (p) => p.lowStockThreshold,
+        cell: ({ row }) => (
+          <span className="tabular-nums text-slate-400">{row.lowStockThreshold}</span>
+        ),
+      },
+      {
         id: 'mrp',
         header: 'MRP',
         minWidth: 90,

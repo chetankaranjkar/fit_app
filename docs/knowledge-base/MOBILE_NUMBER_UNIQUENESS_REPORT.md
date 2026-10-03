@@ -64,11 +64,11 @@ dotnet ef database update --project src/GymManagement.Infrastructure --startup-p
 
 ## Import validation
 
-CSV import (`membersCsv.ts` + `UsersPage` import loop):
+CSV import (`MemberCsvImportModal` + `membersCsv.ts` + `POST /api/Users/bulk-import/preview` then `/bulk-import`):
 
-- Duplicate within file
-- Duplicate against loaded list
-- Server rejects with conflict message on `POST /Users`
+- Duplicate within file (client)
+- Duplicate vs existing phone / login email / Aadhaar (server preview)
+- Skipped rows are not updates; import never PATCHes an existing member
 
 ## Normalization
 

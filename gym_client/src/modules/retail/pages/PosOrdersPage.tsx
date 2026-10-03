@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../../../components/layout/DashboardLayout'
@@ -53,8 +54,12 @@ export function PosOrdersPage() {
         <DashboardMetricsGrid cols={4}>
           <MetricCard title="Today Sales" value={dashboard ? formatInr(dashboard.todaySales) : '—'} gradient="from-emerald-400 to-teal-500" icon={<span className="text-lg">₹</span>} caption={`${dashboard?.todayOrders ?? 0} orders`} />
           <MetricCard title="Month Sales" value={dashboard ? formatInr(dashboard.monthSales) : '—'} gradient="from-blue-500 to-indigo-500" icon={<span className="text-lg">M</span>} caption={`${dashboard?.monthOrders ?? 0} orders`} />
-          <MetricCard title="Low Stock" value={dashboard?.lowStockCount ?? 0} gradient="from-amber-400 to-orange-500" icon={<span className="text-lg">!</span>} caption="Need reorder" />
-          <MetricCard title="Expiring Soon" value={dashboard?.expiringSoonCount ?? 0} gradient="from-rose-400 to-pink-500" icon={<span className="text-lg">⏱</span>} caption="Within 30 days" />
+          <Link to="/dashboard/retail/alerts" className="block">
+            <MetricCard title="Low Stock" value={dashboard?.lowStockCount ?? 0} gradient="from-amber-400 to-orange-500" icon={<span className="text-lg">!</span>} caption="Need reorder · open alerts" />
+          </Link>
+          <Link to="/dashboard/retail/alerts" className="block">
+            <MetricCard title="Expiring Soon" value={dashboard?.expiringSoonCount ?? 0} gradient="from-rose-400 to-pink-500" icon={<span className="text-lg">⏱</span>} caption="Within 30 days · open alerts" />
+          </Link>
         </DashboardMetricsGrid>
 
         <div className="flex flex-wrap items-center gap-3">

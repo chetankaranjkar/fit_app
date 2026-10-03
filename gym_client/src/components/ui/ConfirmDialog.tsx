@@ -26,10 +26,12 @@ export function ConfirmDialog({
   onCancel: () => void
 }) {
   return (
-    <Modal open={open} onClose={onCancel} title={title}>
-      <div className="space-y-5">
-        <div className="text-sm leading-relaxed text-slate-300">{message}</div>
-        <div className="flex justify-end gap-2">
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title={title}
+      footer={
+        <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onCancel} disabled={isLoading}>
             {cancelLabel}
           </Button>
@@ -46,7 +48,9 @@ export function ConfirmDialog({
             {confirmLabel}
           </Button>
         </div>
-      </div>
+      }
+    >
+      <div className="text-sm leading-relaxed text-slate-300">{message}</div>
     </Modal>
   )
 }

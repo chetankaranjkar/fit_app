@@ -1,6 +1,8 @@
+import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../../components/layout/DashboardSubpageShell'
+import { MemberLoadError, MemberLoadingState } from '../../components/member/MemberQueryState'
 import { HealthProfileStepper } from '../../modules/health-profile/components/HealthProfileStepper'
 import { healthProfileService } from '../../modules/health-profile/services/healthProfile.service'
 import { authService } from '../../services/auth.service'
@@ -10,32 +12,41 @@ export function MemberHealthProfilePage() {
   const user = authService.getCurrentUser()
   const userId = user?.userId ?? 0
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['health-profile', userId],
     queryFn: async () => {
       try {
         const { data } = await healthProfileService.getMine()
         return data
-      } catch {
-        return emptyHealthProfile(userId)
+      } catch (err) {
+        if (axios.isAxiosError(err) && err.response?.status === 404) {
+          return emptyHealthProfile(userId)
+        }
+        throw err
       }
     },
     enabled: userId > 0,
-    placeholderData: (previous) => previous,
+    retry: false,
   })
-
-  const showInitialSkeleton = isLoading && profile === undefined
 
   return (
     <DashboardLayout userName={user?.fullName?.trim() || user?.username?.trim() || 'Member'}>
       <DashboardSubpageShell
         eyebrow="Member"
         titleGradient="health profile"
-        subtitle="Complete your premium health assessment for safer, smarter training."
+        subtitle="Your own health assessment. This page never loads another member’s profile."
         showExport={false}
       >
-        {showInitialSkeleton ? (
-          <div className="glass-card h-64 animate-pulse rounded-3xl" />
+        {userId <= 0 ? (
+          <MemberLoadError error={{ response: { status: 403 } }} fallback="Sign in as a member to open this page." />
+        ) : isLoading ? (
+          <MemberLoadingState label="Loading your health profile…" />
+        ) : isError ? (
+          <MemberLoadError
+            error={error}
+            fallback="Could not load your health profile."
+            onRetry={() => void refetch()}
+          />
         ) : (
           <HealthProfileStepper userId={userId} initial={profile} mode="member" />
         )}

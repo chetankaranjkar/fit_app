@@ -339,6 +339,7 @@ namespace GymManagement.Infrastructure.Services
                     PendingAmount = pendingAmount,
                     PaymentStatus = paymentStatus,
                     IsFullyPaid = isFullyPaid,
+                    NextDueDate = payment?.NextDueDate,
                 };
             }).ToList();
 
@@ -925,6 +926,7 @@ namespace GymManagement.Infrastructure.Services
                 dto.PendingAmount = pendingAmount;
                 dto.PaymentStatus = payment?.PaymentStatus.ToString();
                 dto.MembershipPaymentId = payment?.Id;
+                dto.NextDueDate = payment?.NextDueDate;
                 dto.IsFullyPaid = payment == null
                     || payment.PaymentStatus == MembershipPaymentStatus.Paid
                     || pendingAmount <= 0.02m;

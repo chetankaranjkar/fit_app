@@ -6,10 +6,14 @@ import '../core/secure_storage.dart';
 import '../models/auth_models.dart';
 import '../models/device_security_models.dart';
 import '../services/device_tracking_service.dart';
+import '../workout_sync/sync/sync_manager.dart';
 
 class AuthService {
   AuthService._();
   static final AuthService instance = AuthService._();
+
+  /// Incremented on local sign-out so a refresh in flight cannot persist tokens.
+  int _sessionEpoch = 0;
 
   Future<LoginResponse> login(
     String identifier,
@@ -53,8 +57,10 @@ class AuthService {
   }
 
   Future<LoginResponse?> tryRefresh() async {
+    final epoch = _sessionEpoch;
     final refresh = await SecureStorage.readRefreshToken();
     if (refresh == null || refresh.isEmpty) return null;
+    if (_sessionEpoch != epoch) return null;
 
     final deviceUniqueId = await DeviceTrackingService.instance.getOrCreateDeviceUniqueId();
     final sessionId = await SecureStorage.readSessionId();
@@ -68,10 +74,16 @@ class AuthService {
           if (sessionId != null) 'sessionId': sessionId,
         },
       );
+      if (_sessionEpoch != epoch) return null;
       final data = res.data ?? <String, dynamic>{};
       if ((data['token'] ?? data['Token'] ?? '').toString().isEmpty) return null;
       final loginResponse = LoginResponse.fromJson(data);
+      if (_sessionEpoch != epoch) return null;
       await _persist(loginResponse);
+      if (_sessionEpoch != epoch) {
+        await SecureStorage.clearSession();
+        return null;
+      }
       return loginResponse;
     } catch (_) {
       return null;
@@ -122,10 +134,21 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    _sessionEpoch++;
+    ApiClient.instance.invalidateAuthRecovery();
     try {
       await ApiClient.instance.post('/Auth/logout');
     } catch (_) {}
     await SecureStorage.clearSession();
+    await SyncManager.instance.onAccountSignedOut();
+  }
+
+  /// Clears tokens and cancels in-flight 401 recovery without calling the logout API.
+  Future<void> clearLocalSession() async {
+    _sessionEpoch++;
+    ApiClient.instance.invalidateAuthRecovery();
+    await SecureStorage.clearSession();
+    await SyncManager.instance.onAccountSignedOut();
   }
 
   Future<LoginResponse?> readCachedSession() async {

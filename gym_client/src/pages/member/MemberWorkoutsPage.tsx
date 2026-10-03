@@ -40,6 +40,7 @@ import { personalWorkoutPlansService } from '../../services/personalWorkoutPlans
 import type { WorkoutPlan } from '../../types/workoutPlan'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { MemberLoadError } from '../../components/member/MemberQueryState'
 
 type IconType = ComponentType<{ className?: string }>
 
@@ -450,8 +451,8 @@ function ProgramView({ program }: { program: MeAssignedProgram }) {
       <section className="glass-card relative overflow-hidden rounded-3xl border border-white/[0.08] p-5 sm:p-6">
         <header className="mb-5 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold tracking-tight text-white">Your training rings</h3>
-            <p className="text-xs text-slate-400">Snapshot of this program at a glance.</p>
+            <h3 className="text-base font-semibold tracking-tight text-white">Assigned plan snapshot</h3>
+            <p className="text-xs text-slate-400">Days and exercises on the assigned program — not recorded sessions.</p>
           </div>
           <Trophy className="size-5 text-amber-300/70" />
         </header>
@@ -461,7 +462,7 @@ function ProgramView({ program }: { program: MeAssignedProgram }) {
             gradientId="ring-1"
             fromColor="#f97316"
             toColor="#fb923c"
-            label="Active days"
+            label="Assigned days"
             value={activeDays + '/7'}
             sublabel="per week"
             icon={Flame}
@@ -471,7 +472,7 @@ function ProgramView({ program }: { program: MeAssignedProgram }) {
             gradientId="ring-2"
             fromColor="#ef4444"
             toColor="#f59e0b"
-            label="Workouts"
+            label="Assigned"
             value={String(totalExercises)}
             sublabel="exercises"
             icon={Dumbbell}
@@ -493,8 +494,8 @@ function ProgramView({ program }: { program: MeAssignedProgram }) {
       <section>
         <div className="mb-3 flex items-end justify-between">
           <div>
-            <h3 className="text-base font-semibold tracking-tight text-white">This week</h3>
-            <p className="text-xs text-slate-400">Tap a day to view its plan.</p>
+            <h3 className="text-base font-semibold tracking-tight text-white">Assigned week</h3>
+            <p className="text-xs text-slate-400">Tap a day to view the assigned session. Last session numbers on each exercise are recorded activity.</p>
           </div>
           <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-slate-300">
             <CalendarDays className="size-3" /> {activeDays} active . {totalRest} rest
@@ -582,8 +583,8 @@ function ProgramView({ program }: { program: MeAssignedProgram }) {
         <section className="glass-card relative overflow-hidden rounded-3xl border border-white/[0.08] p-5 sm:p-6">
           <header className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-base font-semibold tracking-tight text-white">Your gym schedule</h3>
-              <p className="text-xs text-slate-400">Booked time slots & trainers.</p>
+              <h3 className="text-base font-semibold tracking-tight text-white">Assigned gym times</h3>
+              <p className="text-xs text-slate-400">Scheduled slots from your coach — not recorded check-ins.</p>
             </div>
             <Clock className="size-5 text-cyan-300/70" />
           </header>
@@ -691,16 +692,16 @@ function LoadingSkeleton() {
 function EmptyState() {
   return (
     <GlassPanel role="member">
-      <div className="flex flex-col items-center px-4 py-12 text-center sm:py-16">
+      <div className="flex flex-col items-center px-4 py-12 text-center sm:py-16" data-testid="member-empty-state">
         <div className="relative">
           <span aria-hidden className="absolute inset-0 -m-4 rounded-full bg-gradient-to-br from-orange-500/30 to-amber-600/10 blur-2xl" />
           <span className="relative flex size-24 items-center justify-center rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/20 to-amber-600/10 text-orange-300">
             <Dumbbell className="size-12" />
           </span>
         </div>
-        <h3 className="mt-6 text-xl font-semibold text-white">No workouts yet</h3>
+        <h3 className="mt-6 text-xl font-semibold text-white">No assigned workout program</h3>
         <p className="mt-2 max-w-md text-sm text-slate-400">
-          Your trainer hasn&apos;t assigned a program yet. Once they do, your weekly schedule, every exercise, and your last logged numbers will appear right here.
+          Your coach hasn&apos;t assigned a program yet. Assigned days and exercises will show here separately from recorded sessions (last logged weights).
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs">
           <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-slate-300">
@@ -782,7 +783,7 @@ function PersonalPlansSection() {
         <div>
           <h2 className="text-lg font-semibold text-white">My personal plan</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Create your own workout plan separate from trainer assignments.
+            Your own plan, separate from the assigned program your coach sets below.
           </p>
         </div>
       </div>
@@ -856,12 +857,13 @@ function PersonalPlansSection() {
 
 export function MemberWorkoutsPage() {
   const { userName } = getDashboardUser()
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['member-workout-program'],
     queryFn: async () => {
       const { data: payload } = await meService.getWorkoutProgram()
       return payload
     },
+    retry: false,
   })
 
   const programs = data?.programs ?? []
@@ -870,11 +872,11 @@ export function MemberWorkoutsPage() {
     <DashboardLayout userName={userName}>
       <DashboardPageContent className="max-w-5xl pb-16">
         <Link
-          to="/dashboard"
+          to="/dashboard/member/portal"
           className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-orange-300"
         >
           <ArrowLeft className="size-3.5" />
-          Back to dashboard
+          Back to home
         </Link>
 
         <header className="mb-6 flex items-center gap-3">
@@ -883,7 +885,7 @@ export function MemberWorkoutsPage() {
           </span>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Workouts</h1>
-            <p className="text-sm text-slate-400">Your training plan, day by day.</p>
+            <p className="text-sm text-slate-400">Assigned targets from your coach, plus last recorded session numbers.</p>
           </div>
         </header>
 
@@ -892,15 +894,16 @@ export function MemberWorkoutsPage() {
         {isLoading ? (
           <LoadingSkeleton />
         ) : isError ? (
-          <GlassPanel role="member" title="Couldn't load workouts">
-            <p className="text-sm text-rose-300">
-              {error instanceof Error ? error.message : 'Something went wrong. Try again later.'}
-            </p>
-          </GlassPanel>
+          <MemberLoadError
+            error={error}
+            fallback="Could not load assigned workouts."
+            onRetry={() => void refetch()}
+          />
         ) : programs.length === 0 ? (
           <EmptyState />
         ) : (
           <div className="space-y-8">
+            <p className="text-sm font-medium text-slate-300">Assigned by your coach</p>
             {programs.map((program) => (
               <ProgramView key={program.plan.id} program={program} />
             ))}

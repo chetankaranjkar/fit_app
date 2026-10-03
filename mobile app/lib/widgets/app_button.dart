@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 
+import '../theme/app_a11y.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
@@ -55,26 +58,40 @@ class AppButton extends StatelessWidget {
     final content = isLoading
         ? const CupertinoActivityIndicator(color: CupertinoColors.white, radius: 11)
         : Row(
-            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (icon != null) ...[
                 Icon(icon, color: foreground, size: 18),
                 const SizedBox(width: 8),
               ],
-              Text(
-                label,
-                style: AppType.button.copyWith(color: foreground),
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: AppA11y.isLargeText(context) ? 3 : 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppA11y.applyTextStyle(
+                    context,
+                    AppType.button.copyWith(color: foreground),
+                  ),
+                ),
               ),
             ],
           );
 
-    return PressScale(
+    final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final minH = math.max(AppA11y.minTouchTarget, 54.0 * (scale > 1.2 ? 1.1 : 1.0));
+
+    return Semantics(
+      button: true,
+      enabled: !disabled,
+      label: label,
+      child: PressScale(
       onTap: disabled ? null : onTap,
       child: AnimatedContainer(
-        duration: AppMotion.fast,
-        height: 54,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+        duration: AppA11y.motion(context, AppMotion.fast),
+        constraints: BoxConstraints(minHeight: minH),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.lg),
           gradient: (useGradient && !disabled) ? AppColors.primaryGradient : null,
@@ -94,6 +111,7 @@ class AppButton extends StatelessWidget {
               : null,
         ),
         child: Center(child: content),
+      ),
       ),
     );
   }

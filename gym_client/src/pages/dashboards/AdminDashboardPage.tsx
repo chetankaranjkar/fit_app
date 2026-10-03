@@ -14,6 +14,8 @@ import { usePermission } from '../../features/auth/hooks/usePermission'
 import { authService } from '../../services/auth.service'
 import { membershipPaymentsService } from '../../services/membershipPayments.service'
 import { RenewalQueuePanel } from '../../components/dashboard/RenewalQueuePanel'
+import { DailyWorkListPanel } from '../../components/dashboard/DailyWorkListPanel'
+import { hasAnyDailyWorkAccess } from '../../lib/dailyWorkList'
 import { OutboundRemindersOpsPanel } from '../../components/dashboard/OutboundRemindersOpsPanel'
 
 export function AdminDashboardPage() {
@@ -125,6 +127,12 @@ export function AdminDashboardPage() {
               <HeroStat role="admin" label="Due soon" numericValue={billingDash?.upcomingDueCount ?? 0} />
               <HeroStat role="admin" label="Partial pay" numericValue={billingDash?.partialMembersCount ?? 0} />
             </DashboardMetricsGrid>
+          </section>
+        ) : null}
+
+        {hasAnyDailyWorkAccess() ? (
+          <section className="grid gap-6 lg:grid-cols-3">
+            <DailyWorkListPanel role="admin" />
           </section>
         ) : null}
 

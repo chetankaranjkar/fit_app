@@ -76,10 +76,18 @@ export function SignupPage() {
         setPaying(true)
         setPayMessage('Opening secure checkout…')
         try {
-          await payMembership(paymentId)
-          setPayMessage('Payment received. Welcome to Tiger Fitness!')
-          const role = resolveDashboardRole(authService.getCurrentUser())
-          setTimeout(() => navigate(getPostLoginPath(role), { replace: true }), 1200)
+          const outcome = await payMembership(paymentId)
+          if (outcome.kind === 'completed') {
+            setPayMessage('Payment received. Welcome to Tiger Fitness!')
+            const role = resolveDashboardRole(authService.getCurrentUser())
+            setTimeout(() => navigate(getPostLoginPath(role), { replace: true }), 1200)
+          } else if (outcome.kind === 'confirming' || outcome.kind === 'review') {
+            setPayMessage(outcome.message)
+            setTimeout(() => navigate('/dashboard/member/pay', { replace: true }), 2500)
+          } else {
+            setPayMessage('Signup complete. Checkout was closed — you can pay your balance later from Pay outstanding balance.')
+            setPaying(false)
+          }
         } catch (err) {
           setPayMessage(
             getApiErrorMessage(err, 'Signup succeeded but payment was not completed. You can pay from your member portal after signing in.'),

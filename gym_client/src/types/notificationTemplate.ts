@@ -44,6 +44,7 @@ export interface NotificationHistoryItem {
   subject?: string | null
   message: string
   status: string
+  displayStatus?: string
   sentDate?: string | null
   errorMessage?: string | null
   retryCount: number

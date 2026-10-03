@@ -18,6 +18,9 @@ import { userSchedulesService } from '../../services/userSchedules.service'
 import { usersService } from '../../services/users.service'
 import { workoutPlansService } from '../../services/workoutPlans.service'
 import { trainersService } from '../../services/trainers.service'
+import { TrainingEmptyState } from '../../components/training/TrainingEmptyState'
+import { TrainingJourneyNav } from '../../components/training/TrainingJourneyNav'
+import { getApiErrorMessage } from '../../lib/apiErrors'
 import { MEMBER_ACTIVE_MEMBERSHIP_REQUIRED } from '../../lib/memberTrainingEligibility'
 import { TrainerHealthAlertPanel } from '../../modules/health-profile/components/TrainerHealthAlertPanel'
 import { healthProfileService } from '../../modules/health-profile/services/healthProfile.service'
@@ -166,7 +169,7 @@ export function WorkoutAssignmentsPage() {
       toast.success('Workout plan assigned.')
       if (returnToSafe) navigate(returnToSafe)
     },
-    onError: (error: Error) => setFormError(error.message || 'Failed to assign workout plan'),
+    onError: (error: unknown) => setFormError(getApiErrorMessage(error, 'Failed to assign workout plan')),
   })
 
   const filteredSchedules = useMemo(() => {
@@ -302,10 +305,11 @@ export function WorkoutAssignmentsPage() {
       <DashboardSubpageShell
         eyebrow="Training"
         titleGradient="member assignments"
-        subtitle="Assign workout plans to members and keep assignment history for trainer handover and progress reviews."
+        subtitle="Assign step · give an eligible member an active workout plan. Active membership is required."
         showExport={false}
         primaryAction={{ label: '+ Assign plan', onClick: openAssignModal }}
       >
+        <TrainingJourneyNav />
         <DashboardMetricsGrid cols={4}>
           <MetricCard title="Assignments" value={stats.total} gradient="from-blue-500 to-indigo-500" icon={<span className="text-lg">A</span>} caption="All-time records" />
           <MetricCard title="Active" value={stats.active} gradient="from-emerald-500 to-teal-500" icon={<span className="text-lg">C</span>} caption="Current plans" />
@@ -339,7 +343,25 @@ export function WorkoutAssignmentsPage() {
           {isLoading ? (
             <p className="px-6 py-8 text-sm text-slate-400">Loading assignments...</p>
           ) : filteredSchedules.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-slate-400">No assignments found.</p>
+            schedules.length === 0 ? (
+              workoutPlans.length === 0 ? (
+                <TrainingEmptyState
+                  title="No plans to assign yet"
+                  body="Create a workout program first, then come back here to assign it to a member with an active membership."
+                  actionLabel="Create a plan"
+                  to="/dashboard/training/programs/new"
+                />
+              ) : (
+                <TrainingEmptyState
+                  title="No workout assignments yet"
+                  body="Assign a plan to a member with an active membership. After they train, open Monitor or Review."
+                  actionLabel="Assign a plan"
+                  onAction={openAssignModal}
+                />
+              )
+            ) : (
+              <p className="px-6 py-8 text-sm text-slate-400">No assignments match the filters.</p>
+            )
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] text-left text-sm">

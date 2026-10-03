@@ -45,6 +45,7 @@ class EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: AppType.subhead.copyWith(
                 color: AppColors.resolveTextSecondary(context),
+                height: 1.4,
               ),
             ),
           ],
@@ -84,6 +85,7 @@ class ErrorStateView extends StatelessWidget {
             textAlign: TextAlign.center,
             style: AppType.subhead.copyWith(
               color: AppColors.resolveTextSecondary(context),
+              height: 1.4,
             ),
           ),
           if (onRetry != null) ...[

@@ -22,6 +22,8 @@ namespace GymManagement.Core.DTOs
         public decimal PendingAmount { get; set; }
         public string? PaymentStatus { get; set; }
         public bool IsFullyPaid { get; set; }
+        /// <summary>Billing header next installment due date (null when settled or no header).</summary>
+        public DateTime? NextDueDate { get; set; }
         /// <summary>True when completed payment transactions exist — direct date/plan edits require approval.</summary>
         public bool HasCompletedPayments { get; set; }
     }
@@ -104,5 +106,6 @@ namespace GymManagement.Core.DTOs
         public decimal PendingAmount { get; set; }
         public string? PaymentStatus { get; set; }
         public bool IsFullyPaid { get; set; }
+        public DateTime? NextDueDate { get; set; }
     }
 }

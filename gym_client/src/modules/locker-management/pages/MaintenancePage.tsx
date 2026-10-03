@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { ModulePageShell } from '../components/ModulePageShell'
@@ -20,6 +21,7 @@ import {
 } from '../hooks/useLockerManagement'
 import { useStaggerAnimation } from '../hooks/useAnimations'
 import { formatDate } from '../utils/format'
+import { lockerTicketDaysOpen, lockerTicketIsOverdue, LOCKER_TICKET_SLA_DAYS } from '../../../lib/opsWorkStatus'
 import {
   DEFAULT_MAINTENANCE_FILTERS,
   type Locker,
@@ -31,28 +33,43 @@ import {
 const STATUS_FILTER_OPTIONS: { value: MaintenanceFilters['status']; label: string }[] = [
   { value: 'ALL', label: 'All statuses' },
   { value: 'PENDING', label: 'Pending only' },
+  { value: 'OVERDUE', label: `Overdue (${LOCKER_TICKET_SLA_DAYS}+ days open)` },
   { value: 'FIXED', label: 'Fixed only' },
 ]
 
 export function LockerMaintenancePage() {
   const { data = [], isLoading, isError } = useMaintenance()
   const { data: lockers = [] } = useLockers()
-  const [filters, setFilters] = useState<MaintenanceFilters>(DEFAULT_MAINTENANCE_FILTERS)
+  const [searchParams] = useSearchParams()
+  const [filters, setFilters] = useState<MaintenanceFilters>(() => ({
+    ...DEFAULT_MAINTENANCE_FILTERS,
+    status: searchParams.get('attention') === 'overdue' ? 'OVERDUE' : 'ALL',
+  }))
   const [addOpen, setAddOpen] = useState(false)
   const bodyRef = useRef<HTMLTableSectionElement>(null)
 
   const sorted = useMemo(
     () =>
-      [...data].sort(
-        (a, b) => new Date(b.reportedDate).getTime() - new Date(a.reportedDate).getTime(),
-      ),
+      [...data].sort((a, b) => {
+        const aOver = lockerTicketIsOverdue(a.status, a.reportedDate) ? 0 : 1
+        const bOver = lockerTicketIsOverdue(b.status, b.reportedDate) ? 0 : 1
+        if (aOver !== bOver) return aOver - bOver
+        const aPend = a.status === 'PENDING' ? 0 : 1
+        const bPend = b.status === 'PENDING' ? 0 : 1
+        if (aPend !== bPend) return aPend - bPend
+        return new Date(b.reportedDate).getTime() - new Date(a.reportedDate).getTime()
+      }),
     [data],
   )
 
   const filtered = useMemo(() => {
     const q = filters.query.trim().toLowerCase()
     return sorted.filter((m) => {
-      if (filters.status !== 'ALL' && m.status !== filters.status) return false
+      if (filters.status === 'OVERDUE') {
+        if (!lockerTicketIsOverdue(m.status, m.reportedDate)) return false
+      } else if (filters.status !== 'ALL' && m.status !== filters.status) {
+        return false
+      }
       if (!q) return true
       return (
         m.lockerNumber.toLowerCase().includes(q) ||
@@ -65,6 +82,10 @@ export function LockerMaintenancePage() {
 
   const pendingCount = useMemo(
     () => data.filter((m) => m.status === 'PENDING').length,
+    [data],
+  )
+  const overdueCount = useMemo(
+    () => data.filter((m) => lockerTicketIsOverdue(m.status, m.reportedDate)).length,
     [data],
   )
 
@@ -87,6 +108,7 @@ export function LockerMaintenancePage() {
           <SummaryStrip
             total={data.length}
             pending={pendingCount}
+            overdue={overdueCount}
             fixed={data.length - pendingCount}
           />
         )}
@@ -150,15 +172,21 @@ export function LockerMaintenancePage() {
                 <thead>
                   <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-slate-500">
                     <th className="px-6 py-3 font-semibold">Locker</th>
+                    <th className="px-6 py-3 font-semibold">Area</th>
                     <th className="px-6 py-3 font-semibold">Issue</th>
                     <th className="px-6 py-3 font-semibold">Reported</th>
+                    <th className="px-6 py-3 font-semibold">Open</th>
                     <th className="px-6 py-3 font-semibold">Status</th>
                     <th className="px-6 py-3 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody ref={bodyRef} className="divide-y divide-white/5">
                   {filtered.map((m) => (
-                    <MaintenanceRow key={m.id} entry={m} />
+                    <MaintenanceRow
+                      key={m.id}
+                      entry={m}
+                      location={lockers.find((l) => l.id === m.lockerId)?.location}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -176,17 +204,41 @@ export function LockerMaintenancePage() {
   )
 }
 
-function MaintenanceRow({ entry }: { entry: LockerMaintenance }) {
+function MaintenanceRow({
+  entry,
+  location,
+}: {
+  entry: LockerMaintenance
+  location?: string
+}) {
   const updateMut = useUpdateMaintenanceStatus()
   const toggle = () => {
     const next: MaintenanceStatus = entry.status === 'PENDING' ? 'FIXED' : 'PENDING'
     updateMut.mutate({ id: entry.id, status: next })
   }
+  const overdue = lockerTicketIsOverdue(entry.status, entry.reportedDate)
+  const daysOpen = lockerTicketDaysOpen(entry.reportedDate)
   return (
-    <tr data-row className="transition hover:bg-white/[0.04]">
+    <tr
+      data-row
+      data-testid="locker-ticket"
+      data-overdue={overdue ? 'true' : 'false'}
+      className="transition hover:bg-white/[0.04]"
+    >
       <td className="px-6 py-4 text-slate-200">{entry.lockerNumber}</td>
+      <td className="px-6 py-4 text-sm text-slate-400" data-testid="locker-area">
+        {location ?? '—'}
+      </td>
       <td className="px-6 py-4 text-slate-300">{entry.issue}</td>
       <td className="px-6 py-4 text-slate-300">{formatDate(entry.reportedDate)}</td>
+      <td className="px-6 py-4 text-slate-300" data-testid="locker-days-open">
+        {daysOpen == null ? '—' : daysOpen === 0 ? 'Today' : `${daysOpen}d`}
+        {overdue && (
+          <span className="ml-2 rounded-md border border-rose-400/30 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300">
+            Overdue
+          </span>
+        )}
+      </td>
       <td className="px-6 py-4">
         <StatusPill status={entry.status} />
       </td>
@@ -240,19 +292,22 @@ function StatusPill({ status }: { status: MaintenanceStatus }) {
 function SummaryStrip({
   total,
   pending,
+  overdue,
   fixed,
 }: {
   total: number
   pending: number
+  overdue: number
   fixed: number
 }) {
   const cards = [
     { label: 'Total reports', value: total, gradient: 'from-blue-500 to-purple-500' },
     { label: 'Pending', value: pending, gradient: 'from-amber-400 to-orange-500' },
+    { label: 'Overdue', value: overdue, gradient: 'from-rose-500 to-pink-500' },
     { label: 'Fixed', value: fixed, gradient: 'from-emerald-400 to-teal-500' },
   ]
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       {cards.map((c) => (
         <div
           key={c.label}

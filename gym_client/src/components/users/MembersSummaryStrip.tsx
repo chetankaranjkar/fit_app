@@ -68,6 +68,7 @@ function StripCell({
 
   return (
     <div
+      data-summary-tone={tone}
       className={[
         groupClass,
         introActive ? 'member-bar-intro' : '',
@@ -183,7 +184,7 @@ export function MembersSummaryStrip({
     >
       <StripCell tone="violet" className="sm:col-span-1 lg:col-span-2">
         <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">{copy.totalLabel}</p>
-        <p className="mt-0.5 bg-gradient-to-br from-white to-slate-300 bg-clip-text text-2xl font-bold leading-none tabular-nums text-transparent">
+        <p className="mt-0.5 text-[var(--dashboard-text)] text-2xl font-bold leading-none tabular-nums">
           {displayTotal}
         </p>
         <p className="mt-1 text-[10px] text-slate-500">{copy.totalHint}</p>

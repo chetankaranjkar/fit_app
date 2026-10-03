@@ -1,5 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
+import '../theme/app_a11y.dart';
+
 /// Wraps a child with a tap-down/up scale animation for tactile feedback.
 class PressScale extends StatefulWidget {
   const PressScale({
@@ -36,8 +38,10 @@ class _PressScaleState extends State<PressScale> {
       onTapCancel: () => _set(false),
       onTap: widget.onTap,
       child: AnimatedScale(
-        scale: _pressed ? widget.scale : 1,
-        duration: const Duration(milliseconds: 130),
+        scale: (widget.onTap != null && _pressed && !AppA11y.reduceMotion(context))
+            ? widget.scale
+            : 1,
+        duration: AppA11y.motion(context, const Duration(milliseconds: 130)),
         curve: Curves.easeOutCubic,
         child: widget.child,
       ),

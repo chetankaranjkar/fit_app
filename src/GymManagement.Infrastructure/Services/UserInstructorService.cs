@@ -13,7 +13,7 @@ namespace GymManagement.Infrastructure.Services
 {
     public class UserInstructorService : IUserInstructorService
     {
-        private const int DefaultMaxActiveClients = 30;
+        private const int DefaultMaxActiveClients = TrainerDayRules.DefaultMaxActiveClients;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _db;
         private readonly INotificationEventService _notifications;

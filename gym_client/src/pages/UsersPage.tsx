@@ -24,17 +24,11 @@ import { usersService } from '../services/users.service'
 import { membershipPlansService } from '../services/membershipPlans.service'
 import { trainersService } from '../services/trainers.service'
 import type { User, CreateUserDto } from '../types/user'
-import {
-  MEMBERS_CSV_TEMPLATE,
-  downloadMembersCsv,
-  parseCsvLines,
-  rowsToMemberImports,
-} from '../lib/membersCsv'
+import { downloadMembersCsv } from '../lib/membersCsv'
 import type { Trainer } from '../types/trainer'
 import {
   formatAadhaarForExport,
   isValidAadhaarInput,
-  normalizeAadhaarInput,
   stripAadhaarFormatting,
   validateAadhaarNumber,
 } from '../lib/aadhaar'
@@ -73,7 +67,11 @@ import {
 } from '../lib/memberTrainingSchedule'
 import { MemberTrainingScheduleFields } from '../components/users/MemberTrainingScheduleFields'
 import { collectPaymentPath, memberProfilePath } from '../lib/membershipPaymentNavigation'
+import { COLLECT_OUTSTANDING_LABEL, STANDING_TONE_TEXT, standingFromUser } from '../lib/membershipStanding'
+import { MembershipStatusBadge } from '../components/billing/MembershipStatusBadge'
+import { StandingFactValue } from '../components/memberships/MembershipStandingPanel'
 import { useMemberDirectoryStats, useTrainerMemberStats } from '../hooks/useTrainerMemberStats'
+import { MemberCsvImportModal } from '../components/users/MemberCsvImportModal'
 import { MembersPageHeader } from '../components/users/MembersPageHeader'
 import { MembersSummaryStrip } from '../components/users/MembersSummaryStrip'
 import { TrainerMemberActionsMenu } from '../components/users/TrainerMemberActionsMenu'
@@ -120,55 +118,34 @@ function formatDueDate(iso?: string | null) {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function PaymentDueCell({
-  user,
-  onCollect,
-}: {
-  user: User
-  onCollect?: (u: User) => void
-}) {
-  const pending = user.pendingPaymentAmount ?? 0
-  const dueLabel = formatDueDate(user.paymentNextDueDate)
-  const paidLabel = formatDueDate(user.paymentLastPaidDate)
-  const status = (user.membershipPaymentStatus ?? '').toLowerCase()
-  const hasBalance = pending > 0.02
-  const overdue = hasBalance && user.isPaymentOverdue
-
-  if (!hasBalance) {
-    if (status === 'paid' && paidLabel) {
-      return (
-        <div className="flex max-w-full flex-col gap-0.5">
-          <StatusBadge variant="success">Paid</StatusBadge>
-          <span className="truncate text-[10px] text-slate-400">{paidLabel}</span>
-        </div>
-      )
-    }
-    if (dueLabel) {
-      return (
-        <div className="flex max-w-full flex-col gap-0.5">
-          <span className="text-[10px] text-slate-500">Next due</span>
-          <span className="truncate text-[10px] font-medium text-slate-300">{dueLabel}</span>
-        </div>
-      )
-    }
-    if (paidLabel) {
-      return <span className="text-[10px] text-slate-400">{paidLabel}</span>
-    }
-    return <span className="text-slate-600">—</span>
-  }
-
-  const badgeVariant = overdue ? 'danger' : status === 'partial' ? 'warning' : 'warning'
-  const badgeLabel = overdue ? 'Overdue' : status === 'partial' ? 'Partial due' : 'Payment due'
-
+function MembershipCell({ user }: { user: User }) {
+  if (!user.membershipStatus) return <span className="text-xs text-slate-500">No membership</span>
+  const standing = standingFromUser(user)
   return (
-    <div className="flex max-w-full flex-col gap-0.5">
-      <StatusBadge variant={badgeVariant}>{badgeLabel}</StatusBadge>
-      <span className="truncate text-[10px] font-medium tabular-nums text-amber-100/90">
-        {formatInr(pending)}
+    <div className="flex max-w-full flex-col gap-1" data-testid="directory-membership">
+      <MembershipStatusBadge status={user.membershipStatus} />
+      <span className="truncate text-[10px] text-slate-400">{user.membershipPlanName ?? 'Plan'}</span>
+      <span className={`truncate text-[10px] ${STANDING_TONE_TEXT[standing.dates.tone]}`}>
+        {standing.dates.label}
+        {standing.dates.detail ? ` · ${standing.dates.detail}` : ''}
+      </span>
+    </div>
+  )
+}
+
+function OutstandingCell({ user, onCollect }: { user: User; onCollect?: (u: User) => void }) {
+  const total = user.outstandingBalance ?? user.pendingPaymentAmount ?? 0
+  if (total <= 0.02) return <span className="text-xs tabular-nums text-slate-500">{formatInr(0)}</span>
+  const overdue = Boolean(user.isPaymentOverdue)
+  const dueLabel = formatDueDate(user.paymentNextDueDate)
+  return (
+    <div className="flex max-w-full flex-col items-end gap-0.5" data-testid="directory-outstanding">
+      <span className={`text-xs font-semibold tabular-nums ${overdue ? 'text-rose-300' : 'text-amber-200'}`}>
+        {formatInr(total)}
       </span>
       {dueLabel ? (
-        <span className={`truncate text-[10px] ${overdue ? 'text-rose-300/80' : 'text-slate-500'}`}>
-          Due {dueLabel}
+        <span className={`text-[10px] ${overdue ? 'text-rose-300/80' : 'text-slate-500'}`}>
+          {overdue ? 'Overdue since' : 'Due'} {dueLabel}
         </span>
       ) : null}
       {onCollect && user.openMembershipId ? (
@@ -180,7 +157,7 @@ function PaymentDueCell({
           }}
           className="mt-0.5 w-fit rounded-md bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-blue-200 hover:bg-blue-500/25"
         >
-          Collect
+          {COLLECT_OUTSTANDING_LABEL}
         </button>
       ) : null}
     </div>
@@ -316,11 +293,6 @@ export function UsersPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const [importOpen, setImportOpen] = useState(false)
-  const [importLog, setImportLog] = useState<string[]>([])
-  const [importing, setImporting] = useState(false)
-  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
-
-  const BULK_IMPORT_BATCH_SIZE = 250
   const [membershipModalUser, setMembershipModalUser] = useState<User | null>(null)
 
   useEffect(() => {
@@ -476,6 +448,8 @@ export function UsersPage() {
         if (location.pathname !== profilePath) {
           navigate(collectPaymentPath(p.membershipId, p.userId, profilePath), { replace: true })
         }
+      } else if (created?.id) {
+        navigate(memberProfilePath(created.id))
       }
     },
     onError: (err: unknown) => setFormError(getCreateUserErrorMessage(err)),
@@ -830,6 +804,8 @@ export function UsersPage() {
     setMembershipModalUser(user)
   }
 
+  const canCollectPayments = authService.canPaymentsAccess()
+
   const handleCollectPayment = (user: User) => {
     if (!user.openMembershipId) return
     navigate(collectPaymentPath(user.openMembershipId, user.id, memberProfilePath(user.id)))
@@ -891,25 +867,57 @@ export function UsersPage() {
         accessorFn: (u) => u.phone ?? '',
       },
       {
-        id: 'status',
-        header: 'Status',
-        minWidth: 120,
-        width: 120,
+        id: 'membership',
+        header: 'Membership',
+        minWidth: 190,
+        width: 210,
         sortable: true,
+        accessorFn: (u) => u.membershipEndDate ?? '',
+        cell: ({ row }) => <MembershipCell user={row} />,
+      },
+      {
+        id: 'access',
+        header: 'Gym access',
+        minWidth: 150,
+        width: 160,
+        hideBelow: 'md',
+        accessorFn: (u) => (standingFromUser(u).access.allowed ? 1 : 0),
+        cell: ({ row }) => <StandingFactValue fact={standingFromUser(row).access} compact />,
+      },
+      {
+        id: 'payment',
+        header: 'Payment status',
+        minWidth: 120,
+        width: 130,
+        hideBelow: 'lg',
+        accessorFn: (u) => standingFromUser(u).payment.label,
+        cell: ({ row }) => <StandingFactValue fact={standingFromUser(row).payment} compact />,
+      },
+      {
+        id: 'outstanding',
+        header: 'Outstanding',
+        minWidth: 130,
+        width: 150,
+        align: 'right',
+        sortable: true,
+        accessorFn: (u) => u.outstandingBalance ?? 0,
+        cell: ({ row }) => (
+          <OutstandingCell user={row} onCollect={canCollectPayments ? handleCollectPayment : undefined} />
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Account',
+        minWidth: 100,
+        width: 110,
+        sortable: true,
+        hideBelow: 'xl',
         accessorFn: (u) => (u.isActive ? 'Active' : 'Inactive'),
         cell: ({ row }) => (
           <StatusBadge variant={row.isActive ? 'success' : 'neutral'} dot>
             {row.isActive ? 'Active' : 'Inactive'}
           </StatusBadge>
         ),
-      },
-      {
-        id: 'payment',
-        header: 'Payment due',
-        minWidth: 140,
-        width: 150,
-        hideBelow: 'xl',
-        cell: ({ row }) => <PaymentDueCell user={row} onCollect={handleCollectPayment} />,
       },
       {
         id: 'roles',
@@ -936,7 +944,7 @@ export function UsersPage() {
         ),
       },
     ],
-    [handleActivate, handleDeactivate, handleViewMemberships, handleCollectPayment],
+    [handleActivate, handleDeactivate, handleViewMemberships, handleCollectPayment, canCollectPayments],
   )
 
   const trainerMemberColumns = useMemo<DataGridColumnDef<User>[]>(
@@ -997,25 +1005,35 @@ export function UsersPage() {
         ),
       },
       {
+        id: 'membership',
+        header: 'Membership',
+        minWidth: 180,
+        width: 200,
+        accessorFn: (u) => u.membershipEndDate ?? '',
+        cell: ({ row }) => <MembershipCell user={row} />,
+      },
+      {
+        id: 'access',
+        header: 'Gym access',
+        minWidth: 140,
+        width: 150,
+        hideBelow: 'lg',
+        accessorFn: (u) => (standingFromUser(u).access.allowed ? 1 : 0),
+        cell: ({ row }) => <StandingFactValue fact={standingFromUser(row).access} compact />,
+      },
+      {
         id: 'status',
-        header: 'Status',
-        minWidth: 110,
-        width: 120,
+        header: 'Account',
+        minWidth: 100,
+        width: 110,
         sortable: true,
+        hideBelow: 'xl',
         accessorFn: (u) => (u.isActive ? 'Active' : 'Inactive'),
         cell: ({ row }) => (
           <StatusBadge variant={row.isActive ? 'success' : 'neutral'} dot>
             {row.isActive ? 'Active' : 'Inactive'}
           </StatusBadge>
         ),
-      },
-      {
-        id: 'payment',
-        header: 'Payment Due',
-        minWidth: 140,
-        width: 150,
-        hideBelow: 'lg',
-        cell: ({ row }) => <PaymentDueCell user={row} onCollect={handleCollectPayment} />,
       },
       {
         id: 'joined',
@@ -1117,103 +1135,11 @@ export function UsersPage() {
     toast.success('Downloaded member list CSV.')
   }
 
-  const downloadImportTemplate = () => {
-    const blob = new Blob([MEMBERS_CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'members-import-template.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const handleCsvImportFile = async (file: File | null) => {
-    if (!file) return
-    setImporting(true)
-    setImportLog([])
-    setImportProgress(null)
-    try {
-      const text = await file.text()
-      const grid = parseCsvLines(text)
-      const { rows: parsed, errors } = rowsToMemberImports(grid)
-      const log = [...errors]
-      const seenPhones = new Set<string>()
-      const payloads: CreateUserDto[] = []
-
-      for (const r of parsed) {
-        if (!r.phone) {
-          log.push(`${r.email}: phone is required.`)
-          continue
-        }
-        if (seenPhones.has(r.phone)) {
-          log.push(`Row duplicate phone: ${r.phone} (${r.email})`)
-          continue
-        }
-        seenPhones.add(r.phone)
-        const loginPassword = r.password?.trim() || r.phone
-        if (loginPassword.length < MIN_LOGIN_PASSWORD_LENGTH) {
-          log.push(`${r.email}: password must be at least ${MIN_LOGIN_PASSWORD_LENGTH} characters.`)
-          continue
-        }
-        payloads.push({
-          firstName: r.firstName,
-          lastName: r.lastName,
-          email: r.email,
-          phone: r.phone,
-          aadhaarNumber: r.aadhaarNumber,
-          dateOfBirth: r.dateOfBirth,
-          gender: r.gender,
-          address: undefined,
-          emergencyContact: undefined,
-          emergencyPhone: undefined,
-          profilePictureUrl: undefined,
-          preferredGymTime: undefined,
-          isActive: r.isActive,
-          password: loginPassword,
-          role: 1,
-          planId: undefined,
-          membershipStartDate: undefined,
-          trainerId: undefined,
-          instructorSpecialization: undefined,
-          instructorBio: undefined,
-          instructorHireDate: undefined,
-        })
-      }
-
-      const total = payloads.length
-      setImportProgress({ done: 0, total })
-      let ok = 0
-
-      for (let offset = 0; offset < payloads.length; offset += BULK_IMPORT_BATCH_SIZE) {
-        const batch = payloads.slice(offset, offset + BULK_IMPORT_BATCH_SIZE)
-        try {
-          const { data } = await usersService.bulkImportMembers(batch, { timeoutMs: 300_000 })
-          ok += data.imported ?? 0
-          if (data.log?.length) log.push(...data.log)
-        } catch (err: unknown) {
-          const msg = getCreateUserErrorMessage(err)
-          log.push(`Batch ${Math.floor(offset / BULK_IMPORT_BATCH_SIZE) + 1} failed (${batch.length} rows): ${msg}`)
-        }
-        setImportProgress({ done: Math.min(offset + batch.length, total), total })
-      }
-
-      setImportLog(log)
-      await queryClient.invalidateQueries({ queryKey: ['users-paged'] })
-      await queryClient.invalidateQueries({ queryKey: ['users-directory-total'] })
-      toast.success(`Imported ${ok} member(s). Review log for skips or errors.`)
-    } catch {
-      toast.error('Could not read CSV file.')
-    } finally {
-      setImporting(false)
-      setImportProgress(null)
-    }
-  }
-
   const tableSectionRef = useRef<HTMLElement>(null)
 
   return (
     <DashboardLayout userName={userName}>
-      <DataPageShell lockViewport={false} className="gap-3 bg-[#070B14] pb-2">
+      <DataPageShell lockViewport={false} className="gap-4 rounded-2xl bg-[#070B14] p-4 sm:gap-5 sm:p-6">
         <MembersPageHeader
           title="All Members"
           subtitle={
@@ -1225,7 +1151,6 @@ export function UsersPage() {
           onImport={
             canManageMembers && !coachClientsOnly
               ? () => {
-                  setImportLog([])
                   setImportOpen(true)
                 }
               : undefined
@@ -1687,57 +1612,15 @@ export function UsersPage() {
             </form>
           </Modal>
 
-          <Modal open={importOpen} onClose={() => !importing && setImportOpen(false)} title="Import members from CSV">
-            <div className="space-y-4 text-sm">
-              <p className="text-slate-400">
-                Required columns: <strong className="text-slate-200">firstName</strong>,{' '}
-                <strong className="text-slate-200">lastName</strong>,{' '}
-                <strong className="text-slate-200">email</strong>,{' '}
-                <strong className="text-slate-200">phone</strong>,{' '}
-                <strong className="text-slate-200">dateOfBirth</strong> (YYYY-MM-DD),{' '}
-                <strong className="text-slate-200">gender</strong>. Optional: aadhaarNumber, isActive, password (defaults
-                to phone if omitted). Login uses the email column; password defaults to phone for bulk import. Admins can
-                change email and password later on the member profile.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={downloadImportTemplate}
-                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
-                >
-                  Download template
-                </button>
-              </div>
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium text-slate-500">CSV file</span>
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={importing}
-                  className="block w-full text-xs text-slate-300 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-500/20 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-100"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    void handleCsvImportFile(f ?? null)
-                    e.target.value = ''
-                  }}
-                />
-              </label>
-              {importing ? (
-                <p className="text-slate-400">
-                  {importProgress && importProgress.total > 0
-                    ? `Importing… ${importProgress.done} / ${importProgress.total} rows`
-                    : 'Importing…'}
-                </p>
-              ) : null}
-              {importLog.length > 0 ? (
-                <div className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-[11px] text-slate-300">
-                  {importLog.map((line, i) => (
-                    <div key={`${i}-${line.slice(0, 24)}`}>{line}</div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </Modal>
+          <MemberCsvImportModal
+            open={importOpen}
+            onClose={() => setImportOpen(false)}
+            onImported={async () => {
+              await queryClient.invalidateQueries({ queryKey: ['users-paged'] })
+              await queryClient.invalidateQueries({ queryKey: ['users-directory-total'] })
+              await queryClient.invalidateQueries({ queryKey: ['member-directory-stats'] })
+            }}
+          />
 
       <MemberMembershipsModal
         user={membershipModalUser}

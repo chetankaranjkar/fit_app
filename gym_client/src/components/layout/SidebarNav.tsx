@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { authService } from '../../services/auth.service'
-import { PermissionGate } from '../auth/PermissionGate'
 import {
   canAccessAttendanceNav,
   canAccessConfigNav,
+  canAccessLeadsNav,
   canAccessPaymentsNav,
   canAccessReportsNav,
   canAccessTrainingNav,
@@ -13,105 +13,11 @@ import {
   isStaffFrontDeskOnly,
   getStaffFrontDeskNavLinks,
 } from '../../features/auth/navPermissions'
+import { getTrainingNavNodes, pruneTrainingNavNodes } from '../../features/auth/trainingNav'
+import { groupBySection, type NavSectionId } from '../../features/auth/navSections'
 import { linkPrefetchProps, prefetchRoute } from '../../routes/prefetch'
 import { BrandLogo } from '../brand/BrandLogo'
-
-const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { path: '/dashboard/attendance', label: 'Attendance', icon: 'attendance' },
-  { path: '/dashboard/payments', label: 'Payments', icon: 'payments' },
-  { path: '/dashboard/coupons', label: 'Coupons', icon: 'coupons' },
-  { path: '/dashboard/security', label: 'Security', icon: 'security' },
-  { path: '/dashboard/roles', label: 'Roles & Permissions', icon: 'roles' },
-  { path: '/dashboard/trainers', label: 'Trainers', icon: 'trainers' },
-] as const
-
-const userSubItems = [
-  { path: '/dashboard/users', label: 'Users (members)' },
-  { path: '/dashboard/user-memberships', label: 'User membership plans' },
-  { path: '/dashboard/membership-plans', label: 'Membership plan' },
-] as const
-
-const trainingSubItems = [
-  { path: '/dashboard/training/body-parts', label: 'Body Parts' },
-  { path: '/dashboard/training/exercises', label: 'Exercises' },
-  { path: '/dashboard/training/warmups', label: 'Warmups' },
-  { path: '/dashboard/training/stretches', label: 'Stretches' },
-  { path: '/dashboard/training/workout-categories', label: 'Workout categories' },
-  { path: '/dashboard/training/programs', label: 'Programs' },
-  { path: '/dashboard/training/workout-assignments', label: 'Workout Assignments' },
-  {
-    path: '/dashboard/training/workout-plan-audit',
-    label: 'Workout Plan Audit',
-    permission: 'VIEW_WORKOUT_PLAN_AUDIT',
-  },
-] as const
-
-function isTrainingSubItemVisible(item: (typeof trainingSubItems)[number]) {
-  if ('permission' in item && item.permission) {
-    return authService.hasPermission(item.permission)
-  }
-  return true
-}
-
-const dietSubItems = [
-  { path: '/dashboard/diet-plans', label: 'Dashboard' },
-  { path: '/dashboard/diet-plans/list', label: 'All Diet Plans' },
-  { path: '/dashboard/diet-plans/assign', label: 'Assign to Users' },
-  { path: '/dashboard/supplements/master', label: 'Supplement Catalog' },
-] as const
-
-const gymOpsSubItems = [
-  { path: '/dashboard/gym-operations/equipment', label: 'Equipment' },
-  { path: '/dashboard/gym-operations/maintenance', label: 'Maintenance Logs' },
-  { path: '/dashboard/gym-operations/expenses', label: 'Expenses' },
-  { path: '/dashboard/gym-operations/cleaning', label: 'Cleaning & Hygiene' },
-  { path: '/dashboard/gym-operations/vendors', label: 'Vendors' },
-  { path: '/dashboard/gym-operations/reports', label: 'Reports' },
-] as const
-
-const lockerMgmtSubItems = [
-  { path: '/dashboard/locker-management/lockers', label: 'Lockers' },
-  { path: '/dashboard/locker-management/assignments', label: 'Assignments' },
-  { path: '/dashboard/locker-management/access-logs', label: 'Access Logs' },
-  { path: '/dashboard/locker-management/maintenance', label: 'Maintenance' },
-  { path: '/dashboard/locker-management/reports', label: 'Reports' },
-] as const
-
-const ptSubItems = [
-  { path: '/dashboard/personal-training', label: 'Dashboard' },
-  { path: '/dashboard/personal-training/packages', label: 'PT Packages' },
-  { path: '/dashboard/personal-training/assign', label: 'Assign Package' },
-  { path: '/dashboard/personal-training/sessions', label: 'Sessions' },
-  { path: '/dashboard/personal-training/reports', label: 'Reports' },
-] as const
-
-const retailSubItems = [
-  { path: '/dashboard/retail/pos', label: 'POS Checkout' },
-  { path: '/dashboard/retail/products', label: 'Products' },
-  { path: '/dashboard/retail/categories', label: 'Categories' },
-  { path: '/dashboard/retail/orders', label: 'Orders / Sales' },
-  { path: '/dashboard/retail/alerts', label: 'Stock Alerts' },
-] as const
-
-const notificationsSubItems = [
-  { path: '/dashboard/settings/email', label: 'Email settings' },
-  { path: '/dashboard/settings/sms', label: 'SMS settings' },
-  { path: '/dashboard/settings/invoice-branding', label: 'Invoice branding' },
-  { path: '/dashboard/settings/notification-templates', label: 'Notification templates' },
-] as const
-
-/** Door / QR entry (scan = all; owner console = ADMIN + STAFF). */
-const accessNavItems: ReadonlyArray<{
-  path: string
-  label: string
-  /** When true, visible only to ADMIN + STAFF (owner QR console). */
-  requiresQrConsole?: boolean
-}> = [
-  { path: '/dashboard/access/branches', label: 'Branches', requiresQrConsole: true },
-  { path: '/dashboard/access/owner-qr', label: 'Owner QR', requiresQrConsole: true },
-  { path: '/dashboard/access/scan', label: 'Scan to enter' },
-]
+import { SidebarSectionHeading } from './SidebarSectionHeading'
 
 const iconMap = {
   dashboard: (
@@ -137,6 +43,16 @@ const iconMap = {
   payments: (
     <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  memberships: (
+    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+    </svg>
+  ),
+  plans: (
+    <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
     </svg>
   ),
   attendance: (
@@ -215,6 +131,215 @@ const iconMap = {
   ),
 }
 
+type IconKey = keyof typeof iconMap
+
+type AdminNavChild =
+  | { kind?: 'link'; path: string; label: string; visible?: () => boolean }
+  | { kind: 'heading'; label: string }
+
+type AdminNavEntry =
+  | {
+      kind: 'link'
+      section: NavSectionId
+      path: string
+      label: string
+      icon: IconKey
+      visible?: () => boolean
+    }
+  | {
+      kind: 'group'
+      section: NavSectionId
+      id: string
+      label: string
+      icon: IconKey
+      /** Collapsed-rail target; defaults to the first visible child. */
+      collapsedHref?: string
+      children: readonly AdminNavChild[]
+      visible?: () => boolean
+    }
+
+/** Owner/admin sidebar. URLs and visibility checks are the route contract — keep them stable. */
+const ADMIN_NAV: readonly AdminNavEntry[] = [
+  { kind: 'link', section: 'overview', path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+
+  { kind: 'link', section: 'members', path: '/dashboard/users', label: 'Members', icon: 'clients', visible: canAccessUsersNav },
+  { kind: 'link', section: 'members', path: '/dashboard/reception', label: 'Lead CRM', icon: 'trainers', visible: canAccessLeadsNav },
+
+  { kind: 'link', section: 'billing', path: '/dashboard/user-memberships', label: 'Memberships', icon: 'memberships', visible: canAccessUsersNav },
+  { kind: 'link', section: 'billing', path: '/dashboard/membership-plans', label: 'Plan catalog', icon: 'plans', visible: canAccessUsersNav },
+  { kind: 'link', section: 'billing', path: '/dashboard/payments', label: 'Payments', icon: 'payments', visible: canAccessPaymentsNav },
+  { kind: 'link', section: 'billing', path: '/dashboard/coupons', label: 'Coupons', icon: 'coupons', visible: canAccessPaymentsNav },
+
+  { kind: 'link', section: 'coaching', path: '/dashboard/trainers', label: 'Trainers', icon: 'trainers', visible: canAccessUsersNav },
+  {
+    kind: 'group',
+    section: 'coaching',
+    id: 'training',
+    label: 'Training',
+    icon: 'training',
+    visible: canAccessTrainingNav,
+    collapsedHref: '/dashboard/training/programs',
+    children: getTrainingNavNodes({ includeMonitor: true }),
+  },
+  {
+    kind: 'group',
+    section: 'coaching',
+    id: 'diet',
+    label: 'Diet Plans',
+    icon: 'diet',
+    visible: canAccessTrainingNav,
+    children: [
+      { path: '/dashboard/diet-plans', label: 'Dashboard' },
+      { path: '/dashboard/diet-plans/list', label: 'All Diet Plans' },
+      { path: '/dashboard/diet-plans/assign', label: 'Assign to Members' },
+      { path: '/dashboard/supplements/master', label: 'Supplement Catalog' },
+    ],
+  },
+  {
+    kind: 'group',
+    section: 'coaching',
+    id: 'pt',
+    label: 'Personal Training',
+    icon: 'trainers',
+    visible: canAccessPtNav,
+    children: [
+      { path: '/dashboard/personal-training', label: 'Dashboard' },
+      { path: '/dashboard/personal-training/packages', label: 'PT Packages' },
+      { path: '/dashboard/personal-training/assign', label: 'Assign Package' },
+      { path: '/dashboard/personal-training/sessions', label: 'Sessions' },
+      { path: '/dashboard/personal-training/reports', label: 'Reports' },
+    ],
+  },
+
+  { kind: 'link', section: 'attendance', path: '/dashboard/attendance', label: 'Attendance', icon: 'attendance', visible: canAccessAttendanceNav },
+  {
+    kind: 'group',
+    section: 'attendance',
+    id: 'access',
+    label: 'Access & QR',
+    icon: 'qrDoor',
+    collapsedHref: '/dashboard/access/scan',
+    children: [
+      { path: '/dashboard/access/scan', label: 'Scan to enter' },
+      { path: '/dashboard/access/branches', label: 'Branches', visible: authService.hasQrOwnerAccess },
+      { path: '/dashboard/access/owner-qr', label: 'Owner QR', visible: authService.hasQrOwnerAccess },
+    ],
+  },
+
+  {
+    kind: 'group',
+    section: 'retail',
+    id: 'retail',
+    label: 'Store',
+    icon: 'retail',
+    visible: canAccessPaymentsNav,
+    children: [
+      { path: '/dashboard/retail/pos', label: 'POS Checkout' },
+      { path: '/dashboard/retail/orders', label: 'Orders / Sales' },
+      { path: '/dashboard/retail/products', label: 'Products' },
+      { path: '/dashboard/retail/categories', label: 'Categories' },
+      { path: '/dashboard/retail/alerts', label: 'Stock Alerts' },
+    ],
+  },
+
+  {
+    kind: 'group',
+    section: 'operations',
+    id: 'gymOps',
+    label: 'Facilities',
+    icon: 'gymOps',
+    visible: canAccessReportsNav,
+    children: [
+      { path: '/dashboard/gym-operations/equipment', label: 'Equipment' },
+      { path: '/dashboard/gym-operations/maintenance', label: 'Maintenance Logs' },
+      { path: '/dashboard/gym-operations/cleaning', label: 'Cleaning & Hygiene' },
+      { path: '/dashboard/gym-operations/expenses', label: 'Expenses' },
+      { path: '/dashboard/gym-operations/vendors', label: 'Vendors' },
+      { path: '/dashboard/gym-operations/reports', label: 'Reports' },
+    ],
+  },
+  {
+    kind: 'group',
+    section: 'operations',
+    id: 'lockers',
+    label: 'Lockers',
+    icon: 'locker',
+    visible: canAccessConfigNav,
+    children: [
+      { path: '/dashboard/locker-management/lockers', label: 'Lockers' },
+      { path: '/dashboard/locker-management/assignments', label: 'Assignments' },
+      { path: '/dashboard/locker-management/access-logs', label: 'Access Logs' },
+      { path: '/dashboard/locker-management/maintenance', label: 'Maintenance' },
+      { path: '/dashboard/locker-management/reports', label: 'Reports' },
+    ],
+  },
+
+  { kind: 'link', section: 'reports', path: '/dashboard/owner-analytics', label: 'Owner Analytics', icon: 'analytics', visible: canAccessReportsNav },
+  { kind: 'link', section: 'reports', path: '/dashboard/security', label: 'Security & sessions', icon: 'security', visible: authService.canReportsAccess },
+
+  { kind: 'link', section: 'settings', path: '/dashboard/roles', label: 'Roles & Permissions', icon: 'roles', visible: canAccessConfigNav },
+  {
+    kind: 'group',
+    section: 'settings',
+    id: 'notifications',
+    label: 'Notifications',
+    icon: 'notifications',
+    visible: canAccessConfigNav,
+    children: [
+      { path: '/dashboard/settings/notifications', label: 'Channel status' },
+      { path: '/dashboard/settings/email', label: 'Email settings' },
+      { path: '/dashboard/settings/sms', label: 'SMS settings' },
+      { path: '/dashboard/settings/notification-templates', label: 'Notification templates' },
+      { path: '/dashboard/settings/invoice-branding', label: 'Invoice branding' },
+    ],
+  },
+]
+
+const staffNavIcon: Record<string, IconKey> = {
+  '/dashboard': 'dashboard',
+  '/dashboard/reception': 'trainers',
+  '/dashboard/attendance': 'attendance',
+  '/dashboard/users': 'clients',
+  '/dashboard/user-memberships': 'memberships',
+  '/dashboard/payments/collect': 'payments',
+  '/dashboard/access/scan': 'qrDoor',
+}
+
+/** Visible entries for the signed-in user; groups keep only visible children and drop when empty. */
+function getVisibleAdminNav(): AdminNavEntry[] {
+  const visible: AdminNavEntry[] = []
+  for (const entry of ADMIN_NAV) {
+    if (entry.visible && !entry.visible()) continue
+    if (entry.kind === 'link') {
+      visible.push(entry)
+      continue
+    }
+    const children = pruneTrainingNavNodes(
+      entry.children.filter((c) => c.kind === 'heading' || !c.visible || c.visible()),
+    )
+    if (children.length > 0) visible.push({ ...entry, children })
+  }
+  return visible
+}
+
+function getFrontDeskNav(): AdminNavEntry[] {
+  return getStaffFrontDeskNavLinks().map(({ path, label, section }) => ({
+    kind: 'link',
+    section,
+    path,
+    label,
+    icon: staffNavIcon[path] ?? 'dashboard',
+  }))
+}
+
+function matchesPath(pathname: string, path: string): boolean {
+  return pathname === path || (path !== '/dashboard' && pathname.startsWith(path + '/'))
+}
+
+function isGroupActive(pathname: string, children: readonly AdminNavChild[]): boolean {
+  return children.some((c) => c.kind !== 'heading' && 'path' in c && matchesPath(pathname, c.path))
+}
+
 interface SidebarNavProps {
   userName?: string | null
   userAvatarUrl?: string | null
@@ -234,95 +359,28 @@ export function SidebarNav({
 }: SidebarNavProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const isUserPath = userSubItems.some(
-    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
-  )
-  const isTrainingPath = trainingSubItems.some((s) => location.pathname === s.path)
-  const isDietPath = dietSubItems.some(
-    (s) =>
-      location.pathname === s.path ||
-      (s.path !== '/dashboard/diet-plans' && location.pathname.startsWith(s.path + '/'))
-  )
-  const isGymOpsPath = gymOpsSubItems.some(
-    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
-  )
-  const isLockerMgmtPath = lockerMgmtSubItems.some(
-    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
-  )
-  const isPtPath = ptSubItems.some(
-    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
-  )
-  const isRetailPath = retailSubItems.some(
-    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
-  )
-  const isNotificationsPath = notificationsSubItems.some(
-    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/')
-  )
+  const { pathname } = location
   const staffFrontDesk = isStaffFrontDeskOnly()
-  const visibleAccessNav = accessNavItems.filter(
-    (item) => !item.requiresQrConsole || authService.hasQrOwnerAccess(),
+  const entries = staffFrontDesk ? getFrontDeskNav() : getVisibleAdminNav()
+  const sections = groupBySection(entries)
+  const groups = entries.filter(
+    (e): e is Extract<AdminNavEntry, { kind: 'group' }> => e.kind === 'group',
   )
-  const isAccessPath = visibleAccessNav.some(
-    (s) => location.pathname === s.path || location.pathname.startsWith(s.path + '/'),
-  )
-  const [userOpen, setUserOpen] = useState(isUserPath)
-  const [trainingOpen, setTrainingOpen] = useState(isTrainingPath)
-  const [dietOpen, setDietOpen] = useState(isDietPath)
-  const [gymOpsOpen, setGymOpsOpen] = useState(isGymOpsPath)
-  const [lockerMgmtOpen, setLockerMgmtOpen] = useState(isLockerMgmtPath)
-  const [ptOpen, setPtOpen] = useState(isPtPath)
-  const [retailOpen, setRetailOpen] = useState(isRetailPath)
-  const [accessOpen, setAccessOpen] = useState(isAccessPath)
-  const [notificationsOpen, setNotificationsOpen] = useState(isNotificationsPath)
-  const visibleNavItems = navItems.filter((item) => {
-    if (item.path === '/dashboard/security') return false
-    if (item.path === '/dashboard/attendance') return canAccessAttendanceNav()
-    if (item.path === '/dashboard/payments') return canAccessPaymentsNav()
-    if (item.path === '/dashboard/coupons') return canAccessPaymentsNav()
-    if (item.path === '/dashboard/roles') return canAccessConfigNav()
-    if (item.path === '/dashboard/trainers') return canAccessUsersNav()
-    return true
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {}
+    for (const g of groups) init[g.id] = isGroupActive(pathname, g.children)
+    return init
   })
-  const staffNavIcon: Record<string, keyof typeof iconMap> = {
-    '/dashboard': 'dashboard',
-    '/dashboard/reception': 'trainers',
-    '/dashboard/attendance': 'attendance',
-    '/dashboard/users': 'clients',
-    '/dashboard/user-memberships': 'payments',
-    '/dashboard/payments/collect': 'payments',
-    '/dashboard/access/scan': 'qrDoor',
-  }
-  const staffFrontDeskLinks = getStaffFrontDeskNavLinks()
 
   useEffect(() => {
-    if (isUserPath) setUserOpen(true)
-  }, [isUserPath])
-  useEffect(() => {
-    if (isTrainingPath) setTrainingOpen(true)
-  }, [isTrainingPath])
-  useEffect(() => {
-    if (isDietPath) setDietOpen(true)
-  }, [isDietPath])
-  useEffect(() => {
-    if (isGymOpsPath) setGymOpsOpen(true)
-  }, [isGymOpsPath])
-  useEffect(() => {
-    if (isLockerMgmtPath) setLockerMgmtOpen(true)
-  }, [isLockerMgmtPath])
-  useEffect(() => {
-    if (isRetailPath) setRetailOpen(true)
-  }, [isRetailPath])
-  useEffect(() => {
-    if (isAccessPath) setAccessOpen(true)
-  }, [isAccessPath])
-  useEffect(() => {
-    if (isNotificationsPath) setNotificationsOpen(true)
-  }, [isNotificationsPath])
-
-  const collapsedAccessHref =
-    visibleAccessNav.find((p) => p.path.endsWith('/scan'))?.path ??
-    visibleAccessNav[0]?.path ??
-    '/dashboard/access/scan'
+    for (const g of groups) {
+      if (isGroupActive(pathname, g.children)) {
+        setOpenGroups((prev) => (prev[g.id] ? prev : { ...prev, [g.id]: true }))
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- groups derive from session; re-run on navigation only
+  }, [pathname])
 
   const handleLogout = async () => {
     try {
@@ -339,17 +397,14 @@ export function SidebarNav({
   const inactiveBase = 'text-slate-300 hover:bg-white/5 hover:text-white'
 
   const linkClass = (path: string) => {
-    const isActive =
-      location.pathname === path ||
-      // Keep group highlighted on nested pages (e.g. trainer detail)
-      (path !== '/dashboard' && location.pathname.startsWith(path + '/'))
+    const isActive = matchesPath(pathname, path)
     return `group relative flex items-center rounded-xl py-2.5 text-sm font-medium transition ${
       collapsed ? 'justify-center px-2' : 'gap-3 px-3'
     } ${isActive ? activeBase : inactiveBase}`
   }
 
   const subLinkClass = (path: string) => {
-    const isActive = location.pathname === path
+    const isActive = pathname === path
     return `rounded-lg py-2 pl-3 pr-2 text-sm transition ${
       isActive
         ? 'bg-white/5 text-white font-medium'
@@ -357,12 +412,112 @@ export function SidebarNav({
     }`
   }
 
+  const iconClass = (active: boolean) => (active ? 'text-white' : 'text-slate-400 group-hover:text-white')
+
   const handleNavClick = () => {
     if (mobileOpen && onCloseMobile) onCloseMobile()
   }
 
+  const renderEntry = (entry: AdminNavEntry) => {
+    if (entry.kind === 'link') {
+      const { path, label, icon } = entry
+      return (
+        <Link
+          key={path}
+          to={path}
+          {...linkPrefetchProps(path)}
+          onClick={handleNavClick}
+          title={collapsed ? label : undefined}
+          aria-label={collapsed ? label : undefined}
+          aria-current={matchesPath(pathname, path) ? 'page' : undefined}
+          className={linkClass(path)}
+        >
+          <span className={iconClass(matchesPath(pathname, path))}>{iconMap[icon]}</span>
+          {!collapsed && <span className="truncate">{label}</span>}
+        </Link>
+      )
+    }
+
+    const active = isGroupActive(pathname, entry.children)
+    const firstLink = entry.children.find((c): c is Extract<AdminNavChild, { path: string }> =>
+      Boolean(c.kind !== 'heading' && 'path' in c),
+    )
+    const href = entry.collapsedHref ?? firstLink?.path ?? '/dashboard'
+
+    if (collapsed) {
+      return (
+        <Link
+          key={entry.id}
+          to={href}
+          {...linkPrefetchProps(href)}
+          onClick={handleNavClick}
+          title={entry.label}
+          aria-label={entry.label}
+          className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
+            active ? activeBase : inactiveBase
+          }`}
+        >
+          <span className={iconClass(active)}>{iconMap[entry.icon]}</span>
+        </Link>
+      )
+    }
+
+    const open = openGroups[entry.id] ?? false
+    return (
+      <div key={entry.id} className="flex flex-col gap-0.5">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={`sidebar-group-${entry.id}`}
+          onClick={() => setOpenGroups((p) => ({ ...p, [entry.id]: !open }))}
+          onMouseEnter={() => prefetchRoute(href)}
+          onFocus={() => prefetchRoute(href)}
+          className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
+        >
+          <span className="flex items-center gap-3">
+            <span className="text-slate-400 group-hover:text-white">{iconMap[entry.icon]}</span>
+            <span>{entry.label}</span>
+          </span>
+          <svg
+            className={`size-4 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {open && (
+          <div id={`sidebar-group-${entry.id}`} className="ml-4 flex flex-col border-l border-white/10 pl-3">
+            {entry.children.map((child) =>
+              child.kind === 'heading' ? (
+                <p
+                  key={`heading-${child.label}`}
+                  className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+                >
+                  {child.label}
+                </p>
+              ) : (
+                <Link
+                  key={child.path}
+                  to={child.path}
+                  {...linkPrefetchProps(child.path)}
+                  onClick={handleNavClick}
+                  className={subLinkClass(child.path)}
+                >
+                  {child.label}
+                </Link>
+              ),
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const sidebarContent = (
     <aside
+      id={mobileOpen ? 'dashboard-mobile-nav' : undefined}
       className="z-50 flex h-screen shrink-0 flex-col border-r border-white/5 bg-[rgba(7,7,22,0.85)] backdrop-blur-xl transition-[width] duration-300 ease-out"
       style={{
         width: collapsed ? '5rem' : '16rem',
@@ -416,686 +571,17 @@ export function SidebarNav({
           </button>
         )}
 
-        {!collapsed && (
-          <p className="px-4 pt-3 pb-1 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">
-            Navigation
-          </p>
-        )}
-
-        <nav className="mt-2 flex min-h-0 flex-1 flex-col gap-0.5 px-3 pb-3">
+        <nav className="mt-2 flex min-h-0 flex-1 flex-col gap-0.5 px-3 pb-3" aria-label="Main navigation">
           {/* Scrollable nav links */}
           <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-            {staffFrontDesk ? (
-              staffFrontDeskLinks.map(({ path, label }) => {
-                const icon = staffNavIcon[path] ?? 'dashboard'
-                return (
-                  <Link
-                    key={path}
-                    to={path}
-                    {...linkPrefetchProps(path)}
-                    onClick={handleNavClick}
-                    title={collapsed ? label : undefined}
-                    className={linkClass(path)}
-                  >
-                    <span
-                      className={
-                        location.pathname === path || location.pathname.startsWith(path + '/')
-                          ? 'text-white'
-                          : 'text-slate-400 group-hover:text-white'
-                      }
-                    >
-                      {iconMap[icon]}
-                    </span>
-                    {!collapsed && <span className="truncate">{label}</span>}
-                  </Link>
-                )
-              })
-            ) : (
-              <>
-            {/* Dashboard first */}
-            {visibleNavItems.slice(0, 1).map(({ path, label, icon }) => (
-              <Link
-                key={path}
-                to={path}
-                {...linkPrefetchProps(path)}
-                onClick={handleNavClick}
-                title={collapsed ? label : undefined}
-                className={linkClass(path)}
-              >
-                <span
-                  className={
-                    location.pathname === path
-                      ? 'text-white'
-                      : 'text-slate-400 group-hover:text-white'
-                  }
-                >
-                  {iconMap[icon]}
-                </span>
-                {!collapsed && <span className="truncate">{label}</span>}
-              </Link>
-            ))}
-
-            {/* Users group */}
-            {canAccessUsersNav() &&
-            (collapsed ? (
-              <Link
-                to="/dashboard/users"
-                {...linkPrefetchProps('/dashboard/users')}
-                onClick={handleNavClick}
-                title="User"
-                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
-                  isUserPath ? activeBase : inactiveBase
-                }`}
-              >
-                <span
-                  className={isUserPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}
-                >
-                  {iconMap.clients}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setUserOpen((o) => !o)}
-                  onMouseEnter={() => prefetchRoute('/dashboard/users')}
-                  onFocus={() => prefetchRoute('/dashboard/users')}
-                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="text-slate-400 group-hover:text-white">
-                      {iconMap.clients}
-                    </span>
-                    <span>Users</span>
-                  </span>
-                  <svg
-                    className={`size-4 shrink-0 text-slate-500 transition-transform ${
-                      userOpen ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {userOpen && (
-                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {userSubItems.map(({ path, label }) => (
-                      <Link
-                        key={path}
-                        to={path}
-                        {...linkPrefetchProps(path)}
-                        onClick={handleNavClick}
-                        className={subLinkClass(path)}
-                      >
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
+            {sections.map((bucket, index) => (
+              <div key={bucket.id ?? 'flat'} className="flex flex-col gap-1">
+                {bucket.label ? (
+                  <SidebarSectionHeading label={bucket.label} collapsed={collapsed} first={index === 0} />
+                ) : null}
+                {bucket.entries.map(renderEntry)}
               </div>
             ))}
-
-            {(authService.hasPermission('LEADS_CRM') ||
-              authService.hasPermission('LEADS_TRAINER')) && (
-              <Link
-                to="/dashboard/reception"
-                {...linkPrefetchProps('/dashboard/reception')}
-                onClick={handleNavClick}
-                title={collapsed ? 'Lead CRM' : undefined}
-                className={linkClass('/dashboard/reception')}
-              >
-                <span
-                  className={
-                    location.pathname === '/dashboard/reception' ||
-                    location.pathname.startsWith('/dashboard/reception/')
-                      ? 'text-white'
-                      : 'text-slate-400 group-hover:text-white'
-                  }
-                >
-                  {iconMap.trainers}
-                </span>
-                {!collapsed && <span className="truncate">Lead CRM</span>}
-              </Link>
-            )}
-
-            {/* Payments, Roles, Trainers */}
-            {visibleNavItems.slice(1).map(({ path, label, icon }) => (
-              <Link
-                key={path}
-                to={path}
-                {...linkPrefetchProps(path)}
-                onClick={handleNavClick}
-                title={collapsed ? label : undefined}
-                className={linkClass(path)}
-              >
-                <span
-                  className={
-                    location.pathname === path
-                      ? 'text-white'
-                      : 'text-slate-400 group-hover:text-white'
-                  }
-                >
-                  {iconMap[icon as keyof typeof iconMap]}
-                </span>
-                {!collapsed && <span className="truncate">{label}</span>}
-              </Link>
-            ))}
-            <PermissionGate permission={authService.permissionCodes.reports} fallback={null}>
-              {(() => {
-                const item = navItems.find((n) => n.path === '/dashboard/security')
-                if (!item) return null
-                const { path, label, icon } = item
-                return (
-                  <Link
-                    key={path}
-                    to={path}
-                    {...linkPrefetchProps(path)}
-                    onClick={handleNavClick}
-                    title={collapsed ? label : undefined}
-                    className={linkClass(path)}
-                  >
-                    <span
-                      className={
-                        location.pathname === path
-                          ? 'text-white'
-                          : 'text-slate-400 group-hover:text-white'
-                      }
-                    >
-                      {iconMap[icon]}
-                    </span>
-                    {!collapsed && <span className="truncate">{label}</span>}
-                  </Link>
-                )
-              })()}
-            </PermissionGate>
-
-            {/* Training group */}
-            {canAccessTrainingNav() &&
-            (collapsed ? (
-              <Link
-                to="/dashboard/training/body-parts"
-                {...linkPrefetchProps('/dashboard/training/body-parts')}
-                onClick={handleNavClick}
-                title="Training"
-                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
-                  isTrainingPath ? activeBase : inactiveBase
-                }`}
-              >
-                <span
-                  className={
-                    isTrainingPath ? 'text-white' : 'text-slate-400 group-hover:text-white'
-                  }
-                >
-                  {iconMap.training}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setTrainingOpen((o) => !o)}
-                  onMouseEnter={() => prefetchRoute('/dashboard/training/body-parts')}
-                  onFocus={() => prefetchRoute('/dashboard/training/body-parts')}
-                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="text-slate-400 group-hover:text-white">
-                      {iconMap.training}
-                    </span>
-                    <span>Training</span>
-                  </span>
-                  <svg
-                    className={`size-4 shrink-0 text-slate-500 transition-transform ${
-                      trainingOpen ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {trainingOpen && (
-                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {trainingSubItems.filter(isTrainingSubItemVisible).map(({ path, label }) => (
-                      <Link
-                        key={path}
-                        to={path}
-                        {...linkPrefetchProps(path)}
-                        onClick={handleNavClick}
-                        className={subLinkClass(path)}
-                      >
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Diet group */}
-            {canAccessTrainingNav() &&
-            (collapsed ? (
-              <Link
-                to="/dashboard/diet-plans"
-                {...linkPrefetchProps('/dashboard/diet-plans')}
-                onClick={handleNavClick}
-                title="Diet Plans"
-                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
-                  isDietPath ? activeBase : inactiveBase
-                }`}
-              >
-                <span
-                  className={isDietPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}
-                >
-                  {iconMap.diet}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setDietOpen((o) => !o)}
-                  onMouseEnter={() => prefetchRoute('/dashboard/diet-plans')}
-                  onFocus={() => prefetchRoute('/dashboard/diet-plans')}
-                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="text-slate-400 group-hover:text-white">
-                      {iconMap.diet}
-                    </span>
-                    <span>Diet Plans</span>
-                  </span>
-                  <svg
-                    className={`size-4 shrink-0 text-slate-500 transition-transform ${
-                      dietOpen ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {dietOpen && (
-                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {dietSubItems.map(({ path, label }) => (
-                      <Link
-                        key={path}
-                        to={path}
-                        {...linkPrefetchProps(path)}
-                        onClick={handleNavClick}
-                        className={subLinkClass(path)}
-                      >
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Gym Operations group (isolated module) */}
-            {canAccessReportsNav() &&
-            (collapsed ? (
-              <Link
-                to="/dashboard/gym-operations/equipment"
-                {...linkPrefetchProps('/dashboard/gym-operations/equipment')}
-                onClick={handleNavClick}
-                title="Gym Operations"
-                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
-                  isGymOpsPath ? activeBase : inactiveBase
-                }`}
-              >
-                <span
-                  className={isGymOpsPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}
-                >
-                  {iconMap.gymOps}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setGymOpsOpen((o) => !o)}
-                  onMouseEnter={() => prefetchRoute('/dashboard/gym-operations/equipment')}
-                  onFocus={() => prefetchRoute('/dashboard/gym-operations/equipment')}
-                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="text-slate-400 group-hover:text-white">
-                      {iconMap.gymOps}
-                    </span>
-                    <span>Gym Operations</span>
-                  </span>
-                  <svg
-                    className={`size-4 shrink-0 text-slate-500 transition-transform ${
-                      gymOpsOpen ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {gymOpsOpen && (
-                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {gymOpsSubItems.map(({ path, label }) => (
-                      <Link
-                        key={path}
-                        to={path}
-                        {...linkPrefetchProps(path)}
-                        onClick={handleNavClick}
-                        className={subLinkClass(path)}
-                      >
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Locker Management group (isolated module) */}
-            {canAccessConfigNav() &&
-            (collapsed ? (
-              <Link
-                to="/dashboard/locker-management/lockers"
-                {...linkPrefetchProps('/dashboard/locker-management/lockers')}
-                onClick={handleNavClick}
-                title="Locker Management"
-                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
-                  isLockerMgmtPath ? activeBase : inactiveBase
-                }`}
-              >
-                <span
-                  className={isLockerMgmtPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}
-                >
-                  {iconMap.locker}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setLockerMgmtOpen((o) => !o)}
-                  onMouseEnter={() => prefetchRoute('/dashboard/locker-management/lockers')}
-                  onFocus={() => prefetchRoute('/dashboard/locker-management/lockers')}
-                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="text-slate-400 group-hover:text-white">
-                      {iconMap.locker}
-                    </span>
-                    <span>Locker Management</span>
-                  </span>
-                  <svg
-                    className={`size-4 shrink-0 text-slate-500 transition-transform ${
-                      lockerMgmtOpen ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {lockerMgmtOpen && (
-                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {lockerMgmtSubItems.map(({ path, label }) => (
-                      <Link
-                        key={path}
-                        to={path}
-                        {...linkPrefetchProps(path)}
-                        onClick={handleNavClick}
-                        className={subLinkClass(path)}
-                      >
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Personal Training */}
-            {canAccessPtNav() &&
-            (collapsed ? (
-              <Link
-                to="/dashboard/personal-training"
-                {...linkPrefetchProps('/dashboard/personal-training')}
-                onClick={handleNavClick}
-                title="Personal Training"
-                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
-                  isPtPath ? activeBase : inactiveBase
-                }`}
-              >
-                <span className={isPtPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}>
-                  {iconMap.trainers}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setPtOpen((o) => !o)}
-                  onMouseEnter={() => prefetchRoute('/dashboard/personal-training')}
-                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="text-slate-400 group-hover:text-white">{iconMap.trainers}</span>
-                    <span>Personal Training</span>
-                  </span>
-                  <svg className={`size-4 shrink-0 text-slate-500 transition-transform ${ptOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {ptOpen && (
-                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {ptSubItems.map(({ path, label }) => (
-                      <Link key={path} to={path} {...linkPrefetchProps(path)} onClick={handleNavClick} className={subLinkClass(path)}>
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Retail / Store group (isolated POS module) */}
-            {canAccessPaymentsNav() &&
-            (collapsed ? (
-              <Link
-                to="/dashboard/retail/pos"
-                {...linkPrefetchProps('/dashboard/retail/pos')}
-                onClick={handleNavClick}
-                title="Retail / Store"
-                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
-                  isRetailPath ? activeBase : inactiveBase
-                }`}
-              >
-                <span className={isRetailPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}>
-                  {iconMap.retail}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setRetailOpen((o) => !o)}
-                  onMouseEnter={() => prefetchRoute('/dashboard/retail/pos')}
-                  onFocus={() => prefetchRoute('/dashboard/retail/pos')}
-                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="text-slate-400 group-hover:text-white">{iconMap.retail}</span>
-                    <span>Retail / Store</span>
-                  </span>
-                  <svg className={`size-4 shrink-0 text-slate-500 transition-transform ${retailOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {retailOpen && (
-                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {retailSubItems.map(({ path, label }) => (
-                      <Link key={path} to={path} {...linkPrefetchProps(path)} onClick={handleNavClick} className={subLinkClass(path)}>
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Door / QR entry */}
-            {collapsed ? (
-              <Link
-                to={collapsedAccessHref}
-                {...linkPrefetchProps(collapsedAccessHref)}
-                onClick={handleNavClick}
-                title="Access & QR"
-                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
-                  isAccessPath ? activeBase : inactiveBase
-                }`}
-              >
-                <span
-                  className={
-                    isAccessPath ? 'text-white' : 'text-slate-400 group-hover:text-white'
-                  }
-                >
-                  {iconMap.qrDoor}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setAccessOpen((o) => !o)}
-                  onMouseEnter={() => prefetchRoute(collapsedAccessHref)}
-                  onFocus={() => prefetchRoute(collapsedAccessHref)}
-                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="text-slate-400 group-hover:text-white">
-                      {iconMap.qrDoor}
-                    </span>
-                    <span>Access</span>
-                  </span>
-                  <svg
-                    className={`size-4 shrink-0 text-slate-500 transition-transform ${
-                      accessOpen ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {accessOpen && (
-                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {visibleAccessNav.map(({ path, label }) => (
-                      <Link
-                        key={path}
-                        to={path}
-                        {...linkPrefetchProps(path)}
-                        onClick={handleNavClick}
-                        className={subLinkClass(path)}
-                      >
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Owner Analytics (isolated module, single page with drill-down drawer) */}
-            {canAccessReportsNav() && (
-              <Link
-                to="/dashboard/owner-analytics"
-                {...linkPrefetchProps('/dashboard/owner-analytics')}
-                onClick={handleNavClick}
-                title={collapsed ? 'Owner Analytics' : undefined}
-                className={linkClass('/dashboard/owner-analytics')}
-              >
-                <span
-                  className={
-                    location.pathname === '/dashboard/owner-analytics'
-                      ? 'text-white'
-                      : 'text-slate-400 group-hover:text-white'
-                  }
-                >
-                  {iconMap.analytics}
-                </span>
-                {!collapsed && <span className="truncate">Owner Analytics</span>}
-              </Link>
-            )}
-
-            {/* Notifications group (Email, SMS, Templates) — bottom of menu */}
-            {canAccessConfigNav() &&
-            (collapsed ? (
-              <Link
-                to="/dashboard/settings/email"
-                {...linkPrefetchProps('/dashboard/settings/email')}
-                onClick={handleNavClick}
-                title="Notifications"
-                className={`group flex items-center justify-center rounded-xl px-2 py-2.5 text-sm font-medium transition ${
-                  isNotificationsPath ? activeBase : inactiveBase
-                }`}
-              >
-                <span
-                  className={isNotificationsPath ? 'text-white' : 'text-slate-400 group-hover:text-white'}
-                >
-                  {iconMap.notifications}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setNotificationsOpen((o) => !o)}
-                  onMouseEnter={() => prefetchRoute('/dashboard/settings/email')}
-                  onFocus={() => prefetchRoute('/dashboard/settings/email')}
-                  className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="text-slate-400 group-hover:text-white">{iconMap.notifications}</span>
-                    <span>Notifications</span>
-                  </span>
-                  <svg
-                    className={`size-4 shrink-0 text-slate-500 transition-transform ${
-                      notificationsOpen ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {notificationsOpen && (
-                  <div className="ml-4 flex flex-col border-l border-white/10 pl-3">
-                    {notificationsSubItems.map(({ path, label }) => (
-                      <Link
-                        key={path}
-                        to={path}
-                        {...linkPrefetchProps(path)}
-                        onClick={handleNavClick}
-                        className={subLinkClass(path)}
-                      >
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-              </>
-            )}
           </div>
 
           {/* Bottom: Help Center + Profile + Logout */}
@@ -1105,11 +591,13 @@ export function SidebarNav({
               {...linkPrefetchProps('/help')}
               onClick={handleNavClick}
               title={collapsed ? 'Help Center' : undefined}
+              aria-label={collapsed ? 'Help Center' : undefined}
+              aria-current={pathname.startsWith('/help') ? 'page' : undefined}
               className={linkClass('/help')}
             >
               <span
                 className={
-                  location.pathname.startsWith('/help')
+                  pathname.startsWith('/help')
                     ? 'text-white'
                     : 'text-slate-400 group-hover:text-white'
                 }
@@ -1130,11 +618,13 @@ export function SidebarNav({
               {...linkPrefetchProps('/dashboard/profile')}
               onClick={handleNavClick}
               title={collapsed ? 'Profile' : undefined}
+              aria-label={collapsed ? 'Profile' : undefined}
+              aria-current={pathname === '/dashboard/profile' ? 'page' : undefined}
               className={linkClass('/dashboard/profile')}
             >
               <span
                 className={
-                  location.pathname === '/dashboard/profile'
+                  pathname === '/dashboard/profile'
                     ? 'text-white'
                     : 'text-slate-400 group-hover:text-white'
                 }
@@ -1147,6 +637,7 @@ export function SidebarNav({
               type="button"
               onClick={handleLogout}
               title={collapsed ? 'Logout' : undefined}
+              aria-label="Logout"
               className={`group flex w-full items-center rounded-xl py-2.5 text-sm font-medium text-slate-300 transition hover:bg-pink-500/10 hover:text-pink-300 ${
                 collapsed ? 'justify-center px-2' : 'gap-3 px-3'
               }`}

@@ -57,9 +57,47 @@ export type RazorpayVerifyPayload = {
   razorpaySignature: string
 }
 
+export type OnlinePaymentAttemptStatus =
+  | 'pending'
+  | 'completed'
+  | 'failed'
+  | 'pending_verification'
+  | 'processing'
+  | 'cancelled'
+  | 'review_required'
+
 export type RazorpayVerifyResponse = {
   success: boolean
   message: string
+  status: OnlinePaymentAttemptStatus
+  orderId?: string | null
+}
+
+export type OnlinePaymentAttempt = {
+  orderId: string
+  membershipPaymentId: number
+  status: OnlinePaymentAttemptStatus
+  message: string
+  amount: number
+  capturedAmount?: number | null
+  createdDate: string
+  updatedDate?: string | null
+}
+
+/** Settlement of an existing bill vs renewal of a membership period (renewal is done at reception). */
+export type MemberPaymentNeed = 'settle_outstanding' | 'renewal_required' | 'billing_closed' | 'nothing_due'
+
+export type MemberOnlinePaymentSummary = {
+  onlinePaymentsEnabled: boolean
+  paymentNeed: MemberPaymentNeed
+  message: string
+  membershipPaymentId?: number | null
+  outstandingAmount: number
+  nextDueDate?: string | null
+  planName?: string | null
+  membershipStatus?: string | null
+  membershipEndDate?: string | null
+  latestAttempt?: OnlinePaymentAttempt | null
 }
 
 export type MemberBillingAccess = {
@@ -81,4 +119,9 @@ export const commercialService = {
     }),
   verifyRazorpayPayment: (payload: RazorpayVerifyPayload) =>
     api.post<RazorpayVerifyResponse>('/me/payments/razorpay/verify', payload),
+  getOnlinePaymentSummary: () => api.get<MemberOnlinePaymentSummary>('/me/payments/razorpay/summary'),
+  getRazorpayOrderStatus: (orderId: string) =>
+    api.get<OnlinePaymentAttempt>(`/me/payments/razorpay/orders/${encodeURIComponent(orderId)}`),
+  cancelRazorpayOrder: (orderId: string) =>
+    api.post<OnlinePaymentAttempt>(`/me/payments/razorpay/orders/${encodeURIComponent(orderId)}/cancel`),
 }

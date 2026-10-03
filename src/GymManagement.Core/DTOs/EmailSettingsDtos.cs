@@ -17,6 +17,9 @@ public class EmailSettingsDto
     public bool IsConfigured { get; set; }
     /// <summary>Stored password exists but could not be decrypted (e.g. after API restart before keys were persisted).</summary>
     public bool PasswordNeedsReentry { get; set; }
+    /// <summary>Disabled, Unconfigured, or Ready.</summary>
+    public string Readiness { get; set; } = "Unconfigured";
+    public List<string> BlockingReasons { get; set; } = new();
     public DateTime? UpdatedDateUtc { get; set; }
 }
 

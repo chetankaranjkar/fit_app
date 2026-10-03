@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -16,15 +16,21 @@ import { invalidateDashboardQueries } from '../lib/dashboardQueryKeys'
 import { BillingSummaryCard } from '../components/billing/BillingSummaryCard'
 import { MembershipFinancialSummaryCard } from '../components/billing/MembershipFinancialSummaryCard'
 import { PaymentConfirmationModal } from '../components/billing/PaymentConfirmationModal'
+import { PaymentReceiptModal, type PaymentReceiptData } from '../components/billing/PaymentReceiptModal'
+import { PaymentCollectedPanel } from '../components/billing/PaymentCollectedPanel'
 import {
   MEMBERSHIP_PAYMENT_METHODS,
   computeNetPayable,
+  findRecordedTransaction,
   getMembershipAmount,
   getRemainingBalance,
+  paymentMethodLabel,
   paymentStatusBadgeClass,
   paymentStatusLabel,
 } from '../components/billing/membershipPaymentUi'
-import { resolvePostCollectPaymentPath } from '../lib/membershipPaymentNavigation'
+import { memberMembershipHistoryPath, resolvePostCollectPaymentPath } from '../lib/membershipPaymentNavigation'
+import { RENEW_MEMBERSHIP_LABEL, deriveMembershipStanding } from '../lib/membershipStanding'
+import { MembershipStandingPanel } from '../components/memberships/MembershipStandingPanel'
 import { membershipToConflict } from '../lib/activeMembershipConflict'
 import { extendMembershipAccessRenewal } from '../lib/membershipRenewFlow'
 import { userMembershipsService } from '../services/userMemberships.service'
@@ -57,11 +63,20 @@ export function CollectMembershipPaymentPage() {
   const [method, setMethod] = useState<MembershipPaymentMethod>('Upi')
   const [reference, setReference] = useState('')
   const [nextDue, setNextDue] = useState('')
-  const [discount, setDiscount] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState<ValidateCouponResponse | null>(null)
   const [selectedCouponCode, setSelectedCouponCode] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [duplicateWarn, setDuplicateWarn] = useState<string | null>(null)
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [collected, setCollected] = useState<{
+    receipt: PaymentReceiptData
+    fullySettled: boolean
+    redirectPath: string | null
+  } | null>(null)
+  const [receiptOpen, setReceiptOpen] = useState(false)
+  const submittingRef = useRef(false)
   const [waiveOpen, setWaiveOpen] = useState(false)
   const [waiveAmount, setWaiveAmount] = useState('')
   const [waiveReason, setWaiveReason] = useState('')
@@ -70,6 +85,15 @@ export function CollectMembershipPaymentPage() {
     queryKey: ['membership-payment', membershipId],
     queryFn: async () => {
       const { data: d } = await membershipPaymentsService.byMembership(membershipId)
+      return d
+    },
+    enabled: membershipId > 0 && canPay,
+  })
+
+  const { data: membership } = useQuery({
+    queryKey: ['user-membership', membershipId],
+    queryFn: async () => {
+      const { data: d } = await userMembershipsService.getById(membershipId)
       return d
     },
     enabled: membershipId > 0 && canPay,
@@ -147,7 +171,16 @@ export function CollectMembershipPaymentPage() {
   }, [data, remainingBeforePay, paidNum])
 
   const fullyPaid = remainingBeforePay <= 0.02
-  const backPath = resolvePostCollectPaymentPath(userIdFromUrl || data?.userId || 0, returnToParam)
+  const memberUserId = userIdFromUrl || data?.userId || 0
+  const backPath = resolvePostCollectPaymentPath(memberUserId, returnToParam)
+  const standing = deriveMembershipStanding({
+    status: membership?.status ?? data?.membershipStatus,
+    planName: membership?.planName ?? data?.planName,
+    startDate: membership?.startDate,
+    endDate: membership?.endDate,
+    outstanding: data ? remainingBeforePay : null,
+    billingStatus: data?.paymentStatus,
+  })
 
   const extendAccessMutation = useMutation({
     mutationFn: async () => {
@@ -165,8 +198,9 @@ export function CollectMembershipPaymentPage() {
       return result.endDate
     },
     onSuccess: (endDate) => {
-      toast.success(`Membership extended until ${new Date(endDate + 'T12:00:00').toLocaleDateString()}.`)
+      toast.success(`Membership renewed until ${new Date(endDate + 'T12:00:00').toLocaleDateString()}.`)
       queryClient.invalidateQueries({ queryKey: ['membership-payment', membershipId] })
+      queryClient.invalidateQueries({ queryKey: ['user-membership', membershipId] })
       queryClient.invalidateQueries({ queryKey: ['membership-financial-summary', membershipId] })
       invalidateDashboardQueries(queryClient)
       if (backPath) navigate(backPath, { replace: true })
@@ -222,12 +256,24 @@ export function CollectMembershipPaymentPage() {
     onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Could not submit waive-off request')),
   })
 
+  const runDuplicateCheck = async (paymentId: number, amountToCheck: number) => {
+    try {
+      const { data: dup } = await membershipPaymentsService.checkDuplicate(paymentId, amountToCheck)
+      setDuplicateWarn(
+        dup.isDuplicate ? (dup.message ?? 'Similar payment detected. Please verify before continuing.') : null,
+      )
+    } catch {
+      setDuplicateWarn(null)
+    }
+  }
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (!data) throw new Error('No data')
       if (exceedsOutstanding) {
         throw new Error('Payment amount cannot exceed outstanding balance.')
       }
+      const priorTransactionIds = new Set(data.transactions.map((t) => t.id))
       const body = {
         amount: paidNum,
         method,
@@ -237,47 +283,135 @@ export function CollectMembershipPaymentPage() {
           pendingAfter > 0.02 ? (nextDue ? new Date(`${nextDue}T12:00:00`).toISOString() : undefined) : undefined,
       }
       const { data: res } = await membershipPaymentsService.addInstallment(data.id, body)
-      return res
+      const recorded = findRecordedTransaction(res.transactions ?? [], priorTransactionIds)
+      let prefs: { email?: boolean; sms?: boolean } = {}
+      if (recorded) {
+        // The receipt's "Enable email/SMS" action rewrites both flags, so it needs the member's real preferences.
+        try {
+          const { data: rows } = await membershipPaymentsService.listTransactions({ userId: res.userId })
+          const row = rows.find((r) => r.id === recorded.id)
+          if (row) prefs = { email: row.receiveEmailNotifications, sms: row.receiveSmsNotifications }
+        } catch {
+          prefs = {}
+        }
+      }
+      return { res, recorded, prefs }
     },
-    onSuccess: (res) => {
+    onSuccess: ({ res, recorded, prefs }) => {
       const profileUserId =
         userIdFromUrl > 0 ? userIdFromUrl : (res.userId ?? data?.userId ?? 0)
       const redirectPath = resolvePostCollectPaymentPath(profileUserId, returnToParam)
+      const fullySettled = res.paymentStatus === 'Paid' || Boolean(res.isFullyPaid)
 
       setConfirmOpen(false)
+      setSubmitError(null)
+      setFormError(null)
       setAmount('')
+      setReference('')
       setNextDue('')
-      setDiscount('')
       setAppliedCoupon(null)
       setSelectedCouponCode('')
       setDuplicateWarn(null)
 
-      const msg =
-        res.paymentStatus === 'Paid' || res.isFullyPaid
-          ? 'Full payment recorded. Membership is now active.'
-          : res.paymentStatus === 'Partial' || res.isPartiallyPaid
-            ? `Partial payment recorded. Pending ${formatInr(res.pendingAmount)}.`
-            : 'Payment recorded.'
+      const msg = fullySettled
+        ? 'Full payment recorded. Membership is now active.'
+        : res.paymentStatus === 'Partial' || res.isPartiallyPaid
+          ? `Partial payment recorded. Pending ${formatInr(res.pendingAmount)}.`
+          : 'Payment recorded.'
       toast.success(msg)
 
-      if (redirectPath) {
+      if (recorded) {
+        setCollected({
+          fullySettled,
+          redirectPath: redirectPath || null,
+          receipt: {
+            transactionId: recorded.id,
+            userId: res.userId,
+            receiptNumber: recorded.receiptNumber ?? `#${recorded.id}`,
+            memberName: financialSummary?.memberName ?? membership?.userName ?? 'Member',
+            memberId: financialSummary?.memberCode ?? `M-${res.userId}`,
+            memberPhotoUrl: financialSummary?.memberPhotoUrl,
+            planName: res.planName,
+            amountPaid: recorded.transactionAmount,
+            paymentMethod: recorded.transactionMethod,
+            remainingBalance: res.pendingAmount,
+            paymentDate: recorded.transactionDate,
+            receiveEmailNotifications: prefs.email ?? false,
+            receiveSmsNotifications: prefs.sms ?? false,
+          },
+        })
+        setReceiptOpen(true)
+      } else if (redirectPath) {
         navigate(redirectPath, { replace: true })
       } else {
         toast.error('Payment recorded but member profile could not be opened (missing user id).')
       }
 
+      queryClient.invalidateQueries({ queryKey: ['payment-transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['payments-paged'] })
+      queryClient.invalidateQueries({ queryKey: ['payments-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['enterprise-billing-dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['membership-payment', membershipId] })
+      queryClient.invalidateQueries({ queryKey: ['user-membership', membershipId] })
       queryClient.invalidateQueries({ queryKey: ['membership-financial-summary', membershipId] })
       invalidateDashboardQueries(queryClient)
       if (profileUserId > 0) {
         queryClient.invalidateQueries({ queryKey: ['membership-payments-user', profileUserId] })
+        queryClient.invalidateQueries({ queryKey: ['member-ledger', profileUserId] })
         queryClient.invalidateQueries({ queryKey: ['user', profileUserId] })
+        queryClient.invalidateQueries({ queryKey: ['userProfileSummary', profileUserId] })
         queryClient.invalidateQueries({ queryKey: ['users'] })
         queryClient.invalidateQueries({ queryKey: ['user-memberships'] })
       }
     },
-    onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Failed to record payment')),
+    onError: (e: unknown) => {
+      const message = getApiErrorMessage(e, 'Failed to record payment')
+      setSubmitError(message)
+      toast.error(message)
+      // A timed-out request may still have been saved: reload the balance and re-run the duplicate check before any retry.
+      if (data) {
+        void queryClient.invalidateQueries({ queryKey: ['membership-payment', membershipId] })
+        void runDuplicateCheck(data.id, paidNum)
+      }
+    },
+    onSettled: () => {
+      submittingRef.current = false
+    },
   })
+
+  const localToday = new Date().toLocaleDateString('en-CA')
+
+  const handleReview = async () => {
+    if (!data || paidNum <= 0 || exceedsOutstanding || checkingDuplicate) return
+    if (pendingAfter > 0.02) {
+      if (!nextDue) {
+        setFormError('Next due date is required for partial payments.')
+        return
+      }
+      if (nextDue < localToday) {
+        setFormError('Next due date cannot be in the past.')
+        return
+      }
+    }
+    setFormError(null)
+    setSubmitError(null)
+    setCheckingDuplicate(true)
+    await runDuplicateCheck(data.id, paidNum)
+    setCheckingDuplicate(false)
+    setConfirmOpen(true)
+  }
+
+  const handleConfirm = () => {
+    if (submittingRef.current || mutation.isPending) return
+    submittingRef.current = true
+    setSubmitError(null)
+    mutation.mutate()
+  }
+
+  const finishCollection = () => {
+    setReceiptOpen(false)
+    if (collected?.redirectPath) navigate(collected.redirectPath, { replace: true })
+  }
 
   if (!canPay) {
     return (
@@ -303,6 +437,16 @@ export function CollectMembershipPaymentPage() {
           <h1 className="mt-1 text-2xl font-bold text-white">Collect membership payment</h1>
         </div>
 
+        {collected ? (
+          <PaymentCollectedPanel
+            receipt={collected.receipt}
+            fullySettled={collected.fullySettled}
+            onViewReceipt={() => setReceiptOpen(true)}
+            onDone={collected.redirectPath ? finishCollection : undefined}
+            doneLabel="Done"
+          />
+        ) : null}
+
         {isLoading || !data ? (
           <p className="text-slate-400">Loading…</p>
         ) : (
@@ -316,6 +460,13 @@ export function CollectMembershipPaymentPage() {
                   {paymentStatusLabel(data.paymentStatus)}
                 </span>
               </div>
+              <MembershipStandingPanel
+                className="mt-4"
+                title="Membership"
+                standing={standing}
+                canManage={canPay}
+                showActions={false}
+              />
               {summaryForCard ? (
                 <MembershipFinancialSummaryCard
                   className="mt-4"
@@ -343,31 +494,44 @@ export function CollectMembershipPaymentPage() {
               )}
             </section>
 
-            {fullyPaid ? (
-              <section className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-5 backdrop-blur-md sm:p-6">
-                <h2 className="text-sm font-semibold text-amber-100">No payment due on this period</h2>
-                <p className="mt-2 text-sm leading-relaxed text-amber-100/90">
-                  This membership is fully paid for the current billing period. Collect payment only
-                  applies when there is an outstanding balance (pending, partial, or expired renewal
-                  due).
-                </p>
-                <p className="mt-2 text-sm text-amber-100/90">
-                  To add more gym access time, extend the membership end date instead.
-                </p>
+            {!standing.collect.allowed ? (
+              <section
+                className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-5 backdrop-blur-md sm:p-6"
+                data-testid="collect-blocked"
+              >
+                <h2 className="text-sm font-semibold text-amber-100">
+                  {fullyPaid ? 'Nothing outstanding' : 'Payment cannot be recorded'}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-amber-100/90">{standing.collect.reason}</p>
+                {fullyPaid ? (
+                  <p className="mt-2 text-sm text-amber-100/90">
+                    Collecting a payment does not add gym time. Use {RENEW_MEMBERSHIP_LABEL.toLowerCase()} to
+                    extend or restart access.
+                  </p>
+                ) : null}
+                {standing.renew.reason ? (
+                  <p className="mt-2 text-xs text-amber-100/70">{standing.renew.reason}</p>
+                ) : null}
                 <div className="mt-4 flex flex-wrap gap-2">
                   {backPath ? (
                     <Button type="button" variant="secondary" onClick={() => navigate(backPath)}>
                       Go back
                     </Button>
                   ) : null}
-                  <Button
-                    type="button"
-                    onClick={() => extendAccessMutation.mutate()}
-                    disabled={extendAccessMutation.isPending}
-                    isLoading={extendAccessMutation.isPending}
-                  >
-                    Extend access
-                  </Button>
+                  {standing.renew.allowed && standing.renew.mode === 'extend' ? (
+                    <Button
+                      type="button"
+                      onClick={() => extendAccessMutation.mutate()}
+                      disabled={extendAccessMutation.isPending}
+                      isLoading={extendAccessMutation.isPending}
+                    >
+                      {RENEW_MEMBERSHIP_LABEL}
+                    </Button>
+                  ) : standing.renew.allowed && memberUserId > 0 ? (
+                    <Button type="button" onClick={() => navigate(memberMembershipHistoryPath(memberUserId))}>
+                      {standing.renew.label}
+                    </Button>
+                  ) : null}
                 </div>
               </section>
             ) : (
@@ -424,9 +588,8 @@ export function CollectMembershipPaymentPage() {
                     onChange={(e) => {
                       const code = e.target.value
                       setSelectedCouponCode(code)
-                      setDiscount('')
                       setAppliedCoupon(null)
-                      if (code && code !== '__manual__') {
+                      if (code) {
                         couponsService
                           .validate({
                             couponCode: code,
@@ -442,15 +605,19 @@ export function CollectMembershipPaymentPage() {
                             }
                             applyCouponMutation.mutate(code)
                           })
-                          .catch(() => {
-                            setAppliedCoupon({ valid: false, discountAmount: 0, finalAmount: 0, message: 'Validation failed' })
+                          .catch((err: unknown) => {
+                            setAppliedCoupon({
+                              valid: false,
+                              discountAmount: 0,
+                              finalAmount: 0,
+                              message: getApiErrorMessage(err, 'Validation failed'),
+                            })
                           })
                       }
                     }}
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100"
                   >
                     <option value="" className="bg-slate-900">No discount</option>
-                    <option value="__manual__" className="bg-slate-900">Manual discount (₹)</option>
                     {activeCoupons.map((c) => (
                       <option key={c.id} value={c.couponCode} className="bg-slate-900">
                         {c.couponCode} — {c.discountType === 'Percentage' ? `${c.discountValue}%` : `₹${c.discountValue}`}
@@ -459,19 +626,10 @@ export function CollectMembershipPaymentPage() {
                       </option>
                     ))}
                   </select>
-                  {selectedCouponCode === '__manual__' && (
-                    <div className="mt-2">
-                      <Input
-                        label="Manual Discount (₹)"
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={discount}
-                        onChange={(e) => { setDiscount(e.target.value); setAppliedCoupon(null) }}
-                      />
-                    </div>
-                  )}
-                  {selectedCouponCode && selectedCouponCode !== '__manual__' && appliedCoupon && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Other fee reductions need an admin-approved waive-off request.
+                  </p>
+                  {selectedCouponCode && appliedCoupon && (
                     <div className={`mt-2 rounded-lg border px-3 py-2 text-xs ${
                       appliedCoupon.valid
                         ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
@@ -514,7 +672,7 @@ export function CollectMembershipPaymentPage() {
                   >
                     {MEMBERSHIP_PAYMENT_METHODS.map((m) => (
                       <option key={m} value={m} className="bg-slate-900">
-                        {m}
+                        {paymentMethodLabel(m)}
                       </option>
                     ))}
                   </select>
@@ -524,36 +682,41 @@ export function CollectMembershipPaymentPage() {
 
               {pendingAfter > 0.02 && (
                 <div className="mt-3">
-                  <Input label="Next due date (required for partial)" type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} />
+                  <Input
+                    label="Next due date (required for partial)"
+                    type="date"
+                    min={localToday}
+                    value={nextDue}
+                    onChange={(e) => {
+                      setNextDue(e.target.value)
+                      setFormError(null)
+                    }}
+                  />
                 </div>
               )}
               {exceedsOutstanding && (
                 <p className="mt-3 text-sm text-rose-300">Payment amount cannot exceed outstanding balance.</p>
+              )}
+              {formError && (
+                <p className="mt-3 text-sm text-rose-300" role="alert" data-testid="collect-form-error">
+                  {formError}
+                </p>
               )}
               {duplicateWarn && (
                 <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
                   {duplicateWarn}
                 </p>
               )}
-              <p className="mt-3 text-xs text-slate-500">Remaining after this entry (estimate): {formatInr(pendingAfter)}</p>
-              <div className="mt-4 flex justify-end">
+              <p className="mt-3 text-xs text-slate-400">
+                Outstanding now {formatInr(remainingBeforePay)} · paying {formatInr(paidNum)} · balance after{' '}
+                <span data-testid="collect-balance-after">{formatInr(pendingAfter)}</span>
+              </p>
+              <div className="sticky bottom-0 z-[1] -mx-5 mt-4 flex justify-end border-t border-white/5 bg-[rgba(11,11,26,0.96)] px-5 py-3 sm:-mx-6 sm:px-6">
                 <Button
                   type="button"
-                  onClick={async () => {
-                    if (!data || paidNum <= 0 || exceedsOutstanding) return
-                    try {
-                      const { data: dup } = await membershipPaymentsService.checkDuplicate(data.id, paidNum)
-                      if (dup.isDuplicate) {
-                        setDuplicateWarn(dup.message ?? 'Similar payment detected. Please verify before continuing.')
-                      } else {
-                        setDuplicateWarn(null)
-                      }
-                    } catch {
-                      setDuplicateWarn(null)
-                    }
-                    setConfirmOpen(true)
-                  }}
-                  disabled={mutation.isPending || paidNum <= 0 || exceedsOutstanding}
+                  onClick={() => void handleReview()}
+                  disabled={mutation.isPending || checkingDuplicate || paidNum <= 0 || exceedsOutstanding}
+                  className="min-h-11 w-full sm:w-auto"
                 >
                   Review &amp; pay
                 </Button>
@@ -596,16 +759,40 @@ export function CollectMembershipPaymentPage() {
           <PaymentConfirmationModal
             open={confirmOpen}
             onClose={() => setConfirmOpen(false)}
-            onConfirm={() => mutation.mutate()}
+            onConfirm={handleConfirm}
             confirming={mutation.isPending}
-            memberName={summaryForCard.memberName ?? 'Member'}
+            memberName={summaryForCard.memberName ?? membership?.userName ?? 'Member'}
             memberId={summaryForCard.memberCode ?? `M-${summaryForCard.userId ?? data?.userId}`}
+            memberPhone={membership?.memberPhone}
             memberPhotoUrl={summaryForCard.memberPhotoUrl}
             planName={data?.planName}
+            periodStart={membership?.startDate}
+            periodEnd={membership?.endDate}
             summary={summaryForCard}
             paymentAmount={paidNum}
+            method={method}
+            referenceNumber={reference}
+            nextDueDate={pendingAfter > 0.02 ? nextDue || null : null}
+            duplicateWarning={duplicateWarn}
+            error={submitError}
           />
         )}
+
+        <PaymentReceiptModal
+          open={receiptOpen && collected != null}
+          onClose={() => setReceiptOpen(false)}
+          receipt={collected?.receipt ?? null}
+          onNotificationPrefsChange={(prefs) =>
+            setCollected((c) =>
+              c
+                ? {
+                    ...c,
+                    receipt: { ...c.receipt, receiveEmailNotifications: prefs.email, receiveSmsNotifications: prefs.sms },
+                  }
+                : c,
+            )
+          }
+        />
 
         <Modal open={waiveOpen} onClose={() => setWaiveOpen(false)} title="Request waive-off">
           <p className="mb-3 text-sm text-slate-400">

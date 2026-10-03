@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { ExerciseLibraryUnavailableBanner } from '../../../components/training/ExerciseLibraryUnavailableBanner'
 import { X } from 'lucide-react'
 import type { Exercise } from '../../../types/exercise'
 import type { Stretch } from '../../../types/stretch'
@@ -12,13 +13,26 @@ interface Props {
   stretches: Stretch[]
   onClose: () => void
   onChange: (day: WizardDayDraft) => void
+  libraryError?: unknown
+  onRetryLibrary?: () => void
+  libraryRetrying?: boolean
 }
 
 function newClientKey() {
   return `ex-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
-export function DayConfigDrawer({ day, exercises, warmups, stretches, onClose, onChange }: Props) {
+export function DayConfigDrawer({
+  day,
+  exercises,
+  warmups,
+  stretches,
+  onClose,
+  onChange,
+  libraryError,
+  onRetryLibrary,
+  libraryRetrying,
+}: Props) {
   const [exerciseSearch, setExerciseSearch] = useState('')
   const [warmupSearch, setWarmupSearch] = useState('')
   const [stretchSearch, setStretchSearch] = useState('')
@@ -169,6 +183,13 @@ export function DayConfigDrawer({ day, exercises, warmups, stretches, onClose, o
 
               <section className="space-y-2">
                 <h3 className="text-sm font-semibold text-white">Exercises</h3>
+                {libraryError && onRetryLibrary ? (
+                  <ExerciseLibraryUnavailableBanner
+                    error={libraryError}
+                    onRetry={onRetryLibrary}
+                    isRetrying={libraryRetrying}
+                  />
+                ) : null}
                 <input
                   value={exerciseSearch}
                   onChange={(e) => setExerciseSearch(e.target.value)}

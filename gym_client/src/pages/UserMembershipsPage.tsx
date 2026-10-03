@@ -32,6 +32,7 @@ import {
   extendMembershipAccessRenewal,
 } from '../lib/membershipRenewFlow'
 import { renewStartDateForMembership } from '../lib/membershipFormUtils'
+import { standingFromUserMembership } from '../lib/membershipStanding'
 import {
   parseUserMembershipQuickFilter,
   type UserMembershipQuickFilter,
@@ -413,6 +414,16 @@ export function UserMembershipsPage() {
     }
   }, [openingRenewUserId])
 
+  const handleRenewFromRow = (m: UserMembership) => {
+    const rule = standingFromUserMembership(m).renew
+    if (!rule.allowed) {
+      toast.error(rule.reason ?? 'This membership cannot be renewed.')
+      return
+    }
+    if (rule.mode === 'extend') void handleRenewActive(membershipToConflict(m))
+    else void handleRenewMembership(m)
+  }
+
   const handleRenewQueueItem = useCallback(
     async (item: ExpiringMembershipQueueItem) => {
       await handleRenewMembership({
@@ -546,7 +557,7 @@ export function UserMembershipsPage() {
 
         <DashboardTablePanel
           title="Membership list"
-          description="Timeline and payment columns reflect billing status. Member names open membership history."
+          description="Gym access, payment status, and outstanding balance are shown separately. Member names open membership history."
           pageScroll
           toolbar={
             <UserMembershipsToolbar
@@ -574,7 +585,7 @@ export function UserMembershipsPage() {
             onPageSizeChange={setPageSize}
             onEdit={openEdit}
             onRequestVoid={handleRequestVoid}
-            onRenew={handleRenewMembership}
+            onRenew={handleRenewFromRow}
             pageScroll
           />
         </DashboardTablePanel>
@@ -626,7 +637,10 @@ export function UserMembershipsPage() {
           closeDetail()
           openEdit(m)
         }}
-        onRenew={handleRenewMembership}
+        onRenew={(m) => {
+          closeDetail()
+          handleRenewFromRow(m)
+        }}
         onRequestVoid={handleRequestVoid}
         onRevertLastRenewal={setRevertTarget}
       />

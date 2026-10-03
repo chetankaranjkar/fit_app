@@ -1,15 +1,15 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
+import { getMembershipCollectPaymentPath } from '../../lib/membershipPaymentNavigation'
+import { deriveMemberMembershipModalState } from '../../lib/memberMembershipState'
 import {
-  getMembershipCollectPaymentPath,
-  membershipStatusClickTitle,
-} from '../../lib/membershipPaymentNavigation'
-import {
-  deriveMemberMembershipModalState,
-  formatMembershipDisplayDate,
-} from '../../lib/memberMembershipState'
+  COLLECT_OUTSTANDING_LABEL,
+  STANDING_TONE_TEXT,
+  standingFromUserMembership,
+} from '../../lib/membershipStanding'
 import { MembershipAuditTrail } from '../memberships/MembershipAuditTrail'
+import { MembershipStandingPanel, StandingFactValue } from '../memberships/MembershipStandingPanel'
 import {
   listMembershipsForUser,
   userMembershipsByUserQueryKey,
@@ -18,12 +18,6 @@ import { authService } from '../../services/auth.service'
 import { Button } from '../ui/Button'
 import { MembershipStatusBadge } from '../billing/MembershipStatusBadge'
 import type { MembershipStatus, UserMembership } from '../../types/userMembership'
-
-function formatDate(iso: string) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString()
-}
 
 function sectionFor(status: MembershipStatus): 'current' | 'previous' | 'cancelled' | 'voided' | 'transferred' {
   if (status === 'Voided') return 'voided'
@@ -51,28 +45,35 @@ function MembershipTable({
           <thead className="border-b border-white/10 bg-white/5 text-xs text-slate-400">
             <tr>
               <th className="px-4 py-2">Plan</th>
-              <th className="px-4 py-2">Period</th>
+              <th className="px-4 py-2">Membership dates</th>
               <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2">Payment status</th>
+              <th className="px-4 py-2 text-right">Outstanding</th>
               <th className="px-4 py-2">ID</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {rows.map((m) => (
-              <tr key={m.id}>
+            {rows.map((m) => {
+              const standing = standingFromUserMembership(m)
+              const collectable = onCollectPayment && getMembershipCollectPaymentPath(m)
+              return (
+              <tr key={m.id} data-membership-row={m.id}>
                 <td className="px-4 py-3">{m.planName ?? `Plan #${m.planId}`}</td>
-                <td className="px-4 py-3 text-slate-300">
-                  {formatDate(m.startDate)} – {formatDate(m.endDate)}
+                <td className="px-4 py-3">
+                  <StandingFactValue fact={standing.dates} compact />
                 </td>
                 <td className="px-4 py-3">
                   <MembershipStatusBadge
                     status={m.status}
-                    onClick={
-                      onCollectPayment && getMembershipCollectPaymentPath(m)
-                        ? () => onCollectPayment(m)
-                        : undefined
-                    }
-                    title={membershipStatusClickTitle(m.status)}
+                    onClick={collectable ? () => onCollectPayment!(m) : undefined}
+                    title={collectable ? COLLECT_OUTSTANDING_LABEL : undefined}
                   />
+                </td>
+                <td className="px-4 py-3">
+                  <StandingFactValue fact={standing.payment} compact />
+                </td>
+                <td className={`px-4 py-3 text-right text-xs tabular-nums ${STANDING_TONE_TEXT[standing.outstanding.tone]}`}>
+                  {standing.outstanding.label}
                 </td>
                 <td className="px-4 py-3">
                   <Link
@@ -84,7 +85,8 @@ function MembershipTable({
                   </Link>
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -169,81 +171,47 @@ export function MemberMembershipHistoryTab({
   }
 
   const canViewAudit = authService.canViewMembershipAudit()
+  const focusMembership =
+    modalState.occupyingMembership ??
+    modalState.latestExpired ??
+    [...memberships].sort((a, b) => b.endDate.localeCompare(a.endDate) || b.id - a.id)[0]
+  const focusStanding = focusMembership ? standingFromUserMembership(focusMembership) : null
+  const focusCollectPath = focusMembership
+    ? getMembershipCollectPaymentPath(focusMembership, `/dashboard/users/${userId}`)
+    : null
 
   return (
     <div className="space-y-8">
-      {modalState.state === 'has_active' && modalState.occupyingMembership ? (
-        <div className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-4">
+      {focusMembership && focusStanding ? (
+        <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <MembershipStatusBadge status={modalState.occupyingMembership.status} />
-            <p className="text-sm text-blue-100">
-              Current plan ends{' '}
-              <span className="font-medium">
-                {formatMembershipDisplayDate(modalState.occupyingMembership.endDate)}
-              </span>
-            </p>
+            <MembershipStatusBadge status={focusMembership.status} />
+            <span className="text-xs text-slate-400">
+              {modalState.state === 'has_active' ? 'Current membership' : 'Latest membership'} #{focusMembership.id}
+            </span>
           </div>
-          {canManageMemberships ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {getMembershipCollectPaymentPath(modalState.occupyingMembership, `/dashboard/users/${userId}`) ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => handleCollectPayment(modalState.occupyingMembership!)}
-                >
-                  Collect payment
-                </Button>
-              ) : null}
-              {modalState.canRenewMembership && onRenewMembership ? (
-                <Button
-                  type="button"
-                  onClick={() => onRenewMembership(modalState.occupyingMembership!)}
-                >
-                  Renew membership
-                </Button>
-              ) : null}
+          <MembershipStandingPanel
+            standing={focusStanding}
+            canManage={canManageMemberships}
+            collect={focusCollectPath ? { to: focusCollectPath } : undefined}
+            renew={
+              focusStanding.renew.mode === 'new' && focusMembership.status !== 'Expired'
+                ? onAddMembership
+                  ? { onClick: onAddMembership }
+                  : undefined
+                : onRenewMembership
+                  ? { onClick: () => onRenewMembership(focusMembership) }
+                  : undefined
+            }
+            resolve={{ to: `/dashboard/user-memberships?membershipId=${focusMembership.id}` }}
+          />
+          {modalState.state === 'expired_history_only' && canManageMemberships && onAddMembership ? (
+            <div className="flex justify-end">
+              <Button type="button" variant="secondary" onClick={onAddMembership}>
+                + New membership (different plan)
+              </Button>
             </div>
           ) : null}
-        </div>
-      ) : null}
-
-      {modalState.state === 'expired_history_only' && modalState.latestExpired ? (
-        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <MembershipStatusBadge status="Expired" />
-            <p className="text-sm text-amber-100">
-              Membership expired on:{' '}
-              <span className="font-medium">
-                {formatMembershipDisplayDate(modalState.latestExpired.endDate)}
-              </span>
-            </p>
-          </div>
-          {canManageMemberships ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {modalState.canRenewMembership && onRenewMembership ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => onRenewMembership(modalState.latestExpired!)}
-                >
-                  Renew membership
-                </Button>
-              ) : null}
-              {modalState.canAddMembership && onAddMembership ? (
-                <Button type="button" onClick={onAddMembership}>
-                  + New Membership
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {modalState.state === 'inactive_history_only' && canManageMemberships && onAddMembership ? (
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" onClick={onAddMembership}>
-            + Add Membership
-          </Button>
         </div>
       ) : null}
 

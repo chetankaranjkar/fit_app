@@ -245,6 +245,17 @@ export const MOCK_CLEANING: CleaningLog[] = [
     ],
   },
   {
+    id: 'cl-overdue',
+    area: 'Locker Rooms',
+    shift: 'EVENING',
+    scheduledAt: iso(-2),
+    performedBy: 'Meena',
+    tasks: [
+      { id: 'to1', label: 'Empty waste bins', done: false },
+      { id: 'to2', label: 'Mop wet areas', done: false },
+    ],
+  },
+  {
     id: 'cl-002',
     area: 'Weight Floor',
     shift: 'MORNING',

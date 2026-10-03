@@ -3,25 +3,50 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../../theme/app_a11y.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/fitness_text.dart';
 import '../../../widgets/glass_card.dart';
+import '../diet_assigned_foods.dart';
 
 class DietWaterLab extends StatefulWidget {
-  const DietWaterLab({super.key, required this.goalMl, required this.currentMl, required this.onAdd});
+  const DietWaterLab({
+    super.key,
+    required this.goalMl,
+    required this.recordedMl,
+    required this.onAdd,
+    required this.onUndo,
+    required this.canUndo,
+  });
 
+  /// Assigned / derived daily target (not stored with intake).
   final int goalMl;
-  final int currentMl;
+
+  /// Sum of today's persisted add entries.
+  final int recordedMl;
   final ValueChanged<int> onAdd;
+  final VoidCallback onUndo;
+  final bool canUndo;
 
   @override
   State<DietWaterLab> createState() => _DietWaterLabState();
 }
 
 class _DietWaterLabState extends State<DietWaterLab> with SingleTickerProviderStateMixin {
-  late final AnimationController _wave = AnimationController(vsync: this, duration: const Duration(seconds: 3))
-    ..repeat();
+  late final AnimationController _wave =
+      AnimationController(vsync: this, duration: const Duration(seconds: 3));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppA11y.reduceMotion(context)) {
+      _wave.stop();
+      _wave.value = 0;
+    } else if (!_wave.isAnimating) {
+      _wave.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -31,16 +56,16 @@ class _DietWaterLabState extends State<DietWaterLab> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    final pct = widget.goalMl <= 0 ? 0.0 : (widget.currentMl / widget.goalMl).clamp(0.0, 1.0);
+    final pct = widget.goalMl <= 0 ? 0.0 : (widget.recordedMl / widget.goalMl).clamp(0.0, 1.0);
 
-    return GlassCard(
+    final card = GlassCard(
       radius: 28,
       padding: const EdgeInsets.all(AppSpacing.lg),
       tint: AppColors.neonBlue.withValues(alpha: 0.06),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('HYDRATION MATRIX', style: FitnessText.label(context)),
+          Text(DietCopy.water.toUpperCase(), style: FitnessText.label(context)),
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
@@ -63,12 +88,12 @@ class _DietWaterLabState extends State<DietWaterLab> with SingleTickerProviderSt
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${widget.currentMl} / ${widget.goalMl} ml',
+                      '${DietCopy.waterToday} ${widget.recordedMl} ml',
                       style: FitnessText.metric(context, size: 22),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${(pct * 100).round()}% fluid equilibrium',
+                      '${DietCopy.waterGoal} ${widget.goalMl} ml · ${(pct * 100).round()}% of daily goal',
                       style: FitnessText.body(context, color: AppColors.neonCyan),
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -76,9 +101,27 @@ class _DietWaterLabState extends State<DietWaterLab> with SingleTickerProviderSt
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _AddWaterChip(label: '+250', onTap: () => widget.onAdd(250)),
-                        _AddWaterChip(label: '+500', onTap: () => widget.onAdd(500)),
-                        _AddWaterChip(label: '+750', onTap: () => widget.onAdd(750)),
+                        _AddWaterChip(
+                          label: '+250 ml',
+                          semanticLabel: 'Add 250 milliliters',
+                          onTap: () => widget.onAdd(250),
+                        ),
+                        _AddWaterChip(
+                          label: '+500 ml',
+                          semanticLabel: 'Add 500 milliliters',
+                          onTap: () => widget.onAdd(500),
+                        ),
+                        _AddWaterChip(
+                          label: '+750 ml',
+                          semanticLabel: 'Add 750 milliliters',
+                          onTap: () => widget.onAdd(750),
+                        ),
+                        _AddWaterChip(
+                          label: 'Undo',
+                          semanticLabel: 'Undo last water add',
+                          onTap: widget.canUndo ? widget.onUndo : () {},
+                          enabled: widget.canUndo,
+                        ),
                       ],
                     ),
                   ],
@@ -88,24 +131,44 @@ class _DietWaterLabState extends State<DietWaterLab> with SingleTickerProviderSt
           ),
         ],
       ),
-    ).animate().fadeIn(duration: 400.ms);
+    );
+    return AppA11y.maybeAnimate(
+      context,
+      card,
+      (w) => w.animate().fadeIn(duration: 400.ms),
+    );
   }
 }
 
 class _AddWaterChip extends StatelessWidget {
-  const _AddWaterChip({required this.label, required this.onTap});
+  const _AddWaterChip({
+    required this.label,
+    required this.onTap,
+    this.enabled = true,
+    this.semanticLabel,
+  });
 
   final String label;
   final VoidCallback onTap;
+  final bool enabled;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      color: AppColors.surfaceDarkAlt.withValues(alpha: 0.75),
-      borderRadius: BorderRadius.circular(999),
-      onPressed: onTap,
-      child: Text(label, style: FitnessText.chip(context)),
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: semanticLabel ?? label,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppA11y.minTouchTarget),
+        child: CupertinoButton(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          color: AppColors.surfaceDarkAlt.withValues(alpha: enabled ? 0.75 : 0.35),
+          borderRadius: BorderRadius.circular(999),
+          onPressed: enabled ? onTap : null,
+          child: Text(label, style: FitnessText.chip(context)),
+        ),
+      ),
     );
   }
 }

@@ -12,7 +12,10 @@ import '../../../widgets/skeleton_shimmer.dart';
 
 /// Streak, weekly volume, and resume/start CTA from `/api/workout/dashboard`.
 class WorkoutDashboardCard extends ConsumerWidget {
-  const WorkoutDashboardCard({super.key});
+  const WorkoutDashboardCard({super.key, this.showSessionCta = true});
+
+  /// Home already has Start/Resume; keep stats without a second launch button.
+  final bool showSessionCta;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -62,6 +65,7 @@ class WorkoutDashboardCard extends ConsumerWidget {
                 'Last session · $last · ${d.totalWorkouts} total',
                 style: FitnessText.label(context),
               ),
+              if (showSessionCta) ...[
               const SizedBox(height: AppSpacing.md),
               CupertinoButton(
                 padding: EdgeInsets.zero,
@@ -96,6 +100,7 @@ class WorkoutDashboardCard extends ConsumerWidget {
                   ),
                 ),
               ),
+              ],
             ],
           ),
         );

@@ -22,6 +22,7 @@ Cursor also loads `.cursor/rules/gym-application-context.mdc` automatically.
 
 - API: `src/GymManagement.API` (see `appsettings.Development.json` for DB)
 - Client: `gym_client/` — `npm run dev`
+- Mobile: `cd "mobile app"` then `flutter pub get`, `flutter analyze`, `flutter test` (HTTPS API: `--dart-define=API_BASE_URL=https://uat.tigerfitness.tech`)
 - DB migrate: `dotnet ef database update --project src/GymManagement.Infrastructure --startup-project src/GymManagement.API`
 
 ## When implementing

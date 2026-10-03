@@ -101,6 +101,23 @@ public static class UserMembershipRules
         return GymCheckInAllowedStatuses.Contains(status);
     }
 
+    public const string PaymentCollectionClosedMessage =
+        "Billing is closed for cancelled, voided, or transferred memberships.";
+
+    /// <summary>False for terminal memberships: their billing is closed and payments would reopen them.</summary>
+    public static bool AllowsPaymentCollection(MembershipStatus status) => !IsTerminalForReporting(status);
+
+    /// <summary>
+    /// Lifecycle status after an installment. Frozen, Pending, and VoidPending keep their status so a
+    /// payment never lifts a freeze or bypasses an approval.
+    /// </summary>
+    public static MembershipStatus StatusAfterPayment(MembershipStatus current, bool fullySettled)
+    {
+        if (current is MembershipStatus.Frozen or MembershipStatus.Pending or MembershipStatus.VoidPending)
+            return current;
+        return fullySettled ? MembershipStatus.Active : MembershipStatus.PartialPayment;
+    }
+
     public const string TrainingAssignmentRequiresActiveMembershipMessage =
         "An active membership is required before assigning workout or diet plans.";
 

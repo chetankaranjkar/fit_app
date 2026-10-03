@@ -201,6 +201,9 @@ export function EnterpriseDataGrid<T>({
       <th
         key={header.id}
         scope="col"
+        aria-sort={
+          canSort ? (sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none') : undefined
+        }
         style={{
           width,
           minWidth: meta.minWidth ?? width,
@@ -215,27 +218,31 @@ export function EnterpriseDataGrid<T>({
         ].join(' ')}
       >
         <div className="flex h-[50px] items-center gap-1 pr-2">
-          <button
-            type="button"
-            className={[
-              'flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400',
-              canSort ? 'cursor-pointer hover:text-slate-200' : 'cursor-default',
-            ].join(' ')}
-            onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-          >
-            <span className="truncate">
-              {flexRender(header.column.columnDef.header, header.getContext())}
-            </span>
-            {canSort ? (
-              sorted === 'asc' ? (
-                <ChevronUp className="h-3.5 w-3.5 shrink-0 text-blue-300" />
+          {canSort ? (
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+              onClick={header.column.getToggleSortingHandler()}
+              aria-label={`Sort by ${String(flexRender(header.column.columnDef.header, header.getContext()))}`}
+            >
+              <span className="truncate">
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </span>
+              {sorted === 'asc' ? (
+                <ChevronUp className="h-3.5 w-3.5 shrink-0 text-blue-300" aria-hidden />
               ) : sorted === 'desc' ? (
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-blue-300" />
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-blue-300" aria-hidden />
               ) : (
-                <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" />
-              )
-            ) : null}
-          </button>
+                <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />
+              )}
+            </button>
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <span className="truncate">
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </span>
+            </div>
+          )}
           <span
             role="separator"
             aria-orientation="vertical"
@@ -278,7 +285,8 @@ export function EnterpriseDataGrid<T>({
                   value={(header.column.getFilterValue() as string) ?? ''}
                   onChange={(e) => header.column.setFilterValue(e.target.value)}
                   placeholder={meta.filterPlaceholder ?? 'Filter…'}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-200 placeholder:text-slate-600 focus:border-blue-400/40 focus:outline-none"
+                  aria-label={`Filter ${String(meta.header)}`}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-200 placeholder:text-slate-400 focus:border-blue-400/40 focus:outline-none"
                 />
               ) : null}
             </th>
@@ -338,6 +346,8 @@ export function EnterpriseDataGrid<T>({
     <div className={`flex flex-col ${pageScroll ? '' : 'min-h-0 flex-1'} ${className}`}>
       <div
         ref={scrollRef}
+        role="region"
+        aria-label="Data table. Scroll horizontally to see all columns."
         className={[
           'data-grid-scroll',
           pageScroll ? 'overflow-visible' : 'min-h-0 flex-1 overflow-auto',
@@ -346,11 +356,11 @@ export function EnterpriseDataGrid<T>({
         {...(chainScrollToParent || pageScroll ? {} : { 'data-lenis-prevent': true })}
       >
         {loading ? (
-          <div className="flex items-center justify-center px-6 py-16 text-sm text-slate-400">
+          <div className="flex items-center justify-center px-6 py-16 text-sm text-slate-400" role="status">
             Loading…
           </div>
         ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+          <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center" role="status">
             <p className="text-sm text-slate-400">{emptyMessage}</p>
           </div>
         ) : (

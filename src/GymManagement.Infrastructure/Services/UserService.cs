@@ -85,11 +85,13 @@ namespace GymManagement.Infrastructure.Services
             var userTypesByUserId = await GetUserTypesByUserIdsAsync(userIds);
             var appRoleNamesByUserId = await BuildAppRoleNamesByUserIdsAsync(userIds);
             var billingByUserId = await GetBillingSummariesByUserIdsAsync(userIds);
+            var membershipByUserId = await GetDisplayMembershipsByUserIdsAsync(userIds);
             var trainerAssignmentByUserId = await GetActiveTrainerAssignmentByUserIdsAsync(userIds);
             return userList.Select(u =>
             {
                 var dto = MapToDto(u, authByUserId.GetValueOrDefault(u.Id), trainerUserIds.Contains(u.Id), userTypesByUserId.GetValueOrDefault(u.Id), appRoleNamesByUserId.GetValueOrDefault(u.Id));
                 EnrichWithBillingSummary(dto, billingByUserId.GetValueOrDefault(u.Id));
+                EnrichWithMembershipSummary(dto, membershipByUserId.GetValueOrDefault(u.Id), billingByUserId.GetValueOrDefault(u.Id));
                 EnrichWithTrainerAssignment(dto, trainerAssignmentByUserId.GetValueOrDefault(u.Id));
                 return dto;
             });
@@ -160,6 +162,9 @@ namespace GymManagement.Infrastructure.Services
             var billingByUserId = includeBillingSummary
                 ? await GetBillingSummariesByUserIdsAsync(userIds).ConfigureAwait(false)
                 : new Dictionary<int, UserBillingListSummary>();
+            var membershipByUserId = includeBillingSummary
+                ? await GetDisplayMembershipsByUserIdsAsync(userIds).ConfigureAwait(false)
+                : new Dictionary<int, MembershipSnapshot>();
             var trainerAssignmentByUserId = await GetActiveTrainerAssignmentByUserIdsAsync(userIds).ConfigureAwait(false);
 
             var items = pageUsers.Select(u =>
@@ -171,6 +176,7 @@ namespace GymManagement.Infrastructure.Services
                     userTypesByUserId.GetValueOrDefault(u.Id),
                     appRoleNamesByUserId.GetValueOrDefault(u.Id));
                 EnrichWithBillingSummary(dto, billingByUserId.GetValueOrDefault(u.Id));
+                EnrichWithMembershipSummary(dto, membershipByUserId.GetValueOrDefault(u.Id), billingByUserId.GetValueOrDefault(u.Id));
                 EnrichWithTrainerAssignment(dto, trainerAssignmentByUserId.GetValueOrDefault(u.Id));
                 return dto;
             }).ToList();
@@ -370,6 +376,17 @@ namespace GymManagement.Infrastructure.Services
             var hasAnyDietAssignment = dietRows.Count > 0;
             var primaryDiet = ResolvePrimaryDietAssignment(dietRows, todayUtc);
 
+            var membershipSnapshots = await _db.UserMemberships.AsNoTracking()
+                .Where(m => m.UserId == userId && !m.IsDeleted)
+                .Select(m => new MembershipSnapshot(m.Id, m.Status, m.StartDate, m.EndDate, m.Plan.PlanName))
+                .ToListAsync();
+            var currentMembership = MemberOnboardingRules.ResolveCurrentMembership(membershipSnapshots, todayUtc);
+            var lapsedMembership = MemberOnboardingRules.ResolveLapsedMembership(membershipSnapshots, todayUtc);
+
+            var billingByUserId = await GetBillingSummariesByUserIdsAsync(new[] { userId }).ConfigureAwait(false);
+            var billing = billingByUserId.GetValueOrDefault(userId);
+            var hasOpenBalance = billing?.HasOpenBalance ?? false;
+
             return new UserProfileSummaryDto
             {
                 LatestWeightKg = latestWeight,
@@ -383,6 +400,14 @@ namespace GymManagement.Infrastructure.Services
                 HasDietAssignment = dietRows.Any(row => DietAssignmentCountsAsActive(row, todayUtc)),
                 HasAnyDietAssignment = hasAnyDietAssignment,
                 PrimaryDietPlanName = primaryDiet?.DietPlanName,
+                CurrentMembershipId = currentMembership?.Id,
+                CurrentMembershipStatus = currentMembership?.Status.ToString(),
+                CurrentMembershipPlanName = currentMembership?.PlanName,
+                CurrentMembershipEndDate = currentMembership?.EndDate,
+                LapsedMembershipEndDate = lapsedMembership?.EndDate,
+                HasOpenBalance = hasOpenBalance,
+                IsPaymentOverdue = billing?.Open != null && IsPaymentOverdue(billing.Open),
+                OpenMembershipId = billing?.Open?.MembershipId,
             };
         }
 
@@ -607,35 +632,21 @@ namespace GymManagement.Infrastructure.Services
         public async Task<BulkImportMembersResultDto> BulkImportMembersAsync(BulkImportMembersRequestDto request)
         {
             var members = request.Members ?? new List<CreateUserDto>();
+            var result = new BulkImportMembersResultDto { DryRun = request.DryRun };
             if (members.Count == 0)
-                return new BulkImportMembersResultDto();
+                return result;
 
             if (members.Count > BulkImportMembersMaxBatchSize)
                 throw new ArgumentException($"A maximum of {BulkImportMembersMaxBatchSize} members can be imported per request.");
 
-            var result = new BulkImportMembersResultDto();
-            var existingPhones = await _db.Users.AsNoTracking()
-                .Where(u => !u.IsDeleted && u.Phone != null)
-                .Select(u => u.Phone!)
-                .ToListAsync()
-                .ConfigureAwait(false);
-            var phoneSet = new HashSet<string>(existingPhones, StringComparer.Ordinal);
+            var identities = await LoadBulkImportIdentitiesAsync().ConfigureAwait(false);
+            var evaluation = BulkMemberImportEvaluator.Evaluate(members, identities);
 
-            var existingLoginIds = await _db.AuthUsers.AsNoTracking()
-                .Where(a => !a.IsDeleted)
-                .Select(a => a.Email)
-                .ToListAsync()
-                .ConfigureAwait(false);
-            var loginSet = new HashSet<string>(
-                existingLoginIds.Select(e => e.Trim().ToLowerInvariant()),
-                StringComparer.Ordinal);
-
-            var existingAadhaar = await _db.Users.AsNoTracking()
-                .Where(u => !u.IsDeleted && u.AadhaarNumber != null)
-                .Select(u => u.AadhaarNumber!)
-                .ToListAsync()
-                .ConfigureAwait(false);
-            var aadhaarSet = new HashSet<string>(existingAadhaar, StringComparer.Ordinal);
+            if (request.DryRun || evaluation.Accepted.Count == 0)
+            {
+                BulkMemberImportEvaluator.ApplyCounts(result, evaluation, dryRun: request.DryRun, imported: 0);
+                return result;
+            }
 
             var validUserTypeIds = await _db.UserTypes.AsNoTracking()
                 .Where(ut => !ut.IsDeleted)
@@ -646,135 +657,62 @@ namespace GymManagement.Infrastructure.Services
             var memberAppRole = (await _unitOfWork.AppRoles.GetAllAsync().ConfigureAwait(false))
                 .FirstOrDefault(r => string.Equals(r.Name, "MEMBER", StringComparison.OrdinalIgnoreCase));
 
-            var batchPhones = new HashSet<string>(StringComparer.Ordinal);
-            var batchLogins = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var batchAadhaar = new HashSet<string>(StringComparer.Ordinal);
             var prepared = new List<PreparedBulkMember>();
-
-            for (var i = 0; i < members.Count; i++)
+            foreach (var row in evaluation.Accepted)
             {
-                var dto = members[i];
-                var label = string.IsNullOrWhiteSpace(dto.Email) ? $"row {i + 1}" : dto.Email.Trim();
-
-                try
+                var dto = row.Dto;
+                var now = DateTime.UtcNow;
+                var user = new User
                 {
-                    var loginId = ResolveLoginId(dto);
-                    if (string.IsNullOrWhiteSpace(loginId))
+                    FirstName = dto.FirstName.Trim(),
+                    LastName = dto.LastName.Trim(),
+                    Phone = row.Phone,
+                    AadhaarNumber = row.Aadhaar,
+                    DateOfBirth = dto.DateOfBirth,
+                    Gender = dto.Gender,
+                    Address = dto.Address,
+                    EmergencyContact = dto.EmergencyContact,
+                    EmergencyPhone = PhoneNumberValidator.NormalizeOptionalPhone(dto.EmergencyPhone),
+                    ProfilePictureUrl = dto.ProfilePictureUrl,
+                    PreferredGymTime = dto.PreferredGymTime,
+                    IsActive = dto.IsActive,
+                    RegistrationDate = now,
+                };
+
+                var userTypeIds = (dto.UserTypeIds ?? new List<int>())
+                    .Where(id => id > 0 && validUserTypeIds.Contains(id))
+                    .Distinct()
+                    .ToList();
+
+                prepared.Add(new PreparedBulkMember
+                {
+                    Password = row.Password,
+                    User = user,
+                    AuthUser = new AuthUser
                     {
-                        result.Log.Add($"{label}: email is required for login.");
-                        continue;
-                    }
-
-                    var password = dto.Password?.Trim();
-                    if (string.IsNullOrEmpty(password))
+                        Email = row.LoginId,
+                        CreatedDate = now,
+                    },
+                    Member = new Member
                     {
-                        result.Log.Add($"{label}: password is required.");
-                        continue;
-                    }
-
-                    if (password.Length < 6)
-                    {
-                        result.Log.Add($"{label}: password must be at least 6 characters.");
-                        continue;
-                    }
-
-                    var normalizedPhone = PhoneNumberValidator.NormalizeRequiredPhone(dto.Phone);
-                    var loginKey = loginId.ToLowerInvariant();
-
-                    if (batchLogins.Contains(loginKey) || loginSet.Contains(loginKey))
-                    {
-                        result.Log.Add($"Skipped (exists): {loginId}");
-                        continue;
-                    }
-
-                    if (batchPhones.Contains(normalizedPhone) || phoneSet.Contains(normalizedPhone))
-                    {
-                        result.Log.Add($"Duplicate phone number: {normalizedPhone} ({loginId})");
-                        continue;
-                    }
-
-                    string? normalizedAadhaar = null;
-                    try
-                    {
-                        normalizedAadhaar = AadhaarNumberValidator.TryNormalizeOptionalAadhaar(dto.AadhaarNumber);
-                    }
-                    catch (ArgumentException ex)
-                    {
-                        result.Log.Add($"{label}: {ex.Message}");
-                        continue;
-                    }
-
-                    if (normalizedAadhaar != null)
-                    {
-                        if (batchAadhaar.Contains(normalizedAadhaar) || aadhaarSet.Contains(normalizedAadhaar))
-                        {
-                            result.Log.Add($"{label}: Aadhaar number is already registered.");
-                            continue;
-                        }
-
-                        batchAadhaar.Add(normalizedAadhaar);
-                        aadhaarSet.Add(normalizedAadhaar);
-                    }
-
-                    batchLogins.Add(loginKey);
-                    loginSet.Add(loginKey);
-                    batchPhones.Add(normalizedPhone);
-                    phoneSet.Add(normalizedPhone);
-
-                    var now = DateTime.UtcNow;
-                    var user = new User
-                    {
-                        FirstName = dto.FirstName.Trim(),
-                        LastName = dto.LastName.Trim(),
-                        Phone = normalizedPhone,
-                        AadhaarNumber = normalizedAadhaar,
-                        DateOfBirth = dto.DateOfBirth,
-                        Gender = dto.Gender,
-                        Address = dto.Address,
-                        EmergencyContact = dto.EmergencyContact,
-                        EmergencyPhone = PhoneNumberValidator.NormalizeOptionalPhone(dto.EmergencyPhone),
-                        ProfilePictureUrl = dto.ProfilePictureUrl,
-                        PreferredGymTime = dto.PreferredGymTime,
-                        IsActive = dto.IsActive,
+                        EmergencyContact = user.EmergencyContact,
+                        EmergencyPhone = user.EmergencyPhone,
+                        PreferredGymTime = user.PreferredGymTime,
+                        DateOfBirth = user.DateOfBirth,
+                        Gender = user.Gender,
                         RegistrationDate = now,
-                    };
-
-                    var userTypeIds = (dto.UserTypeIds ?? new List<int>())
-                        .Where(id => id > 0 && validUserTypeIds.Contains(id))
-                        .Distinct()
-                        .ToList();
-
-                    prepared.Add(new PreparedBulkMember
-                    {
-                        Password = password,
-                        User = user,
-                        AuthUser = new AuthUser
-                        {
-                            Email = loginId,
-                            CreatedDate = now,
-                        },
-                        Member = new Member
-                        {
-                            EmergencyContact = user.EmergencyContact,
-                            EmergencyPhone = user.EmergencyPhone,
-                            PreferredGymTime = user.PreferredGymTime,
-                            DateOfBirth = user.DateOfBirth,
-                            Gender = user.Gender,
-                            RegistrationDate = now,
-                            IsActive = user.IsActive,
-                        },
-                        UserUserTypes = userTypeIds.Select(typeId => new UserUserType { UserTypeId = typeId }).ToList(),
-                        MemberRoleId = memberAppRole?.Id,
-                    });
-                }
-                catch (ArgumentException ex)
-                {
-                    result.Log.Add($"{label}: {ex.Message}");
-                }
+                        IsActive = user.IsActive,
+                    },
+                    UserUserTypes = userTypeIds.Select(typeId => new UserUserType { UserTypeId = typeId }).ToList(),
+                    MemberRoleId = memberAppRole?.Id,
+                });
             }
 
             if (prepared.Count == 0)
+            {
+                BulkMemberImportEvaluator.ApplyCounts(result, evaluation, dryRun: false, imported: 0);
                 return result;
+            }
 
             Parallel.ForEach(prepared, item =>
             {
@@ -841,8 +779,79 @@ namespace GymManagement.Infrastructure.Services
                 }
             }).ConfigureAwait(false);
 
-            result.Imported = prepared.Count;
+            BulkMemberImportEvaluator.ApplyCounts(result, evaluation, dryRun: false, imported: prepared.Count);
             return result;
+        }
+
+        private async Task<BulkMemberImportEvaluator.ExistingIdentities> LoadBulkImportIdentitiesAsync()
+        {
+            var users = await _db.Users.AsNoTracking()
+                .Where(u => !u.IsDeleted)
+                .Select(u => new { u.Id, u.Phone, u.AadhaarNumber, u.FirstName, u.LastName })
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            var usersById = users.ToDictionary(u => u.Id);
+            static string Label(int id, string first, string last)
+            {
+                var name = $"{first} {last}".Trim();
+                return string.IsNullOrWhiteSpace(name) ? $"user #{id}" : $"{name} (#{id})";
+            }
+
+            var phones = new Dictionary<string, BulkMemberImportEvaluator.ExistingPerson>(StringComparer.Ordinal);
+            var aadhaar = new Dictionary<string, BulkMemberImportEvaluator.ExistingPerson>(StringComparer.Ordinal);
+            foreach (var u in users)
+            {
+                var person = new BulkMemberImportEvaluator.ExistingPerson
+                {
+                    UserId = u.Id,
+                    Label = Label(u.Id, u.FirstName, u.LastName),
+                };
+                if (!string.IsNullOrEmpty(u.Phone) && !phones.ContainsKey(u.Phone))
+                    phones[u.Phone] = person;
+                if (!string.IsNullOrEmpty(u.AadhaarNumber) && !aadhaar.ContainsKey(u.AadhaarNumber))
+                    aadhaar[u.AadhaarNumber] = person;
+            }
+
+            var authRows = await _db.AuthUsers.AsNoTracking()
+                .Where(a => !a.IsDeleted)
+                .Select(a => new { a.UserId, a.Email })
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            var emails = new Dictionary<string, BulkMemberImportEvaluator.ExistingPerson>(StringComparer.OrdinalIgnoreCase);
+            foreach (var a in authRows)
+            {
+                if (string.IsNullOrWhiteSpace(a.Email))
+                    continue;
+                var key = a.Email.Trim();
+                if (emails.ContainsKey(key))
+                    continue;
+
+                if (a.UserId is int uid && usersById.TryGetValue(uid, out var owner))
+                {
+                    emails[key] = new BulkMemberImportEvaluator.ExistingPerson
+                    {
+                        UserId = uid,
+                        Label = Label(uid, owner.FirstName, owner.LastName),
+                    };
+                }
+                else
+                {
+                    emails[key] = new BulkMemberImportEvaluator.ExistingPerson
+                    {
+                        UserId = a.UserId,
+                        Label = a.UserId is int orphanId ? $"user #{orphanId}" : key,
+                    };
+                }
+            }
+
+            return new BulkMemberImportEvaluator.ExistingIdentities
+            {
+                Phones = phones,
+                Emails = emails,
+                Aadhaar = aadhaar,
+            };
         }
 
         private sealed class PreparedBulkMember
@@ -1288,10 +1297,24 @@ namespace GymManagement.Infrastructure.Services
             await _db.SaveChangesAsync();
         }
 
+        private sealed record BillingListRow(
+            int UserId,
+            int Id,
+            int MembershipId,
+            DateTime CreatedDate,
+            MembershipPaymentStatus PaymentStatus,
+            decimal PendingAmount,
+            DateTime? NextDueDate,
+            DateTime? PaymentDate);
+
         private sealed class UserBillingListSummary
         {
             public MembershipPayment Latest { get; init; } = null!;
-            public bool HasOpenBalance { get; init; }
+            /// <summary>Latest billing row that still has a balance (target for Collect).</summary>
+            public MembershipPayment? Open { get; init; }
+            public bool HasOpenBalance => Open != null;
+            public decimal TotalOutstanding { get; init; }
+            public Dictionary<int, MembershipPaymentStatus> StatusByMembershipId { get; init; } = new();
         }
 
         private async Task<Dictionary<int, UserBillingListSummary>> GetBillingSummariesByUserIdsAsync(IEnumerable<int> userIds)
@@ -1302,8 +1325,7 @@ namespace GymManagement.Infrastructure.Services
 
             var billings = await _db.MembershipPayments.AsNoTracking()
                 .Where(p => !p.IsDeleted && idSet.Contains(p.UserId))
-                .Select(p => new
-                {
+                .Select(p => new BillingListRow(
                     p.UserId,
                     p.Id,
                     p.MembershipId,
@@ -1311,8 +1333,7 @@ namespace GymManagement.Infrastructure.Services
                     p.PaymentStatus,
                     p.PendingAmount,
                     p.NextDueDate,
-                    p.PaymentDate,
-                })
+                    p.PaymentDate))
                 .ToListAsync()
                 .ConfigureAwait(false);
 
@@ -1320,22 +1341,68 @@ namespace GymManagement.Infrastructure.Services
                 .GroupBy(p => p.UserId)
                 .ToDictionary(g => g.Key, g =>
                 {
-                    var latestRow = g.OrderByDescending(p => p.CreatedDate).First();
-                    var latest = new MembershipPayment
+                    static MembershipPayment ToHeader(BillingListRow row) => new()
                     {
-                        Id = latestRow.Id,
-                        UserId = latestRow.UserId,
-                        MembershipId = latestRow.MembershipId,
-                        CreatedDate = latestRow.CreatedDate,
-                        PaymentStatus = latestRow.PaymentStatus,
-                        PendingAmount = latestRow.PendingAmount,
-                        NextDueDate = latestRow.NextDueDate,
-                        PaymentDate = latestRow.PaymentDate,
+                        Id = row.Id,
+                        UserId = row.UserId,
+                        MembershipId = row.MembershipId,
+                        CreatedDate = row.CreatedDate,
+                        PaymentStatus = row.PaymentStatus,
+                        PendingAmount = row.PendingAmount,
+                        NextDueDate = row.NextDueDate,
+                        PaymentDate = row.PaymentDate,
                     };
-                    var hasOpen = g.Any(p =>
-                        p.PaymentStatus != MembershipPaymentStatus.Paid && p.PendingAmount > 0.02m);
-                    return new UserBillingListSummary { Latest = latest, HasOpenBalance = hasOpen };
+                    var ordered = g.OrderByDescending(p => p.CreatedDate).ToList();
+                    var openRows = ordered
+                        .Where(p => p.PaymentStatus != MembershipPaymentStatus.Paid && p.PendingAmount > 0.02m)
+                        .ToList();
+                    return new UserBillingListSummary
+                    {
+                        Latest = ToHeader(ordered[0]),
+                        Open = openRows.Count > 0 ? ToHeader(openRows[0]) : null,
+                        TotalOutstanding = openRows.Sum(p => p.PendingAmount),
+                        StatusByMembershipId = ordered
+                            .GroupBy(p => p.MembershipId)
+                            .ToDictionary(m => m.Key, m => m.First().PaymentStatus),
+                    };
                 });
+        }
+
+        private async Task<Dictionary<int, MembershipSnapshot>> GetDisplayMembershipsByUserIdsAsync(IEnumerable<int> userIds)
+        {
+            var idSet = userIds.ToHashSet();
+            if (idSet.Count == 0)
+                return new Dictionary<int, MembershipSnapshot>();
+
+            var rows = await _db.UserMemberships.AsNoTracking()
+                .Where(m => !m.IsDeleted && idSet.Contains(m.UserId))
+                .Select(m => new { m.UserId, Snapshot = new MembershipSnapshot(m.Id, m.Status, m.StartDate, m.EndDate, m.Plan.PlanName) })
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            var today = DateTime.UtcNow.Date;
+            return rows
+                .GroupBy(r => r.UserId)
+                .Select(g => (g.Key, Display: MemberOnboardingRules.ResolveDisplayMembership(g.Select(r => r.Snapshot), today)))
+                .Where(x => x.Display != null)
+                .ToDictionary(x => x.Key, x => x.Display!);
+        }
+
+        private static void EnrichWithMembershipSummary(
+            UserDto dto,
+            MembershipSnapshot? membership,
+            UserBillingListSummary? billing)
+        {
+            if (membership == null)
+                return;
+
+            dto.MembershipId = membership.Id;
+            dto.MembershipStatus = membership.Status.ToString();
+            dto.MembershipPlanName = membership.PlanName;
+            dto.MembershipStartDate = membership.StartDate;
+            dto.MembershipEndDate = membership.EndDate;
+            if (billing != null && billing.StatusByMembershipId.TryGetValue(membership.Id, out var billingStatus))
+                dto.MembershipBillingStatus = billingStatus.ToString();
         }
 
         private static void EnrichWithBillingSummary(UserDto dto, UserBillingListSummary? summary)
@@ -1343,16 +1410,17 @@ namespace GymManagement.Infrastructure.Services
             if (summary == null)
                 return;
 
-            var billing = summary.Latest;
+            var billing = summary.Open ?? summary.Latest;
             dto.MembershipPaymentStatus = billing.PaymentStatus.ToString();
             dto.PendingPaymentAmount = billing.PendingAmount;
             dto.PaymentNextDueDate = billing.NextDueDate;
-            dto.PaymentLastPaidDate = billing.PaymentDate;
-            dto.IsPaymentOverdue = summary.HasOpenBalance && IsPaymentOverdue(billing);
-            if (summary.HasOpenBalance)
+            dto.PaymentLastPaidDate = summary.Latest.PaymentDate;
+            dto.OutstandingBalance = summary.TotalOutstanding;
+            dto.IsPaymentOverdue = summary.Open != null && IsPaymentOverdue(summary.Open);
+            if (summary.Open != null)
             {
-                dto.OpenMembershipPaymentId = billing.Id;
-                dto.OpenMembershipId = billing.MembershipId;
+                dto.OpenMembershipPaymentId = summary.Open.Id;
+                dto.OpenMembershipId = summary.Open.MembershipId;
             }
         }
 

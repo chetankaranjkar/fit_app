@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../../components/layout/DashboardSubpageShell'
 import { Button } from '../../components/ui/Button'
-import { exercisesService } from '../../services/exercises.service'
+import { ExerciseLibraryUnavailableBanner } from '../../components/training/ExerciseLibraryUnavailableBanner'
+import { TrainingJourneyNav } from '../../components/training/TrainingJourneyNav'
+import { useExercisePickerLibrary } from '../../hooks/useExercisePickerLibrary'
+import { getApiErrorMessage } from '../../lib/apiErrors'
 import { programsService } from '../../services/workoutPlans.service'
 import { stretchesService } from '../../services/stretches.service'
 import { warmupsService } from '../../services/warmups.service'
@@ -60,13 +63,13 @@ export function WorkoutPlanWizardPage() {
     },
   })
 
-  const { data: exercises = [] } = useQuery({
-    queryKey: ['wizard-exercises'],
-    queryFn: async () => {
-      const { data } = await exercisesService.getPaged({ page: 1, pageSize: 200 })
-      return data.items ?? []
-    },
-  })
+  const {
+    data: exercises = [],
+    isError: exercisesError,
+    error: exercisesErr,
+    refetch: refetchExercises,
+    isFetching: exercisesFetching,
+  } = useExercisePickerLibrary()
 
   const { data: warmups = [] } = useQuery({
     queryKey: ['wizard-warmups'],
@@ -126,7 +129,7 @@ export function WorkoutPlanWizardPage() {
       toast.success('Workout plan created')
       navigate(`/dashboard/training/programs/${plan.id}?tab=schedule`)
     },
-    onError: (err: Error) => toast.error(err.message || 'Failed to create plan'),
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, 'Failed to create plan')),
   })
 
   function canNext(): boolean {
@@ -140,10 +143,22 @@ export function WorkoutPlanWizardPage() {
   return (
     <DashboardLayout userName={userName}>
       <DashboardSubpageShell
-        title="New workout plan"
+        eyebrow="Plan"
+        titleGradient="New workout plan"
         subtitle="Template-based program wizard — stores only template weeks, not 52 physical rows."
-        backTo="/dashboard/training/programs"
+        showExport={false}
       >
+        <TrainingJourneyNav />
+        <Link to="/dashboard/training/programs" className="text-sm text-slate-400 hover:text-white">
+          ← Back to plans
+        </Link>
+        {exercisesError ? (
+          <ExerciseLibraryUnavailableBanner
+            error={exercisesErr}
+            onRetry={() => void refetchExercises()}
+            isRetrying={exercisesFetching}
+          />
+        ) : null}
         <div className="mb-6 flex flex-wrap items-center gap-2">
           {([1, 2, 3] as WizardStep[]).map((s) => (
             <div
@@ -163,6 +178,9 @@ export function WorkoutPlanWizardPage() {
             basic={basic}
             weeks={weeks}
             exercises={exercises}
+            libraryError={exercisesError ? exercisesErr : null}
+            onRetryLibrary={() => void refetchExercises()}
+            libraryRetrying={exercisesFetching}
             warmups={warmups}
             stretches={stretches}
             onWeeksChange={setWeeks}

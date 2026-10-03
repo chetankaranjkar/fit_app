@@ -14,6 +14,7 @@ import 'post_auth_navigation.dart';
 import '../../animations/app_motion.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_keyboard_inset.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/tiger_fitness_logo.dart';
 
@@ -154,7 +155,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ),
             SafeArea(
-              child: Center(
+              child: AppKeyboardInset(
+                child: Center(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
@@ -180,7 +182,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         'Your training data, membership, and check-ins — one account.',
                         textAlign: TextAlign.center,
                         style: AppType.footnote.copyWith(
-                          color: CupertinoColors.white.withValues(alpha: 0.55),
+                          color: CupertinoColors.white.withValues(alpha: 0.82),
                           height: 1.35,
                         ),
                       ).animate().fadeIn(delay: 90.ms, duration: AppFx.regular),
@@ -302,12 +304,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         'By continuing you agree to our Terms & Privacy.',
                         textAlign: TextAlign.center,
                         style: AppType.caption.copyWith(
-                          color: CupertinoColors.white.withValues(alpha: 0.38),
+                          color: CupertinoColors.white.withValues(alpha: 0.78),
                         ),
                       ),
                       const SizedBox(height: 48),
                     ],
                   ),
+                ),
                 ),
               ),
             ),

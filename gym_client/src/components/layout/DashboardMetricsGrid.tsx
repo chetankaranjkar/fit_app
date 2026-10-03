@@ -16,14 +16,16 @@ export function DashboardMetricsGrid({
   className = '',
   children,
   innerRef,
+  mobileCols = 1,
 }: {
   cols?: DashboardMetricsGridCols
   className?: string
   children: ReactNode
   innerRef?: Ref<HTMLDivElement>
+  mobileCols?: 1 | 2
 }) {
   return (
-    <div ref={innerRef} className={`${GRID_BY_COLS[cols]} ${className}`.trim()}>
+    <div ref={innerRef} className={`${mobileCols === 2 ? GRID_BY_COLS[cols].replace('grid-cols-1', 'grid-cols-2') : GRID_BY_COLS[cols]} ${className}`.trim()}>
       {children}
     </div>
   )

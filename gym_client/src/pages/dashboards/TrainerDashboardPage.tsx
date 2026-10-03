@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
@@ -7,19 +6,16 @@ import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { HeroStat } from '../../components/dashboard/premium/HeroStat'
 import { QuickAction } from '../../components/dashboard/premium/QuickAction'
 import { getDashboardUser } from '../../lib/dashboardUser'
-import { trainerClientsReturnPath, memberWorkoutTimelineUrl, trainerWorkoutsReviewUrl, workoutAssignmentUrl } from '../../lib/workoutAssignmentLinks'
+import { trainerClientsReturnPath, trainerWorkoutsReviewUrl, workoutAssignmentUrl } from '../../lib/workoutAssignmentLinks'
 import { authService } from '../../services/auth.service'
 import { usersService } from '../../services/users.service'
 import { userSchedulesService } from '../../services/userSchedules.service'
-import { attendanceService } from '../../services/attendance.service'
+import { trainersService } from '../../services/trainers.service'
 import type { User } from '../../types/user'
 import type { UserScheduleDto } from '../../types/userSchedule'
-import {
-  formatTrainingScheduleLabel,
-  memberHasTrainingToday,
-  memberTrainingTimeRange,
-} from '../../lib/memberTrainingSchedule'
+import { formatTrainingScheduleLabel } from '../../lib/memberTrainingSchedule'
 import { workoutTrackingService } from '../../services/workoutTracking.service'
+import { TrainerTodayPanel } from '../../components/dashboard/trainer/TrainerTodayPanel'
 
 export function TrainerDashboardPage() {
   const { userName } = getDashboardUser()
@@ -34,14 +30,18 @@ export function TrainerDashboardPage() {
     },
   })
 
+  const todayQuery = useQuery({
+    queryKey: ['trainer-today'],
+    queryFn: async () => (await trainersService.getMyToday()).data,
+    refetchInterval: 120_000,
+  })
+
   const { data, isLoading } = useQuery({
     queryKey: ['trainer-dashboard', trainerId],
     queryFn: async () => {
-      const todayStr = new Date().toISOString().slice(0, 10)
-      const [usersRes, schedulesRes, attendanceRes] = await Promise.all([
+      const [usersRes, schedulesRes] = await Promise.all([
         usersService.getAll({ assignedToCoachOnly: true }),
         userSchedulesService.getAll(),
-        attendanceService.getByDateRange(todayStr, todayStr),
       ])
       const users = (usersRes.data ?? []) as User[]
       const schedules = (schedulesRes.data ?? []) as UserScheduleDto[]
@@ -52,16 +52,9 @@ export function TrainerDashboardPage() {
         (s) => (!trainerId || s.trainerId === trainerId) && s.dayOfWeek === todayDow && s.isActive
       )
 
-      const checkedInIds = new Set(
-        (attendanceRes.data ?? []).map((log) => log.userId)
-      )
-      const scheduledUserIds = new Set(todaySessions.map((s) => s.userId))
-      const pendingCheckIns = [...scheduledUserIds].filter((id) => !checkedInIds.has(id)).length
-
       return {
         clients,
         todaySessions,
-        pendingCheckIns,
         completionPct: clients.length
           ? Math.min(100, Math.round((todaySessions.length / Math.max(clients.length, 1)) * 100))
           : 0,
@@ -69,18 +62,7 @@ export function TrainerDashboardPage() {
     },
   })
 
-  const todayDow = new Date().getDay()
-  const todayTrainingSlots = useMemo(() => {
-    return (data?.clients ?? [])
-      .filter((client) => memberHasTrainingToday(client, todayDow))
-      .map((client) => ({
-        id: client.id,
-        name: `${client.firstName} ${client.lastName}`.trim(),
-        label: formatTrainingScheduleLabel(client),
-        range: memberTrainingTimeRange(client),
-      }))
-      .sort((a, b) => (a.range?.start ?? '').localeCompare(b.range?.start ?? ''))
-  }, [data?.clients, todayDow])
+  const pendingCheckIns = (todayQuery.data?.expectedToday ?? []).filter((c) => c.state !== 'CheckedIn').length
 
   return (
     <DashboardLayout userName={userName}>
@@ -107,8 +89,8 @@ export function TrainerDashboardPage() {
             <HeroStat role="trainer" label="Active clients" numericValue={isLoading ? 0 : data?.clients.length ?? 0} />
             <HeroStat
               role="trainer"
-              label="Pending check-ins"
-              numericValue={isLoading ? 0 : data?.pendingCheckIns ?? 0}
+              label="No check-in yet (inferred)"
+              numericValue={todayQuery.isLoading ? 0 : pendingCheckIns}
             />
             <HeroStat
               role="trainer"
@@ -119,33 +101,15 @@ export function TrainerDashboardPage() {
           </div>
         </header>
 
+        <TrainerTodayPanel
+          today={todayQuery.data}
+          isLoading={todayQuery.isLoading}
+          error={todayQuery.error}
+          memberWorkouts={memberWorkouts}
+        />
+
         <div className="grid gap-6 lg:grid-cols-3">
-          <GlassPanel role="trainer" title="Today's timeline" subtitle="Scheduled classes" className="lg:col-span-2">
-            <div className="mb-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-300/80">
-                Member training slots
-              </p>
-              <ul className="mt-2 space-y-2">
-                {todayTrainingSlots.slice(0, 6).map((slot) => (
-                  <li
-                    key={slot.id}
-                    className="flex items-center justify-between rounded-xl border border-orange-500/15 bg-orange-500/5 px-4 py-3 text-sm"
-                  >
-                    <Link to={`/dashboard/users/${slot.id}`} className="font-medium text-white hover:text-orange-200">
-                      {slot.name}
-                    </Link>
-                    <span className="text-slate-300">
-                      {slot.range ? `${slot.range.start.slice(0, 5)} – ${slot.range.end.slice(0, 5)}` : slot.label}
-                    </span>
-                  </li>
-                ))}
-                {todayTrainingSlots.length === 0 ? (
-                  <li className="rounded-xl border border-dashed border-white/10 px-4 py-3 text-sm text-slate-500">
-                    No custom training slots scheduled for today.
-                  </li>
-                ) : null}
-              </ul>
-            </div>
+          <GlassPanel role="trainer" title="Today's timeline" subtitle="Workout plan schedule" className="lg:col-span-2">
             <ul className="space-y-3">
               {(data?.todaySessions ?? []).slice(0, 8).map((s) => (
                 <li
@@ -167,9 +131,9 @@ export function TrainerDashboardPage() {
           <GlassPanel role="trainer" title="Reminders" subtitle="Upcoming & alerts">
             <ul className="space-y-2 text-sm text-slate-300">
               <li className="rounded-lg border border-orange-500/20 bg-orange-500/10 px-3 py-2">
-                {data?.pendingCheckIns
-                  ? `${data.pendingCheckIns} scheduled members are still pending check-in today`
-                  : 'All scheduled members are checked in for now'}
+                {pendingCheckIns
+                  ? `${pendingCheckIns} scheduled clients have no check-in recorded yet today (inferred from schedule)`
+                  : 'Every client scheduled today has a recorded check-in so far'}
               </li>
               <li className="rounded-lg border border-white/10 px-3 py-2">
                 {data?.todaySessions?.length
@@ -209,49 +173,8 @@ export function TrainerDashboardPage() {
                 </li>
               ))}
             </ul>
-            <Link
-              to={
-                trainerId
-                  ? `/dashboard/trainers/${trainerId}?tab=clients`
-                  : '/dashboard/users'
-              }
-              className="mt-2 inline-block text-xs text-orange-400 hover:underline"
-            >
+            <Link to="/dashboard/users" className="mt-2 inline-block text-xs text-orange-400 hover:underline">
               All members →
-            </Link>
-          </GlassPanel>
-
-          <GlassPanel role="trainer" title="Workouts to review" subtitle="Live tracking">
-            <ul className="divide-y divide-white/5">
-              {(memberWorkouts ?? []).slice(0, 6).map((w) => (
-                <li key={w.sessionId} className="flex items-center justify-between py-3 text-sm">
-                  <div>
-                    <Link
-                      to={memberWorkoutTimelineUrl({
-                        memberId: w.userId || w.memberId,
-                        trainerId: trainerId ?? undefined,
-                        returnTo: trainerWorkoutsReviewUrl(),
-                      })}
-                      className="font-medium text-white hover:text-orange-300"
-                    >
-                      {w.memberName}
-                    </Link>
-                    <p className="text-xs text-slate-500">{w.planName ?? 'Workout'} · {w.status}</p>
-                  </div>
-                  <span className="text-xs text-orange-300">
-                    {w.completionPercent != null ? `${Math.round(w.completionPercent)}%` : '—'}
-                  </span>
-                </li>
-              ))}
-              {!(memberWorkouts?.length) ? (
-                <li className="py-6 text-center text-sm text-slate-500">No tracked workouts yet.</li>
-              ) : null}
-            </ul>
-            <Link
-              to={trainerWorkoutsReviewUrl()}
-              className="mt-2 inline-block text-xs text-orange-400 hover:underline"
-            >
-              Review all client workouts →
             </Link>
           </GlassPanel>
 
@@ -298,11 +221,7 @@ export function TrainerDashboardPage() {
             />
             <QuickAction
               role="trainer"
-              to={
-                trainerId
-                  ? `/dashboard/trainers/${trainerId}?tab=clients`
-                  : '/dashboard/users'
-              }
+              to="/dashboard/users"
               label="My clients"
               icon={<span>👥</span>}
             />

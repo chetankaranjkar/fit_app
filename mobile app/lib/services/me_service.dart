@@ -2,6 +2,7 @@ import '../core/api_client.dart';
 import '../core/api_exception.dart';
 import '../models/me_models.dart';
 import '../workout_sync/sync/sync_manager.dart';
+import 'me_response_cache.dart';
 import 'workout_template_cache.dart';
 
 /// Calls into the backend `/api/me/*` self-service endpoints.
@@ -10,8 +11,18 @@ class MeService {
   static final MeService instance = MeService._();
 
   Future<MeDashboard> getDashboard() async {
-    final res = await ApiClient.instance.get<Map<String, dynamic>>('/me/dashboard');
-    return MeDashboard.fromJson(res.data ?? {});
+    try {
+      final res = await ApiClient.instance.get<Map<String, dynamic>>('/me/dashboard');
+      final data = res.data ?? <String, dynamic>{};
+      await MeResponseCache.instance.saveMap(MeResponseCache.dashboardKey, data);
+      return MeDashboard.fromJson(data);
+    } on ApiException catch (e) {
+      if (e.isNetwork) {
+        final cached = await MeResponseCache.instance.loadMap(MeResponseCache.dashboardKey);
+        if (cached != null) return MeDashboard.fromJson(cached).asStale();
+      }
+      rethrow;
+    }
   }
 
   Future<MeProfile> getProfile() async {
@@ -126,6 +137,11 @@ class MeService {
     await ApiClient.instance.post<void>('/me/notifications/$id/read');
   }
 
+  /// Server-side mark-all; inbox is the source of truth.
+  Future<void> markAllNotificationsRead() async {
+    await ApiClient.instance.post<void>('/me/notifications/read-all');
+  }
+
   Future<List<MeInvoiceSummary>> getInvoices() async {
     final res = await ApiClient.instance.get<List<dynamic>>('/me/invoices');
     return (res.data ?? const [])
@@ -135,34 +151,18 @@ class MeService {
   }
 
   Future<MeBillingAccess> getBillingAccess() async {
-    final res = await ApiClient.instance.get<Map<String, dynamic>>('/me/membership-billing/access');
-    return MeBillingAccess.fromJson(res.data ?? {});
-  }
-
-  Future<Map<String, dynamic>> createRazorpayOrder({int? membershipPaymentId}) async {
-    final res = await ApiClient.instance.post<Map<String, dynamic>>(
-      '/me/payments/razorpay/order',
-      body: {
-        if (membershipPaymentId != null) 'membershipPaymentId': membershipPaymentId,
-      },
-    );
-    return res.data ?? {};
-  }
-
-  Future<Map<String, dynamic>> verifyRazorpayPayment({
-    required String razorpayOrderId,
-    required String razorpayPaymentId,
-    required String razorpaySignature,
-  }) async {
-    final res = await ApiClient.instance.post<Map<String, dynamic>>(
-      '/me/payments/razorpay/verify',
-      body: {
-        'razorpayOrderId': razorpayOrderId,
-        'razorpayPaymentId': razorpayPaymentId,
-        'razorpaySignature': razorpaySignature,
-      },
-    );
-    return res.data ?? {};
+    try {
+      final res = await ApiClient.instance.get<Map<String, dynamic>>('/me/membership-billing/access');
+      final data = res.data ?? <String, dynamic>{};
+      await MeResponseCache.instance.saveMap(MeResponseCache.billingKey, data);
+      return MeBillingAccess.fromJson(data);
+    } on ApiException catch (e) {
+      if (e.isNetwork) {
+        final cached = await MeResponseCache.instance.loadMap(MeResponseCache.billingKey);
+        if (cached != null) return MeBillingAccess.fromJson(cached);
+      }
+      rethrow;
+    }
   }
 
   Future<List<int>> downloadInvoicePdf(int membershipPaymentId) async {
@@ -183,22 +183,42 @@ class MeService {
   }
 
   Future<List<MeWorkoutPlanSummary>> getWorkoutPlans() async {
-    final res = await ApiClient.instance.get<List<dynamic>>('/me/workout-plans');
-    return (res.data ?? const [])
-        .whereType<Map<String, dynamic>>()
-        .map(MeWorkoutPlanSummary.fromJson)
-        .toList();
+    try {
+      final res = await ApiClient.instance.get<List<dynamic>>('/me/workout-plans');
+      final data = res.data ?? const [];
+      await MeResponseCache.instance.saveList(MeResponseCache.plansKey, data);
+      return data.whereType<Map<String, dynamic>>().map(MeWorkoutPlanSummary.fromJson).toList();
+    } on ApiException catch (e) {
+      if (e.isNetwork) {
+        final cached = await MeResponseCache.instance.loadList(MeResponseCache.plansKey);
+        if (cached != null) {
+          return cached
+              .whereType<Map>()
+              .map((e) => MeWorkoutPlanSummary.fromJson(e.cast<String, dynamic>()))
+              .toList();
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<MeWorkoutSessionTemplate> getWorkoutSessionTemplate(int planId) async {
-    final offset = DateTime.now().timeZoneOffset.inMinutes;
-    final res = await ApiClient.instance.get<Map<String, dynamic>>(
-      '/me/workout-plans/$planId/session',
-      query: {'utcOffsetMinutes': offset},
-    );
-    final template = MeWorkoutSessionTemplate.fromJson(res.data ?? {});
-    await WorkoutTemplateCache.instance.save(planId, template);
-    return template;
+    try {
+      final offset = DateTime.now().timeZoneOffset.inMinutes;
+      final res = await ApiClient.instance.get<Map<String, dynamic>>(
+        '/me/workout-plans/$planId/session',
+        query: {'utcOffsetMinutes': offset},
+      );
+      final template = MeWorkoutSessionTemplate.fromJson(res.data ?? {});
+      await WorkoutTemplateCache.instance.save(planId, template);
+      return template;
+    } on ApiException catch (e) {
+      if (e.isNetwork) {
+        final cached = await WorkoutTemplateCache.instance.load(planId);
+        if (cached != null) return cached;
+      }
+      rethrow;
+    }
   }
 
   Future<MeDietPlan?> getDietPlan() async {

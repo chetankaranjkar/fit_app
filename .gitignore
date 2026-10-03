@@ -70,3 +70,8 @@ deploy/secrets/*.json
 !deploy/secrets/.gitkeep
 
 artifacts/
+
+# Android / Flutter signing (never commit keystores or passwords)
+**/key.properties
+*.jks
+*.keystore

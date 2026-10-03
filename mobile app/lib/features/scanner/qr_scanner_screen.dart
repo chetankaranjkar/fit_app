@@ -10,14 +10,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../services/qr_attendance_service.dart';
+import '../../features/home/home_action_resolver.dart';
 import '../../providers/ui_banner_provider.dart';
+import '../../theme/app_a11y.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/press_scale.dart';
+import 'check_in_location.dart';
+import 'check_in_presentation.dart';
+import 'check_in_scan_gate.dart';
 
 /// 🔧 Set to `false` once the real backend endpoint is wired in
 /// `qr_attendance_service.dart`. Stub mode is great for screen recordings,
@@ -37,13 +44,19 @@ class QrScannerScreen extends ConsumerStatefulWidget {
 
 class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
   late final MobileScannerController _controller;
+  final CheckInScanGate _gate = CheckInScanGate();
+  final CheckInLocationSource _location = const CheckInLocationSource();
   bool _torchOn = false;
   bool _isProcessing = false;
+  bool _cameraReady = false;
+  bool _cameraPrompted = false;
+  bool _previewLocationPrompted = false;
   AttendanceResult? _result;
   Timer? _autoCloseTimer;
   bool _previewGpsLoading = true;
   double? _previewLat;
   double? _previewLng;
+  CheckInLocationFailed? _previewLocationFailure;
 
   @override
   void initState() {
@@ -53,34 +66,79 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
       facing: CameraFacing.back,
       torchEnabled: false,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshPreviewGps());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureCameraPermission();
+      _refreshPreviewGps(requestIfDenied: true);
+    });
   }
 
-  Future<void> _refreshPreviewGps() async {
-    try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (mounted) setState(() => _previewGpsLoading = false);
-        return;
-      }
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
+  Future<void> _ensureCameraPermission() async {
+    if (_cameraPrompted) return;
+    _cameraPrompted = true;
+    var status = await Permission.camera.status;
+    if (status.isDenied) {
+      status = await Permission.camera.request();
+    }
+    if (!mounted) return;
+    if (status.isGranted) {
+      setState(() => _cameraReady = true);
+      return;
+    }
+    _gate.begin();
+    _gate.finishLocked();
+    setState(() {
+      _cameraReady = false;
+      _result = AttendanceCameraIssue(
+        permanentlyDenied: status.isPermanentlyDenied || status.isRestricted,
       );
-      if (!mounted) return;
+    });
+  }
+
+  Future<void> _refreshPreviewGps({bool requestIfDenied = false}) async {
+    if (mounted) {
       setState(() {
-        _previewLat = pos.latitude;
-        _previewLng = pos.longitude;
-        _previewGpsLoading = false;
+        _previewGpsLoading = true;
+        _previewLocationFailure = null;
       });
-    } catch (_) {
-      if (mounted) setState(() => _previewGpsLoading = false);
+    }
+    final shouldAsk = requestIfDenied && !_previewLocationPrompted;
+    if (shouldAsk) _previewLocationPrompted = true;
+    final geo = await _location.resolve(requestIfDenied: shouldAsk);
+    if (!mounted) return;
+    if (geo is CheckInLocationReady) {
+      setState(() {
+        _previewLat = geo.position.latitude;
+        _previewLng = geo.position.longitude;
+        _previewGpsLoading = false;
+        _previewLocationFailure = null;
+      });
+      return;
+    }
+    final failed = geo as CheckInLocationFailed;
+    setState(() {
+      _previewLat = null;
+      _previewLng = null;
+      _previewGpsLoading = false;
+      _previewLocationFailure = failed;
+    });
+  }
+
+  Future<void> _onPreviewGpsRetry() async {
+    final failed = _previewLocationFailure;
+    if (failed == null) {
+      await _refreshPreviewGps(requestIfDenied: true);
+      return;
+    }
+    switch (failed.kind) {
+      case LocationIssueKind.permissionDeniedForever:
+      case LocationIssueKind.permissionDenied:
+        await openAppSettings();
+        return;
+      case LocationIssueKind.gpsOff:
+        await Geolocator.openLocationSettings();
+        return;
+      case LocationIssueKind.noFix:
+        await _refreshPreviewGps(requestIfDenied: false);
     }
   }
 
@@ -92,12 +150,15 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_isProcessing || _result != null) return;
+    if (!_gate.begin()) return;
     final raw = capture.barcodes.firstWhere(
       (b) => (b.rawValue ?? '').isNotEmpty,
       orElse: () => const Barcode(),
     ).rawValue;
-    if (raw == null || raw.isEmpty) return;
+    if (raw == null || raw.isEmpty) {
+      _gate.reset();
+      return;
+    }
 
     setState(() => _isProcessing = true);
     HapticFeedback.mediumImpact();
@@ -108,6 +169,7 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
         ? await service.submitStub(raw)
         : await service.submit(raw);
 
+    _gate.finishLocked();
     if (!mounted) return;
 
     setState(() {
@@ -140,9 +202,44 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
 
   Future<void> _retry() async {
     HapticFeedback.selectionClick();
-    setState(() => _result = null);
     _autoCloseTimer?.cancel();
-    await _controller.start();
+    _gate.reset();
+    setState(() {
+      _result = null;
+      _isProcessing = false;
+    });
+    if (_cameraReady) {
+      await _controller.start();
+    } else {
+      _cameraPrompted = false;
+      await _ensureCameraPermission();
+    }
+  }
+
+  Future<void> _onPrimaryAction(CheckInNextAction action) async {
+    switch (action) {
+      case CheckInNextAction.none:
+        return;
+      case CheckInNextAction.retryScan:
+      case CheckInNextAction.waitThenRetry:
+        await _retry();
+        return;
+      case CheckInNextAction.openAppSettings:
+        await openAppSettings();
+        return;
+      case CheckInNextAction.openLocationSettings:
+        await Geolocator.openLocationSettings();
+        return;
+      case CheckInNextAction.viewMembership:
+        if (mounted) context.go(kMemberPaymentHandoffRoute);
+        return;
+      case CheckInNextAction.goHome:
+        if (mounted) context.go('/home');
+        return;
+      case CheckInNextAction.close:
+        if (mounted) context.pop();
+        return;
+    }
   }
 
   @override
@@ -153,12 +250,26 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
         fit: StackFit.expand,
         children: [
           // ─── Camera ─────────────────────────────────────────────
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-            errorBuilder: (context, error, _) =>
-                _ScannerError(message: error.errorDetails?.message ?? 'Camera error'),
-          ),
+          if (_cameraReady)
+            MobileScanner(
+              controller: _controller,
+              onDetect: _onDetect,
+              errorBuilder: (context, error, _) {
+                final denied = error.errorCode == MobileScannerErrorCode.permissionDenied;
+                return _ScannerError(
+                  message: denied
+                      ? 'Camera is blocked. Open Settings, allow Camera, then return to scan.'
+                      : (error.errorDetails?.message ?? 'Camera error'),
+                  onOpenSettings: denied
+                      ? () {
+                          openAppSettings();
+                        }
+                      : null,
+                );
+              },
+            )
+          else
+            const ColoredBox(color: Color(0xFF000000)),
 
           // ─── Dimmed cutout overlay with neon frame ──────────────
           const _ScannerFrameOverlay(),
@@ -174,6 +285,7 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
                 children: [
                   _CircleChromeButton(
                     icon: CupertinoIcons.xmark,
+                    semanticLabel: 'Close scanner',
                     onTap: () {
                       HapticFeedback.selectionClick();
                       context.pop();
@@ -184,6 +296,7 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
                     icon: _torchOn
                         ? CupertinoIcons.bolt_fill
                         : CupertinoIcons.bolt,
+                    semanticLabel: _torchOn ? 'Turn flashlight off' : 'Turn flashlight on',
                     activeGlow: _torchOn,
                     onTap: _toggleTorch,
                   ),
@@ -202,7 +315,8 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
                 loading: _previewGpsLoading,
                 latitude: _previewLat,
                 longitude: _previewLng,
-                onRetryTap: _refreshPreviewGps,
+                failure: _previewLocationFailure,
+                onRetryTap: _onPreviewGpsRetry,
               ),
             ),
 
@@ -223,8 +337,7 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
           if (_result != null)
             _ResultOverlay(
               result: _result!,
-              onClose: () => context.pop(),
-              onRetry: _retry,
+              onPrimary: _onPrimaryAction,
             ),
         ],
       ),
@@ -374,7 +487,18 @@ class _ScanLineState extends State<_ScanLine>
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2400),
-    )..repeat(reverse: true);
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppA11y.reduceMotion(context)) {
+      _ctrl.stop();
+      _ctrl.value = 0.45;
+    } else if (!_ctrl.isAnimating) {
+      _ctrl.repeat(reverse: true);
+    }
   }
 
   @override
@@ -435,46 +559,53 @@ class _CircleChromeButton extends StatelessWidget {
   const _CircleChromeButton({
     required this.icon,
     required this.onTap,
+    required this.semanticLabel,
     this.activeGlow = false,
   });
   final IconData icon;
   final VoidCallback onTap;
+  final String semanticLabel;
   final bool activeGlow;
 
   @override
   Widget build(BuildContext context) {
-    return PressScale(
-      onTap: onTap,
-      scale: 0.92,
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFF000000).withValues(alpha: 0.42),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: activeGlow
-                    ? AppColors.gold.withValues(alpha: 0.85)
-                    : const Color(0xFFFFFFFF).withValues(alpha: 0.18),
-                width: 1,
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: PressScale(
+        onTap: onTap,
+        scale: 0.92,
+        child: ClipOval(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFF000000).withValues(alpha: 0.42),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: activeGlow
+                      ? AppColors.gold.withValues(alpha: 0.85)
+                      : const Color(0xFFFFFFFF).withValues(alpha: 0.18),
+                  width: 1,
+                ),
+                boxShadow: activeGlow
+                    ? [
+                        BoxShadow(
+                          color: AppColors.gold.withValues(alpha: 0.55),
+                          blurRadius: 18,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : null,
               ),
-              boxShadow: activeGlow
-                  ? [
-                      BoxShadow(
-                        color: AppColors.gold.withValues(alpha: 0.55),
-                        blurRadius: 18,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Icon(
-              icon,
-              color: activeGlow ? AppColors.gold : CupertinoColors.white,
-              size: 18,
+              child: Icon(
+                icon,
+                color: activeGlow ? AppColors.gold : CupertinoColors.white,
+                size: 18,
+                semanticLabel: semanticLabel,
+              ),
             ),
           ),
         ),
@@ -492,13 +623,29 @@ class _ScannerGpsPreview extends StatelessWidget {
     required this.loading,
     required this.latitude,
     required this.longitude,
+    required this.failure,
     required this.onRetryTap,
   });
 
   final bool loading;
   final double? latitude;
   final double? longitude;
+  final CheckInLocationFailed? failure;
   final VoidCallback onRetryTap;
+
+  String get _failureLabel {
+    switch (failure?.kind) {
+      case LocationIssueKind.permissionDenied:
+      case LocationIssueKind.permissionDeniedForever:
+        return 'Location permission needed — tap Settings';
+      case LocationIssueKind.gpsOff:
+        return 'GPS is off — tap to enable';
+      case LocationIssueKind.noFix:
+        return 'No GPS fix — tap to retry';
+      case null:
+        return 'GPS unavailable — tap to retry';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -541,7 +688,7 @@ class _ScannerGpsPreview extends StatelessWidget {
                             ),
                           )
                         : Text(
-                            'GPS unavailable — tap to retry',
+                            _failureLabel,
                             style: AppType.caption.copyWith(
                               color: CupertinoColors.white.withValues(alpha: 0.75),
                             ),
@@ -549,13 +696,23 @@ class _ScannerGpsPreview extends StatelessWidget {
               ),
               if (!loading) ...[
                 const SizedBox(width: 6),
-                PressScale(
-                  onTap: onRetryTap,
-                  scale: 0.94,
-                  child: Icon(
-                    CupertinoIcons.arrow_clockwise,
-                    size: 16,
-                    color: CupertinoColors.white.withValues(alpha: 0.85),
+                Semantics(
+                  button: true,
+                  label: 'Retry location or open settings',
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: AppA11y.minTouchTarget,
+                      minHeight: AppA11y.minTouchTarget,
+                    ),
+                    child: PressScale(
+                      onTap: onRetryTap,
+                      scale: 0.94,
+                      child: Icon(
+                        CupertinoIcons.arrow_clockwise,
+                        size: 18,
+                        color: CupertinoColors.white.withValues(alpha: 0.85),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -627,89 +784,57 @@ class _BottomHint extends StatelessWidget {
 class _ResultOverlay extends StatelessWidget {
   const _ResultOverlay({
     required this.result,
-    required this.onClose,
-    required this.onRetry,
+    required this.onPrimary,
   });
   final AttendanceResult result;
-  final VoidCallback onClose;
-  final VoidCallback onRetry;
+  final Future<void> Function(CheckInNextAction action) onPrimary;
 
   @override
   Widget build(BuildContext context) {
     final r = result;
+    final feedback = CheckInFeedback.fromResult(r);
     final IconData icon;
     final Color tint;
-    final String title;
-    final String body;
-    final bool celebratory;
-    final String? ctaLabel;
-    VoidCallback? cta;
+    final title = feedback.title;
+    final body = feedback.reason;
+    final celebratory = feedback.celebratory;
+    final ctaLabel = feedback.nextActionLabel;
+    final cta = ctaLabel == null
+        ? null
+        : () {
+            onPrimary(feedback.nextAction);
+          };
 
     if (r is AttendanceSuccess) {
       icon = CupertinoIcons.checkmark_alt;
       tint = AppColors.success;
-      title = 'You\'re checked in!';
-      body =
-          '${r.memberName} • ${DateFormat('h:mm a').format(r.checkInTime.toLocal())}'
-          '${r.planName != null ? '\n${r.planName}' : ''}';
-      celebratory = true;
-      ctaLabel = null;
     } else if (r is AttendanceMembershipExpired) {
       icon = CupertinoIcons.exclamationmark_triangle;
       tint = AppColors.gold;
-      title = 'Membership expired';
-      body = r.endDate != null
-          ? 'Your plan ended on ${DateFormat.yMMMd().format(r.endDate!)}.\nRenew to continue.'
-          : 'Your plan has ended. Renew to continue.';
-      celebratory = false;
-      ctaLabel = 'Close';
-      cta = onClose;
     } else if (r is AttendanceAlreadyScanned) {
       icon = CupertinoIcons.clock;
       tint = AppColors.neonBlueLite;
-      title = 'Already checked in';
-      body =
-          'You scanned in at ${DateFormat('h:mm a').format(r.previousCheckIn.toLocal())} today.\nSee you tomorrow!';
-      celebratory = false;
-      ctaLabel = 'Close';
-      cta = onClose;
-    } else if (r is AttendanceInvalidQr) {
-      final reason = r.reason ?? '';
-      final looksLikeGeoDistance =
-          reason.toLowerCase().contains('meter') && reason.toLowerCase().contains('branch');
-      icon = looksLikeGeoDistance ? CupertinoIcons.map : CupertinoIcons.xmark_octagon;
+    } else if (r is AttendanceTooFar) {
+      icon = CupertinoIcons.map;
       tint = AppColors.danger;
-      title = looksLikeGeoDistance ? 'Too far from venue' : 'Invalid QR code';
-      body =
-          reason.isNotEmpty ? reason : 'This QR isn\'t recognised. Try a different one.';
-      celebratory = false;
-      ctaLabel = 'Try again';
-      cta = onRetry;
+    } else if (r is AttendanceRateLimited) {
+      icon = CupertinoIcons.timer;
+      tint = AppColors.gold;
+    } else if (r is AttendanceCameraIssue) {
+      icon = CupertinoIcons.camera;
+      tint = AppColors.gold;
+    } else if (r is AttendanceInvalidQr) {
+      icon = CupertinoIcons.xmark_octagon;
+      tint = AppColors.danger;
     } else if (r is AttendanceLocationIssue) {
       icon = CupertinoIcons.location_fill;
       tint = AppColors.gold;
-      title = 'Location needed';
-      body = r.message;
-      celebratory = false;
-      ctaLabel = 'Try again';
-      cta = onRetry;
-    } else if (r is AttendanceSessionIssue) {
+    } else if (r is AttendanceSessionIssue || r is AttendanceAccessDenied) {
       icon = CupertinoIcons.lock_fill;
       tint = AppColors.danger;
-      title = 'Session issue';
-      body = r.message;
-      celebratory = false;
-      ctaLabel = 'Close';
-      cta = onClose;
     } else {
-      final n = r as AttendanceNetworkError;
       icon = CupertinoIcons.wifi_exclamationmark;
       tint = AppColors.danger;
-      title = 'Connection issue';
-      body = n.message;
-      celebratory = false;
-      ctaLabel = 'Try again';
-      cta = onRetry;
     }
 
     return Positioned.fill(
@@ -749,14 +874,10 @@ class _ResultOverlay extends StatelessWidget {
                               height: 1.4,
                             ),
                           ),
-                          if (r is AttendanceInvalidQr &&
-                              r.deviceLatitude != null &&
-                              r.deviceLongitude != null) ...[
+                          if (_coordsCaption(r) != null) ...[
                             const SizedBox(height: 10),
                             Text(
-                              'Sent to server (WGS84)\n'
-                              'lat ${r.deviceLatitude!.toStringAsFixed(6)}\n'
-                              'lng ${r.deviceLongitude!.toStringAsFixed(6)}',
+                              _coordsCaption(r)!,
                               textAlign: TextAlign.center,
                               style: AppType.caption.copyWith(
                                 color: AppColors.resolveTextSecondary(context),
@@ -768,9 +889,10 @@ class _ResultOverlay extends StatelessWidget {
                             const SizedBox(height: AppSpacing.lg),
                             PressScale(
                               onTap: cta,
-                              child: Container(
+                                child: Container(
                                 width: double.infinity,
-                                height: 48,
+                                constraints: const BoxConstraints(minHeight: 48),
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   gradient: AppColors.primaryGradient,
@@ -781,6 +903,9 @@ class _ResultOverlay extends StatelessWidget {
                                 ),
                                 child: Text(
                                   ctaLabel,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppType.button.copyWith(
                                     color: CupertinoColors.white,
                                   ),
@@ -991,8 +1116,10 @@ class _ConfettiPainter extends CustomPainter {
 // ╚════════════════════════════════════════════════════════════════╝
 
 class _ScannerError extends StatelessWidget {
-  const _ScannerError({required this.message});
+  const _ScannerError({required this.message, this.onOpenSettings});
   final String message;
+  final VoidCallback? onOpenSettings;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1007,6 +1134,7 @@ class _ScannerError extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             'Camera unavailable',
+            textAlign: TextAlign.center,
             style: AppType.title3.copyWith(color: CupertinoColors.white),
           ),
           const SizedBox(height: 6),
@@ -1014,11 +1142,41 @@ class _ScannerError extends StatelessWidget {
             message,
             textAlign: TextAlign.center,
             style: AppType.footnote.copyWith(
-              color: CupertinoColors.white.withValues(alpha: 0.7),
+              color: CupertinoColors.white.withValues(alpha: 0.85),
+              height: 1.4,
             ),
           ),
+          if (onOpenSettings != null) ...[
+            const SizedBox(height: 20),
+            AppButton(
+              label: 'Open settings',
+              onTap: onOpenSettings,
+            ),
+            const SizedBox(height: 8),
+            AppButton(
+              label: 'Not now',
+              style: AppButtonStyle.plain,
+              onTap: () => Navigator.maybePop(context),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+String? _coordsCaption(AttendanceResult r) {
+  double? lat;
+  double? lng;
+  if (r is AttendanceTooFar) {
+    lat = r.deviceLatitude;
+    lng = r.deviceLongitude;
+  } else if (r is AttendanceInvalidQr) {
+    lat = r.deviceLatitude;
+    lng = r.deviceLongitude;
+  }
+  if (lat == null || lng == null) return null;
+  return 'Sent to server (WGS84)\n'
+      'lat ${lat.toStringAsFixed(6)}\n'
+      'lng ${lng.toStringAsFixed(6)}';
 }

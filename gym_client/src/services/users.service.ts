@@ -14,6 +14,30 @@ export type MembersDirectoryStats = {
   batches: { batch: string; count: number }[]
 }
 
+export type BulkImportMemberRowResult = {
+  sourceRowNumber: number
+  email?: string | null
+  phone?: string | null
+  outcome: 'accepted' | 'skipped' | 'failed' | string
+  field?: string | null
+  code?: string | null
+  message: string
+  howToFix?: string | null
+  matchedOn?: string | null
+  existingUserId?: number | null
+  existingUserLabel?: string | null
+}
+
+export type BulkImportMembersResult = {
+  imported: number
+  wouldImport: number
+  skipped: number
+  failed: number
+  dryRun: boolean
+  log: string[]
+  rows: BulkImportMemberRowResult[]
+}
+
 export const usersService = {
   getAll: (params?: { assignedToCoachOnly?: boolean }) => {
     const query = new URLSearchParams()
@@ -144,8 +168,14 @@ export const usersService = {
     }
   },
   create: (data: CreateUserDto) => api.post<User>('/Users', data),
+  previewBulkImportMembers: (members: CreateUserDto[], options?: { timeoutMs?: number }) =>
+    api.post<BulkImportMembersResult>(
+      '/Users/bulk-import/preview',
+      { members, dryRun: true },
+      options?.timeoutMs != null ? { timeout: options.timeoutMs } : undefined,
+    ),
   bulkImportMembers: (members: CreateUserDto[], options?: { timeoutMs?: number }) =>
-    api.post<{ imported: number; log: string[] }>(
+    api.post<BulkImportMembersResult>(
       '/Users/bulk-import',
       { members },
       options?.timeoutMs != null ? { timeout: options.timeoutMs } : undefined,

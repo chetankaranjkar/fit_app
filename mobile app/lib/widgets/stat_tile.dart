@@ -63,10 +63,11 @@ class StatTile extends StatelessWidget {
                     child: Text(
                       label,
                       style: AppType.caption.copyWith(
-                        color: accent.withValues(alpha: 0.85),
+                        color: accent,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.2,
                       ),
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -83,33 +84,35 @@ class StatTile extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    value,
-                    style: AppType.title1.copyWith(
-                      color: isDark ? CupertinoColors.white : AppColors.textLight,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  if (suffix != null) ...[
-                    const SizedBox(width: 3),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
-                      child: Text(
-                        suffix!,
-                        style: AppType.caption.copyWith(
-                          color: isDark
-                              ? CupertinoColors.white.withValues(alpha: 0.55)
-                              : AppColors.textLightSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      value,
+                      style: AppType.title1.copyWith(
+                        color: isDark ? CupertinoColors.white : AppColors.textLight,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
+                    if (suffix != null) ...[
+                      const SizedBox(width: 3),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text(
+                          suffix!,
+                          style: AppType.caption.copyWith(
+                            color: AppColors.resolveTextSecondary(context),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ],
           ),

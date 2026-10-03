@@ -455,6 +455,22 @@ export const gymOperationsService = {
       mapCleaning,
       MOCK_CLEANING,
     ),
+
+  async updateCleaningTask(logId: string, taskId: string, isDone: boolean): Promise<CleaningTask> {
+    if (!USE_API) return { id: taskId, label: '', done: isDone }
+    try {
+      const res = await api.patch<ApiCleaningTask>(
+        `/gym-operations/cleaning/${logId}/tasks/${taskId}`,
+        { isDone },
+      )
+      return mapCleaningTask(res.data)
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.warn('[gym-operations] updateCleaningTask fell back to local', err)
+      }
+      return { id: taskId, label: '', done: isDone }
+    }
+  },
   listVendors: (): Promise<Vendor[]> =>
     fetchWithFallback<ApiVendor, Vendor>(
       '/gym-operations/vendors',

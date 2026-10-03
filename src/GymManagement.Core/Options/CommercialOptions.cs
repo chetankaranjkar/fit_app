@@ -17,10 +17,15 @@ namespace GymManagement.Core.Options
         /// <summary>Razorpay Key Secret. Server-side only; never expose to clients.</summary>
         public string? RazorpayKeySecret { get; set; }
 
+        /// <summary>Razorpay webhook secret (Dashboard → Webhooks). When empty, POST /api/public/razorpay/webhook is disabled.</summary>
+        public string? RazorpayWebhookSecret { get; set; }
+
         /// <summary>Display name shown on Razorpay checkout.</summary>
         public string CheckoutBusinessName { get; set; } = "Tiger Fitness";
 
         public bool IsRazorpayConfigured =>
             !string.IsNullOrWhiteSpace(RazorpayKeyId) && !string.IsNullOrWhiteSpace(RazorpayKeySecret);
+
+        public bool IsRazorpayWebhookConfigured => !string.IsNullOrWhiteSpace(RazorpayWebhookSecret);
     }
 }

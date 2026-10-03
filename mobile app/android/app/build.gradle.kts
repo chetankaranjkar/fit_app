@@ -48,13 +48,41 @@ android {
     }
 
     buildTypes {
+        // Debug and profile keep the Android debug keystore so local/dev builds stay usable.
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        getByName("profile") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // No silent debug-keystore fallback for release/production.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val assemblingRelease =
+        allTasks.any { task ->
+            val name = task.name
+            name.contains("Release") &&
+                (
+                    name.startsWith("assemble") ||
+                        name.startsWith("bundle") ||
+                        name.startsWith("package") ||
+                        name.contains("Sign")
+                )
+        }
+    if (assemblingRelease && !keystorePropertiesFile.exists()) {
+        throw GradleException(
+            "Release/production Android builds require android/key.properties " +
+                "(upload keystore). Debug/profile builds use the debug keystore. " +
+                "Set ANDROID_KEYSTORE_* GitHub secrets or a local key.properties file. " +
+                "For day-to-day APKs use `flutter build apk` (debug), not --release.",
+        )
     }
 }
 

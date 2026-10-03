@@ -28,6 +28,7 @@ export interface UserMembership {
   paymentStatus?: string | null
   isFullyPaid?: boolean
   hasCompletedPayments?: boolean
+  nextDueDate?: string | null
 }
 
 export interface UserMembershipSummary {
@@ -97,6 +98,7 @@ export interface ExpiringMembershipQueueItem {
   pendingAmount: number
   paymentStatus?: string | null
   isFullyPaid: boolean
+  nextDueDate?: string | null
 }
 
 export interface PagedExpiringMembershipQueueResponse {

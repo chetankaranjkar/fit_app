@@ -27,6 +27,12 @@ namespace GymManagement.Core.DTOs
         public string? ProfilePictureUrl { get; set; }
         public DateTime RegistrationDate { get; set; }
         public string? PreferredGymTime { get; set; }
+        /// <summary>Assigned goal weight from UserDetails (not a recorded weigh-in).</summary>
+        public decimal? TargetWeightKg { get; set; }
+        /// <summary>Assigned goal type from UserDetails (e.g. Weight Loss).</summary>
+        public string? AssignedGoalType { get; set; }
+        /// <summary>Assigned height from UserDetails, used only for BMI estimates.</summary>
+        public decimal? HeightCm { get; set; }
     }
 
     /// <summary>Member opt-in for outbound email and SMS/WhatsApp.</summary>
@@ -40,6 +46,20 @@ namespace GymManagement.Core.DTOs
     {
         public bool ReceiveEmailNotifications { get; set; }
         public bool ReceiveSmsNotifications { get; set; }
+    }
+
+    /// <summary>
+    /// Member-facing gym contact and legal links. Null fields were not stored in config.
+    /// </summary>
+    public sealed class MeSupportDto
+    {
+        public string? GymName { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public string? WhatsApp { get; set; }
+        public string? HelpCenterUrl { get; set; }
+        public string? PrivacyPolicyUrl { get; set; }
     }
 
     public class MeMembershipDto
@@ -335,6 +355,8 @@ namespace GymManagement.Core.DTOs
         public int? CarbsGrams { get; set; }
         public int? FatsGrams { get; set; }
         public string? Description { get; set; }
+        /// <summary>Coach note on this assignment (<c>UserDietPlans.Notes</c>), not an AI summary.</summary>
+        public string? AssignmentNotes { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public IReadOnlyList<MeDietMealDto> Meals { get; set; } = Array.Empty<MeDietMealDto>();

@@ -9,6 +9,8 @@ import { Input } from '../components/ui/Input'
 import { authService } from '../services/auth.service'
 import { emailSettingsService } from '../services/emailSettings.service'
 import { getApiErrorMessage } from '../lib/apiErrors'
+import { deriveChannelReadiness } from '../lib/notificationStatus'
+import { ChannelReadinessBadge } from '../components/notifications/ChannelReadinessBadge'
 import type { EmailProvider, UpdateEmailSettings } from '../types/emailSettings'
 
 function getDashboardUser() {
@@ -153,7 +155,7 @@ export function EmailSettingsPage() {
           eyebrow="Notifications"
           titleBefore="Email "
           titleGradient="settings"
-          subtitle="Connect Gmail or another SMTP account to send payment receipts and membership renewal reminders."
+          subtitle="Connect Gmail or another SMTP account to send payment receipts and membership renewal reminders. Members must opt in to email."
         >
           <div className="glass-card dashboard-card max-w-3xl rounded-2xl p-6">
             {isLoading ? (
@@ -162,6 +164,24 @@ export function EmailSettingsPage() {
               <p className="text-sm text-rose-300">Could not load email settings.</p>
             ) : (
               <div className="space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4">
+                  <div>
+                    <p className="text-sm font-medium text-white">Email channel</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Disabled means the gym turned sending off. Unconfigured means a required SMTP field is missing.
+                    </p>
+                  </div>
+                  <ChannelReadinessBadge
+                    readiness={deriveChannelReadiness(data?.readiness, enabled, Boolean(data?.isConfigured))}
+                  />
+                </div>
+                {(data?.blockingReasons?.length ?? 0) > 0 ? (
+                  <ul className="list-disc space-y-1 pl-5 text-xs text-amber-200/90" data-testid="email-blocking-reasons">
+                    {data!.blockingReasons!.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                ) : null}
                 <div className="rounded-xl border border-blue-400/20 bg-blue-500/5 p-4 text-sm text-slate-300">
                   <p className="font-medium text-blue-100">Gmail setup</p>
                   <p className="mt-1 text-xs leading-relaxed text-slate-400">
@@ -217,6 +237,9 @@ export function EmailSettingsPage() {
                     onChange={(e) => setSmtpPassword(e.target.value)}
                     autoComplete="new-password"
                   />
+                  <p className="sm:col-span-2 text-xs text-slate-500" data-testid="email-password-state">
+                    {hasPasswordConfigured ? 'Password: configured (masked).' : 'Password: empty.'}
+                  </p>
                   <Input
                     label="From email"
                     value={fromAddress}
@@ -307,13 +330,15 @@ export function EmailSettingsPage() {
                   </p>
                 ) : data?.isConfigured ? (
                   <p className="text-xs text-emerald-300/90">
-                    SMTP is configured
+                    SMTP is ready
                     {data.updatedDateUtc
                       ? ` · last updated ${new Date(data.updatedDateUtc).toLocaleString()}`
                       : ''}
                   </p>
+                ) : enabled ? (
+                  <p className="text-xs text-amber-300/90">Email is unconfigured. Fill the missing SMTP fields above.</p>
                 ) : (
-                  <p className="text-xs text-slate-500">SMTP not configured yet.</p>
+                  <p className="text-xs text-slate-500">Email is disabled.</p>
                 )}
               </div>
             )}

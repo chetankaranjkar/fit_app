@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api_client.dart';
@@ -75,6 +77,7 @@ class AuthController extends StateNotifier<AuthBootstrapState> {
   }
 
   void markSignedOut() {
+    unawaited(AuthService.instance.clearLocalSession());
     state = const AuthBootstrapState(AuthBootstrapStatus.signedOut);
   }
 }

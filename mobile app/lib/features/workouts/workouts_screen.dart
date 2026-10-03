@@ -24,9 +24,9 @@ class WorkoutsScreen extends ConsumerWidget {
   static MeProfile _fallbackProfile() {
     return MeProfile(
       userId: 0,
-      firstName: 'Athlete',
+      firstName: 'Member',
       lastName: '',
-      fullName: 'Athlete',
+      fullName: 'Member',
       email: '',
       registrationDate: DateTime.now(),
     );
@@ -176,7 +176,7 @@ class WorkoutsScreen extends ConsumerWidget {
                           const SizedBox(height: AppSpacing.xl),
                           WorkoutFeaturedCarousel(plans: data, dashboard: dashboard),
                           const SizedBox(height: AppSpacing.xl),
-                          const WorkoutAiCoachCard(),
+                          WorkoutAiCoachCard(assignedPlanDescription: featured.description),
                           const SizedBox(height: AppSpacing.xl),
                           WorkoutAnalyticsSection(attendance: attendance),
                           const SizedBox(height: AppSpacing.xxl),

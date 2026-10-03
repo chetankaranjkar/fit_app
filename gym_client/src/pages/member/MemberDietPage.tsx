@@ -28,6 +28,7 @@ import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
 import { AnimatedStat } from '../../components/dashboard/premium/AnimatedStat'
 import { getDashboardUser } from '../../lib/dashboardUser'
 import { meService, type MeDietPlan } from '../../services/me.service'
+import { MemberLoadError, MemberLoadingState } from '../../components/member/MemberQueryState'
 
 type IconType = ComponentType<{ className?: string }>
 
@@ -218,27 +219,10 @@ function MealCard({
   )
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-6 pb-12" aria-busy="true">
-      <div className="h-32 animate-pulse rounded-3xl bg-white/[0.04]" />
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="h-24 animate-pulse rounded-2xl bg-white/[0.04]" />
-        <div className="h-24 animate-pulse rounded-2xl bg-white/[0.04]" />
-        <div className="h-24 animate-pulse rounded-2xl bg-white/[0.04]" />
-      </div>
-      <div className="space-y-3">
-        <div className="h-40 animate-pulse rounded-2xl bg-white/[0.04]" />
-        <div className="h-40 animate-pulse rounded-2xl bg-white/[0.04]" />
-      </div>
-    </div>
-  )
-}
-
 function EmptyState() {
   return (
     <GlassPanel role="member">
-      <div className="flex flex-col items-center px-4 py-10 text-center sm:py-14">
+      <div className="flex flex-col items-center px-4 py-10 text-center sm:py-14" data-testid="member-empty-state">
         <div className="relative">
           <span
             aria-hidden
@@ -250,7 +234,7 @@ function EmptyState() {
         </div>
         <h3 className="mt-6 text-lg font-semibold text-white">No diet plan assigned yet</h3>
         <p className="mt-2 max-w-md text-sm text-slate-400">
-          Your trainer hasn&apos;t built a nutrition plan for you yet. Drop them a message at the gym and they&apos;ll tailor meals to your goal.
+          Your coach hasn&apos;t assigned a nutrition plan yet. Assigned meals will appear here; this page does not record what you ate.
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs">
           <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-slate-300">
@@ -273,9 +257,10 @@ function EmptyState() {
 
 export function MemberDietPage() {
   const { userName } = getDashboardUser()
-  const { data: plan, isLoading } = useQuery({
+  const { data: plan, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['member-diet-plan'],
     queryFn: () => meService.getDietPlan(),
+    retry: false,
   })
 
   const totals = useMemo(() => {
@@ -299,11 +284,11 @@ export function MemberDietPage() {
     <DashboardLayout userName={userName}>
       <DashboardPageContent className="max-w-5xl">
         <Link
-          to="/dashboard"
+          to="/dashboard/member/portal"
           className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-orange-300"
         >
           <ArrowLeft className="size-3.5" />
-          Back to dashboard
+          Back to home
         </Link>
 
         <header className="mb-6 flex items-center gap-3">
@@ -312,16 +297,22 @@ export function MemberDietPage() {
           </span>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              Your Nutrition Plan
+              Assigned diet
             </h1>
             <p className="text-sm text-slate-400">
-              Meals and macros tailored by your trainer.
+              Meal targets from your coach. This is not a food diary.
             </p>
           </div>
         </header>
 
         {isLoading ? (
-          <LoadingSkeleton />
+          <MemberLoadingState label="Loading assigned diet…" />
+        ) : isError ? (
+          <MemberLoadError
+            error={error}
+            fallback="Could not load your assigned diet."
+            onRetry={() => void refetch()}
+          />
         ) : plan ? (
           <div className="space-y-6">
             <section className="glass-card relative overflow-hidden rounded-3xl border border-white/[0.08] p-5 sm:p-7">
@@ -412,9 +403,9 @@ export function MemberDietPage() {
             <section>
               <div className="mb-3 flex items-end justify-between">
                 <div>
-                  <h2 className="text-base font-semibold tracking-tight text-white">Daily meals</h2>
+                  <h2 className="text-base font-semibold tracking-tight text-white">Assigned daily meals</h2>
                   <p className="text-xs text-slate-400">
-                    {plan.meals.length} meal{plan.meals.length === 1 ? '' : 's'} scheduled through the day.
+                    {plan.meals.length} assigned meal{plan.meals.length === 1 ? '' : 's'} — not logged intake.
                   </p>
                 </div>
               </div>

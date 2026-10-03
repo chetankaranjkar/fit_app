@@ -10,6 +10,11 @@ const DEFAULT_SERVER = 'Something went wrong on our side. Please try again in a 
 const DEFAULT_CONFLICT =
   'This action conflicts with existing data. Refresh the page and try again.'
 
+export function isForbiddenError(error: unknown): boolean {
+  const ax = error as AxiosError | undefined
+  return ax?.response?.status === 403
+}
+
 /** User-facing message for HTTP 403 responses. */
 export function getForbiddenMessage(error?: unknown): string {
   const ax = error as AxiosError<{ message?: string; title?: string; detail?: string }> | undefined

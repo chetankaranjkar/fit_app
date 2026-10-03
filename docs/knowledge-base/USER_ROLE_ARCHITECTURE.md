@@ -60,8 +60,8 @@
 | RBAC | `Roles` (`AppRole`), `UserRoles`, `Permissions` | **Keep**—rename mentally to spec’s Roles/UserRoles |
 | Parallel “types” | `UserTypes` + `UserUserTypes` | **Deprecate**—migrate to `UserRoles` only |
 | Trainer profile | `Trainer` → `UserId` | **Keep**—remove duplicate `ProfilePicture` over time |
-| Member profile | On `User` + `UserDetail` | **Extract** → `Members` table |
-| Staff profile | Missing | **Add** `Staff` |
+| Member profile | **`Members` table exists** (P1); some fitness fields still on `Users` | Prefer `Members` read path over duplicating columns |
+| Staff profile | **`Staff` table exists** (P1) | Keep 1:1 `UserId` |
 | Member↔Coach link | `UserInstructors` | **Keep** (assignment, not role) |
 | PK type | `int` | Optional phase-2: `uniqueidentifier` / UUID |
 | ORM | EF Core | Stay (Prisma doc is reference only) |
@@ -642,6 +642,6 @@ Map permissions (examples):
 | permissions | `Permissions` |
 | role_permissions | `RolePermissions` |
 | trainers | `Trainer` |
-| members | *split from `Users` + `UserDetail` → new `Members`* |
-| staff | *new `Staff`* |
+| members | `Members` (P1 done; some fields still also on `Users`) |
+| staff | `Staff` (P1 done) |
 | user_instructors | `UserInstructors` |

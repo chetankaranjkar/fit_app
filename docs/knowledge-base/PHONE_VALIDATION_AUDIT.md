@@ -42,7 +42,7 @@
 
 - **API:** `EnsurePhoneNotDuplicateAsync` → `409` with message `Phone number already exists`.
 - **UI:** Blur/submit checks against current list page.
-- **CSV:** Per-row and within-file duplicate detection before `POST /Users`.
+- **CSV:** Client parse (`membersCsv.ts`) plus **server** `POST /api/Users/bulk-import/preview` (`dryRun`) — phone/email/Aadhaar vs existing users. Submit: `POST /api/Users/bulk-import` (not a per-row `POST /Users` loop). See APPLICATION_FLOWS §5b.
 
 ## Search
 

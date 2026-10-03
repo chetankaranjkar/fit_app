@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MoreHorizontal } from 'lucide-react'
 import type { RowAction } from './types'
@@ -25,8 +25,10 @@ export function RowActionsMenu<T>({
   const [menuPos, setMenuPos] = useState<MenuPosition | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const instanceId = useId()
 
   const visible = actions.filter((a) => !a.hidden?.(row))
+  const menuId = `row-actions-menu-${instanceId}`
 
   const updateMenuPosition = useCallback(() => {
     const btn = buttonRef.current
@@ -41,6 +43,10 @@ export function RowActionsMenu<T>({
   useLayoutEffect(() => {
     if (!open) return
     updateMenuPosition()
+    const frame = window.requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not([disabled])')?.focus()
+    })
+    return () => window.cancelAnimationFrame(frame)
   }, [open, updateMenuPosition, visible.length])
 
   useEffect(() => {
@@ -51,7 +57,21 @@ export function RowActionsMenu<T>({
       setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === 'Escape') {
+        setOpen(false)
+        buttonRef.current?.focus()
+        return
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const items = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])')
+        if (!items?.length) return
+        const list = Array.from(items)
+        const current = list.findIndex((el) => el === document.activeElement)
+        const delta = e.key === 'ArrowDown' ? 1 : -1
+        const next = current < 0 ? 0 : (current + delta + list.length) % list.length
+        list[next]?.focus()
+      }
     }
     const onScroll = () => updateMenuPosition()
     document.addEventListener('click', onDocClick, true)
@@ -89,6 +109,7 @@ export function RowActionsMenu<T>({
       ? createPortal(
           <div
             ref={menuRef}
+            id={menuId}
             role="menu"
             style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, zIndex: 9999 }}
             className="min-w-[9.5rem] overflow-hidden rounded-xl border border-white/10 bg-[rgba(12,12,24,0.98)] py-1 shadow-xl shadow-black/40 backdrop-blur-xl"
@@ -96,12 +117,16 @@ export function RowActionsMenu<T>({
           >
             {visible.map((action) => {
               const disabled = action.disabled?.(row)
+              const disabledReason = disabled ? action.disabledReason?.(row) : undefined
               return (
                 <button
                   key={action.id}
                   type="button"
                   role="menuitem"
                   disabled={disabled}
+                  aria-disabled={disabled || undefined}
+                  aria-describedby={disabledReason ? `${instanceId}-${action.id}-reason` : undefined}
+                  title={disabledReason}
                   onClick={(e) => {
                     e.stopPropagation()
                     if (disabled) return
@@ -109,11 +134,20 @@ export function RowActionsMenu<T>({
                     action.onClick(row)
                   }}
                   className={[
-                    'block w-full px-3 py-2 text-left text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40',
+                    'block w-full px-3 py-2 text-left text-xs font-medium transition disabled:cursor-not-allowed',
+                    disabledReason ? '' : 'disabled:opacity-40',
                     variantClass[action.variant ?? 'default'],
                   ].join(' ')}
                 >
-                  {action.label}
+                  <span className={disabledReason ? 'opacity-50' : undefined}>{action.label}</span>
+                  {disabledReason ? (
+                    <span
+                      id={`${instanceId}-${action.id}-reason`}
+                      className="mt-0.5 block max-w-[14rem] whitespace-normal text-[10px] font-normal leading-snug text-slate-400"
+                    >
+                      {disabledReason}
+                    </span>
+                  ) : null}
                 </button>
               )
             })}
@@ -130,10 +164,11 @@ export function RowActionsMenu<T>({
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-controls={open ? menuId : undefined}
         onClick={toggleOpen}
         className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
       >
-        <MoreHorizontal className="h-4 w-4" />
+        <MoreHorizontal className="h-4 w-4" aria-hidden />
       </button>
       {menu}
     </div>

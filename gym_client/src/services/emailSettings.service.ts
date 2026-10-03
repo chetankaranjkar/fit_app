@@ -7,17 +7,20 @@ function normalize(raw: Record<string, unknown>): EmailSettings {
     provider: String(raw.provider ?? raw.Provider ?? 'custom'),
     smtpHost: (raw.smtpHost ?? raw.SmtpHost ?? null) as string | null,
     smtpPort: Number(raw.smtpPort ?? raw.SmtpPort ?? 587),
-    smtpUseStartTls: raw.smtpUseStartTls ?? raw.SmtpUseStartTls ?? true,
+    smtpUseStartTls: Boolean(raw.smtpUseStartTls ?? raw.SmtpUseStartTls ?? true),
     smtpUsername: (raw.smtpUsername ?? raw.SmtpUsername ?? null) as string | null,
     hasPasswordConfigured: Boolean(raw.hasPasswordConfigured ?? raw.HasPasswordConfigured),
     fromAddress: (raw.fromAddress ?? raw.FromAddress ?? null) as string | null,
     fromDisplayName: (raw.fromDisplayName ?? raw.FromDisplayName ?? null) as string | null,
-    sendPaymentReceipts: raw.sendPaymentReceipts ?? raw.SendPaymentReceipts ?? true,
-    sendMembershipExpiryReminders:
+    sendPaymentReceipts: Boolean(raw.sendPaymentReceipts ?? raw.SendPaymentReceipts ?? true),
+    sendMembershipExpiryReminders: Boolean(
       raw.sendMembershipExpiryReminders ?? raw.SendMembershipExpiryReminders ?? true,
-    sendDietAssignments: raw.sendDietAssignments ?? raw.SendDietAssignments ?? true,
+    ),
+    sendDietAssignments: Boolean(raw.sendDietAssignments ?? raw.SendDietAssignments ?? true),
     isConfigured: Boolean(raw.isConfigured ?? raw.IsConfigured),
     passwordNeedsReentry: Boolean(raw.passwordNeedsReentry ?? raw.PasswordNeedsReentry),
+    readiness: String(raw.readiness ?? raw.Readiness ?? ''),
+    blockingReasons: ((raw.blockingReasons ?? raw.BlockingReasons ?? []) as unknown[]).map(String),
     updatedDateUtc: (raw.updatedDateUtc ?? raw.UpdatedDateUtc ?? null) as string | null,
   }
 }

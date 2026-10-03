@@ -113,14 +113,18 @@ export interface Vendor {
   notes?: string
 }
 
+export type EquipmentServiceFilter = 'ALL' | 'OVERDUE' | 'DUE_SOON'
+
 export interface EquipmentFilters {
   query: string
   status: 'ALL' | EquipmentStatus
   category: 'ALL' | EquipmentCategory
+  service: EquipmentServiceFilter
 }
 
 export const DEFAULT_EQUIPMENT_FILTERS: EquipmentFilters = {
   query: '',
   status: 'ALL',
   category: 'ALL',
+  service: 'ALL',
 }

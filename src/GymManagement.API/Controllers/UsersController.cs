@@ -265,6 +265,15 @@ namespace GymManagement.API.Controllers
             }
         }
 
+        /// <summary>Validate CSV member rows against existing phone/email/Aadhaar without writing. Duplicates are skipped, never updated.</summary>
+        [HttpPost("bulk-import/preview")]
+        [HasPermission(PermissionCodes.CREATE_MEMBER)]
+        public Task<ActionResult<BulkImportMembersResultDto>> PreviewBulkImportMembers(BulkImportMembersRequestDto request)
+        {
+            request.DryRun = true;
+            return BulkImportMembers(request);
+        }
+
         /// <summary>Batch member import for CSV uploads (up to 500 rows per request).</summary>
         [HttpPost("bulk-import")]
         [HasPermission(PermissionCodes.CREATE_MEMBER)]

@@ -44,20 +44,23 @@ class _AmbientBlob extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0)],
-          ),
+    final blob = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0)],
         ),
-      )
-          .animate(onPlay: (c) => c.repeat(reverse: true))
-          .moveY(begin: -10, end: 12, duration: AppFx.ambient, curve: AppFx.ambientCurve)
-          .scaleXY(begin: 0.95, end: 1.04, duration: AppFx.ambient, curve: AppFx.ambientCurve),
+      ),
+    );
+    return IgnorePointer(
+      child: TickerMode.of(context)
+          ? blob
+              .animate(onPlay: (c) => c.repeat(reverse: true))
+              .moveY(begin: -10, end: 12, duration: AppFx.ambient, curve: AppFx.ambientCurve)
+              .scaleXY(begin: 0.95, end: 1.04, duration: AppFx.ambient, curve: AppFx.ambientCurve)
+          : blob,
     );
   }
 }

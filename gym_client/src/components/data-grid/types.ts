@@ -36,4 +36,6 @@ export type RowAction<T> = {
   variant?: 'default' | 'danger' | 'success' | 'warning'
   hidden?: (row: T) => boolean
   disabled?: (row: T) => boolean
+  /** Shown under the label when the action is disabled. */
+  disabledReason?: (row: T) => string | undefined
 }

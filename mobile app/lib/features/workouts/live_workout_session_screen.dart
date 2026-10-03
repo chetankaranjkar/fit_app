@@ -21,6 +21,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_keyboard_inset.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/premium_background.dart';
 import 'widgets/exercise_history_sheet.dart';
@@ -126,6 +127,15 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
   @override
   void dispose() {
     _timer?.cancel();
+    final session = _session;
+    if (session != null && session.status == 'InProgress') {
+      unawaited(SessionAutosaveService.instance.persist(
+        session: session,
+        elapsedSeconds: _elapsedSec,
+        currentExerciseIndex: _currentExerciseIndex,
+        scrollOffset: _scrollController.hasClients ? _scrollController.offset : 0,
+      ));
+    }
     SessionAutosaveService.instance.stop();
     _scrollController.dispose();
     super.dispose();
@@ -335,16 +345,23 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
     return CupertinoPageScaffold(
       backgroundColor: AppColors.resolveBg(context),
       navigationBar: CupertinoNavigationBar(
-        middle: Text(session.planName ?? 'Live workout'),
+        middle: Text(
+          session.planName ?? 'Live workout',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
         border: null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SyncStatusChip(compact: true),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: _completing ? null : () => context.pop(),
-              child: const Text('Close'),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                onPressed: _completing ? null : () => context.pop(),
+                child: const Text('Close'),
+              ),
             ),
           ],
         ),
@@ -352,7 +369,8 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
       child: Stack(
         children: [
           const Positioned.fill(child: PremiumBackground()),
-          Column(
+          AppKeyboardInset(
+            child: Column(
             children: [
               _WorkoutSyncBanner(session: session),
               Padding(
@@ -362,15 +380,18 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${session.completedSets} / ${session.totalSets} sets completed',
-                            style: AppType.body.copyWith(
-                              color: AppColors.resolveText(context),
-                              fontWeight: FontWeight.w700,
+                          Expanded(
+                            child: Text(
+                              '${session.completedSets} / ${session.totalSets} sets completed',
+                              style: AppType.body.copyWith(
+                                color: AppColors.resolveText(context),
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Row(
                             children: [
                               const Icon(CupertinoIcons.timer, size: 16, color: AppColors.neonCyan),
@@ -448,6 +469,7 @@ class _LiveWorkoutSessionScreenState extends ConsumerState<LiveWorkoutSessionScr
               ),
             ],
           ),
+          ),
         ],
       ),
     );
@@ -466,17 +488,25 @@ class _WorkoutSyncBanner extends ConsumerWidget {
       loading: () => const SizedBox.shrink(),
       error: (_, __) => const SizedBox.shrink(),
       data: (status) {
-        if (!session.isOffline && status.displayState == WorkoutSyncDisplayState.synced) {
+        if (!session.isOffline &&
+            !session.pendingCompleteSync &&
+            status.displayState == WorkoutSyncDisplayState.synced) {
           return const SizedBox.shrink();
         }
-        final color = session.isOffline || status.displayState == WorkoutSyncDisplayState.offline
-            ? AppColors.accent
-            : AppColors.danger;
-        final message = session.isOffline
-            ? 'Offline — sets save on this device (${status.pendingCount} pending upload).'
-            : status.isSyncing
-                ? 'Syncing your workout…'
-                : 'Sync pending — ${status.pendingCount} item(s) waiting to upload.';
+        final failed = status.displayState == WorkoutSyncDisplayState.failed ||
+            status.failedCount > 0;
+        final color = failed
+            ? AppColors.danger
+            : session.isOffline || status.displayState == WorkoutSyncDisplayState.offline
+                ? AppColors.accent
+                : AppColors.danger;
+        final message = failed
+            ? 'Sync failed — retry. ${status.lastError ?? 'Last upload did not complete.'}'
+            : session.isOffline
+                ? 'Offline — sets save on this device (${status.pendingCount} pending upload).'
+                : status.isSyncing
+                    ? 'Syncing your workout…'
+                    : 'Sync pending — ${status.pendingCount} item(s) waiting to upload.';
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 8),
@@ -490,7 +520,11 @@ class _WorkoutSyncBanner extends ConsumerWidget {
                 )
               else
                 Icon(
-                  session.isOffline ? CupertinoIcons.wifi_slash : CupertinoIcons.arrow_2_circlepath,
+                  failed
+                      ? CupertinoIcons.exclamationmark_triangle_fill
+                      : session.isOffline
+                          ? CupertinoIcons.wifi_slash
+                          : CupertinoIcons.arrow_2_circlepath,
                   size: 16,
                   color: color,
                 ),
@@ -498,6 +532,21 @@ class _WorkoutSyncBanner extends ConsumerWidget {
               Expanded(
                 child: Text(message, style: AppType.footnote.copyWith(color: color)),
               ),
+              if (failed && !status.isSyncing)
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  onPressed: () async {
+                    await SyncManager.instance.retryFailed(reason: 'live-banner');
+                    invalidateSyncStatus(ref);
+                  },
+                  child: Text(
+                    'Retry now',
+                    style: AppType.caption.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
             ],
           ),
         );

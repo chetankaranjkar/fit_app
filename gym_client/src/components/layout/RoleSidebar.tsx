@@ -9,11 +9,19 @@ import {
   getOtherNavItems,
   getTrainerNavGroups,
   getTrainerNavItems,
+  type NavGroup,
+  type NavGroupChild,
   type NavIcon,
   type NavItem,
 } from './roleNavConfig'
+import { groupBySection, type NavSectionId } from '../../features/auth/navSections'
 import { linkPrefetchProps, prefetchRoute } from '../../routes/prefetch'
 import { BrandLogo } from '../brand/BrandLogo'
+import { SidebarSectionHeading } from './SidebarSectionHeading'
+
+type RoleNavEntry =
+  | { kind: 'item'; section?: NavSectionId; item: NavItem }
+  | { kind: 'group'; section?: NavSectionId; group: NavGroup }
 
 const iconMap: Record<NavIcon, ReactNode> = {
   dashboard: (
@@ -116,6 +124,8 @@ function NavLinkItem({
       onClick={onNavigate}
       {...linkPrefetchProps(item.path)}
       onMouseEnter={() => prefetchRoute(item.path)}
+      aria-label={collapsed ? item.label : undefined}
+      aria-current={active ? 'page' : undefined}
       className={[
         'flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-medium transition-all duration-200',
         active ? accentActive[accent] : 'text-slate-400 hover:bg-white/5 hover:text-slate-100',
@@ -159,10 +169,15 @@ export function RoleSidebar({
   const { pathname } = useLocation()
   const navigate = useNavigate()
 
-  const isActive = (path: string) =>
-    path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(path)
+  const isActive = (path: string) => {
+    if (path === '/dashboard' || path === '/dashboard/member/portal') {
+      return pathname === '/dashboard' || pathname === '/dashboard/member/portal'
+    }
+    return pathname.startsWith(path)
+  }
 
-  const groupActive = (children: { path: string }[]) => children.some((c) => isActive(c.path))
+  const groupActive = (children: NavGroupChild[]) =>
+    children.some((c) => c.kind !== 'heading' && c.path && isActive(c.path))
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
@@ -192,8 +207,79 @@ export function RoleSidebar({
 
   const onNavigate = () => onCloseMobile()
 
+  const sections = groupBySection<RoleNavEntry>([
+    ...items.map((item): RoleNavEntry => ({ kind: 'item', section: item.section, item })),
+    ...groups.map((group): RoleNavEntry => ({ kind: 'group', section: group.section, group })),
+  ])
+
+  const renderGroup = (group: NavGroup) => {
+    const open = openGroups[group.id] ?? false
+    const active = groupActive(group.children)
+    return (
+      <div key={group.id} className="pt-1">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={`role-sidebar-group-${group.id}`}
+          onClick={() => setOpenGroups((p) => ({ ...p, [group.id]: !open }))}
+          className={[
+            'flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-medium transition-all duration-200',
+            active ? accentActive[brand.accent] : 'text-slate-400 hover:bg-white/5 hover:text-slate-100',
+            collapsed ? 'justify-center px-2' : '',
+          ].join(' ')}
+          title={collapsed ? group.label : undefined}
+        >
+          {iconMap[group.icon]}
+          {!collapsed && (
+            <>
+              <span className="flex-1 text-left">{group.label}</span>
+              <svg
+                className={`size-4 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </>
+          )}
+        </button>
+        {!collapsed && open && (
+          <ul id={`role-sidebar-group-${group.id}`} className="ml-2 mt-1 space-y-0.5 border-l border-white/10 pl-3">
+            {group.children.map((child) =>
+              child.kind === 'heading' ? (
+                <li key={`heading-${child.label}`}>
+                  <p className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    {child.label}
+                  </p>
+                </li>
+              ) : (
+                <li key={child.path}>
+                  <Link
+                    to={child.path}
+                    onClick={onNavigate}
+                    {...linkPrefetchProps(child.path)}
+                    className={[
+                      'block rounded-lg py-2 pl-2 pr-2 text-sm transition-colors duration-200',
+                      pathname === child.path || pathname.startsWith(child.path + '/')
+                        ? 'font-medium text-orange-200'
+                        : 'text-slate-500 hover:text-slate-200',
+                    ].join(' ')}
+                  >
+                    {child.label}
+                  </Link>
+                </li>
+              ),
+            )}
+          </ul>
+        )}
+      </div>
+    )
+  }
+
   const sidebarContent = (
     <aside
+      id={mobileOpen ? 'dashboard-mobile-nav' : undefined}
       className={[
         'flex h-full flex-col border-r border-white/[0.06] bg-slate-950/80 backdrop-blur-2xl',
         'transition-[width] duration-200 ease-out',
@@ -211,72 +297,28 @@ export function RoleSidebar({
         />
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {items.map((item) => (
-          <NavLinkItem
-            key={item.path}
-            item={item}
-            collapsed={collapsed}
-            accent={brand.accent}
-            isActive={isActive}
-            onNavigate={onNavigate}
-          />
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Main navigation">
+        {sections.map((bucket, index) => (
+          <div key={bucket.id ?? 'flat'} className="space-y-1">
+            {bucket.label ? (
+              <SidebarSectionHeading label={bucket.label} collapsed={collapsed} first={index === 0} />
+            ) : null}
+            {bucket.entries.map((entry) =>
+              entry.kind === 'item' ? (
+                <NavLinkItem
+                  key={entry.item.path}
+                  item={entry.item}
+                  collapsed={collapsed}
+                  accent={brand.accent}
+                  isActive={isActive}
+                  onNavigate={onNavigate}
+                />
+              ) : (
+                renderGroup(entry.group)
+              ),
+            )}
+          </div>
         ))}
-
-        {groups.map((group) => {
-          const open = openGroups[group.id] ?? false
-          const active = groupActive(group.children)
-          return (
-            <div key={group.id} className="pt-1">
-              <button
-                type="button"
-                onClick={() => setOpenGroups((p) => ({ ...p, [group.id]: !open }))}
-                className={[
-                  'flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-medium transition-all duration-200',
-                  active ? accentActive[brand.accent] : 'text-slate-400 hover:bg-white/5 hover:text-slate-100',
-                  collapsed ? 'justify-center px-2' : '',
-                ].join(' ')}
-                title={collapsed ? group.label : undefined}
-              >
-                {iconMap[group.icon]}
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-left">{group.label}</span>
-                    <svg
-                      className={`size-4 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </>
-                )}
-              </button>
-              {!collapsed && open && (
-                <ul className="ml-2 mt-1 space-y-0.5 border-l border-white/10 pl-3">
-                  {group.children.map((child) => (
-                    <li key={child.path}>
-                      <Link
-                        to={child.path}
-                        onClick={onNavigate}
-                        {...linkPrefetchProps(child.path)}
-                        className={[
-                          'block rounded-lg py-2 pl-2 pr-2 text-sm transition-colors duration-200',
-                          pathname === child.path || pathname.startsWith(child.path + '/')
-                            ? 'font-medium text-orange-200'
-                            : 'text-slate-500 hover:text-slate-200',
-                        ].join(' ')}
-                      >
-                        {child.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )
-        })}
       </nav>
 
       <div className="border-t border-white/[0.06] p-3">
@@ -284,6 +326,7 @@ export function RoleSidebar({
         <button
           type="button"
           onClick={() => void handleLogout()}
+          aria-label="Sign out"
           className={[
             'w-full rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white',
             collapsed ? 'px-2' : '',
@@ -294,7 +337,8 @@ export function RoleSidebar({
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="mt-2 hidden w-full rounded-lg py-1.5 text-[10px] text-slate-500 hover:text-slate-300 lg:block"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="mt-2 hidden w-full rounded-lg py-1.5 text-[10px] text-slate-400 hover:text-slate-300 lg:block"
         >
           {collapsed ? '→' : '← Collapse'}
         </button>

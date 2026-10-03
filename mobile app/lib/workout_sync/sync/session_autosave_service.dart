@@ -45,7 +45,7 @@ class SessionAutosaveService {
     int? currentExerciseIndex,
     double? scrollOffset,
   }) async {
-    final existing = await _offline.loadSnapshot();
+    final existing = await _offline.loadSnapshot(memberId: session.memberId);
     final snap = LocalWorkoutSnapshot(
       session: session,
       currentExerciseIndex: currentExerciseIndex ?? existing?.currentExerciseIndex ?? 0,

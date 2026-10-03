@@ -10,10 +10,17 @@ import '../features/media/transformation_tracker_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/diet/diet_screen.dart';
 import '../features/membership/membership_screen.dart';
+import '../features/notifications/notification_destination.dart';
+import '../features/notifications/notification_detail_screen.dart';
 import '../features/notifications/notifications_screen.dart';
+import '../features/health/health_profile_screen.dart';
 import '../features/profile/notification_preferences_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/supplements/assigned_supplements_screen.dart';
 import '../features/profile/change_password_screen.dart';
+import '../features/profile/help_support_screen.dart';
+import '../features/profile/in_app_web_screen.dart';
+import '../features/profile/privacy_screen.dart';
 import '../features/profile/security_devices_screen.dart';
 import '../features/progress/progress_screen.dart';
 import '../features/scanner/qr_scanner_screen.dart';
@@ -92,6 +99,17 @@ final appRouter = GoRouter(
       pageBuilder: (_, __) => _slidePage(const QrScannerScreen()),
     ),
     GoRoute(
+      path: '/notifications/detail',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (context, state) {
+        final extra = state.extra;
+        final args = extra is NotificationDetailArgs
+            ? extra
+            : const NotificationDetailArgs(title: 'Notification', body: '');
+        return _slidePage(NotificationDetailScreen(args: args));
+      },
+    ),
+    GoRoute(
       path: '/notifications',
       parentNavigatorKey: _rootNavKey,
       pageBuilder: (_, __) => _slidePage(const NotificationsScreen()),
@@ -127,6 +145,46 @@ final appRouter = GoRouter(
       path: '/profile/notifications',
       parentNavigatorKey: _rootNavKey,
       pageBuilder: (_, __) => _slidePage(const NotificationPreferencesScreen()),
+    ),
+    GoRoute(
+      path: '/profile/health',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const HealthProfileScreen()),
+    ),
+    GoRoute(
+      path: '/profile/supplements',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const AssignedSupplementsScreen()),
+    ),
+    GoRoute(
+      path: '/profile/help',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const HelpSupportScreen()),
+      routes: [
+        GoRoute(
+          path: 'article/:id',
+          parentNavigatorKey: _rootNavKey,
+          pageBuilder: (context, state) => _slidePage(
+            HelpArticleScreen(articleId: state.pathParameters['id'] ?? ''),
+          ),
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/profile/privacy',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const PrivacyScreen()),
+    ),
+    GoRoute(
+      path: '/profile/document',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (context, state) {
+        final extra = state.extra;
+        if (extra is InAppWebArgs) {
+          return _slidePage(InAppWebScreen(title: extra.title, url: extra.url));
+        }
+        return _slidePage(const InAppWebScreen(title: 'Document', url: ''));
+      },
     ),
     StatefulShellRoute.indexedStack(
       builder: (_, __, navigationShell) => AppShell(navigationShell: navigationShell),

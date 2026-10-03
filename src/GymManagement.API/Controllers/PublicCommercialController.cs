@@ -15,14 +15,49 @@ namespace GymManagement.API.Controllers
     public class PublicCommercialController : ControllerBase
     {
         private readonly ICommercialSignupService _signupService;
+        private readonly IOnlinePaymentService _onlinePaymentService;
         private readonly CommercialOptions _options;
 
         public PublicCommercialController(
             ICommercialSignupService signupService,
+            IOnlinePaymentService onlinePaymentService,
             IOptions<CommercialOptions> options)
         {
             _signupService = signupService;
+            _onlinePaymentService = onlinePaymentService;
             _options = options.Value;
+        }
+
+        /// <summary>
+        /// Razorpay webhook (payment.captured, order.paid, payment.authorized, payment.failed). Signature is checked
+        /// against the raw body; repeated deliveries are idempotent. Non-2xx makes Razorpay retry.
+        /// </summary>
+        [HttpPost("razorpay/webhook")]
+        public async Task<ActionResult<RazorpayWebhookResultDto>> RazorpayWebhook(CancellationToken cancellationToken)
+        {
+            using var buffer = new MemoryStream();
+            await Request.Body.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+            var signature = Request.Headers["X-Razorpay-Signature"].ToString();
+
+            try
+            {
+                var result = await _onlinePaymentService
+                    .HandleRazorpayWebhookAsync(buffer.ToArray(), signature, cancellationToken)
+                    .ConfigureAwait(false);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return BadRequest(new { message = "Invalid webhook payload." });
+            }
         }
 
         [HttpGet("config")]

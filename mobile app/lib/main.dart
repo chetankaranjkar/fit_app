@@ -5,11 +5,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'routes/app_router.dart';
+import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 import 'workout_sync/sync/workout_sync_bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PushNotificationService.instance.attachNavigator((location, {Object? extra}) {
+    appRouter.go(location, extra: extra);
+  });
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);

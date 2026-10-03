@@ -11,6 +11,7 @@ import { authService } from '../services/auth.service'
 import { notificationTemplatesService } from '../services/notificationTemplates.service'
 import { getApiErrorMessage } from '../lib/apiErrors'
 import { NOTIFICATION_PLACEHOLDERS, type NotificationTemplate } from '../types/notificationTemplate'
+import { DeliveryStatusBadge } from '../components/notifications/DeliveryStatusBadge'
 
 function getDashboardUser() {
   try {
@@ -114,7 +115,7 @@ export function NotificationTemplatesPage() {
         <DashboardSubpageShell
           eyebrow="Config"
           titleGradient="Notification templates"
-          subtitle="Manage HTML email and SMS templates. Edits apply to all future notifications."
+          subtitle="Manage HTML email and SMS templates. WhatsApp uses the SMS template text. Edits apply to all future notifications. Delivery queue and history use the existing outbox worker (retries are not started from this page)."
           showExport={false}
         >
           <div className="mb-4 flex flex-wrap gap-3">
@@ -214,6 +215,8 @@ export function NotificationTemplatesPage() {
               </Button>
             </div>
           </div>
+
+          <NotificationDeliveryPanels />
         </DashboardSubpageShell>
 
         <Modal open={!!editing} onClose={() => setEditing(null)} title={`Edit — ${editing?.templateName ?? ''}`}>
@@ -296,5 +299,122 @@ export function NotificationTemplatesPage() {
         </Modal>
       </PermissionGate>
     </DashboardLayout>
+  )
+}
+
+function NotificationDeliveryPanels() {
+  const { data: outbox, isLoading: outboxLoading } = useQuery({
+    queryKey: ['notification-outbox'],
+    queryFn: async () => {
+      const { data: d } = await notificationTemplatesService.outbox({ take: 50 })
+      return d
+    },
+  })
+
+  const { data: history, isLoading: historyLoading } = useQuery({
+    queryKey: ['notification-history'],
+    queryFn: async () => {
+      const { data: d } = await notificationTemplatesService.history({ take: 50 })
+      return d
+    },
+  })
+
+  return (
+    <div className="mt-10 space-y-8">
+      <section>
+        <h2 className="text-lg font-semibold text-white">Delivery queue</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          Pending and retrying rows from the existing outbox. The background worker retries automatically (up to
+          each row&apos;s max attempts).
+        </p>
+        {outboxLoading ? (
+          <p className="mt-3 text-sm text-slate-400">Loading queue…</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto rounded-2xl border border-white/10">
+            <table className="min-w-[720px] w-full text-left text-sm" data-testid="notification-outbox-table">
+              <thead className="border-b border-white/10 bg-white/[0.04] text-xs uppercase text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Channel</th>
+                  <th className="px-4 py-3">Template</th>
+                  <th className="px-4 py-3">Recipient</th>
+                  <th className="px-4 py-3">Retries</th>
+                  <th className="px-4 py-3">Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {(outbox ?? []).length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-4 text-slate-500" colSpan={6}>
+                      No queued messages.
+                    </td>
+                  </tr>
+                ) : (
+                  (outbox ?? []).map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-4 py-3">
+                        <DeliveryStatusBadge status={row.displayStatus || row.status} />
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">{row.channel}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-300">{row.templateCode}</td>
+                      <td className="px-4 py-3 text-slate-300">{row.recipient}</td>
+                      <td className="px-4 py-3 text-slate-400">
+                        {row.retryCount}/{row.maxRetries}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-rose-200/90">{row.errorMessage || '—'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-white">Delivery history</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          Sent, failed, and skipped attempts. Failed reasons are sanitized so tokens and passwords are not shown.
+        </p>
+        {historyLoading ? (
+          <p className="mt-3 text-sm text-slate-400">Loading history…</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto rounded-2xl border border-white/10">
+            <table className="min-w-[720px] w-full text-left text-sm" data-testid="notification-history-table">
+              <thead className="border-b border-white/10 bg-white/[0.04] text-xs uppercase text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Channel</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Recipient</th>
+                  <th className="px-4 py-3">Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {(history ?? []).length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-4 text-slate-500" colSpan={5}>
+                      No delivery history yet.
+                    </td>
+                  </tr>
+                ) : (
+                  (history ?? []).map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-4 py-3">
+                        <DeliveryStatusBadge status={row.displayStatus || row.status} />
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">{row.channel}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-300">{row.notificationType}</td>
+                      <td className="px-4 py-3 text-slate-300">{row.recipient}</td>
+                      <td className="px-4 py-3 text-xs text-rose-200/90">{row.errorMessage || '—'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
   )
 }

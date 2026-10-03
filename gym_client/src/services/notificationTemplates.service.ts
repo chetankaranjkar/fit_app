@@ -6,6 +6,7 @@ import type {
   NotificationTemplateQuery,
   UpdateNotificationTemplate,
 } from '../types/notificationTemplate'
+import type { NotificationOutboxItem } from '../types/notificationChannels'
 
 export const notificationTemplatesService = {
   list: (params: NotificationTemplateQuery) =>
@@ -24,4 +25,6 @@ export const notificationTemplatesService = {
     api.post(`/notification-templates/${id}/test-send`, { recipient }),
   history: (params?: { memberId?: number; take?: number }) =>
     api.get<NotificationHistoryItem[]>('/notification-templates/history', { params }),
+  outbox: (params?: { take?: number }) =>
+    api.get<NotificationOutboxItem[]>('/notification-templates/outbox', { params }),
 }

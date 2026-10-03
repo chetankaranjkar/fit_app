@@ -64,9 +64,9 @@ Photo tab uses shared **`ProfilePhotoEditor`** (same as member edit).
 
 ---
 
-## Follow-up (tracked in APPLICATION_FLOWS §12)
+## Follow-up (tracked in APPLICATION_FLOWS §14)
 
-- P2: Wire role chips to `/api/users/{id}/roles`; reduce UserTypes-only UI.
-- P2: Extract shared “edit person” form for User + Trainer modals.
+- P2 role chips: **done** (2026-06-20) — `UserApplicationRolesEditor` + `/api/Roles/users/{id}/roles`. Remaining: extract shared “edit person” form for User + Trainer modals.
 - Deprecate mock `trainers-management` module for production paths.
 - Optional per-module docs under `docs/modules/*.md`.
+- See [PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md) for Implemented vs Tested vs Released.

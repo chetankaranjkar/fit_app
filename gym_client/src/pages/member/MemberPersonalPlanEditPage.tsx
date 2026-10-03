@@ -6,10 +6,11 @@ import { ArrowLeft } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { getDashboardUser } from '../../lib/dashboardUser'
-import { exercisesService } from '../../services/exercises.service'
 import { personalWorkoutPlansService } from '../../services/personalWorkoutPlans.service'
 import type { ProgramWeekDto, SaveProgramStructureDto } from '../../types/workoutPlan'
 import { WeekScheduleTab } from '../training/program/WeekScheduleTab'
+import { useExercisePickerLibrary } from '../../hooks/useExercisePickerLibrary'
+import { getApiErrorMessage } from '../../lib/apiErrors'
 
 export function MemberPersonalPlanEditPage() {
   const { userName } = getDashboardUser()
@@ -26,13 +27,13 @@ export function MemberPersonalPlanEditPage() {
     enabled: Number.isInteger(id) && id > 0,
   })
 
-  const { data: exerciseLibrary = [] } = useQuery({
-    queryKey: ['exercises-picker'],
-    queryFn: async () => {
-      const { data } = await exercisesService.getPaged({ page: 1, pageSize: 200 })
-      return data.items ?? []
-    },
-  })
+  const {
+    data: exerciseLibrary = [],
+    isError: exerciseLibraryError,
+    error: exerciseLibraryErr,
+    refetch: refetchExerciseLibrary,
+    isFetching: exerciseLibraryFetching,
+  } = useExercisePickerLibrary()
 
   const [localWeeks, setLocalWeeks] = useState<ProgramWeekDto[] | null>(null)
   const weeks = localWeeks ?? plan?.weeks ?? []
@@ -60,7 +61,7 @@ export function MemberPersonalPlanEditPage() {
       void queryClient.invalidateQueries({ queryKey: ['member-personal-plans'] })
       void queryClient.invalidateQueries({ queryKey: ['member-workout-program'] })
     },
-    onError: () => toast.error('Could not save schedule'),
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, 'Could not save schedule')),
   })
 
   if (!Number.isInteger(id) || id <= 0) {
@@ -102,6 +103,9 @@ export function MemberPersonalPlanEditPage() {
             isSaving={saveMutation.isPending}
             aiSuggest={() => undefined}
             exerciseLibrary={exerciseLibrary}
+            libraryError={exerciseLibraryError ? exerciseLibraryErr : null}
+            onRetryLibrary={() => void refetchExerciseLibrary()}
+            libraryRetrying={exerciseLibraryFetching}
             workoutsPerWeek={plan?.workoutsPerWeek ?? 4}
             orphanExercises={orphanExercises}
           />

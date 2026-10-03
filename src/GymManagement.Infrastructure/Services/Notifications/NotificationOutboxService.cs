@@ -86,6 +86,32 @@ public sealed class NotificationOutboxService : INotificationOutboxService
             await DispatchOneAsync(item, ct);
     }
 
+    public async Task<IReadOnlyList<NotificationOutboxDto>> ListRecentAsync(int take, CancellationToken ct = default)
+    {
+        var rows = await _db.NotificationOutboxes.AsNoTracking()
+            .Where(o => !o.IsDeleted)
+            .OrderByDescending(o => o.CreatedDate)
+            .Take(Math.Clamp(take, 1, 200))
+            .ToListAsync(ct);
+
+        return rows.Select(o => new NotificationOutboxDto
+        {
+            Id = o.Id,
+            TemplateCode = o.TemplateCode,
+            Channel = o.Channel,
+            Recipient = o.Recipient,
+            Subject = o.Subject,
+            Status = o.Status,
+            DisplayStatus = NotificationDeliveryDisplay.FromOutbox(o.Status, o.RetryCount),
+            RetryCount = o.RetryCount,
+            MaxRetries = o.MaxRetries,
+            ScheduledForUtc = o.ScheduledForUtc,
+            ProcessedAtUtc = o.ProcessedAtUtc,
+            ErrorMessage = NotificationDeliveryErrorSanitizer.Sanitize(o.ErrorMessage),
+            CreatedDate = o.CreatedDate,
+        }).ToList();
+    }
+
     private async Task DispatchOneAsync(NotificationOutbox item, CancellationToken ct)
     {
         item.Status = NotificationOutboxStatuses.Processing;
@@ -139,7 +165,8 @@ public sealed class NotificationOutboxService : INotificationOutboxService
         {
             sw.Stop();
             item.RetryCount++;
-            item.ErrorMessage = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
+            item.ErrorMessage = NotificationDeliveryErrorSanitizer.Sanitize(
+                ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message);
 
             if (item.RetryCount >= item.MaxRetries)
             {

@@ -1,4 +1,8 @@
-import type { MembershipPaymentMethod, MembershipPaymentStatus } from '../../types/membershipPayment'
+import type {
+  MembershipPaymentMethod,
+  MembershipPaymentStatus,
+  MembershipPaymentTransaction,
+} from '../../types/membershipPayment'
 
 export const MEMBERSHIP_PAYMENT_METHODS: MembershipPaymentMethod[] = [
   'Cash',
@@ -8,6 +12,29 @@ export const MEMBERSHIP_PAYMENT_METHODS: MembershipPaymentMethod[] = [
   'Online',
   'Other',
 ]
+
+const PAYMENT_METHOD_LABELS: Record<MembershipPaymentMethod, string> = {
+  Cash: 'Cash',
+  Upi: 'UPI',
+  Card: 'Card',
+  BankTransfer: 'Bank transfer',
+  Online: 'Online',
+  Other: 'Other',
+}
+
+export function paymentMethodLabel(method: MembershipPaymentMethod) {
+  return PAYMENT_METHOD_LABELS[method] ?? method
+}
+
+/** The completed installment that was not on the bill before this collection. */
+export function findRecordedTransaction(
+  after: MembershipPaymentTransaction[],
+  beforeIds: ReadonlySet<number>,
+): MembershipPaymentTransaction | null {
+  const added = after.filter((t) => !beforeIds.has(t.id) && (t.status ?? 'Completed') === 'Completed')
+  if (added.length === 0) return null
+  return added.reduce((latest, t) => (t.id > latest.id ? t : latest))
+}
 
 export function paymentStatusBadgeClass(status: MembershipPaymentStatus) {
   const s = status.toLowerCase()

@@ -45,6 +45,11 @@ export type MeBodyMetric = {
   bmi?: number | null
 }
 
+export type MeBodyMetricLog = MeBodyMetric & {
+  id: number
+  notes?: string | null
+}
+
 export type MeUpcomingSchedule = {
   id: number
   title: string
@@ -175,6 +180,14 @@ export const meService = {
     api
       .put<MeNotificationPreferences>('/me/notification-preferences', payload)
       .then((r) => r.data),
+  getBodyMetrics: (take = 60) =>
+    api.get<MeBodyMetricLog[]>('/me/body-metrics', { params: { take } }).then((r) => r.data),
+  createBodyMetric: (payload: {
+    weightKg: number
+    bodyFatPct?: number
+    notes?: string
+    measurementDate?: string
+  }) => api.post<MeBodyMetricLog>('/me/body-metrics', payload).then((r) => r.data),
   getWorkoutPlans: () => api.get<MeWorkoutPlanSummary[]>('/me/workout-plans'),
   getWorkoutProgram: () => api.get<MeWorkoutProgram>('/me/workout-program'),
   /** Returns null when the member has no active diet plan (204/404), not an error. */

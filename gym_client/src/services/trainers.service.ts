@@ -10,6 +10,7 @@ import type {
   TrainerAvailabilitySlot,
   TrainerEarningsSummary,
 } from '../types/trainer'
+import type { TrainerToday } from '../types/trainerToday'
 
 /**
  * Trainer-module API surface. The "extended" endpoints below (reviews,
@@ -90,4 +91,10 @@ export const trainersService = {
   /* Earnings (extended) */
   getEarnings: (id: number) =>
     api.get<TrainerEarningsSummary>(`/Trainers/${id}/earnings`),
+
+  /** Caller's own coach day; the API resolves the trainer profile from the JWT. */
+  getMyToday: (missedLookbackDays = 7) =>
+    api.get<TrainerToday>('/trainers/me/today', {
+      params: { utcOffsetMinutes: -new Date().getTimezoneOffset(), missedLookbackDays },
+    }),
 }

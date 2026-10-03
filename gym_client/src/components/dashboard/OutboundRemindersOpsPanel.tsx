@@ -42,6 +42,10 @@ export function OutboundRemindersOpsPanel({ enabled }: { enabled: boolean }) {
             <Link to="/dashboard/settings/email" className="text-violet-300 hover:underline">
               Email settings
             </Link>
+            {' · '}
+            <Link to="/dashboard/settings/notifications" className="text-violet-300 hover:underline">
+              Channel status
+            </Link>
             .
           </p>
         </div>

@@ -1,13 +1,17 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../../models/me_models.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/fitness_text.dart';
 import '../../../widgets/glass_card.dart';
+import '../diet_assigned_foods.dart';
 
 class DietIntelPanelCompact extends StatefulWidget {
-  const DietIntelPanelCompact({super.key});
+  const DietIntelPanelCompact({super.key, required this.plan});
+
+  final MeDietPlan plan;
 
   @override
   State<DietIntelPanelCompact> createState() => _DietIntelPanelCompactState();
@@ -15,6 +19,7 @@ class DietIntelPanelCompact extends StatefulWidget {
 
 class _DietIntelPanelCompactState extends State<DietIntelPanelCompact> {
   final _controller = TextEditingController();
+  List<AssignedFoodMatch> _matches = const [];
 
   @override
   void dispose() {
@@ -22,8 +27,14 @@ class _DietIntelPanelCompactState extends State<DietIntelPanelCompact> {
     super.dispose();
   }
 
+  void _onQuery(String value) {
+    setState(() => _matches = searchAssignedFoods(widget.plan, value));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final query = _controller.text.trim();
+
     return GlassCard(
       radius: 26,
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -31,90 +42,107 @@ class _DietIntelPanelCompactState extends State<DietIntelPanelCompact> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('NUTRIENT SCANNER', style: FitnessText.label(context)),
+          Text(DietCopy.searchAssignedFoods.toUpperCase(), style: FitnessText.label(context)),
+          const SizedBox(height: 4),
+          Text(DietCopy.notLoggedIntake, style: FitnessText.body(context)),
           const SizedBox(height: AppSpacing.sm),
           CupertinoSearchTextField(
             controller: _controller,
-            placeholder: 'Search foods, brands, macros…',
+            placeholder: 'Search foods on your assigned plan',
             style: FitnessText.body(context),
-            onSubmitted: (_) => _showSheet(context),
-            suffixIcon: const Icon(CupertinoIcons.mic_fill, color: AppColors.neonCyan, size: 18),
+            onChanged: _onQuery,
+            onSubmitted: _onQuery,
           ),
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _SuggestionChip(
-                label: 'AI: High-protein yogurt',
-                onTap: () => _toast(context, 'Curated for your protein window.'),
-              ),
-              _SuggestionChip(
+              _UnavailableChip(
                 label: 'Scan barcode',
-                onTap: () => _toast(context, 'Use the gym kiosk or member portal barcode tools.'),
+                detail: DietCopy.previewUnavailable,
               ),
-              _SuggestionChip(
-                label: 'Trending: Greek bowl',
-                onTap: () => _toast(context, 'Macro-safe meal trending with PulseFit athletes.'),
+              _UnavailableChip(
+                label: 'AI suggest',
+                detail: DietCopy.previewUnavailable,
               ),
             ],
           ),
+          if (query.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            if (_matches.isEmpty)
+              Text(DietCopy.noAssignedMatch, style: FitnessText.body(context))
+            else
+              ..._matches.map(
+                (m) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: _AssignedFoodResult(match: m),
+                ),
+              ),
+          ],
         ],
       ),
     ).animate().fadeIn(duration: 400.ms);
   }
+}
 
-  void _showSheet(BuildContext context) {
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (c) => CupertinoActionSheet(
-        title: const Text('Smart search'),
-        message: Text(_controller.text.isEmpty ? 'Type a food to analyze.' : _controller.text),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('Analyze macros (preview)'),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(c),
-          isDefaultAction: true,
-          child: const Text('Close'),
+class _AssignedFoodResult extends StatelessWidget {
+  const _AssignedFoodResult({required this.match});
+
+  final AssignedFoodMatch match;
+
+  @override
+  Widget build(BuildContext context) {
+    final macros = <String>[];
+    if (match.calories != null) macros.add('${match.calories} kcal planned');
+    if (match.proteinGrams != null) macros.add('P ${match.proteinGrams!.round()}g');
+    if (match.carbsGrams != null) macros.add('C ${match.carbsGrams!.round()}g');
+    if (match.fatsGrams != null) macros.add('F ${match.fatsGrams!.round()}g');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(match.foodName, style: FitnessText.title(context).copyWith(fontSize: 15)),
+        Text(
+          '${match.mealName}${match.quantity.isNotEmpty ? ' · ${match.quantity}' : ''}',
+          style: FitnessText.body(context),
         ),
-      ),
-    );
-  }
-
-  void _toast(BuildContext context, String msg) {
-    showCupertinoDialog<void>(
-      context: context,
-      builder: (c) => CupertinoAlertDialog(
-        content: Text(msg),
-        actions: [
-          CupertinoDialogAction(onPressed: () => Navigator.pop(c), child: const Text('OK')),
-        ],
-      ),
+        if (macros.isNotEmpty)
+          Text(macros.join(' · '), style: FitnessText.chip(context, color: AppColors.neonCyan)),
+      ],
     );
   }
 }
 
-class _SuggestionChip extends StatelessWidget {
-  const _SuggestionChip({required this.label, required this.onTap});
+class _UnavailableChip extends StatelessWidget {
+  const _UnavailableChip({required this.label, required this.detail});
 
   final String label;
-  final VoidCallback onTap;
+  final String detail;
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: AppColors.surfaceDarkAlt.withValues(alpha: 0.75),
-      borderRadius: BorderRadius.circular(999),
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: Text(
-        label,
-        style: FitnessText.body(context).copyWith(fontSize: 12, fontWeight: FontWeight.w600),
+    return Opacity(
+      opacity: 0.55,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDarkAlt.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: FitnessText.body(context).copyWith(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              detail,
+              style: FitnessText.label(context),
+            ),
+          ],
+        ),
       ),
     );
   }

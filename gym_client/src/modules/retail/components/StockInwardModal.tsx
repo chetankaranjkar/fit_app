@@ -7,7 +7,9 @@ import { retailInventoryService } from '../../../services/retail.service'
 import { getApiErrorMessage } from '../../../lib/apiErrors'
 import type { Product } from '../../../types/retail'
 
-export function StockInwardModal({ product, onClose }: { product: Product; onClose: () => void }) {
+export type StockInwardTarget = Pick<Product, 'id' | 'name' | 'sku' | 'stockQuantity' | 'purchasePrice'>
+
+export function StockInwardModal({ product, onClose }: { product: StockInwardTarget; onClose: () => void }) {
   const qc = useQueryClient()
   const [quantity, setQuantity] = useState('')
   const [unitPrice, setUnitPrice] = useState(String(product.purchasePrice || ''))
@@ -25,6 +27,9 @@ export function StockInwardModal({ product, onClose }: { product: Product; onClo
     })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['retail-products'] })
+      qc.invalidateQueries({ queryKey: ['retail-inventory-low-stock'] })
+      qc.invalidateQueries({ queryKey: ['retail-inventory-expiry'] })
+      qc.invalidateQueries({ queryKey: ['retail-pos-dashboard'] })
       toast.success('Stock added')
       onClose()
     },

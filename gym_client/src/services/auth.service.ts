@@ -204,6 +204,12 @@ export const authService = {
   refresh: (refreshToken: string) =>
     api.post<LoginResponse>('/Auth/refresh', { refreshToken }),
   logout: () => api.post('/Auth/logout'),
+  getPreferences: async (): Promise<{ theme: 'light' | 'dark' }> => {
+    const { data } = await api.get<{ theme: 'light' | 'dark' }>('/Auth/preferences')
+    return data
+  },
+  updatePreferences: (theme: 'light' | 'dark') =>
+    api.put<{ theme: 'light' | 'dark' }>('/Auth/preferences', { theme }),
   getCompromisedSessions: () => api.get<CompromisedSession[]>('/Auth/compromised-sessions'),
   getAccount: async (): Promise<AccountAuthInfo> => {
     const { data } = await api.get<Record<string, unknown>>('/Auth/account')

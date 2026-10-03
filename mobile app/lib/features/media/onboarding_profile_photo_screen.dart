@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../animations/app_motion.dart';
@@ -15,6 +14,7 @@ import '../../theme/app_typography.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/premium_background.dart';
 import 'premium_media_flow.dart';
+import '../auth/post_auth_navigation.dart';
 
 const kProfilePhotoPromptDismissedKey = 'pulsefit_profile_photo_prompt_dismissed';
 
@@ -25,7 +25,7 @@ class OnboardingProfilePhotoScreen extends ConsumerWidget {
   Future<void> _skip(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(kProfilePhotoPromptDismissedKey, true);
-    if (context.mounted) context.go('/home');
+    if (context.mounted) await goHomeOrPendingPush(context);
   }
 
   Future<void> _upload(BuildContext context, WidgetRef ref) async {
@@ -39,7 +39,7 @@ class OnboardingProfilePhotoScreen extends ConsumerWidget {
       ref.invalidate(profileProvider);
       ref.invalidate(dashboardProvider);
       if (!context.mounted) return;
-      context.go('/home');
+      await goHomeOrPendingPush(context);
     } on ApiException catch (e) {
       if (!context.mounted) return;
       showCupertinoDialog<void>(

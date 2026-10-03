@@ -1,4 +1,5 @@
 import { useMemo, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { ModulePageShell } from '../components/ModulePageShell'
 import {
   useCleaning,
@@ -9,6 +10,7 @@ import {
 } from '../hooks/useGymOperations'
 import { useStaggerAnimation } from '../hooks/useStaggerAnimation'
 import { formatINR, isThisMonth } from '../utils/format'
+import { cleaningIsOverdue, serviceUrgency } from '../../../lib/opsWorkStatus'
 
 export function ReportsPage() {
   const { data: equipment = [] } = useEquipment()
@@ -21,11 +23,8 @@ export function ReportsPage() {
   const metrics = useMemo(() => {
     const equipmentTotal = equipment.length
     const equipmentOutOfOrder = equipment.filter((e) => e.status === 'OUT_OF_ORDER').length
-    const serviceDueSoon = equipment.filter((e) => {
-      if (!e.nextServiceDate) return false
-      const diff = (new Date(e.nextServiceDate).getTime() - Date.now()) / 86400000
-      return diff <= 7
-    }).length
+    const serviceOverdue = equipment.filter((e) => serviceUrgency(e.nextServiceDate) === 'overdue').length
+    const serviceDueSoon = equipment.filter((e) => serviceUrgency(e.nextServiceDate) === 'due_soon').length
 
     const monthlyExpense = expenses
       .filter((e) => isThisMonth(e.incurredAt))
@@ -56,12 +55,14 @@ export function ReportsPage() {
     )
     const cleaningPercent =
       cleaningTotal === 0 ? 0 : Math.round((cleaningDone / cleaningTotal) * 100)
+    const cleaningOverdue = cleaning.filter((log) => cleaningIsOverdue(log)).length
 
     const vendorsOnContract = vendors.filter((v) => v.onContract).length
 
     return {
       equipmentTotal,
       equipmentOutOfOrder,
+      serviceOverdue,
       serviceDueSoon,
       monthlyExpense,
       pendingExpense,
@@ -69,6 +70,7 @@ export function ReportsPage() {
       repairsThisMonth,
       highMaintenanceCount,
       cleaningPercent,
+      cleaningOverdue,
       vendorsTotal: vendors.length,
       vendorsOnContract,
     }
@@ -82,12 +84,14 @@ export function ReportsPage() {
     caption?: string
     gradient: string
     severity?: 'info' | 'warn' | 'danger'
+    to?: string
   }> = [
     {
       label: 'Total equipment',
       value: `${metrics.equipmentTotal}`,
       caption: 'All inventory across zones',
       gradient: 'from-blue-500 to-purple-500',
+      to: '/dashboard/gym-operations/equipment',
     },
     {
       label: 'Out of order',
@@ -95,6 +99,15 @@ export function ReportsPage() {
       caption: metrics.equipmentOutOfOrder > 0 ? 'Needs attention' : 'All units operational',
       gradient: 'from-rose-500 to-pink-500',
       severity: metrics.equipmentOutOfOrder > 0 ? 'danger' : 'info',
+      to: '/dashboard/gym-operations/equipment',
+    },
+    {
+      label: 'Service overdue',
+      value: `${metrics.serviceOverdue}`,
+      caption: metrics.serviceOverdue > 0 ? 'Past next-service date' : 'None overdue',
+      gradient: 'from-rose-500 to-orange-500',
+      severity: metrics.serviceOverdue > 0 ? 'danger' : 'info',
+      to: '/dashboard/gym-operations/equipment?service=overdue',
     },
     {
       label: 'Service due (≤7 days)',
@@ -102,6 +115,7 @@ export function ReportsPage() {
       caption: metrics.serviceDueSoon > 0 ? 'Schedule maintenance' : 'No upcoming services',
       gradient: 'from-amber-400 to-orange-500',
       severity: metrics.serviceDueSoon > 0 ? 'warn' : 'info',
+      to: '/dashboard/gym-operations/equipment',
     },
     {
       label: 'Monthly expenses',
@@ -121,6 +135,7 @@ export function ReportsPage() {
       value: `${metrics.maintenanceThisMonth}`,
       caption: `${metrics.repairsThisMonth} repair${metrics.repairsThisMonth === 1 ? '' : 's'} this month`,
       gradient: 'from-cyan-400 to-blue-500',
+      to: '/dashboard/gym-operations/maintenance',
     },
     {
       label: 'High-maintenance units',
@@ -133,6 +148,15 @@ export function ReportsPage() {
       value: `${metrics.cleaningPercent}%`,
       caption: 'Combined across shifts',
       gradient: 'from-sky-400 to-blue-500',
+      to: '/dashboard/gym-operations/cleaning',
+    },
+    {
+      label: 'Overdue cleaning',
+      value: `${metrics.cleaningOverdue}`,
+      caption: metrics.cleaningOverdue > 0 ? 'Incomplete shifts past due date' : 'No overdue shifts',
+      gradient: 'from-rose-400 to-pink-500',
+      severity: metrics.cleaningOverdue > 0 ? 'danger' : 'info',
+      to: '/dashboard/gym-operations/cleaning?view=overdue',
     },
     {
       label: 'Vendors on contract',
@@ -160,9 +184,8 @@ export function ReportsPage() {
       <div className="mt-6 rounded-2xl border border-blue-400/20 bg-gradient-to-br from-blue-500/5 to-purple-500/5 px-5 py-4 text-xs text-blue-100">
         <p className="font-semibold text-blue-200">Powered by live module data</p>
         <p className="mt-1 text-blue-100/80">
-          These reports are computed client-side from the Gym Operations module data. When
-          the backend is wired in Phase 2, the same cards will continue to work without any
-          UI changes.
+          These cards are computed from live Gym Operations lists. Overdue service and cleaning
+          open the matching screens so staff can log service or mark a shift complete.
         </p>
       </div>
     </ModulePageShell>
@@ -175,12 +198,14 @@ function ReportCard({
   caption,
   gradient,
   severity = 'info',
+  to,
 }: {
   label: string
   value: string
   caption?: string
   gradient: string
   severity?: 'info' | 'warn' | 'danger'
+  to?: string
 }) {
   const borderCls =
     severity === 'danger'
@@ -189,15 +214,8 @@ function ReportCard({
         ? 'hover:border-amber-400/30'
         : 'hover:border-white/20'
 
-  return (
-    <div
-      data-report-card
-      className={[
-        'glass-card dashboard-card group relative overflow-hidden rounded-2xl p-5 transition-all duration-300',
-        'hover:-translate-y-0.5 hover:scale-[1.02]',
-        borderCls,
-      ].join(' ')}
-    >
+  const body = (
+    <>
       <div
         aria-hidden
         className={`pointer-events-none absolute -right-10 -top-10 size-32 rounded-full bg-gradient-to-br ${gradient} opacity-20 blur-2xl transition-opacity group-hover:opacity-30`}
@@ -208,6 +226,27 @@ function ReportCard({
       <p className="mt-2 text-2xl font-bold text-white">{value}</p>
       {caption && <p className="mt-1 text-xs text-slate-500">{caption}</p>}
       <div className={`mt-4 h-1 w-10 rounded-full bg-gradient-to-r ${gradient}`} />
+    </>
+  )
+
+  const className = [
+    'glass-card dashboard-card group relative overflow-hidden rounded-2xl p-5 transition-all duration-300',
+    'hover:-translate-y-0.5 hover:scale-[1.02]',
+    borderCls,
+    to ? 'block' : '',
+  ].join(' ')
+
+  if (to) {
+    return (
+      <Link data-report-card to={to} className={className}>
+        {body}
+      </Link>
+    )
+  }
+
+  return (
+    <div data-report-card className={className}>
+      {body}
     </div>
   )
 }

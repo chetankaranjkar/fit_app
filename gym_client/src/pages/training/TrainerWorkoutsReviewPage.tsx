@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { TrainingEmptyState } from '../../components/training/TrainingEmptyState'
+import { TrainingJourneyNav } from '../../components/training/TrainingJourneyNav'
+import { TRAINING_JOURNEY_PATHS } from '../../features/auth/trainingNav'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
@@ -71,9 +74,10 @@ export function TrainerWorkoutsReviewPage() {
           </Link>
           <h1 className="mt-2 text-2xl font-bold text-white">Workouts to review</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Live tracking from your assigned clients — open a session to review sets and progress.
+            Review step · open a completed session to inspect sets. Live sessions from your clients also appear here.
           </p>
         </header>
+        <TrainingJourneyNav />
 
         <div className="grid gap-4 sm:grid-cols-2">
           <HeroStat role="trainer" label="Live now" numericValue={isLoading ? 0 : liveCount} />
@@ -112,12 +116,23 @@ export function TrainerWorkoutsReviewPage() {
               />
             ))}
             {!isLoading && filtered.length === 0 ? (
-              <li className="py-8 text-center text-sm text-slate-500">
-                {filter === 'live'
-                  ? 'No live workouts right now.'
-                  : filter === 'completed'
-                    ? 'No completed workouts to show.'
-                    : 'No tracked workouts yet from your clients.'}
+              <li className="list-none">
+                {filter === 'all' && workouts.length === 0 ? (
+                  <TrainingEmptyState
+                    title="No tracked workouts yet"
+                    body="Clients need an assigned plan before sessions show here. Assign a plan, then review completed work."
+                    actionLabel="Assign a plan"
+                    to={TRAINING_JOURNEY_PATHS.assign}
+                  />
+                ) : (
+                  <p className="py-8 text-center text-sm text-slate-500">
+                    {filter === 'live'
+                      ? 'No live workouts right now.'
+                      : filter === 'completed'
+                        ? 'No completed workouts to show.'
+                        : 'No tracked workouts yet from your clients.'}
+                  </p>
+                )}
               </li>
             ) : null}
           </ul>

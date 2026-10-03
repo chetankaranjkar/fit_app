@@ -1,0 +1,152 @@
+/* Dashboard themes are scoped to the authenticated app, including portal dialogs.
+   Public marketing pages keep their brand palette. Existing dark utility classes
+   are mapped here while new surfaces can use these shared semantic variables. */
+html.dashboard-app {
+  --dashboard-canvas: #050509;
+  --dashboard-surface: #111127;
+  --dashboard-surface-muted: #18182c;
+  --dashboard-text: #f1f5f9;
+  --dashboard-muted: #94a3b8;
+  --dashboard-border: rgb(255 255 255 / 0.1);
+}
+
+html.dashboard-app[data-theme="light"] {
+  color-scheme: light;
+  --dashboard-canvas: #f3f5fa;
+  --dashboard-surface: #ffffff;
+  --dashboard-surface-muted: #eef2f8;
+  --dashboard-text: #172033;
+  --dashboard-muted: #526078;
+  --dashboard-border: #dce2ed;
+}
+
+html.dashboard-app[data-theme="light"] body {
+  color: var(--dashboard-text);
+  background: var(--dashboard-canvas);
+}
+
+/* Shared cards, navigation, popovers and modals with hardcoded dark surfaces. */
+html.dashboard-app[data-theme="light"] :is(
+  .glass-card, .glass-card-strong,
+  :is([class^="bg-[rgba("], [class*=" bg-[rgba("]), :is([class^="bg-[#0"], [class*=" bg-[#0"]), :is([class^="bg-[#1"], [class*=" bg-[#1"]),
+  :is([class^="bg-slate-950"], [class*=" bg-slate-950"]), :is([class^="bg-slate-900"], [class*=" bg-slate-900"]), :is([class^="bg-slate-800"], [class*=" bg-slate-800"]),
+  :is([class^="bg-ink-"], [class*=" bg-ink-"]), :is([class^="bg-neutral-9"], [class*=" bg-neutral-9"]), :is([class^="bg-zinc-9"], [class*=" bg-zinc-9"])
+) {
+  background-color: var(--dashboard-surface);
+  background-image: none;
+}
+
+html.dashboard-app[data-theme="light"] :is(.glass-card, .glass-card-strong) {
+  border-color: var(--dashboard-border);
+  box-shadow: 0 4px 18px rgb(28 44 75 / 0.06);
+}
+
+/* Member directory panels need lighter depth than the dark glass treatment. */
+html.dashboard-app[data-theme="light"] [data-summary-tone],
+html.dashboard-app[data-theme="light"] [data-walkthrough="members-table"] {
+  border-color: var(--dashboard-border);
+  box-shadow: 0 3px 12px rgb(28 44 75 / 0.06);
+  --tw-ring-color: transparent;
+}
+
+html.dashboard-app[data-theme="light"] [data-summary-tone] > [aria-hidden] {
+  display: none;
+}
+
+html.dashboard-app[data-theme="light"] [data-summary-tone="violet"] {
+  background: #f5f3ff;
+}
+
+html.dashboard-app[data-theme="light"] [data-summary-tone="emerald"] {
+  background: #effaf5;
+}
+
+html.dashboard-app[data-theme="light"] [data-summary-tone="spectrum"] {
+  background: #f0f5ff;
+}
+
+html.dashboard-app[data-theme="light"] [data-summary-tone] [class*="drop-shadow-"] {
+  filter: none;
+}
+
+html.dashboard-app[data-theme="light"] :is(
+  :is([class^="bg-white/"], [class*=" bg-white/"]), :is([class^="bg-white/["], [class*=" bg-white/["]), :is([class^="bg-black/20"], [class*=" bg-black/20"])
+) {
+  background-color: var(--dashboard-surface-muted);
+}
+
+/* Tinted gradient panels remain distinct from solid gradient actions/avatars. */
+html.dashboard-app[data-theme="light"] :is(section, article):is([class^="bg-gradient"], [class*=" bg-gradient"]),
+html.dashboard-app[data-theme="light"] :is([class^="bg-[linear-gradient("], [class*=" bg-[linear-gradient("])[class*="rgba("] {
+  background-image: linear-gradient(135deg, #eef3ff, #f6f0ff);
+}
+
+html.dashboard-app[data-theme="light"] :is([class^="border-white/"], [class*=" border-white/"]),
+html.dashboard-app[data-theme="light"] :is([class^="border-white/["], [class*=" border-white/["]) {
+  border-color: var(--dashboard-border);
+}
+
+html.dashboard-app[data-theme="light"] :is([class^="divide-white/"], [class*=" divide-white/"]) > :not(:last-child) {
+  border-color: var(--dashboard-border);
+}
+
+html.dashboard-app[data-theme="light"] :is(
+  .text-white, .text-slate-50, .text-slate-100, .text-slate-200,
+  .text-slate-300, .text-mute-100, .text-mute-200,
+  [class^="text-white/"], [class*=" text-white/"]
+) { color: var(--dashboard-text); }
+
+html.dashboard-app[data-theme="light"] :is(
+  .text-slate-400, .text-slate-500, .text-slate-600,
+  .text-mute-300, .text-mute-400, .text-mute-500
+) { color: var(--dashboard-muted); }
+
+/* Status text needs darker tones against pale tinted backgrounds. */
+html.dashboard-app[data-theme="light"] :is(:is([class^="text-blue-"], [class*=" text-blue-"]), :is([class^="text-sky-"], [class*=" text-sky-"]), :is([class^="text-indigo-"], [class*=" text-indigo-"])) { color: #1d4ed8; }
+html.dashboard-app[data-theme="light"] :is(:is([class^="text-violet-"], [class*=" text-violet-"]), :is([class^="text-purple-"], [class*=" text-purple-"]), :is([class^="text-fuchsia-"], [class*=" text-fuchsia-"])) { color: #6d28d9; }
+html.dashboard-app[data-theme="light"] :is(:is([class^="text-emerald-"], [class*=" text-emerald-"]), :is([class^="text-green-"], [class*=" text-green-"]), :is([class^="text-teal-"], [class*=" text-teal-"])) { color: #047857; }
+html.dashboard-app[data-theme="light"] :is(:is([class^="text-amber-"], [class*=" text-amber-"]), :is([class^="text-yellow-"], [class*=" text-yellow-"]), :is([class^="text-orange-"], [class*=" text-orange-"]), :is([class^="text-[#F5C400]"], [class*=" text-[#F5C400]"])) { color: #925800; }
+html.dashboard-app[data-theme="light"] :is(:is([class^="text-rose-"], [class*=" text-rose-"]), :is([class^="text-red-"], [class*=" text-red-"]), :is([class^="text-pink-"], [class*=" text-pink-"])) { color: #be123c; }
+html.dashboard-app[data-theme="light"] :is([class^="text-cyan-"], [class*=" text-cyan-"]) { color: #0e7490; }
+
+/* Retain white contrast on saturated actions, badges and avatar gradients. */
+html.dashboard-app[data-theme="light"] .text-white:is(
+  :is([class^="bg-[linear-gradient("], [class*=" bg-[linear-gradient("]), :is([class^="bg-gradient-to-"], [class*=" bg-gradient-to-"]),
+  [class~="bg-blue-600"], [class~="bg-blue-500"],
+  [class~="bg-emerald-600"], [class~="bg-rose-600"]
+):not([class*="rgba("]):not(section):not(article) {
+  color: #ffffff;
+}
+
+html.dashboard-app[data-theme="light"] :is(button, a).text-white:is(
+  [class^="bg-[linear-gradient("], [class*=" bg-[linear-gradient("],
+  [class^="bg-gradient-to-"], [class*=" bg-gradient-to-"]
+):not([class*="rgba("]) .text-white { color: #ffffff; }
+
+html.dashboard-app[data-theme="light"] :is(button, a):hover:is(
+  [class*="hover:bg-white/"], [class*="hover:bg-slate-"]
+) { background-color: #e4eaf5; }
+
+html.dashboard-app[data-theme="light"] :is(button, a):hover[class*="hover:text-white"] { color: var(--dashboard-text); }
+
+html.dashboard-app[data-theme="light"] :is(input, textarea, select) {
+  color-scheme: light;
+  color: var(--dashboard-text);
+  background-color: var(--dashboard-surface);
+}
+
+html.dashboard-app[data-theme="light"] :is(input, textarea)::placeholder { color: #65738a; }
+html.dashboard-app[data-theme="light"] :is(select option, select optgroup) { background: #fff; color: var(--dashboard-text); }
+html.dashboard-app[data-theme="light"] select option:checked { background: #e4eaf5; }
+html.dashboard-app[data-theme="light"] [class*="hover:bg-white/"]:hover { background-color: #e4eaf5; }
+html.dashboard-app[data-theme="light"] .recharts-cartesian-axis-tick-value { fill: var(--dashboard-muted); }
+html.dashboard-app[data-theme="light"] .recharts-cartesian-grid line { stroke: var(--dashboard-border); }
+html.dashboard-app[data-theme="light"] .recharts-default-tooltip {
+  background: var(--dashboard-surface) !important;
+  color: var(--dashboard-text) !important;
+  border-color: var(--dashboard-border) !important;
+}
+
+html.dashboard-app[data-theme="light"] ::selection { background: #dbeafe; color: #172033; }
+html.dashboard-app[data-theme="light"] * { scrollbar-color: #a8b5cb transparent; }
+html.dashboard-app[data-theme="light"] *::-webkit-scrollbar-thumb { background-color: #a8b5cb; }

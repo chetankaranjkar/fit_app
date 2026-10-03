@@ -1,4 +1,5 @@
 using GymManagement.Core.DTOs;
+using GymManagement.Core.Notifications;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
@@ -128,30 +129,55 @@ public sealed class SmsSettingsService : ISmsSettingsService
         return row;
     }
 
-    private SmsSettingsDto MapToDto(GymSetting row) => new()
+    private SmsSettingsDto MapToDto(GymSetting row)
     {
-        Sms = new SmsChannelSettingsDto
+        var smsReady = NotificationChannelReadiness.ForWebhookChannel(
+            row.SmsNotificationsEnabled, row.SmsWebhookUrl, "SMS");
+        var waReady = NotificationChannelReadiness.ForWebhookChannel(
+            row.WhatsAppNotificationsEnabled, row.WhatsAppWebhookUrl, "WhatsApp");
+
+        return new SmsSettingsDto
         {
-            Enabled = row.SmsNotificationsEnabled,
-            WebhookUrl = row.SmsWebhookUrl,
-            SenderId = row.SmsSenderId,
-            HasAuthHeaderConfigured = !string.IsNullOrWhiteSpace(row.SmsAuthHeaderProtected),
-            SendPaymentReceipts = row.SmsSendPaymentReceipts,
-            SendMembershipExpiryReminders = row.SmsSendMembershipExpiryReminders,
-            IsConfigured = row.SmsNotificationsEnabled && !string.IsNullOrWhiteSpace(row.SmsWebhookUrl),
-        },
-        WhatsApp = new SmsChannelSettingsDto
+            Sms = MapChannel(
+                row.SmsNotificationsEnabled,
+                row.SmsWebhookUrl,
+                row.SmsSenderId,
+                !string.IsNullOrWhiteSpace(row.SmsAuthHeaderProtected),
+                row.SmsSendPaymentReceipts,
+                row.SmsSendMembershipExpiryReminders,
+                smsReady),
+            WhatsApp = MapChannel(
+                row.WhatsAppNotificationsEnabled,
+                row.WhatsAppWebhookUrl,
+                row.WhatsAppSenderId,
+                !string.IsNullOrWhiteSpace(row.WhatsAppAuthHeaderProtected),
+                row.WhatsAppSendPaymentReceipts,
+                row.WhatsAppSendMembershipExpiryReminders,
+                waReady),
+            UpdatedDateUtc = row.SmsSettingsUpdatedDate ?? row.UpdatedDate,
+        };
+    }
+
+    private static SmsChannelSettingsDto MapChannel(
+        bool enabled,
+        string? webhookUrl,
+        string? senderId,
+        bool hasAuth,
+        bool sendReceipts,
+        bool sendExpiry,
+        NotificationChannelReadinessResult readiness) =>
+        new()
         {
-            Enabled = row.WhatsAppNotificationsEnabled,
-            WebhookUrl = row.WhatsAppWebhookUrl,
-            SenderId = row.WhatsAppSenderId,
-            HasAuthHeaderConfigured = !string.IsNullOrWhiteSpace(row.WhatsAppAuthHeaderProtected),
-            SendPaymentReceipts = row.WhatsAppSendPaymentReceipts,
-            SendMembershipExpiryReminders = row.WhatsAppSendMembershipExpiryReminders,
-            IsConfigured = row.WhatsAppNotificationsEnabled && !string.IsNullOrWhiteSpace(row.WhatsAppWebhookUrl),
-        },
-        UpdatedDateUtc = row.SmsSettingsUpdatedDate ?? row.UpdatedDate,
-    };
+            Enabled = enabled,
+            WebhookUrl = webhookUrl,
+            SenderId = senderId,
+            HasAuthHeaderConfigured = hasAuth,
+            SendPaymentReceipts = sendReceipts,
+            SendMembershipExpiryReminders = sendExpiry,
+            IsConfigured = readiness.IsReady,
+            Readiness = readiness.Readiness,
+            BlockingReasons = readiness.BlockingReasons.ToList(),
+        };
 
     private static string? NullableTrim(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

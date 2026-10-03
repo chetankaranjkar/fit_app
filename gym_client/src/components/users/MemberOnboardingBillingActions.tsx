@@ -33,7 +33,22 @@ function formatDueDate(value?: string | null) {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export function MemberOnboardingBillingActions({ user, userId }: { user: User; userId: number }) {
+export function MemberOnboardingBillingActions({
+  user,
+  userId,
+  openMembershipId,
+  isPaymentOverdue,
+  compact = false,
+  showCollectAction = true,
+}: {
+  user: User
+  userId: number
+  /** From the profile summary; get-by-id `User` omits billing fields. */
+  openMembershipId?: number | null
+  isPaymentOverdue?: boolean
+  compact?: boolean
+  showCollectAction?: boolean
+}) {
   const canPayments = usePermission(authService.permissionCodes.payments)
   const queryClient = useQueryClient()
   const [sendingKey, setSendingKey] = useState<string | null>(null)
@@ -117,14 +132,23 @@ export function MemberOnboardingBillingActions({ user, userId }: { user: User; u
     }
   }
 
+  const collectMembershipId =
+    (primary && primary.pendingAmount > 0.02 ? primary.membershipId : null) ??
+    user.openMembershipId ??
+    openMembershipId ??
+    null
   const collectHref =
-    user.openMembershipId != null
-      ? collectPaymentPath(user.openMembershipId, userId, memberProfilePath(userId))
+    collectMembershipId != null
+      ? collectPaymentPath(collectMembershipId, userId, memberProfilePath(userId))
       : null
+  const overdue = user.isPaymentOverdue ?? isPaymentOverdue ?? false
 
   return (
-    <div className="rounded-xl border border-amber-400/20 bg-amber-500/5 p-4">
-      <h3 className="text-sm font-semibold text-amber-100">Billing notifications</h3>
+    <details open={compact ? undefined : true} className="min-h-24 rounded-xl border border-amber-400/20 bg-amber-500/5 p-4">
+      <summary className="cursor-pointer text-sm text-slate-300">
+        <h3 className="inline text-sm font-semibold text-amber-100">Billing notifications</h3>
+        {hasPending ? <span className="mt-1 block text-lg font-semibold text-amber-200">{formatInr(pendingAmount)} pending{overdue ? ' · Overdue' : ''}</span> : null}
+      </summary>
       <p className="mt-1 text-xs leading-relaxed text-slate-400">
         Send only when the member has opted in and gym email/SMS is configured.
       </p>
@@ -134,7 +158,7 @@ export function MemberOnboardingBillingActions({ user, userId }: { user: User; u
           <p className="text-xs font-medium text-white">
             {formatInr(pendingAmount)} pending
             {dueDate ? <span className="text-slate-400"> · due {dueDate}</span> : null}
-            {user.isPaymentOverdue ? (
+            {overdue ? (
               <span className="ml-1 text-rose-300">(overdue)</span>
             ) : null}
           </p>
@@ -181,7 +205,7 @@ export function MemberOnboardingBillingActions({ user, userId }: { user: User; u
                 Enable SMS
               </Button>
             )}
-            {collectHref ? (
+            {collectHref && showCollectAction ? (
               <Link
                 to={collectHref}
                 className="inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
@@ -247,6 +271,6 @@ export function MemberOnboardingBillingActions({ user, userId }: { user: User; u
           </div>
         </div>
       ) : null}
-    </div>
+    </details>
   )
 }

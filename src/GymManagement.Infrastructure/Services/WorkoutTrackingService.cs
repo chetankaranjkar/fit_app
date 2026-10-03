@@ -478,7 +478,7 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             ?? throw new NotFoundException("Trainer profile not found.");
 
         var memberUserIds = await _db.UserInstructors.AsNoTracking()
-            .Where(ui => ui.TrainerId == trainer.Id && !ui.IsDeleted)
+            .Where(ui => ui.TrainerId == trainer.Id && !ui.IsDeleted && ui.IsActive && !ui.EndDate.HasValue)
             .Select(ui => ui.UserId)
             .Distinct()
             .ToListAsync(ct);
@@ -681,7 +681,8 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             .FirstAsync(t => t.UserId == callerUserId.Value && !t.IsDeleted, ct);
 
         var assigned = await _db.UserInstructors.AsNoTracking()
-            .AnyAsync(ui => ui.TrainerId == trainer.Id && ui.UserId == memberUserId && !ui.IsDeleted, ct);
+            .AnyAsync(ui => ui.TrainerId == trainer.Id && ui.UserId == memberUserId && !ui.IsDeleted
+                            && ui.IsActive && !ui.EndDate.HasValue, ct);
 
         var hasAdmin = await (
             from ur in _db.UserRoles.AsNoTracking()

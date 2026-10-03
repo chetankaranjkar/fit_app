@@ -176,7 +176,19 @@ Local work → push uat → deploy /opt/gym_uat/fit_app → test uat.tigerfitnes
 | [deploy/DEPLOYMENT.md](../deploy/DEPLOYMENT.md) | Production VPS, Nginx, SSL |
 | [FIREBASE_OTP_PRODUCTION.md](./FIREBASE_OTP_PRODUCTION.md) | Firebase domains (add `uat.tigerfitness.tech` for UAT) |
 | [AGENTS.md](../AGENTS.md) | Repo overview for developers and AI tools |
+| [mobile app/README.md](../mobile%20app/README.md) | PulseFit Flutter: HTTPS `API_BASE_URL`, analyze/test, Android signing |
 
 ---
 
-**Last updated:** 2026-06-01
+## Mobile APK (PulseFit)
+
+| Audience | Command / workflow | API URL | Signing |
+|----------|-------------------|---------|---------|
+| Local / PR testing | `cd "mobile app"` then `flutter analyze`, `flutter test`, `flutter build apk` | `--dart-define=API_BASE_URL=https://uat.tigerfitness.tech` (or LAN HTTP) | Debug keystore |
+| Store / production install | GitHub Action **Mobile app — Android APK**, profile **production** | **Required HTTPS**, typically `https://tigerfitness.tech` | Upload keystore via `ANDROID_KEYSTORE_*` secrets — **fails if missing** |
+
+Do not ship a production APK pointed at `http://…` or signed with the debug keystore. Secrets and `.jks` files stay out of git. iOS signing is not in CI.
+
+---
+
+**Last updated:** 2026-10-04

@@ -11,6 +11,7 @@ import 'models/me_models.dart';
 import 'providers/me_providers.dart';
 import 'services/me_service.dart';
 import 'services/workout_pending_queue.dart';
+import 'workout_sync/sync/sync_manager.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_typography.dart';
@@ -92,6 +93,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
           workoutPlanId: widget.plan.id,
           durationMinutes: durationMinutes,
           sets: sets,
+          memberId: SyncManager.instance.boundMemberId,
         );
         if (!mounted) return;
         ref.invalidate(workoutPlansProvider);

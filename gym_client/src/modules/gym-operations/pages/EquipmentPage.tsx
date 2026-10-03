@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { DashboardMetricsGrid } from '../../../components/layout/DashboardMetricsGrid'
@@ -7,10 +8,12 @@ import { FilterBar } from '../components/FilterBar'
 import { EmptyState } from '../components/EmptyState'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceAlertBadge } from '../components/ServiceAlertBadge'
+import { latestMaintenanceByEquipment, serviceUrgency } from '../../../lib/opsWorkStatus'
 import {
   useCreateEquipment,
   useDeleteEquipment,
   useEquipment,
+  useMaintenance,
   useUpdateEquipment,
 } from '../hooks/useGymOperations'
 import { useStaggerAnimation } from '../hooks/useStaggerAnimation'
@@ -19,6 +22,7 @@ import type {
   Equipment,
   EquipmentCategory,
   EquipmentFilters,
+  EquipmentServiceFilter,
   EquipmentStatus,
 } from '../types'
 import { DEFAULT_EQUIPMENT_FILTERS } from '../types'
@@ -41,6 +45,12 @@ const CATEGORY_OPTIONS: { value: EquipmentFilters['category']; label: string }[]
   { value: 'Strength', label: 'Strength' },
   { value: 'Functional', label: 'Functional' },
   { value: 'Accessory', label: 'Accessory' },
+]
+
+const SERVICE_OPTIONS: { value: EquipmentServiceFilter; label: string }[] = [
+  { value: 'ALL', label: 'All service dates' },
+  { value: 'OVERDUE', label: 'Overdue only' },
+  { value: 'DUE_SOON', label: 'Due within 7 days' },
 ]
 
 const STATUS_FORM_OPTIONS: { value: EquipmentStatus; label: string }[] = [
@@ -75,11 +85,17 @@ const formatAge = (iso: string): string => {
 
 export function EquipmentPage() {
   const { data = [], isLoading } = useEquipment()
-  const [filters, setFilters] = useState<EquipmentFilters>(DEFAULT_EQUIPMENT_FILTERS)
+  const { data: maintenance = [] } = useMaintenance()
+  const [searchParams] = useSearchParams()
+  const [filters, setFilters] = useState<EquipmentFilters>(() => ({
+    ...DEFAULT_EQUIPMENT_FILTERS,
+    service: searchParams.get('service') === 'overdue' ? 'OVERDUE' : 'ALL',
+  }))
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
-    key: 'name',
+    key: 'nextServiceDate',
     dir: 'asc',
   })
+  const lastService = useMemo(() => latestMaintenanceByEquipment(maintenance), [maintenance])
   const [formMode, setFormMode] = useState<{ kind: 'closed' } | { kind: 'add' } | { kind: 'edit'; equipment: Equipment }>(
     { kind: 'closed' },
   )
@@ -91,6 +107,11 @@ export function EquipmentPage() {
     const list = data.filter((e) => {
       if (filters.status !== 'ALL' && e.status !== filters.status) return false
       if (filters.category !== 'ALL' && e.category !== filters.category) return false
+      if (filters.service !== 'ALL') {
+        const urgency = serviceUrgency(e.nextServiceDate)
+        if (filters.service === 'OVERDUE' && urgency !== 'overdue') return false
+        if (filters.service === 'DUE_SOON' && urgency !== 'due_soon' && urgency !== 'overdue') return false
+      }
       if (!q) return true
       return (
         e.name.toLowerCase().includes(q) ||
@@ -124,7 +145,10 @@ export function EquipmentPage() {
   useStaggerAnimation(tableBodyRef, 'tr[data-row]', [filtered.length, isLoading])
 
   const filtersActive =
-    filters.query.trim() !== '' || filters.status !== 'ALL' || filters.category !== 'ALL'
+    filters.query.trim() !== '' ||
+    filters.status !== 'ALL' ||
+    filters.category !== 'ALL' ||
+    filters.service !== 'ALL'
 
   return (
     <ModulePageShell
@@ -186,6 +210,13 @@ export function EquipmentPage() {
                 onChange: (v) =>
                   setFilters((f) => ({ ...f, category: v as EquipmentFilters['category'] })),
                 options: CATEGORY_OPTIONS,
+              },
+              {
+                label: 'Service',
+                value: filters.service,
+                onChange: (v) =>
+                  setFilters((f) => ({ ...f, service: v as EquipmentServiceFilter })),
+                options: SERVICE_OPTIONS,
               },
             ]}
             right={
@@ -253,6 +284,7 @@ export function EquipmentPage() {
                       onSort={setSort}
                       className="px-6 py-3"
                     />
+                    <th className="px-6 py-3 font-semibold">Last serviced by</th>
                     <th className="px-6 py-3 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -261,6 +293,7 @@ export function EquipmentPage() {
                     <EquipmentRow
                       key={e.id}
                       equipment={e}
+                      lastServicedBy={lastService.get(e.id)?.performedBy}
                       onView={() => setDetail(e)}
                       onEdit={() => setFormMode({ kind: 'edit', equipment: e })}
                     />
@@ -275,7 +308,7 @@ export function EquipmentPage() {
                     <td className="px-6 py-3 text-sm font-semibold text-white">
                       {formatINR(filtered.reduce((sum, e) => sum + e.purchaseCost, 0))}
                     </td>
-                    <td colSpan={3} />
+                    <td colSpan={4} />
                   </tr>
                 </tfoot>
               </table>
@@ -313,16 +346,18 @@ function KpiStrip({ data }: { data: Equipment[] }) {
       RETIRED: 0,
     }
     let totalValue = 0
-    let serviceAlerts = 0
+    let overdueAlerts = 0
+    let dueSoonAlerts = 0
     data.forEach((e) => {
       counts[e.status] += 1
       totalValue += e.purchaseCost
-      const d = daysUntil(e.nextServiceDate)
-      if (d !== null && d <= 7) serviceAlerts += 1
+      const urgency = serviceUrgency(e.nextServiceDate)
+      if (urgency === 'overdue') overdueAlerts += 1
+      if (urgency === 'due_soon') dueSoonAlerts += 1
     })
     const active = data.length - counts.RETIRED
     const uptimePct = active > 0 ? Math.round((counts.OPERATIONAL / active) * 100) : 0
-    return { counts, totalValue, serviceAlerts, uptimePct, active }
+    return { counts, totalValue, overdueAlerts, dueSoonAlerts, uptimePct, active }
   }, [data])
 
   const cards: Array<{
@@ -373,12 +408,20 @@ function KpiStrip({ data }: { data: Equipment[] }) {
       tone: totals.counts.OUT_OF_ORDER > 0 ? 'danger' : 'success',
     },
     {
-      label: 'Service alerts',
-      value: totals.serviceAlerts.toString(),
-      hint: 'Due within 7 days',
-      gradient: 'from-orange-400 to-red-500',
+      label: 'Service overdue',
+      value: totals.overdueAlerts.toString(),
+      hint: 'Past next-service date',
+      gradient: 'from-rose-500 to-orange-500',
       icon: <IconBell />,
-      tone: totals.serviceAlerts > 0 ? 'warn' : 'default',
+      tone: totals.overdueAlerts > 0 ? 'danger' : 'default',
+    },
+    {
+      label: 'Due within 7 days',
+      value: totals.dueSoonAlerts.toString(),
+      hint: 'Upcoming scheduled service',
+      gradient: 'from-orange-400 to-amber-500',
+      icon: <IconWrench />,
+      tone: totals.dueSoonAlerts > 0 ? 'warn' : 'default',
     },
   ]
 
@@ -516,20 +559,36 @@ function ServiceQueueCard({
   const queue = useMemo(() => {
     return data
       .filter((e) => !!e.nextServiceDate && e.status !== 'RETIRED')
-      .map((e) => ({ e, days: daysUntil(e.nextServiceDate) ?? 9999 }))
-      .sort((a, b) => a.days - b.days)
+      .map((e) => ({ e, urgency: serviceUrgency(e.nextServiceDate) }))
+      .sort((a, b) => {
+        const order = { overdue: 0, due_soon: 1, scheduled: 2, none: 3 }
+        const urg = order[a.urgency] - order[b.urgency]
+        if (urg !== 0) return urg
+        const aN = a.e.nextServiceDate ? new Date(a.e.nextServiceDate).getTime() : Number.MAX_SAFE_INTEGER
+        const bN = b.e.nextServiceDate ? new Date(b.e.nextServiceDate).getTime() : Number.MAX_SAFE_INTEGER
+        return aN - bN
+      })
       .slice(0, 5)
   }, [data])
+
+  const overdueCount = data.filter((e) => serviceUrgency(e.nextServiceDate) === 'overdue').length
 
   return (
     <section className="glass-card dashboard-card flex min-w-0 flex-col rounded-2xl p-5">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-white">Upcoming service</h3>
-          <p className="text-[11px] text-slate-500">Next 5 scheduled</p>
+          <p className="text-[11px] text-slate-500">Overdue first · next 5</p>
         </div>
-        <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-300">
-          Priority
+        <span
+          className={[
+            'rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
+            overdueCount > 0
+              ? 'border-rose-400/30 bg-rose-500/10 text-rose-300'
+              : 'border-amber-400/30 bg-amber-500/10 text-amber-300',
+          ].join(' ')}
+        >
+          {overdueCount > 0 ? `${overdueCount} overdue` : 'Priority'}
         </span>
       </div>
 
@@ -539,22 +598,28 @@ function ServiceQueueCard({
         </p>
       ) : (
         <ul className="mt-3 flex flex-col divide-y divide-white/5">
-          {queue.map(({ e, days }) => (
-            <li key={e.id}>
-              <button
-                type="button"
-                onClick={() => onView(e)}
-                className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-2 text-left transition hover:bg-white/[0.04]"
-              >
-                <div className="min-w-0 flex-1">
+          {queue.map(({ e }) => (
+            <li key={e.id} className="py-1">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => onView(e)}
+                  className="min-w-0 flex-1 rounded-lg px-1 py-1.5 text-left transition hover:bg-white/[0.04]"
+                >
                   <p className="truncate text-xs font-semibold text-white">{e.name}</p>
-                  <p className="truncate text-[11px] text-slate-500">{e.location}</p>
-                </div>
+                  <p className="truncate text-[11px] text-slate-500">
+                    {e.location}
+                    {e.nextServiceDate ? ` · due ${formatDate(e.nextServiceDate)}` : ''}
+                  </p>
+                </button>
                 <ServiceAlertBadge nextServiceDate={e.nextServiceDate} />
-                <span className="text-[10px] text-slate-500">
-                  {days < 0 ? `${Math.abs(days)}d late` : days === 0 ? 'today' : `${days}d`}
-                </span>
-              </button>
+              </div>
+              <Link
+                to={`/dashboard/gym-operations/maintenance?equipmentId=${encodeURIComponent(e.id)}`}
+                className="ml-1 text-[11px] font-medium text-blue-300 hover:text-blue-200"
+              >
+                Log service
+              </Link>
             </li>
           ))}
         </ul>
@@ -569,15 +634,24 @@ function ServiceQueueCard({
 
 function EquipmentRow({
   equipment,
+  lastServicedBy,
   onView,
   onEdit,
 }: {
   equipment: Equipment
+  lastServicedBy?: string
   onView: () => void
   onEdit: () => void
 }) {
+  const overdue = serviceUrgency(equipment.nextServiceDate) === 'overdue'
   return (
-    <tr data-row className="group transition hover:bg-white/[0.03]">
+    <tr
+      data-row
+      data-testid="equipment-row"
+      data-equipment-id={equipment.id}
+      data-overdue={overdue ? 'true' : 'false'}
+      className="group transition hover:bg-white/[0.03]"
+    >
       <td className="px-6 py-4">
         <button
           type="button"
@@ -610,10 +684,24 @@ function EquipmentRow({
         <StatusBadge status={equipment.status} />
       </td>
       <td className="px-6 py-4">
-        <ServiceAlertBadge nextServiceDate={equipment.nextServiceDate} />
+        <div className="flex flex-col gap-1">
+          <span className="text-[11px] text-slate-400">
+            {equipment.nextServiceDate ? formatDate(equipment.nextServiceDate) : '—'}
+          </span>
+          <ServiceAlertBadge nextServiceDate={equipment.nextServiceDate} />
+        </div>
+      </td>
+      <td className="px-6 py-4 text-sm text-slate-300" data-testid="equipment-assignee">
+        {lastServicedBy ?? 'Unassigned'}
       </td>
       <td className="px-6 py-4">
-        <div className="flex items-center justify-end gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+        <div className="flex items-center justify-end gap-1">
+          <Link
+            to={`/dashboard/gym-operations/maintenance?equipmentId=${encodeURIComponent(equipment.id)}`}
+            className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-200 hover:bg-blue-500/20"
+          >
+            Log service
+          </Link>
           <IconActionButton label="View details" onClick={onView}>
             <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -875,6 +963,12 @@ function EquipmentDetailModal({
             <Button variant="ghost" size="sm" type="button" onClick={onClose}>
               Close
             </Button>
+            <Link
+              to={`/dashboard/gym-operations/maintenance?equipmentId=${encodeURIComponent(equipment.id)}`}
+              className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+            >
+              Log service
+            </Link>
             <Button size="sm" type="button" onClick={() => onEdit(equipment)}>
               Edit
             </Button>

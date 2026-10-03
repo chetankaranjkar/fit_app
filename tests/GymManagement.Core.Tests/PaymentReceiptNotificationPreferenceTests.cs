@@ -214,6 +214,9 @@ public sealed class PaymentReceiptNotificationPreferenceTests
         public IReadOnlyDictionary<string, string?> FromMembershipExpiring(MembershipExpiringNotificationDto dto) =>
             new Dictionary<string, string?>();
 
+        public IReadOnlyDictionary<string, string?> FromPaymentDueReminder(PaymentDueReminderNotificationDto dto) =>
+            new Dictionary<string, string?>();
+
         public IReadOnlyDictionary<string, string?> FromDietAssignment(DietAssignmentAssignedNotificationDto dto) =>
             new Dictionary<string, string?>();
     }
@@ -246,6 +249,9 @@ public sealed class PaymentReceiptNotificationPreferenceTests
         }
 
         public Task ProcessPendingAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<NotificationOutboxDto>> ListRecentAsync(int take, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<NotificationOutboxDto>>(Array.Empty<NotificationOutboxDto>());
     }
 
     private sealed class RecordingEmailTransportService : IEmailTransportService
@@ -277,6 +283,10 @@ public sealed class PaymentReceiptNotificationPreferenceTests
 
         public Task SendMembershipExpiringAsync(MembershipExpiringNotificationDto dto, CancellationToken ct = default) =>
             Task.CompletedTask;
+
+        public Task<SendNotificationChannelResultDto> TrySendPaymentDueReminderAsync(
+            PaymentDueReminderNotificationDto dto, CancellationToken ct = default) =>
+            Task.FromResult(new SendNotificationChannelResultDto { Sent = true });
 
         public Task SendDietAssignmentAssignedAsync(DietAssignmentAssignedNotificationDto dto, CancellationToken ct = default) =>
             Task.CompletedTask;

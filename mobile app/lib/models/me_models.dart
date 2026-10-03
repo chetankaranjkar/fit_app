@@ -12,6 +12,12 @@ class MeProfile {
   final String? profilePictureUrl;
   final DateTime registrationDate;
   final String? preferredGymTime;
+  /// Assigned goal weight from UserDetails — not a recorded weigh-in.
+  final num? targetWeightKg;
+  /// Assigned goal type from UserDetails.
+  final String? assignedGoalType;
+  /// Assigned height from UserDetails — used only for BMI estimates.
+  final num? heightCm;
 
   const MeProfile({
     required this.userId,
@@ -25,6 +31,9 @@ class MeProfile {
     this.dateOfBirth,
     this.profilePictureUrl,
     this.preferredGymTime,
+    this.targetWeightKg,
+    this.assignedGoalType,
+    this.heightCm,
   });
 
   factory MeProfile.fromJson(Map<String, dynamic> json) {
@@ -40,6 +49,9 @@ class MeProfile {
       profilePictureUrl: json['profilePictureUrl']?.toString(),
       registrationDate: _dt(json['registrationDate']) ?? DateTime.now(),
       preferredGymTime: json['preferredGymTime']?.toString(),
+      targetWeightKg: _double(json['targetWeightKg']),
+      assignedGoalType: json['assignedGoalType']?.toString(),
+      heightCm: _double(json['heightCm']),
     );
   }
 
@@ -751,6 +763,8 @@ class MeDashboard {
   final MeBodyMetricSummary? latestBodyMetric;
   final List<MeUpcomingSchedule> upcomingSchedule;
   final List<MeNotification> recentNotifications;
+  /// True when this payload was restored from on-device cache (offline Home).
+  final bool isStale;
 
   const MeDashboard({
     required this.profile,
@@ -759,7 +773,18 @@ class MeDashboard {
     required this.recentNotifications,
     this.membership,
     this.latestBodyMetric,
+    this.isStale = false,
   });
+
+  MeDashboard asStale() => MeDashboard(
+        profile: profile,
+        membership: membership,
+        attendance: attendance,
+        latestBodyMetric: latestBodyMetric,
+        upcomingSchedule: upcomingSchedule,
+        recentNotifications: recentNotifications,
+        isStale: true,
+      );
 
   factory MeDashboard.fromJson(Map<String, dynamic> json) {
     final membership = json['membership'];
@@ -820,6 +845,7 @@ class MeDietPlan {
   final int? carbsGrams;
   final int? fatsGrams;
   final String? description;
+  final String? assignmentNotes;
   final DateTime startDate;
   final DateTime? endDate;
   final List<MeDietMeal> meals;
@@ -836,6 +862,7 @@ class MeDietPlan {
     this.carbsGrams,
     this.fatsGrams,
     this.description,
+    this.assignmentNotes,
     this.endDate,
   });
 
@@ -850,6 +877,7 @@ class MeDietPlan {
       carbsGrams: _int(json['carbsGrams']),
       fatsGrams: _int(json['fatsGrams']),
       description: json['description']?.toString(),
+      assignmentNotes: json['assignmentNotes']?.toString(),
       startDate: _dt(json['startDate']) ?? DateTime.now(),
       endDate: _dt(json['endDate']),
       meals: (json['meals'] as List? ?? [])

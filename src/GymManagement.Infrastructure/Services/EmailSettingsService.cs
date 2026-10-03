@@ -1,4 +1,5 @@
 using GymManagement.Core.DTOs;
+using GymManagement.Core.Notifications;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
@@ -112,11 +113,14 @@ public sealed class EmailSettingsService : IEmailSettingsService
         var hasStoredPassword = !string.IsNullOrWhiteSpace(row.SmtpPasswordProtected);
         var passwordReadable = hasStoredPassword && !string.IsNullOrWhiteSpace(UnprotectPassword(row.SmtpPasswordProtected));
         var passwordNeedsReentry = hasStoredPassword && !passwordReadable;
-        var configured = row.EmailNotificationsEnabled
-            && !string.IsNullOrWhiteSpace(row.SmtpHost)
-            && !string.IsNullOrWhiteSpace(row.SmtpUsername)
-            && passwordReadable
-            && !string.IsNullOrWhiteSpace(row.EmailFromAddress);
+        var readiness = NotificationChannelReadiness.ForEmail(
+            row.EmailNotificationsEnabled,
+            row.SmtpHost,
+            row.SmtpPort,
+            row.SmtpUsername,
+            hasReadablePassword: passwordReadable,
+            passwordNeedsReentry: passwordNeedsReentry,
+            row.EmailFromAddress);
 
         return new EmailSettingsDto
         {
@@ -132,8 +136,10 @@ public sealed class EmailSettingsService : IEmailSettingsService
             SendPaymentReceipts = row.EmailSendPaymentReceipts,
             SendMembershipExpiryReminders = row.EmailSendMembershipExpiryReminders,
             SendDietAssignments = row.EmailSendDietAssignments,
-            IsConfigured = configured,
+            IsConfigured = readiness.IsReady,
             PasswordNeedsReentry = passwordNeedsReentry,
+            Readiness = readiness.Readiness,
+            BlockingReasons = readiness.BlockingReasons.ToList(),
             UpdatedDateUtc = row.EmailSettingsUpdatedDate ?? row.UpdatedDate,
         };
     }

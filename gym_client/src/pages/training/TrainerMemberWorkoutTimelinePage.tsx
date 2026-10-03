@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { TrainingEmptyState } from '../../components/training/TrainingEmptyState'
+import { TrainingJourneyNav } from '../../components/training/TrainingJourneyNav'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { DashboardPageContent } from '../../components/layout/DataPageShell'
 import { GlassPanel } from '../../components/dashboard/premium/GlassPanel'
@@ -86,6 +88,7 @@ export function TrainerMemberWorkoutTimelinePage() {
             ) : null}
           </div>
         </header>
+        <TrainingJourneyNav />
 
         <div className="grid gap-4 sm:grid-cols-3">
           <HeroStat
@@ -136,7 +139,18 @@ export function TrainerMemberWorkoutTimelinePage() {
               </li>
             ))}
             {!isLoading && !(data?.sessions?.length) ? (
-              <li className="py-8 text-center text-slate-500">No tracked workouts yet.</li>
+              <li className="list-none">
+                <TrainingEmptyState
+                  title="No tracked workouts yet"
+                  body="Assign a workout plan so this member can train. Sessions will show here for review."
+                  actionLabel="Assign a plan"
+                  to={workoutAssignmentUrl({
+                    userId: assignUserId,
+                    trainerId,
+                    returnTo,
+                  })}
+                />
+              </li>
             ) : null}
           </ul>
         </GlassPanel>

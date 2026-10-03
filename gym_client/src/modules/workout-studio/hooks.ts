@@ -15,6 +15,8 @@ export function useExerciseLibrary(search?: string) {
   return useQuery({
     queryKey: ['workout-studio', 'exercise-library', search ?? ''],
     queryFn: () => fetchExerciseLibrary(search),
+    placeholderData: (previous) => previous,
+    retry: 1,
   })
 }
 

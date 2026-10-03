@@ -10,7 +10,7 @@ import {
   MOCK_MAINTENANCE,
   MOCK_VENDORS,
 } from '../services/mockData'
-import type { MaintenanceInput, MaintenanceLog } from '../types'
+import type { CleaningLog, CleaningTask, MaintenanceInput, MaintenanceLog } from '../types'
 
 const NAMESPACE = ['gym-operations'] as const
 const EQUIPMENT_KEY = [...NAMESPACE, 'equipment']
@@ -105,12 +105,58 @@ export function useExpenses() {
   })
 }
 
+const CLEANING_KEY = [...NAMESPACE, 'cleaning'] as const
+
 export function useCleaning() {
   return useQuery({
-    queryKey: [...NAMESPACE, 'cleaning'],
+    queryKey: CLEANING_KEY,
     queryFn: () =>
       gymOperationsService.listCleaning().catch(() => MOCK_CLEANING),
     placeholderData: MOCK_CLEANING,
+  })
+}
+
+export function useUpdateCleaningTask() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      logId,
+      taskId,
+      isDone,
+    }: {
+      logId: string
+      taskId: string
+      isDone: boolean
+    }) => gymOperationsService.updateCleaningTask(logId, taskId, isDone),
+    onSuccess: (task, vars) => {
+      qc.setQueryData<CleaningLog[]>(CLEANING_KEY, (prev) => {
+        if (!prev) return prev
+        return prev.map((log) =>
+          log.id !== vars.logId
+            ? log
+            : {
+                ...log,
+                tasks: log.tasks.map((t) => (t.id === vars.taskId ? { ...t, done: task.done } : t)),
+              },
+        )
+      })
+      qc.invalidateQueries({ queryKey: CLEANING_KEY })
+    },
+  })
+}
+
+export function useCompleteCleaningShift() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ logId, tasks }: { logId: string; tasks: CleaningTask[] }) => {
+      const remaining = tasks.filter((t) => !t.done)
+      for (const task of remaining) {
+        await gymOperationsService.updateCleaningTask(logId, task.id, true)
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CLEANING_KEY })
+    },
   })
 }
 

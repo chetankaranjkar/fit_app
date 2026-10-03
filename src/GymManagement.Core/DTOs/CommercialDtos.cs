@@ -66,8 +66,46 @@ namespace GymManagement.Core.DTOs
 
     public sealed class RazorpayVerifyResponseDto
     {
+        /// <summary>True only when the installment is recorded (see <see cref="Status"/> for recoverable states).</summary>
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
+        /// <summary>completed | pending_verification | processing | review_required | failed | cancelled | pending.</summary>
+        public string Status { get; set; } = "completed";
+        public string? OrderId { get; set; }
         public MembershipPaymentDto? Payment { get; set; }
+    }
+
+    public sealed class OnlinePaymentAttemptDto
+    {
+        public string OrderId { get; set; } = string.Empty;
+        public int MembershipPaymentId { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public decimal? CapturedAmount { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime? UpdatedDate { get; set; }
+    }
+
+    /// <summary>Member pay page state: settle an existing bill vs renewal at reception, plus the latest checkout attempt.</summary>
+    public sealed class MemberOnlinePaymentSummaryDto
+    {
+        public bool OnlinePaymentsEnabled { get; set; }
+        /// <summary>settle_outstanding | renewal_required | billing_closed | nothing_due.</summary>
+        public string PaymentNeed { get; set; } = "nothing_due";
+        public string Message { get; set; } = string.Empty;
+        public int? MembershipPaymentId { get; set; }
+        public decimal OutstandingAmount { get; set; }
+        public DateTime? NextDueDate { get; set; }
+        public string? PlanName { get; set; }
+        public string? MembershipStatus { get; set; }
+        public DateTime? MembershipEndDate { get; set; }
+        public OnlinePaymentAttemptDto? LatestAttempt { get; set; }
+    }
+
+    public sealed class RazorpayWebhookResultDto
+    {
+        public bool Handled { get; set; }
+        public string Message { get; set; } = string.Empty;
     }
 }

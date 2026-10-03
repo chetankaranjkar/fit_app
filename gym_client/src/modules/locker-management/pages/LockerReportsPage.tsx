@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import gsap from 'gsap'
 import { ModulePageShell } from '../components/ModulePageShell'
 import { LockerStatusBadge } from '../components/LockerStatusBadge'
@@ -19,6 +20,7 @@ import {
   useMaintenance,
 } from '../hooks/useLockerManagement'
 import { formatDate, isExpired } from '../utils/format'
+import { lockerTicketIsOverdue, LOCKER_TICKET_SLA_DAYS } from '../../../lib/opsWorkStatus'
 import type { Locker, LockerStatus } from '../types'
 
 export function LockerReportsPage() {
@@ -38,6 +40,9 @@ export function LockerReportsPage() {
     const occupancy = lockers.length > 0 ? Math.round((counts.OCCUPIED / lockers.length) * 100) : 0
     const expiredAssignments = assignments.filter((a) => isExpired(a.expiryDate)).length
     const pendingMaintenance = maintenance.filter((m) => m.status === 'PENDING').length
+    const overdueMaintenance = maintenance.filter((m) =>
+      lockerTicketIsOverdue(m.status, m.reportedDate),
+    ).length
     return {
       total: lockers.length,
       occupied: counts.OCCUPIED,
@@ -46,6 +51,7 @@ export function LockerReportsPage() {
       occupancy,
       expiredAssignments,
       pendingMaintenance,
+      overdueMaintenance,
     }
   }, [lockers, assignments, maintenance])
 
@@ -125,6 +131,7 @@ export function LockerReportsPage() {
             <HealthCard
               expiredAssignments={kpi.expiredAssignments}
               pendingMaintenance={kpi.pendingMaintenance}
+              overdueMaintenance={kpi.overdueMaintenance}
             />
           </div>
         )}
@@ -359,9 +366,11 @@ function LegendItem({
 function HealthCard({
   expiredAssignments,
   pendingMaintenance,
+  overdueMaintenance,
 }: {
   expiredAssignments: number
   pendingMaintenance: number
+  overdueMaintenance: number
 }) {
   const items = [
     {
@@ -369,12 +378,21 @@ function HealthCard({
       value: expiredAssignments,
       tone: expiredAssignments > 0 ? 'danger' : 'ok',
       hint: 'Members past locker expiry date',
+      to: '/dashboard/locker-management/assignments',
     },
     {
       label: 'Pending maintenance',
       value: pendingMaintenance,
       tone: pendingMaintenance > 0 ? 'warn' : 'ok',
       hint: 'Open tickets awaiting resolution',
+      to: '/dashboard/locker-management/maintenance',
+    },
+    {
+      label: 'Overdue tickets',
+      value: overdueMaintenance,
+      tone: overdueMaintenance > 0 ? 'danger' : 'ok',
+      hint: `Pending ${LOCKER_TICKET_SLA_DAYS}+ days`,
+      to: '/dashboard/locker-management/maintenance?attention=overdue',
     },
   ] as const
   return (
@@ -384,7 +402,7 @@ function HealthCard({
           <h3 className="text-sm font-semibold text-white">Alerts</h3>
           <p className="text-[11px] text-slate-500">Action items needing attention</p>
         </div>
-        {(expiredAssignments > 0 || pendingMaintenance > 0) && (
+        {(expiredAssignments > 0 || pendingMaintenance > 0 || overdueMaintenance > 0) && (
           <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
             <IconAlert className="size-3" />
             Needs attention
@@ -393,33 +411,35 @@ function HealthCard({
       </div>
       <ul className="mt-4 space-y-3">
         {items.map((it) => (
-          <li
-            key={it.label}
-            className={[
-              'flex items-center justify-between rounded-xl border p-3 transition hover:-translate-y-0.5',
-              it.tone === 'danger'
-                ? 'border-rose-400/25 bg-rose-500/[0.05] hover:border-rose-400/40'
-                : it.tone === 'warn'
-                  ? 'border-amber-400/25 bg-amber-500/[0.05] hover:border-amber-400/40'
-                  : 'border-white/10 bg-white/[0.02] hover:border-white/20',
-            ].join(' ')}
-          >
-            <div className="min-w-0">
-              <p className="truncate text-xs font-semibold text-white">{it.label}</p>
-              <p className="truncate text-[11px] text-slate-500">{it.hint}</p>
-            </div>
-            <span
+          <li key={it.label}>
+            <Link
+              to={it.to}
               className={[
-                'text-2xl font-bold tabular-nums',
+                'flex items-center justify-between rounded-xl border p-3 transition hover:-translate-y-0.5',
                 it.tone === 'danger'
-                  ? 'text-rose-300'
+                  ? 'border-rose-400/25 bg-rose-500/[0.05] hover:border-rose-400/40'
                   : it.tone === 'warn'
-                    ? 'text-amber-200'
-                    : 'text-emerald-200',
+                    ? 'border-amber-400/25 bg-amber-500/[0.05] hover:border-amber-400/40'
+                    : 'border-white/10 bg-white/[0.02] hover:border-white/20',
               ].join(' ')}
             >
-              <CountUp value={it.value} />
-            </span>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-white">{it.label}</p>
+                <p className="truncate text-[11px] text-slate-500">{it.hint}</p>
+              </div>
+              <span
+                className={[
+                  'text-2xl font-bold tabular-nums',
+                  it.tone === 'danger'
+                    ? 'text-rose-300'
+                    : it.tone === 'warn'
+                      ? 'text-amber-200'
+                      : 'text-emerald-200',
+                ].join(' ')}
+              >
+                <CountUp value={it.value} />
+              </span>
+            </Link>
           </li>
         ))}
       </ul>
@@ -437,7 +457,15 @@ function UnavailableRow({ locker }: { locker: Locker }) {
           {locker.location ? ` \u00b7 ${locker.location}` : ''}
         </p>
       </div>
-      <LockerStatusBadge status={locker.status} />
+      <div className="flex items-center gap-2">
+        <LockerStatusBadge status={locker.status} />
+        <Link
+          to="/dashboard/locker-management/maintenance"
+          className="text-[11px] font-medium text-blue-300 hover:text-blue-200"
+        >
+          Open ticket
+        </Link>
+      </div>
     </li>
   )
 }

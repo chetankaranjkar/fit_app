@@ -36,6 +36,7 @@ const loaders: Record<string, Loader> = {
   '/dashboard/settings/email': () => import('../pages/EmailSettingsPage'),
   '/dashboard/settings/sms': () => import('../pages/SmsSettingsPage'),
   '/dashboard/settings/invoice-branding': () => import('../pages/InvoiceBrandingPage'),
+  '/dashboard/settings/notifications': () => import('../pages/NotificationChannelsPage'),
   '/dashboard/settings/notification-templates': () => import('../pages/NotificationTemplatesPage'),
   '/dashboard/roles': () => import('../pages/RolesPage'),
   '/dashboard/trainers': () => import('../pages/TrainersPage'),
@@ -54,6 +55,9 @@ const loaders: Record<string, Loader> = {
   '/dashboard/training/warmups': () => import('../pages/training/WarmupsPage'),
   '/dashboard/training/stretches': () => import('../pages/training/StretchesPage'),
   '/dashboard/training/workout-categories': () => import('../pages/training/WorkoutCategoriesPage'),
+  '/dashboard/training/workout-assignments': () => import('../pages/training/WorkoutAssignmentsPage'),
+  '/dashboard/training/workouts-to-review': () => import('../pages/training/TrainerWorkoutsReviewPage'),
+  '/dashboard/training/workout-monitoring': () => import('../pages/training/WorkoutAdminMonitoringPage'),
 
   // Diet group
   '/dashboard/diet-plans': () => import('../pages/DietPlansDashboardPage'),

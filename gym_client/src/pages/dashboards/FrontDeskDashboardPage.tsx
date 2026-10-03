@@ -6,11 +6,13 @@ import { HeroStat } from '../../components/dashboard/premium/HeroStat'
 import { DashboardMetricsGrid } from '../../components/layout/DashboardMetricsGrid'
 import { QuickAction } from '../../components/dashboard/premium/QuickAction'
 import { RenewalQueuePanel } from '../../components/dashboard/RenewalQueuePanel'
+import { DailyWorkListPanel } from '../../components/dashboard/DailyWorkListPanel'
+import { hasAnyDailyWorkAccess } from '../../lib/dailyWorkList'
 import { getDashboardUser } from '../../lib/dashboardUser'
 import { dashboardService } from '../../services/dashboard.service'
 import { usePermission } from '../../features/auth/hooks/usePermission'
 import { authService } from '../../services/auth.service'
-import { getStaffFrontDeskNavLinks } from '../../features/auth/navPermissions'
+import { canAccessLeadsNav, getStaffFrontDeskNavLinks } from '../../features/auth/navPermissions'
 
 export function FrontDeskDashboardPage() {
   const { userName } = getDashboardUser()
@@ -78,6 +80,15 @@ export function FrontDeskDashboardPage() {
                 icon={<span className="text-lg">₹</span>}
               />
             ) : null}
+            {canAccessLeadsNav() ? (
+              <QuickAction
+                role="admin"
+                to="/dashboard/reception"
+                label="Lead CRM"
+                description="Follow-ups and trials"
+                icon={<span className="text-lg">☎</span>}
+              />
+            ) : null}
             <QuickAction
               role="admin"
               to="/dashboard/access/scan"
@@ -94,6 +105,12 @@ export function FrontDeskDashboardPage() {
             />
           </div>
         </section>
+
+        {hasAnyDailyWorkAccess() ? (
+          <section className="grid gap-6 lg:grid-cols-3">
+            <DailyWorkListPanel role="other" />
+          </section>
+        ) : null}
 
         {canPayments ? (
           <section className="grid gap-6 lg:grid-cols-3">

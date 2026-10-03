@@ -50,6 +50,20 @@ public static class UserDirectoryScope
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    /// <summary>Coach-scoped callers may only read data for their own trainer profile.</summary>
+    public static async Task<bool> CanAccessTrainerProfileAsync(
+        HttpContext http,
+        ApplicationDbContext db,
+        int trainerId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!ShouldApplyCoachFilter(http))
+            return true;
+
+        var trainerProfileId = await ResolveTrainerProfileIdAsync(http, db, cancellationToken);
+        return trainerProfileId.HasValue && trainerProfileId.Value == trainerId;
+    }
+
     public static async Task<bool> CanAccessMemberAsync(
         HttpContext http,
         ApplicationDbContext db,

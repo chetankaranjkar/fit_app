@@ -299,6 +299,7 @@ builder.Services.AddScoped<INotificationWebhookDispatcher, NotificationWebhookDi
 builder.Services.AddHostedService<MembershipExpiryReminderHostedService>();
 builder.Services.AddHostedService<GymQrExpiryReminderHostedService>();
 builder.Services.AddHostedService<PaymentBillingReminderHostedService>();
+builder.Services.AddHostedService<OnlinePaymentReconciliationHostedService>();
 builder.Services.AddHostedService<WorkoutDayReminderHostedService>();
 
 // Register Unit of Work
@@ -333,6 +334,7 @@ builder.Services.AddScoped<INotificationContextBuilder, GymManagement.Infrastruc
 builder.Services.AddScoped<INotificationComposerService, GymManagement.Infrastructure.Services.Notifications.NotificationComposerService>();
 builder.Services.AddScoped<INotificationOutboxService, GymManagement.Infrastructure.Services.Notifications.NotificationOutboxService>();
 builder.Services.AddScoped<INotificationHistoryService, GymManagement.Infrastructure.Services.Notifications.NotificationHistoryService>();
+builder.Services.AddScoped<INotificationChannelStatusService, GymManagement.Infrastructure.Services.Notifications.NotificationChannelStatusService>();
 builder.Services.AddScoped<INotificationEventService, GymManagement.Infrastructure.Services.Notifications.NotificationEventService>();
 builder.Services.AddScoped<IOutboundEmailService, OutboundEmailService>();
 builder.Services.AddScoped<IUserNotificationPreferenceService, UserNotificationPreferenceService>();
@@ -359,6 +361,7 @@ builder.Services.AddScoped<IDeviceSessionService, DeviceSessionService>();
 builder.Services.Configure<DeviceSecurityOptions>(builder.Configuration.GetSection(DeviceSecurityOptions.SectionName));
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IUserInstructorService, UserInstructorService>();
+builder.Services.AddScoped<ITrainerTodayService, TrainerTodayService>();
 builder.Services.AddScoped<ITrainerFeedbackService, TrainerFeedbackService>();
 builder.Services.AddScoped<IBodyMetricsService, BodyMetricsService>();
 builder.Services.AddScoped<IHealthProfileService, GymManagement.Infrastructure.Services.Health.HealthProfileService>();
@@ -423,6 +426,7 @@ builder.Services.AddScoped<IMembershipExpiryWebhookReminderService, MembershipEx
 builder.Services.AddScoped<IWorkoutDayReminderService, WorkoutDayReminderService>();
 builder.Services.AddScoped<IMemberPushNotificationService, MemberPushNotificationService>();
 builder.Services.AddScoped<ICommercialSignupService, CommercialSignupService>();
+builder.Services.AddScoped<IRazorpayGatewayClient, RazorpayGatewayClient>();
 builder.Services.AddScoped<IOnlinePaymentService, RazorpayOnlinePaymentService>();
 
 builder.Services.AddScoped<IGymQrFloorWorkoutService, GymQrFloorWorkoutService>();

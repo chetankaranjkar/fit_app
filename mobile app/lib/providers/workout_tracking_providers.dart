@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/workout_tracking_models.dart';
 import '../services/workout_tracking_repository.dart';
 import '../services/workout_tracking_service.dart';
+import '../workout_sync/sync/sync_manager.dart';
 
 final memberIdProvider = FutureProvider.autoDispose<int>((ref) async {
-  return WorkoutTrackingService.instance.resolveMemberId();
+  final id = await WorkoutTrackingService.instance.resolveMemberId();
+  await SyncManager.instance.bindMember(id);
+  return id;
 });
 
 final workoutTrackingDashboardProvider =

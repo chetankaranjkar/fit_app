@@ -670,7 +670,7 @@ class _PrRecordsStrip extends StatelessWidget {
       return GlassCard(
         radius: 26,
         child: Text(
-          'Log this session to unlock PR telemetry for every lift.',
+          'Log this session to record weights for each exercise.',
           style: FitnessText.body(context),
         ),
       );
@@ -679,7 +679,7 @@ class _PrRecordsStrip extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('LAST SESSION PEAKS', style: FitnessText.label(context)),
+        Text('LAST SESSION WEIGHTS', style: FitnessText.label(context)),
         const SizedBox(height: AppSpacing.sm),
         ...prs.map(
           (e) => Padding(

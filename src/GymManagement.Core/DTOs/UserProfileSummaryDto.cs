@@ -18,5 +18,19 @@ namespace GymManagement.Core.DTOs
         public bool HasDietAssignment { get; set; }
         public bool HasAnyDietAssignment { get; set; }
         public string? PrimaryDietPlanName { get; set; }
+
+        /// <summary>In-flight membership (see <c>MemberOnboardingRules.ResolveCurrentMembership</c>).</summary>
+        public int? CurrentMembershipId { get; set; }
+        public string? CurrentMembershipStatus { get; set; }
+        public string? CurrentMembershipPlanName { get; set; }
+        public DateTime? CurrentMembershipEndDate { get; set; }
+
+        /// <summary>End date of the most recent lapsed membership when there is no current one.</summary>
+        public DateTime? LapsedMembershipEndDate { get; set; }
+
+        /// <summary>Unpaid membership billing exists. Amounts stay on the Payments-gated billing APIs.</summary>
+        public bool HasOpenBalance { get; set; }
+        public bool IsPaymentOverdue { get; set; }
+        public int? OpenMembershipId { get; set; }
     }
 }

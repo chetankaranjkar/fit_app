@@ -1,4 +1,5 @@
 import { authService } from '../../services/auth.service'
+import type { NavSectionId } from './navSections'
 
 /** Permission codes aligned with backend <see cref="PermissionCodes"/>. */
 export const NavPermission = {
@@ -15,6 +16,7 @@ export const NavPermission = {
 export type StaffFrontDeskNavLink = {
   path: string
   label: string
+  section: NavSectionId
 }
 
 /** Full admin sidebar (not front-desk-only staff). */
@@ -64,24 +66,24 @@ export function getStaffFrontDeskAllowedPrefixes(): string[] {
 /** Front-desk sidebar links filtered by permissions. */
 export function getStaffFrontDeskNavLinks(): StaffFrontDeskNavLink[] {
   const links: StaffFrontDeskNavLink[] = [
-    { path: '/dashboard', label: 'Dashboard' },
-    { path: '/dashboard/attendance', label: 'Attendance' },
+    { path: '/dashboard', label: 'Dashboard', section: 'overview' },
   ]
 
   if (canAccessUsersNav()) {
-    links.push({ path: '/dashboard/users', label: 'Members' })
+    links.push({ path: '/dashboard/users', label: 'Members', section: 'members' })
+  }
+
+  if (canAccessLeadsNav()) {
+    links.push({ path: '/dashboard/reception', label: 'Lead CRM', section: 'members' })
   }
 
   if (canAccessPaymentsNav()) {
-    links.push({ path: '/dashboard/user-memberships', label: 'Memberships' })
-    links.push({ path: '/dashboard/payments/collect', label: 'Collect payment' })
+    links.push({ path: '/dashboard/user-memberships', label: 'Memberships', section: 'billing' })
+    links.push({ path: '/dashboard/payments/collect', label: 'Collect payment', section: 'billing' })
   }
 
-  links.push({ path: '/dashboard/access/scan', label: 'Check-in' })
-
-  if (canAccessLeadsNav()) {
-    links.push({ path: '/dashboard/reception', label: 'Lead CRM' })
-  }
+  links.push({ path: '/dashboard/attendance', label: 'Attendance', section: 'attendance' })
+  links.push({ path: '/dashboard/access/scan', label: 'Check-in', section: 'attendance' })
 
   return links
 }
@@ -137,4 +139,9 @@ export function canAccessAttendanceNav(): boolean {
     canAccessNavSection(NavPermission.viewAttendance) ||
     canAccessNavSection(NavPermission.manageAttendance)
   )
+}
+
+/** Gym-wide live workout board (`GET /api/workout/admin/monitoring`) — ADMIN or UsersAccess. */
+export function canAccessWorkoutMonitoringNav(): boolean {
+  return authService.hasAppRole('ADMIN') || authService.canUsersAccess()
 }

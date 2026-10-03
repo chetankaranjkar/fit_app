@@ -212,13 +212,17 @@ export function GlobalSearch({ className = '' }: { className?: string }) {
         onKeyDown={handleKeyDown}
         placeholder="Search members, trainers, plans, Aadhaar…"
         aria-label="Search members, trainers, plans, and Aadhaar"
+        aria-expanded={showPanel}
+        aria-controls={showPanel ? 'global-search-results' : undefined}
+        aria-autocomplete="list"
         autoComplete="off"
-        className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 transition focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
+        className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-400 transition focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
       />
 
       {showPanel ? (
         <div
           id="global-search-results"
+          role="listbox"
           className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[min(24rem,70vh)] overflow-y-auto rounded-2xl border border-white/10 bg-[rgba(17,17,39,0.98)] py-2 shadow-2xl shadow-black/50 backdrop-blur-xl"
         >
           {query.trim().length < MEMBER_SEARCH_MIN_CHARS ? (

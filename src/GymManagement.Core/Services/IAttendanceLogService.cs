@@ -1,3 +1,4 @@
+using GymManagement.Core.Attendance;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.DTOs.Common;
 
@@ -12,7 +13,12 @@ namespace GymManagement.Core.Services
             DateTime? fromDate = null,
             DateTime? toDate = null,
             string? sortBy = null,
-            string? sortDir = null);
+            string? sortDir = null,
+            string? status = null,
+            int lateThresholdMinutes = AttendanceLateRules.DefaultLateThresholdMinutes);
+
+        /// <summary>Aggregates every visit in the date range. Does not page or apply the log status filter.</summary>
+        Task<AttendanceRangeSummaryDto> GetRangeSummaryAsync(DateTime? fromDate, DateTime? toDate);
 
         Task<IEnumerable<AttendanceLogDto>> GetAllAttendanceLogsAsync();
         Task<IEnumerable<AttendanceLogDto>> GetAttendanceLogsByUserIdAsync(int userId);

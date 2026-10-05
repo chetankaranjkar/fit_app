@@ -67,6 +67,30 @@ namespace GymManagement.Core.DTOs
         public string AuditNote { get; set; } = string.Empty;
     }
 
+    /// <summary>
+    /// Counts for a date range. Completed sessions are visits in that range with a check-out.
+    /// Session completion rate is <see cref="CompletedSessions"/> / <see cref="TotalVisits"/>.
+    /// </summary>
+    public class AttendanceRangeSummaryDto
+    {
+        public int TotalVisits { get; set; }
+        public int ActiveVisits { get; set; }
+        public int CompletedSessions { get; set; }
+        public int UniqueMembers { get; set; }
+
+        public static int SessionCompletionPercent(int completedSessions, int totalVisits) =>
+            totalVisits <= 0 ? 0 : (int)Math.Round(completedSessions * 100d / totalVisits, MidpointRounding.AwayFromZero);
+
+        public static AttendanceRangeSummaryDto FromCounts(int totalVisits, int activeVisits, int uniqueMembers) =>
+            new()
+            {
+                TotalVisits = totalVisits,
+                ActiveVisits = activeVisits,
+                CompletedSessions = totalVisits - activeVisits,
+                UniqueMembers = uniqueMembers,
+            };
+    }
+
     public class AttendanceAnomalyDto
     {
         public int UserId { get; set; }

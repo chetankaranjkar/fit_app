@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Linq;
 using System.Text;
+using GymManagement.Core.Attendance;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
 using GymManagement.Core.Services;
@@ -1062,7 +1063,7 @@ namespace GymManagement.Infrastructure.Services
         {
             try
             {
-                var today = DateTime.UtcNow.Date;
+                var today = GymCalendar.AttendanceDateFromUtc(DateTime.UtcNow);
                 AttendanceLog? existingLog = null;
 
                 if (userId.HasValue)

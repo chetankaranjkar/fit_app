@@ -1,6 +1,10 @@
 import { api } from '../lib/api'
 import type { ApiPagedResponse } from '../types/apiPaged'
-import type { AttendanceAnomalyDto, AttendanceLogDto } from '../types/attendance'
+import type {
+  AttendanceAnomalyDto,
+  AttendanceLogDto,
+  AttendanceRangeSummary,
+} from '../types/attendance'
 import type { AttendanceScanResponseDto } from '../types/qr'
 
 export type CheckInBody = {
@@ -45,6 +49,7 @@ export const attendanceService = {
     toDate?: string
     sortBy?: string
     sortDir?: 'asc' | 'desc'
+    status?: 'checked-in' | 'checked-out' | 'late'
   }) => {
     const query = new URLSearchParams()
     query.set('page', String(params.page))
@@ -54,9 +59,18 @@ export const attendanceService = {
     if (params.toDate) query.set('toDate', params.toDate)
     if (params.sortBy) query.set('sortBy', params.sortBy)
     if (params.sortDir) query.set('sortDir', params.sortDir)
+    if (params.status) query.set('status', params.status)
     return api.get<ApiPagedResponse<AttendanceLogDto>>(
       `/AttendanceLogs/paged?${query.toString()}`,
     )
+  },
+
+  getSummary: (params: { fromDate?: string; toDate?: string }) => {
+    const query = new URLSearchParams()
+    if (params.fromDate) query.set('fromDate', params.fromDate)
+    if (params.toDate) query.set('toDate', params.toDate)
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return api.get<AttendanceRangeSummary>(`/AttendanceLogs/summary${suffix}`)
   },
   getByDateRange: (startDate: string, endDate: string) =>
     api.get<AttendanceLogDto[]>('/AttendanceLogs/daterange', {

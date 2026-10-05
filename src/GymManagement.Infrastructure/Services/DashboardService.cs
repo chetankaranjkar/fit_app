@@ -1,3 +1,4 @@
+using GymManagement.Core.Attendance;
 using GymManagement.Core.Caching;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
@@ -83,8 +84,9 @@ namespace GymManagement.Infrastructure.Services
                          && m.EndDate.Date <= expiryWindowEnd,
                     cancellationToken);
 
+            var attendanceToday = GymCalendar.AttendanceDateFromUtc(DateTime.UtcNow);
             var todayAttendance = await _context.AttendanceLogs.AsNoTracking()
-                .CountAsync(a => a.AttendanceDate == today, cancellationToken);
+                .CountAsync(a => a.AttendanceDate == attendanceToday, cancellationToken);
 
             var now = DateTime.UtcNow;
             var pendingPayments = await _context.Invoices.AsNoTracking()

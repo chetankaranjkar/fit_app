@@ -195,7 +195,8 @@ export function EnterpriseDataGrid<T>({
     const width = getColWidth(meta)
     const canSort = header.column.getCanSort()
     const sorted = header.column.getIsSorted()
-    const isSticky = stickyFirstColumn && (meta.sticky || colIndex === 0)
+    const isStickyEnd = meta.stickyEnd === true
+    const isSticky = !isStickyEnd && stickyFirstColumn && (meta.sticky || colIndex === 0)
 
     return (
       <th
@@ -209,12 +210,13 @@ export function EnterpriseDataGrid<T>({
           minWidth: meta.minWidth ?? width,
           maxWidth: meta.maxWidth,
           ...(isSticky ? { left: stickyLeft(colIndex) } : {}),
+          ...(isStickyEnd ? { right: 0 } : {}),
         }}
         className={[
           'relative border-b border-white/[0.08] bg-[rgba(12,10,28,0.98)] px-3 text-left align-middle',
           meta.hideBelow ? hideBelowClass[meta.hideBelow] : '',
           meta.align === 'right' ? 'text-right' : meta.align === 'center' ? 'text-center' : '',
-          isSticky ? 'sticky z-20' : 'z-10',
+          isSticky || isStickyEnd ? 'sticky z-20' : 'z-10',
         ].join(' ')}
       >
         <div className="flex h-[50px] items-center gap-1 pr-2">
@@ -312,7 +314,8 @@ export function EnterpriseDataGrid<T>({
         {row.getVisibleCells().map((cell, colIndex) => {
           const meta = cell.column.columnDef.meta as DataGridColumnDef<T>
           const width = getColWidth(meta)
-          const isSticky = stickyFirstColumn && (meta.sticky || colIndex === 0)
+          const isStickyEnd = meta.stickyEnd === true
+          const isSticky = !isStickyEnd && stickyFirstColumn && (meta.sticky || colIndex === 0)
           const overflowVisible = meta.overflowVisible === true || meta.id === 'actions'
           return (
             <td
@@ -321,11 +324,12 @@ export function EnterpriseDataGrid<T>({
                 width,
                 minWidth: meta.minWidth ?? width,
                 ...(isSticky ? { left: stickyLeft(colIndex) } : {}),
+                ...(isStickyEnd ? { right: 0 } : {}),
               }}
               className={[
                 'h-[52px] px-3 align-middle text-sm text-slate-200',
                 overflowVisible ? 'overflow-visible' : 'max-h-[52px] overflow-hidden',
-                isSticky
+                isSticky || isStickyEnd
                   ? 'sticky z-10 bg-[rgba(11,11,26,0.98)] group-hover:bg-[rgba(18,16,36,0.98)]'
                   : '',
                 meta.hideBelow ? hideBelowClass[meta.hideBelow] : '',

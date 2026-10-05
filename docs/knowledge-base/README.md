@@ -47,7 +47,7 @@ Headings in [APPLICATION_FLOWS.md](./APPLICATION_FLOWS.md) are **not strictly se
 | **11b** | User memberships (one occupying membership) + **membership standing** |
 | 11c | Membership lifecycle (no delete) |
 | **12** | Enterprise billing + **collect payment** (review modal, receipt) |
-| 12b | QR check-in gate; **notifications** (channel status, SMTP/SMS, templates, Razorpay member pay) |
+| 12b | QR check-in gate; **staff attendance dashboard**; **notifications** (channel status, SMTP/SMS, templates, Razorpay member pay) |
 | 12c | Staff front-desk menu |
 | **12d** | **Web sidebar sections** (Overview … Settings; Plan → Assign → Monitor → Review) |
 | **12e** | **Dashboard daily work** (“Today’s work”) |

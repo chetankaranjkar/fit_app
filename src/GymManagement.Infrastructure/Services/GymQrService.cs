@@ -1,3 +1,4 @@
+using GymManagement.Core.Attendance;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
@@ -174,7 +175,7 @@ public sealed class GymQrService : IGymQrService
             UserId = memberUserId,
             LoggedByUserId = null,
             CheckInTime = nowUtc,
-            AttendanceDate = nowUtc.Date,
+            AttendanceDate = GymCalendar.AttendanceDateFromUtc(nowUtc),
             CheckInMethod = GymQrScanConstants.Method,
             Notes = notes
         };

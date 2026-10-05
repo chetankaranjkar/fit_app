@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-10-04 (mobile QR check-in failure copy + device checklist; mobile member-facing copy + a11y; mobile workout queue/recovery/conflict rules; mobile home primary actions; mobile notification center routing; health profile + assigned supplements; Profile Help & Privacy; Progress recorded vs estimate; diet assigned vs recorded; Diet water intake).
+**Last updated:** 2026-10-05 (staff attendance dashboard layout: compact range summary, one check-in action, inferred no-shows).
 
 **Section map:** [README.md](./README.md#application_flows-section-map). Scheduled work / evidence labels: [PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md).
 
@@ -292,6 +292,8 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 **Member self-log body metrics:** `POST /api/me/body-metrics` (authenticated member) accepts `weightKg`, optional `bodyFatPct`, `notes`, `measurementDate`. **Web:** Progress → **Record weigh-in**. **Mobile:** Progress tab → **Log weight** sheet. Charts refresh from `GET /api/me/body-metrics`.
 
 **Mobile Progress tab** (`mobile app/lib/features/progress/`): presentation over existing `/api/me` payloads — recorded weigh-ins (`GET /api/me/body-metrics`), recorded check-ins (`GET /api/me/attendance`), recorded completed sessions (`GET /api/me/workout-sessions`), recorded transformation photos (`GET /api/me/progress-photos`). Assigned goal weight / goal type / height come from existing `UserDetails` on `GET /api/me/profile` (`targetWeightKg`, `assignedGoalType`, `heightCm`) and are not treated as weigh-ins. **Trends** use two or more recorded points in the selected window (30 / 90 / all); one point shows **Not enough logged data** (no fake slope). **Estimate** badge: BMI (last logged weight + height) and optional projected goal date (linear from logged points). Goal copy is `Goal N kg · latest logged M kg` only when both exist; optional toward-goal % is `(start − current) ÷ (start − goal)` from the first logged weigh-in and is skipped if start or goal is missing. Sparse sections use empty states; grey attendance days are not inferred misses; zeros are not filled as visits. Metric-entry sheet and transformation camera/upload are unchanged. Tests: `mobile app/test/progress_insights_test.dart`.
+
+**Mobile Google Fit (Health Connect):** Progress → **Google Fit** (`/progress/google-fit`) reads steps (today and the previous six local days), weight, and exercise sessions from **Health Connect** on Android. Google Fit writes into that store; the app does not call the deprecated Google Fit REST API and does not write sessions back. Weight and workouts are the last 30 days Health Connect will return. **Save latest to weigh-ins** posts the newest Health Connect weight through the existing `POST /api/me/body-metrics` when that local day does not already have a weigh-in within 0.15 kg. Fit workouts stay on this screen and are not inserted into `WorkoutSessions`. Tests: `mobile app/test/phone_health_snapshot_test.dart`.
 
 **Mobile water intake (PulseFit Diet tab):** Recorded ml is **not** the assigned goal. Goal stays the calorie-derived daily target on the Diet screen (`kcal × 1.1`, clamped 2200–4200) because `DietPlan` has no water field. Recorded intake is a list of add entries (250/500/750 ml) stored in **SharedPreferences**, keyed by login `Users.Id` (`Members.UserId`) + **device local** `yyyy-MM-dd` (not UTC; midnight on the phone starts a new day at 0 recorded; previous days remain). Undo removes the last add for that local day. There is **no** `/api/me` water endpoint — logs do not sync to the server or to trainers. Logout/login loads only the signed-in user’s key. Tests: `mobile app/test/water_intake_service_test.dart`.
 
@@ -729,6 +731,31 @@ Void and refund (history page) recalculate the bill through `BillingCalculationS
 | Success | — | Confetti + Home banner (`checkInBannerProvider`) | Auto-close |
 
 **Automated tests:** `mobile app/test/qr_check_in_test.dart` (fake GPS/API; debounce; success feedback). Real camera/GPS cannot be fully simulated.
+
+### Staff attendance dashboard
+
+**Route:** `/dashboard/attendance` (`AttendancePage`). View requires `VIEW_ATTENDANCE`. Check-in and check-out require `MANAGE_ATTENDANCE` (API and the page actions).
+
+| Surface | Scope | API |
+|---------|--------|-----|
+| Overview metrics | Selected date range, every matching visit | `GET /api/AttendanceLogs/summary?fromDate=&toDate=` |
+| Attendance log | Same range, plus search and status, paged | `GET /api/AttendanceLogs/paged` (`status` = `checked-in`, `checked-out`, or `late`) |
+| Exception monitor | One monitor date, not the log range | `GET /api/AttendanceLogs/anomalies/{date}` |
+| Member history | That member's visits | `GET /api/AttendanceLogs/user/{userId}` |
+
+**Overview.** The heading is **Today's Overview** only when the range is a single day and that day is today. A single other day is **Daily Overview**. A span is **Range Overview**. The date line matches that range. "Today" and the default range use the Asia/Kolkata calendar (UTC+05:30), so 00:00–05:30 IST is still that local day rather than the previous UTC date. Totals, active visits (no check-out), completed sessions (has check-out), and unique members are aggregated on the server for the whole range — not the current page. **Session Completion Rate** is completed visits / total visits. The summary does not follow the log search or status filter. New staff, login, and QR check-ins store `AttendanceDate` as that Kolkata day. Late detection still compares the stored check-in timestamp with `AttendanceDate` plus the schedule start, without a separate timezone conversion.
+
+**Log status.** `checked-in`, `checked-out`, and `late` are applied in `AttendanceLogListQuery` before `COUNT` and `OFFSET`. `totalRecords` is the filtered count. **Late** is the specific visit: check-in on that attendance date is more than 15 whole minutes after the member's earliest active `UserSchedule` start for that weekday (`AttendanceLateRules`). Another visit by the same member is not marked late.
+
+**Layout.** The attendance log is the main panel. Range totals sit in a compact strip above it and name the selected range. **Check in member** is the page header action only (`MANAGE_ATTENDANCE`). The log’s row menu stays pinned to the right edge while other columns scroll. Exceptions are a secondary panel for one monitor date, with separate loading, failure, empty (**All clear**), and populated states. Schedule-based no-shows are labeled **Inferred no-show** (no attendance row was recorded). Late visits stay labeled **Late**.
+
+**Check-in member.** The dialog searches `GET /api/Users/paged` (`membersOnly`, active members, `includeBilling=false`, 20 per page) with next/previous pages. It does not load a fixed first 200 members.
+
+Exception cards show the full member name on its own wrapping line, with the status badge and explanation below, so the narrow desktop panel remains readable at 100% browser zoom.
+
+**Refresh.** Check-in and check-out invalidate `attendance-paged`, `attendance-summary`, `attendance-anomalies`, and `attendance-member-history`, so an open history modal reloads.
+
+**Tests:** `AttendanceLateRulesTests` (including the Kolkata attendance-date boundary), `AttendanceLogQueryTests` (query shape only; they do not write attendance rows), and `gym_client/tests/e2e/attendance-dashboard.spec.ts` (mocked APIs, no live attendance writes).
 
 **Real-device verification (Android + iOS):**
 

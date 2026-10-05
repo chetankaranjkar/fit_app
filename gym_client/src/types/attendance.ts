@@ -17,6 +17,13 @@ export interface AttendanceLogDto {
   correctedAt?: string | null
 }
 
+export interface AttendanceRangeSummary {
+  totalVisits: number
+  activeVisits: number
+  completedSessions: number
+  uniqueMembers: number
+}
+
 export interface AttendanceAnomalyDto {
   userId: number
   userName: string

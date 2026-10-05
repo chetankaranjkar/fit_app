@@ -30,13 +30,26 @@ namespace GymManagement.API.Controllers
             [FromQuery] DateTime? fromDate = null,
             [FromQuery] DateTime? toDate = null,
             [FromQuery] string? sortBy = null,
-            [FromQuery] string? sortDir = null)
+            [FromQuery] string? sortDir = null,
+            [FromQuery] string? status = null,
+            [FromQuery] int lateThresholdMinutes = 15)
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
             var result = await _attendanceLogService.GetPagedAsync(
-                safePage, safePageSize, search, fromDate, toDate, sortBy, sortDir);
+                safePage, safePageSize, search, fromDate, toDate, sortBy, sortDir, status, lateThresholdMinutes);
             return Ok(ApiPagedResponse<AttendanceLogDto>.From(result));
+        }
+
+        /// <summary>Full-range totals for the attendance dashboard. Not limited to the current page.</summary>
+        [HttpGet("summary")]
+        [HasPermission(PermissionCodes.VIEW_ATTENDANCE)]
+        public async Task<ActionResult<AttendanceRangeSummaryDto>> GetSummary(
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null)
+        {
+            var summary = await _attendanceLogService.GetRangeSummaryAsync(fromDate, toDate);
+            return Ok(summary);
         }
 
         [HttpGet]

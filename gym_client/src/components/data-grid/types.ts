@@ -11,6 +11,8 @@ export type DataGridColumnDef<T> = {
   maxWidth?: number
   /** Pin as first sticky column */
   sticky?: boolean
+  /** Pin to the right edge while the grid scrolls horizontally */
+  stickyEnd?: boolean
   sortable?: boolean
   filterable?: boolean
   /** Hide below breakpoint (horizontal scroll still available) */

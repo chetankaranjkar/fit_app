@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using GymManagement.Core.Attendance;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
@@ -32,30 +33,22 @@ namespace GymManagement.Infrastructure.Services
             DateTime? fromDate = null,
             DateTime? toDate = null,
             string? sortBy = null,
-            string? sortDir = null)
+            string? sortDir = null,
+            string? status = null,
+            int lateThresholdMinutes = AttendanceLateRules.DefaultLateThresholdMinutes)
         {
             var (safePage, safePageSize) = PagedQueryHelper.Normalize(page, pageSize);
-            var trimmedSearch = search?.Trim();
-            var likeSearch = string.IsNullOrWhiteSpace(trimmedSearch) ? null : $"%{trimmedSearch}%";
 
-            // EXPLAIN ANALYZE: filter on AttendanceDate (indexed) then join Users for name search.
-            IQueryable<AttendanceLog> query = _context.AttendanceLogs.AsNoTracking();
-
-            if (fromDate.HasValue)
-                query = query.Where(a => a.AttendanceDate >= fromDate.Value.Date);
-            if (toDate.HasValue)
-                query = query.Where(a => a.AttendanceDate <= toDate.Value.Date);
-
-            if (!string.IsNullOrWhiteSpace(likeSearch))
-            {
-                query = query.Where(a =>
-                    a.UserId.HasValue
-                    && _context.Users.Any(u =>
-                        u.Id == a.UserId
-                        && (EF.Functions.Like(u.FirstName, likeSearch)
-                            || EF.Functions.Like(u.LastName, likeSearch)
-                            || EF.Functions.Like(u.Phone ?? string.Empty, likeSearch))));
-            }
+            // EXPLAIN ANALYZE: filter on AttendanceDate (indexed), then status, then page.
+            var query = AttendanceLogListQuery.Apply(
+                _context.AttendanceLogs.AsNoTracking(),
+                _context.Users,
+                _context.UserSchedules,
+                fromDate,
+                toDate,
+                search,
+                status,
+                lateThresholdMinutes);
 
             var isAsc = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
             query = (sortBy ?? "checkin").Trim().ToLowerInvariant() switch
@@ -73,6 +66,29 @@ namespace GymManagement.Infrastructure.Services
             var items = (await MapAttendanceLogsToDtoAsync(pageLogs)).ToList();
 
             return PagedQueryHelper.ToResult(items, totalCount, safePage, safePageSize);
+        }
+
+        public async Task<AttendanceRangeSummaryDto> GetRangeSummaryAsync(DateTime? fromDate, DateTime? toDate)
+        {
+            var query = AttendanceLogListQuery.Apply(
+                _context.AttendanceLogs.AsNoTracking(),
+                _context.Users,
+                _context.UserSchedules,
+                fromDate,
+                toDate,
+                search: null,
+                status: null,
+                lateThresholdMinutes: AttendanceLateRules.DefaultLateThresholdMinutes);
+
+            var totalVisits = await query.CountAsync();
+            var activeVisits = await query.CountAsync(a => a.CheckOutTime == null);
+            var uniqueMembers = await query
+                .Where(a => a.UserId != null)
+                .Select(a => a.UserId!.Value)
+                .Distinct()
+                .CountAsync();
+
+            return AttendanceRangeSummaryDto.FromCounts(totalVisits, activeVisits, uniqueMembers);
         }
 
         public async Task<IEnumerable<AttendanceLogDto>> GetAllAttendanceLogsAsync()
@@ -147,8 +163,8 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<AttendanceLogDto> CheckInAsync(CheckInDto checkInDto)
         {
-            var today = DateTime.UtcNow.Date;
             var checkInTime = DateTime.UtcNow;
+            var today = GymCalendar.AttendanceDateFromUtc(checkInTime);
 
             if (checkInDto.UserId <= 0)
                 throw new BadRequestException("UserId must be provided for check-in.");
@@ -361,30 +377,32 @@ namespace GymManagement.Infrastructure.Services
                 .ToList();
             var users = (await _unitOfWork.Users.FindAsync(u => userIds.Contains(u.Id))).ToDictionary(u => u.Id);
 
+            var startsByUser = schedules
+                .GroupBy(s => s.UserId)
+                .ToDictionary(g => g.Key, g => g.Select(s => s.StartTime).ToList());
             var result = new List<AttendanceAnomalyDto>();
 
             foreach (var log in logs.Where(x => x.UserId.HasValue))
             {
                 var userId = log.UserId!.Value;
-                var schedule = schedules.Where(s => s.UserId == userId).OrderBy(s => s.StartTime).FirstOrDefault();
-                if (schedule == null) continue;
+                if (!startsByUser.TryGetValue(userId, out var starts))
+                    continue;
 
-                var checkInLocal = log.CheckInTime;
-                var scheduledAt = day.Add(schedule.StartTime);
-                var lateBy = (int)(checkInLocal - scheduledAt).TotalMinutes;
-                if (lateBy > lateThresholdMinutes)
+                var earliest = AttendanceLateRules.EarliestStart(starts);
+                if (!AttendanceLateRules.IsLateVisit(log.CheckInTime, log.AttendanceDate, earliest, lateThresholdMinutes))
+                    continue;
+
+                var lateBy = AttendanceLateRules.LateByMinutes(log.CheckInTime, log.AttendanceDate, earliest!.Value);
+                result.Add(new AttendanceAnomalyDto
                 {
-                    result.Add(new AttendanceAnomalyDto
-                    {
-                        UserId = userId,
-                        UserName = users.TryGetValue(userId, out var u) ? $"{u.FirstName} {u.LastName}".Trim() : "Unknown",
-                        AttendanceDate = day,
-                        Type = "late",
-                        Message = $"Checked in {lateBy} minutes late.",
-                        AttendanceLogId = log.Id,
-                        LateByMinutes = lateBy
-                    });
-                }
+                    UserId = userId,
+                    UserName = users.TryGetValue(userId, out var u) ? $"{u.FirstName} {u.LastName}".Trim() : "Unknown",
+                    AttendanceDate = log.AttendanceDate.Date,
+                    Type = "late",
+                    Message = $"Checked in {lateBy} minutes late.",
+                    AttendanceLogId = log.Id,
+                    LateByMinutes = lateBy
+                });
             }
 
             var presentUserIds = logs.Where(x => x.UserId.HasValue).Select(x => x.UserId!.Value).ToHashSet();

@@ -36,7 +36,8 @@ New or extended `GET .../paged` endpoints return a standard envelope:
 
 | Endpoint | Service | Query params (typical) |
 |----------|---------|-------------------------|
-| `GET /api/AttendanceLogs/paged` | `AttendanceLogService` | `page`, `pageSize`, `search`, `fromDate`, `toDate`, `sortBy`, `sortDir` |
+| `GET /api/AttendanceLogs/paged` | `AttendanceLogService` | `page`, `pageSize`, `search`, `fromDate`, `toDate`, `sortBy`, `sortDir`, `status` (`checked-in`, `checked-out`, `late` — applied before paging) |
+| `GET /api/AttendanceLogs/summary` | `AttendanceLogService` | `fromDate`, `toDate` — full-range totals (not the current page) |
 | `GET /api/Payments/paged` | `PaymentService` | `page`, `pageSize`, `search`, `fromDate`, `toDate`, `sortBy`, `sortDir` |
 | `GET /api/Invoices/paged` | `InvoiceService` | Same pattern (list without heavy line-item graphs) |
 | `GET /api/Trainers/paged` | `TrainerService` | `page`, `pageSize`, `search`, `sortBy`, `sortDir` |

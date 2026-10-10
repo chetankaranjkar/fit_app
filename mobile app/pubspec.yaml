@@ -70,6 +70,7 @@ dependencies:
   # Structured offline workout persistence
   hive: ^2.2.3
   hive_flutter: ^1.1.0
+  health: ^13.1.4
 
 dev_dependencies:
   flutter_test:

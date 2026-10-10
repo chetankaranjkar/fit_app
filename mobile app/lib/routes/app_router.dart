@@ -22,6 +22,7 @@ import '../features/profile/help_support_screen.dart';
 import '../features/profile/in_app_web_screen.dart';
 import '../features/profile/privacy_screen.dart';
 import '../features/profile/security_devices_screen.dart';
+import '../features/phone_health/phone_health_screen.dart';
 import '../features/progress/progress_screen.dart';
 import '../features/scanner/qr_scanner_screen.dart';
 import '../features/shell/app_shell.dart';
@@ -123,6 +124,11 @@ final appRouter = GoRouter(
       path: '/progress/transformation',
       parentNavigatorKey: _rootNavKey,
       pageBuilder: (_, __) => _slidePage(const TransformationTrackerScreen()),
+    ),
+    GoRoute(
+      path: '/progress/google-fit',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (_, __) => _slidePage(const PhoneHealthScreen()),
     ),
     GoRoute(
       path: '/profile/change-password',

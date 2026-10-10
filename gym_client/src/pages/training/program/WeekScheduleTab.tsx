@@ -16,15 +16,16 @@ import type { ProgramDayDto, ProgramWeekDto, SaveProgramStructureDto, WorkoutPla
 import { buildDefaultWeek } from './buildDefaultWeek'
 import { DayExercisePanel } from './DayExercisePanel'
 import { nextTempId } from './tempIds'
+import { cleanScheduleText } from './scheduleText'
 
 export function toStructurePayload(weeks: ProgramWeekDto[]): SaveProgramStructureDto {
   return {
     weeks: weeks.map((w) => ({
       weekNumber: w.weekNumber,
-      name: w.name,
+      name: w.name ? cleanScheduleText(w.name) : w.name,
       days: w.days.map((d) => ({
         dayNumber: d.dayNumber,
-        name: d.dayName,
+        name: cleanScheduleText(d.dayName),
         focusArea: d.focusArea,
         durationMinutes: d.durationMinutes,
         notes: d.notes,
@@ -90,16 +91,16 @@ function SortableDayRow({
         ⋮⋮
       </button>
       <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
-        <p className="text-sm font-medium text-white">{label}</p>
-        <p className="truncate text-xs text-slate-400">{subtitle}</p>
+        <p className="text-sm font-semibold text-[var(--dashboard-text)] [overflow-wrap:anywhere]">{cleanScheduleText(label)}</p>
+        <p className="mt-1 text-xs text-[var(--dashboard-muted)] [overflow-wrap:anywhere]">{subtitle}</p>
       </button>
       {!isRest && exerciseCount > 0 ? (
-        <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-200">
+        <span className="shrink-0 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-200">
           {exerciseCount} ex
         </span>
       ) : null}
       {isRest && (
-        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+        <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
           Rest
         </span>
       )}
@@ -271,7 +272,11 @@ export function WeekScheduleTab({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-surface)] p-4">
+        <div className="mr-auto">
+          <h2 className="text-base font-semibold text-[var(--dashboard-text)]">Weekly schedule</h2>
+          <p className="mt-1 text-xs text-[var(--dashboard-muted)]">Choose a day, build its workout, then save your changes.</p>
+        </div>
         <Button type="button" variant="soft" size="sm" onClick={aiSuggest}>
           AI suggest split
         </Button>
@@ -284,7 +289,6 @@ export function WeekScheduleTab({
         <Button
           type="button"
           size="sm"
-          className="ml-auto"
           isLoading={isSaving}
           onClick={() => void Promise.resolve(onSave(toStructurePayload(weeks)))}
         >
@@ -317,18 +321,18 @@ export function WeekScheduleTab({
       ) : null}
 
       {activeWeek ? (
-        <section className="glass-card rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+        <section className="min-w-0 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-muted)] p-3 sm:p-5">
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-white">
               Week {activeWeek.weekNumber}
-              {activeWeek.name ? <span className="text-slate-400"> — {activeWeek.name}</span> : null}
+              {activeWeek.name && activeWeek.name !== `Week ${activeWeek.weekNumber}` ? <span className="text-slate-400"> — {cleanScheduleText(activeWeek.name)}</span> : null}
             </h3>
             <p className="text-xs text-slate-500">
               Drag to reorder display order. Click a day to edit its exercise list.
             </p>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-[minmax(240px,320px)_1fr]">
+          <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -340,7 +344,7 @@ export function WeekScheduleTab({
               >
                 <div className="space-y-2">
                   {activeWeek.days.map((d) => (
-                    <div key={d.id} className="flex flex-col gap-2">
+                    <div key={d.id}>
                       <SortableDayRow
                         id={`w${activeWeekIndex}-d-${d.id}`}
                         label={d.dayName}
@@ -354,16 +358,6 @@ export function WeekScheduleTab({
                         isSelected={d.id === activeDayId}
                         onSelect={() => setActiveDayId(d.id)}
                       />
-                      <div className="flex justify-end gap-2 pl-10 sm:pl-12">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleRest(activeWeekIndex, d.id)}
-                        >
-                          {d.isRestDay ? 'Mark training' : 'Mark rest'}
-                        </Button>
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -371,19 +365,31 @@ export function WeekScheduleTab({
             </DndContext>
 
             {activeDay ? (
-              <div className="space-y-3">
-                <Input
-                  label="Focus area"
-                  value={activeDay.focusArea ?? ''}
-                  onChange={(e) =>
-                    updateDay(activeWeekIndex, activeDay.id, {
-                      ...activeDay,
-                      focusArea: e.target.value || null,
-                    })
-                  }
-                  placeholder="e.g. Chest & triceps"
-                />
+              <div className="min-w-0 space-y-4">
+                <div className="rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-surface)] p-4">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-[var(--dashboard-text)]">Day settings</p>
+                    <Button type="button" variant="soft" size="sm" onClick={() => toggleRest(activeWeekIndex, activeDay.id)}>
+                      {activeDay.isRestDay ? 'Mark as training day' : 'Mark as rest day'}
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Input label="Day name" value={cleanScheduleText(activeDay.dayName)} onChange={(event) => updateDay(activeWeekIndex, activeDay.id, { ...activeDay, dayName: event.target.value })} />
+                    <Input
+                      label="Focus area"
+                      value={activeDay.focusArea ?? ''}
+                      onChange={(e) =>
+                        updateDay(activeWeekIndex, activeDay.id, {
+                          ...activeDay,
+                          focusArea: e.target.value || null,
+                        })
+                      }
+                      placeholder="e.g. Chest & triceps"
+                    />
+                  </div>
+                </div>
                 <DayExercisePanel
+                  key={`${activeWeek.id}-${activeDay.id}-${activeDay.isRestDay}`}
                   day={activeDay}
                   exerciseLibrary={exerciseLibrary}
                   libraryError={libraryError}

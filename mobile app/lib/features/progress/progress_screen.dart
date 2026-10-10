@@ -137,6 +137,55 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: AppSpacing.md),
+                      GlassCard(
+                        tint: AppColors.neonBlue.withValues(alpha: 0.07),
+                        child: PressScale(
+                          onTap: () => context.push('/progress/google-fit'),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(AppRadius.md),
+                                  color: AppColors.neonBlue.withValues(alpha: 0.15),
+                                ),
+                                child: const Icon(
+                                  CupertinoIcons.heart_fill,
+                                  color: AppColors.neonBlue,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Google Fit',
+                                      style: AppType.headline.copyWith(
+                                        color: AppColors.resolveText(context),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Steps, weight, and workouts from Health Connect',
+                                      style: AppType.caption.copyWith(
+                                        color: AppColors.resolveTextSecondary(context),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                CupertinoIcons.chevron_right,
+                                color: AppColors.resolveTextSecondary(context),
+                                size: 18,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: AppSpacing.lg),
                       attendance.when(
                         loading: () => const SkeletonBlock(height: 100),

@@ -69,6 +69,57 @@ async function signInAs(
 }
 
 test.describe('Training journey @training-journey', () => {
+  test('schedule reviews additions, cancels safely, and repairs legacy day labels', async ({ page }) => {
+    const program = {
+      id: 11, name: 'Schedule review', workoutType: 'Strength', difficultyLevel: 'Beginner',
+      duration: 60, isActive: true, isPublic: false, exercises: [], warmups: [], stretches: [],
+      weeks: [{ id: 1, weekNumber: 1, name: 'Week 1', days: [{
+        id: 10, weekId: 1, dayNumber: 1, dayName: 'Monday \u00e2\u20ac\u201d Upper body',
+        focusArea: 'Chest, back, shoulders, arms', isRestDay: false, orderIndex: 1, exercises: [],
+      }] }],
+    }
+    await signInAs(page, { appRoles: ['ADMIN'], permissions: ADMIN_PERMISSIONS }, (pathname) => {
+      if (pathname === '/api/Programs/11') return { status: 200, body: JSON.stringify(program) }
+      if (pathname.includes('/Exercises/paged')) return { status: 200, body: JSON.stringify({
+        items: [{ id: 9, name: 'Incline Dumbbell Press', bodyPartName: 'Chest' }], totalCount: 1,
+      }) }
+      return null
+    })
+    let saved: { weeks: { days: { name: string; exercises: { sets: number; reps: number; restBetweenSets: number }[] }[] }[] } | undefined
+    await page.route('**/api/Programs/11/structure', (route) => {
+      saved = route.request().postDataJSON()
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(program) })
+    })
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto('/dashboard/training/programs/11?tab=schedule')
+    await expect(page.getByLabel('Day name')).toHaveValue('Monday — Upper body')
+    await page.getByRole('button', { name: 'Add Incline Dumbbell Press', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Add exercise' })
+    await expect(dialog).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Workout exercises (0)' })).toBeVisible()
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Workout exercises (0)' })).toBeVisible()
+    await page.getByRole('button', { name: 'Add Incline Dumbbell Press', exact: true }).click()
+    await dialog.getByLabel('Sets', { exact: true }).fill('4')
+    await dialog.getByLabel('Reps', { exact: true }).fill('12')
+    await dialog.getByLabel('Rest (s)', { exact: true }).fill('90')
+    await dialog.getByRole('button', { name: 'Confirm addition' }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Workout exercises (1)' })).toBeVisible()
+    await page.getByRole('heading', { name: 'Workout exercises (1)' }).scrollIntoViewIfNeeded()
+    await page.screenshot({ path: '../.tmp/schedule-redesign-desktop.png' })
+    await page.getByRole('button', { name: 'Save schedule', exact: true }).click()
+    await expect.poll(() => saved).toBeTruthy()
+    expect(saved!.weeks[0].days[0].name).toBe('Monday — Upper body')
+    expect(saved!.weeks[0].days[0].exercises[0]).toMatchObject({ sets: 4, reps: 12, restBetweenSets: 90 })
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(page.getByLabel('Day name')).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
+    await page.getByRole('heading', { name: 'Exercise library', exact: true }).scrollIntoViewIfNeeded()
+    await page.screenshot({ path: '../.tmp/schedule-redesign-mobile.png' })
+  })
+
   test('admin training nav is Plan → Assign → Monitor → Review then catalog', async ({ page }) => {
     await signInAs(page, { appRoles: ['ADMIN'], permissions: ADMIN_PERMISSIONS })
     await page.goto('/dashboard/profile', { waitUntil: 'domcontentloaded' })

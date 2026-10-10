@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-10-05 (staff attendance dashboard layout: compact range summary, one check-in action, inferred no-shows).
+**Last updated:** 2026-10-10 (weekly schedule redesign, exercise confirmation, and legacy day-label punctuation repair).
 
 **Section map:** [README.md](./README.md#application_flows-section-map). Scheduled work / evidence labels: [PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md).
 
@@ -540,6 +540,7 @@ Staff and trainers work through one coaching path. Catalog administration and au
 - **Programs** = gym templates in the plan library. **Workout plans** in APIs are the same `WorkoutPlans` rows (program or personal).
 - **Studio** (`/dashboard/training/workout-studio`) and **plan builder** (`/dashboard/training/workout-plan-builder`) redirect to **programs**; they are leftover canvases, not a second assignment path.
 - **Builders** in production: program wizard (`programs/new`) and program detail **Weekly Schedule** (`WeekScheduleTab` / `DayExercisePanel`).
+- **Weekly Schedule editor:** compact day navigation sits beside editable day settings and the exercise library/workout list. Rest/training changes apply to the selected day. **Add** opens a shared confirmation dialog to review sets, reps, and rest; **Cancel** makes no change, and **Confirm addition** adds to the draft only. **Save schedule** persists the draft. Known legacy garbled dash sequences in day/week names are repaired for display and in the structure save payload; other text is preserved.
 - **Assignments** = `POST` user schedules (eligibility: `MemberTrainingEligibilityGuard`). Coach assignment remains `PUT Users` `trainerId` / `UserInstructorService`.
 - **Monitoring** = admin live board (`UsersAccess` or ADMIN). Trainers use **Review** for their clients.
 - **Reviews** = completed/live sessions + health-summary on assign and member workout screens.

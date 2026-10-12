@@ -11,6 +11,7 @@ import '../workout_sync/recovery/session_recovery_service.dart';
 import '../workout_sync/sync/session_autosave_service.dart';
 import '../workout_sync/sync/sync_manager.dart';
 import '../workout_sync/sync/workout_sync_log.dart';
+import '../features/workouts/logic/today_workout_gate.dart';
 import 'workout_pending_queue.dart';
 import 'workout_template_cache.dart';
 import 'workout_tracking_service.dart';
@@ -25,6 +26,7 @@ class WorkoutTrackingRepository {
   final _recovery = SessionRecoveryService.instance;
   final _sync = SyncManager.instance;
   final _templates = WorkoutTemplateCache.instance;
+  final _starts = InFlightGate();
 
   Future<void> _ensureReady() async {
     await WorkoutSyncBootstrap.ensureStarted();
@@ -54,24 +56,145 @@ class WorkoutTrackingRepository {
     return (await WorkoutPendingQueue.instance.pendingCount()) > 0;
   }
 
-  /// Recovery order: local → server → start (never if active exists).
+  /// Recovery order: today's saved session → live session → start.
+  /// A completed workout for today is not started again unless [startAnother] is set.
   Future<ActiveWorkoutSession> resolveOrStart({
     required int memberId,
     required int workoutPlanId,
+    bool startAnother = false,
   }) async {
     await _ensureReady();
     await _bindMember(memberId);
-    final restored = await _recovery.restoreWorkoutSession(memberId);
-    if (restored != null) return restored.session;
+    if (startAnother) {
+      final local = await _offline.loadSnapshot(memberId: memberId);
+      if (TodayWorkoutGate.blocksAnotherUntilSynced(local?.session, memberId)) {
+        throw const ApiException('Sync the saved workout before starting another session.');
+      }
+    } else {
+      final decision = await resolveToday(memberId: memberId, workoutPlanId: workoutPlanId);
+      if (decision.action == TodayWorkoutAction.viewCompleted) {
+        throw const ApiException('WORKOUT_ALREADY_COMPLETED_TODAY', statusCode: 409);
+      }
+      if (decision.action == TodayWorkoutAction.resume && decision.session != null) {
+        return decision.session!;
+      }
+      if (decision.action == TodayWorkoutAction.otherPlanInProgress) {
+        throw const ApiException(
+          'Another workout is still in progress. Finish that session before logging this plan.',
+        );
+      }
+      if (decision.action == TodayWorkoutAction.syncBeforeAnother) {
+        throw const ApiException('Sync the saved workout before starting another session.');
+      }
+    }
+    return start(
+      memberId: memberId,
+      workoutPlanId: workoutPlanId,
+      startAnother: startAnother,
+    );
+  }
+
+  Future<TodayWorkoutDecision> resolveToday({
+    required int memberId,
+    int? workoutPlanId,
+    bool startAnother = false,
+    DateTime? now,
+  }) async {
+    await _ensureReady();
+    await _bindMember(memberId);
+    final local = await _offline.loadSnapshot(memberId: memberId);
+    ActiveWorkoutSession? serverActive;
+    ActiveWorkoutSession? serverCompleted;
+    var serverReachable = true;
+    try {
+      final today = await _api.getToday(memberId: memberId, workoutPlanId: workoutPlanId);
+      if (today.state == 'inProgress') serverActive = today.session;
+      if (today.state == 'completed') serverCompleted = today.session;
+    } catch (e) {
+      if (!_isOfflineError(e)) rethrow;
+      serverReachable = false;
+      final restored = await _recovery.restoreWorkoutSession(memberId);
+      serverActive = restored?.session;
+    }
+    return TodayWorkoutGate.decide(
+      memberId: memberId,
+      workoutPlanId: workoutPlanId,
+      localSession: local?.session,
+      serverActive: serverActive,
+      serverCompleted: serverCompleted,
+      now: now ?? DateTime.now(),
+      startAnother: startAnother,
+      serverReachable: serverReachable,
+    );
+  }
+
+  Future<ActiveWorkoutSession> start({
+    required int memberId,
+    required int workoutPlanId,
+    bool startAnother = false,
+  }) {
+    return _starts.run(
+      '$memberId|$workoutPlanId|$startAnother',
+      () => _startOnce(
+        memberId: memberId,
+        workoutPlanId: workoutPlanId,
+        startAnother: startAnother,
+      ),
+    );
+  }
+
+  Future<ActiveWorkoutSession> _startOnce({
+    required int memberId,
+    required int workoutPlanId,
+    required bool startAnother,
+  }) async {
+    await _ensureReady();
+    await _bindMember(memberId);
+    if (!startAnother) {
+      final local = await _offline.loadSnapshot(memberId: memberId);
+      final blocked = TodayWorkoutGate.decide(
+        memberId: memberId,
+        workoutPlanId: workoutPlanId,
+        localSession: local?.session,
+        now: DateTime.now(),
+      );
+      if (blocked.action == TodayWorkoutAction.viewCompleted) {
+        throw const ApiException('WORKOUT_ALREADY_COMPLETED_TODAY', statusCode: 409);
+      }
+    }
+    final existing = await _recovery.restoreActiveSession(memberId);
+    if (existing != null &&
+        (existing.workoutPlanId == null || existing.workoutPlanId == workoutPlanId)) {
+      return existing;
+    }
 
     try {
-      return await start(memberId: memberId, workoutPlanId: workoutPlanId);
+      final session = await _api.start(
+        memberId: memberId,
+        workoutPlanId: workoutPlanId,
+        startAnotherSession: startAnother,
+      );
+      await _mirrorSnapshot(session);
+      return session;
     } on ApiException catch (e) {
+      if (e.statusCode == 409 && e.message.contains('WORKOUT_ALREADY_COMPLETED_TODAY')) {
+        rethrow;
+      }
       if (e.statusCode == 409) {
         final active = await _recovery.restoreActiveSession(memberId);
         if (active != null) return active;
       }
-      rethrow;
+      if (!_isOfflineError(e)) rethrow;
+      if (startAnother) {
+        throw const ApiException('Sync the saved workout before starting another session.');
+      }
+      return _startOffline(memberId: memberId, workoutPlanId: workoutPlanId);
+    } catch (e) {
+      if (!_isOfflineError(e)) rethrow;
+      if (startAnother) {
+        throw const ApiException('Sync the saved workout before starting another session.');
+      }
+      return _startOffline(memberId: memberId, workoutPlanId: workoutPlanId);
     }
   }
 
@@ -79,28 +202,6 @@ class WorkoutTrackingRepository {
     await _ensureReady();
     await _bindMember(memberId);
     return _recovery.restoreWorkoutSession(memberId);
-  }
-
-  Future<ActiveWorkoutSession> start({
-    required int memberId,
-    required int workoutPlanId,
-  }) async {
-    await _ensureReady();
-    await _bindMember(memberId);
-    final existing = await _recovery.restoreActiveSession(memberId);
-    if (existing != null) return existing;
-
-    try {
-      final session = await _api.start(
-        memberId: memberId,
-        workoutPlanId: workoutPlanId,
-      );
-      await _mirrorSnapshot(session);
-      return session;
-    } catch (e) {
-      if (!_isOfflineError(e)) rethrow;
-      return _startOffline(memberId: memberId, workoutPlanId: workoutPlanId);
-    }
   }
 
   Future<ActiveWorkoutSession?> getActive(int memberId) async {

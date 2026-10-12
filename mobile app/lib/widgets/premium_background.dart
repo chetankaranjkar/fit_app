@@ -1,7 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
-import '../animations/app_motion.dart';
 import '../theme/app_colors.dart';
 
 class PremiumBackground extends StatelessWidget {
@@ -54,14 +52,7 @@ class _AmbientBlob extends StatelessWidget {
         ),
       ),
     );
-    return IgnorePointer(
-      child: TickerMode.of(context)
-          ? blob
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .moveY(begin: -10, end: 12, duration: AppFx.ambient, curve: AppFx.ambientCurve)
-              .scaleXY(begin: 0.95, end: 1.04, duration: AppFx.ambient, curve: AppFx.ambientCurve)
-          : blob,
-    );
+    return IgnorePointer(child: blob);
   }
 }
 

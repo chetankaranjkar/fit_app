@@ -7,6 +7,7 @@ import '../../models/me_models.dart';
 import '../../providers/me_providers.dart';
 import '../../providers/sync_status_provider.dart';
 import '../../providers/workout_tracking_providers.dart';
+import '../workouts/logic/today_workout_gate.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -40,11 +41,17 @@ class HomeTodayActions extends ConsumerWidget {
     final plansAsync = ref.watch(workoutPlansProvider);
     final templateAsync = ref.watch(todayAssignedTemplateProvider);
     final activeAsync = ref.watch(activeWorkoutProvider);
+    final todayAsync = ref.watch(todayWorkoutProvider);
+    ref.watch(workoutSyncRefreshProvider);
 
     final plans = plansAsync.valueOrNull ?? const <MeWorkoutPlanSummary>[];
     final templateFailed = templateAsync.hasError;
     final template = templateAsync.valueOrNull;
-    final active = activeAsync.valueOrNull;
+    final decision = todayAsync.valueOrNull;
+    final active = decision?.action == TodayWorkoutAction.resume
+        ? decision?.session
+        : activeAsync.valueOrNull;
+    final completed = decision?.action == TodayWorkoutAction.viewCompleted ? decision?.session : null;
 
     final actions = resolveHomePrimaryActions(
       membership: membership,
@@ -53,6 +60,7 @@ class HomeTodayActions extends ConsumerWidget {
       plans: plans,
       template: template,
       activeSession: active,
+      completedToday: completed,
       templateLoadFailed: templateFailed,
       offline: offline,
       usingCachedData: dashboard?.isStale == true || offline,
@@ -143,6 +151,12 @@ class _WorkoutCard extends ConsumerWidget {
       onTap: !action.canLaunch
           ? null
           : () async {
+              if (action.kind == HomeWorkoutKind.completed) {
+                final plan = action.plan;
+                if (plan == null) return;
+                context.push('/workouts/${plan.id}', extra: plan);
+                return;
+              }
               if (action.kind == HomeWorkoutKind.resume && action.session != null) {
                 context.push('/workouts/live', extra: action.session);
                 return;

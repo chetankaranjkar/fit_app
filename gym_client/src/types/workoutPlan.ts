@@ -176,3 +176,22 @@ export interface SaveProgramStructureDto {
 export interface CloneWorkoutPlanDto {
   name?: string | null
 }
+
+/** Basic program roster row. No contact, billing, or health fields. */
+export interface ProgramRosterMember {
+  userId: number
+  memberName: string
+  coachLabel: string
+  assignmentStartedAt: string
+  assignmentEndedAt?: string | null
+  canOpenProfile: boolean
+}
+
+export interface ProgramAssignedMembers {
+  items: ProgramRosterMember[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+  profileAccessLimited: boolean
+}

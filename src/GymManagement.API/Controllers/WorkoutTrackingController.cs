@@ -53,6 +53,28 @@ public sealed class WorkoutTrackingController : ControllerBase
         }
     }
 
+    [HttpGet("today/{memberId:int}")]
+    [ProducesResponseType(typeof(TodayWorkoutStateDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<TodayWorkoutStateDto>> GetToday(
+        int memberId,
+        [FromQuery] int? workoutPlanId,
+        [FromQuery] int? utcOffsetMinutes,
+        CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _tracking.GetTodayAsync(memberId, workoutPlanId, utcOffsetMinutes, ResolveUserId(), ct));
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
     [HttpGet("active/{memberId:int}")]
     [ProducesResponseType(typeof(ActiveWorkoutActiveResponseDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ActiveWorkoutActiveResponseDto>> GetActive(int memberId, CancellationToken ct)

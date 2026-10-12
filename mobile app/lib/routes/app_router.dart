@@ -24,6 +24,7 @@ import '../features/profile/privacy_screen.dart';
 import '../features/profile/security_devices_screen.dart';
 import '../features/phone_health/phone_health_screen.dart';
 import '../features/progress/progress_screen.dart';
+import '../features/progress/workout_history_detail_screen.dart';
 import '../features/scanner/qr_scanner_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/splash/splash_screen.dart';
@@ -119,6 +120,15 @@ final appRouter = GoRouter(
       path: '/membership',
       parentNavigatorKey: _rootNavKey,
       pageBuilder: (_, __) => _slidePage(const MembershipScreen()),
+    ),
+    GoRoute(
+      path: '/progress/session',
+      parentNavigatorKey: _rootNavKey,
+      pageBuilder: (context, state) {
+        final extra = state.extra;
+        final id = extra is int ? extra : int.tryParse('$extra') ?? 0;
+        return _slidePage(WorkoutHistoryDetailScreen(sessionId: id));
+      },
     ),
     GoRoute(
       path: '/progress/transformation',

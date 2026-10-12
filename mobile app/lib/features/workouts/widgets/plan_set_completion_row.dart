@@ -16,6 +16,8 @@ class PlanSetCompletionRow extends StatefulWidget {
     required this.completed,
     required this.saving,
     required this.onCompleted,
+    this.lockedReason,
+    this.readOnly = false,
   });
 
   final int setNumber;
@@ -24,6 +26,9 @@ class PlanSetCompletionRow extends StatefulWidget {
   final bool completed;
   final bool saving;
   final Future<void> Function(int reps, double weight) onCompleted;
+  /// When set, weight and reps stay editable, but Log set is blocked.
+  final String? lockedReason;
+  final bool readOnly;
 
   @override
   State<PlanSetCompletionRow> createState() => _PlanSetCompletionRowState();
@@ -73,7 +78,7 @@ class _PlanSetCompletionRowState extends State<PlanSetCompletionRow> {
                 child: _Field(
                   label: 'Weight (kg)',
                   controller: widget.weightController,
-                  enabled: !widget.completed && !widget.saving,
+                  enabled: !widget.completed && !widget.saving && !widget.readOnly,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) => _validate(),
                 ),
@@ -83,14 +88,20 @@ class _PlanSetCompletionRowState extends State<PlanSetCompletionRow> {
                 child: _Field(
                   label: 'Reps',
                   controller: widget.repsController,
-                  enabled: !widget.completed && !widget.saving,
+                  enabled: !widget.completed && !widget.saving && !widget.readOnly,
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _validate(),
                 ),
               ),
             ],
           ),
-          if (!widget.completed) ...[
+          if (!widget.completed && widget.lockedReason != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              widget.lockedReason!,
+              style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+            ),
+          ] else if (!widget.completed) ...[
             const SizedBox(height: AppSpacing.sm),
             SwipeToCompleteSetWidget(
               enabled: !widget.saving,

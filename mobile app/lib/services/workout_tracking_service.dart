@@ -22,6 +22,7 @@ class WorkoutTrackingService {
   Future<ActiveWorkoutSession> start({
     required int memberId,
     required int workoutPlanId,
+    bool startAnotherSession = false,
   }) async {
     final offset = DateTime.now().timeZoneOffset.inMinutes;
     final res = await ApiClient.instance.post<Map<String, dynamic>>(
@@ -30,9 +31,32 @@ class WorkoutTrackingService {
         'memberId': memberId,
         'workoutPlanId': workoutPlanId,
         'utcOffsetMinutes': offset,
+        'startAnotherSession': startAnotherSession,
       },
     );
     return ActiveWorkoutSession.fromJson(res.data ?? {});
+  }
+
+  Future<TodayWorkoutState> getToday({
+    required int memberId,
+    int? workoutPlanId,
+  }) async {
+    final offset = DateTime.now().timeZoneOffset.inMinutes;
+    final res = await ApiClient.instance.get<Map<String, dynamic>>(
+      '/workout/today/$memberId',
+      query: {
+        'utcOffsetMinutes': offset,
+        if (workoutPlanId != null) 'workoutPlanId': workoutPlanId,
+      },
+    );
+    return TodayWorkoutState.fromJson(res.data ?? {});
+  }
+
+  Future<WorkoutSessionDetail> getSessionDetail(int sessionId) async {
+    final res = await ApiClient.instance.get<Map<String, dynamic>>(
+      '/workout/session/$sessionId/detail',
+    );
+    return WorkoutSessionDetail.fromJson(res.data ?? {});
   }
 
   /// Returns null when no active session (404). Supports envelope + legacy flat JSON.

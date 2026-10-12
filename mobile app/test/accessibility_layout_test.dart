@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pulsefit/features/diet/diet_assigned_foods.dart';
 import 'package:pulsefit/features/home/home_today_actions.dart';
+import 'package:pulsefit/features/workouts/logic/today_workout_gate.dart';
 import 'package:pulsefit/models/me_models.dart';
 import 'package:pulsefit/models/online_payment_models.dart';
 import 'package:pulsefit/providers/me_providers.dart';
@@ -113,6 +114,10 @@ void main() {
           workoutPlansProvider.overrideWith((ref) async => const <MeWorkoutPlanSummary>[]),
           todayAssignedTemplateProvider.overrideWith((ref) async => null),
           activeWorkoutProvider.overrideWith((ref) async => null),
+          todayWorkoutProvider.overrideWith(
+            (ref) async => const TodayWorkoutDecision(action: TodayWorkoutAction.start),
+          ),
+          workoutSyncRefreshProvider.overrideWith((ref) {}),
           billingAccessProvider.overrideWith(
             (ref) async => const MeBillingAccess(accessBlocked: false, pendingAmount: 0),
           ),

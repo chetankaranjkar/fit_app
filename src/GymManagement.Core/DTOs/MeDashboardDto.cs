@@ -332,6 +332,20 @@ namespace GymManagement.Core.DTOs
         public DateTime SessionDateUtc { get; set; }
         public int? DurationMinutes { get; set; }
         public int SetsLogged { get; set; }
+        public int TotalSets { get; set; }
+        public decimal? RecordedVolume { get; set; }
+        public bool VolumeComplete { get; set; } = true;
+        public DateTime? WorkoutDate { get; set; }
+        public decimal? CompletionPercent { get; set; }
+    }
+
+    public sealed class MeWorkoutHistoryPageDto
+    {
+        public IReadOnlyList<MeWorkoutSessionSummaryDto> Sessions { get; set; } = Array.Empty<MeWorkoutSessionSummaryDto>();
+        public int TotalMatching { get; set; }
+        public int Returned { get; set; }
+        public bool Truncated { get; set; }
+        public int Take { get; set; }
     }
 
     /// <summary>Partial profile update from the mobile app (name, phone, optional photo URL).</summary>

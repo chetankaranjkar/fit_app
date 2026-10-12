@@ -1,5 +1,46 @@
 // Models for `/api/workout/*` live tracking endpoints.
 
+class TodayWorkoutState {
+  const TodayWorkoutState({required this.state, this.session});
+
+  final String state;
+  final ActiveWorkoutSession? session;
+
+  factory TodayWorkoutState.fromJson(Map<String, dynamic> json) {
+    final raw = json['session'];
+    return TodayWorkoutState(
+      state: json['state']?.toString() ?? 'none',
+      session: raw is Map ? ActiveWorkoutSession.fromJson(raw.cast<String, dynamic>()) : null,
+    );
+  }
+}
+
+class WorkoutSessionDetail {
+  const WorkoutSessionDetail({
+    required this.session,
+    required this.durationMinutes,
+    required this.completedExercises,
+    required this.totalVolume,
+  });
+
+  final ActiveWorkoutSession session;
+  final int durationMinutes;
+  final int completedExercises;
+  final double totalVolume;
+
+  factory WorkoutSessionDetail.fromJson(Map<String, dynamic> json) {
+    final raw = json['session'];
+    return WorkoutSessionDetail(
+      session: ActiveWorkoutSession.fromJson(
+        raw is Map ? raw.cast<String, dynamic>() : const {},
+      ),
+      durationMinutes: _int(json['durationMinutes']) ?? 0,
+      completedExercises: _int(json['completedExercises']) ?? 0,
+      totalVolume: _double(json['totalVolume']) ?? 0,
+    );
+  }
+}
+
 class ActiveWorkoutSession {
   final int sessionId;
   final int memberId;

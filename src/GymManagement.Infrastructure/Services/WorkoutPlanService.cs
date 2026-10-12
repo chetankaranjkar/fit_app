@@ -87,6 +87,7 @@ namespace GymManagement.Infrastructure.Services
             var stretchDtos = await ResolveEffectiveStretchesAsync(workoutPlan);
             var dto = await MapToDtoAsync(workoutPlan, instructor, exerciseDtos, warmupDtos, stretchDtos, instructorDict, userDict, includeWeeks: true);
             var schedules = await _unitOfWork.UserSchedules.FindAsync(s => s.WorkoutPlanId == id && s.IsActive);
+            // Distinct active users. GET /api/Programs/{id}/assigned-members uses the same current-assignment rule.
             dto.AssignedMembersCount = schedules.Select(s => s.UserId).Distinct().Count();
             var sessions = await _unitOfWork.WorkoutSessions.FindAsync(s => s.WorkoutPlanId == id);
             var sessionList = sessions.ToList();

@@ -6,6 +6,8 @@ public sealed class StartWorkoutRequestDto
     public int? WorkoutPlanId { get; set; }
     /// <summary>Client UTC offset in minutes for today's plan day filter.</summary>
     public int? UtcOffsetMinutes { get; set; }
+    /// <summary>When true, a workout already completed today does not block a new session.</summary>
+    public bool StartAnotherSession { get; set; }
 }
 
 public sealed class LogWorkoutSetRequestDto
@@ -43,6 +45,13 @@ public sealed class WorkoutSessionGroupDto
     public int ExerciseId { get; set; }
     public string ExerciseName { get; set; } = string.Empty;
     public IReadOnlyList<WorkoutSessionExerciseDto> Sets { get; set; } = Array.Empty<WorkoutSessionExerciseDto>();
+}
+
+public sealed class TodayWorkoutStateDto
+{
+    /// <summary>none | inProgress | completed</summary>
+    public string State { get; set; } = "none";
+    public ActiveWorkoutSessionDto? Session { get; set; }
 }
 
 public sealed class ActiveWorkoutSessionDto

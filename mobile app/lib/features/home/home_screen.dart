@@ -31,6 +31,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(workoutSyncRefreshProvider);
     final dashboard = ref.watch(dashboardProvider);
     final checkIn = ref.watch(checkInBannerProvider);
     final topPad = MediaQuery.paddingOf(context).top;

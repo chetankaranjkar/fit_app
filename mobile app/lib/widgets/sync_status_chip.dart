@@ -112,11 +112,11 @@ class _SyncChip extends StatelessWidget {
       case WorkoutSyncDisplayState.synced:
         return 'Synced';
       case WorkoutSyncDisplayState.pending:
-        return s.pendingCount > 0 ? 'Pending' : 'Pending';
+        return 'Saved on device — waiting to sync';
       case WorkoutSyncDisplayState.offline:
         return 'Offline';
       case WorkoutSyncDisplayState.failed:
-        return s.failedCount > 0 ? 'Sync failed — retry' : 'No server';
+        return 'Sync failed — retry';
     }
   }
 

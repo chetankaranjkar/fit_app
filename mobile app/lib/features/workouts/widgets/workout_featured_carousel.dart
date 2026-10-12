@@ -1,12 +1,15 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../models/me_models.dart';
+import '../../../providers/workout_tracking_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/fitness_text.dart';
 import '../../../widgets/press_scale.dart';
+import '../logic/today_workout_gate.dart';
 import '../workout_derived_metrics.dart';
 
 class WorkoutFeaturedCarousel extends StatefulWidget {
@@ -219,12 +222,22 @@ class _WorkoutFeaturedCarouselState extends State<WorkoutFeaturedCarousel> {
                                         children: [
                                           const Icon(CupertinoIcons.play_fill, color: CupertinoColors.white),
                                           const SizedBox(width: 8),
-                                          Text(
-                                            'START WORKOUT',
-                                            style: FitnessText.chip(context).copyWith(
-                                              color: CupertinoColors.white,
-                                              letterSpacing: 1.2,
-                                            ),
+                                          Consumer(
+                                            builder: (context, ref, _) {
+                                              final today = ref.watch(todayWorkoutProvider).asData?.value;
+                                              final samePlan = today?.session?.workoutPlanId == p.id ||
+                                                  today?.session?.workoutPlanId == null;
+                                              final action = samePlan && today != null
+                                                  ? today.action
+                                                  : TodayWorkoutAction.start;
+                                              return Text(
+                                                todayWorkoutButtonLabel(action),
+                                                style: FitnessText.chip(context).copyWith(
+                                                  color: CupertinoColors.white,
+                                                  letterSpacing: 1.2,
+                                                ),
+                                              );
+                                            },
                                           ),
                                         ],
                                       ),

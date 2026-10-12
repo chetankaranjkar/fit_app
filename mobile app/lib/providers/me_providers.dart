@@ -6,6 +6,7 @@ import '../features/profile/in_app_web_types.dart';
 import '../models/me_models.dart';
 import '../models/online_payment_models.dart';
 import '../models/support_models.dart';
+import '../features/progress/progress_insights.dart';
 import '../services/me_service.dart';
 import '../services/online_payment_service.dart';
 import '../services/support_service.dart';
@@ -66,8 +67,9 @@ final dietPlanProvider = FutureProvider.autoDispose<MeDietPlan?>((ref) async {
 });
 
 final workoutSessionHistoryProvider =
-    FutureProvider.autoDispose<List<MeWorkoutSessionSummary>>((ref) async {
-  return MeService.instance.getWorkoutSessions();
+    FutureProvider.autoDispose.family<MeWorkoutHistoryPage, ProgressDateRange>((ref, range) async {
+  final from = ProgressInsights.rangeStart(range, DateTime.now());
+  return MeService.instance.getWorkoutHistoryPage(fromLocal: from);
 });
 
 final progressPhotosProvider = FutureProvider.autoDispose<List<MeProgressPhoto>>((ref) async {

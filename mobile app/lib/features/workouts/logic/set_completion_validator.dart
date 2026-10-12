@@ -33,6 +33,15 @@ class SetCompletionValidation {
   static String? firstError(String repsRaw, String weightRaw) {
     return validateReps(repsRaw) ?? validateWeight(weightRaw);
   }
+
+  /// Set 2+ can be filled in, but cannot be logged until the previous set is saved.
+  static String? previousSetRequired({
+    required int setNumber,
+    required bool previousSetCompleted,
+  }) {
+    if (setNumber <= 1 || previousSetCompleted) return null;
+    return 'Complete set ${setNumber - 1} before logging set $setNumber.';
+  }
 }
 
 class SetCompletionInput {

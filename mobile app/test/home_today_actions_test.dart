@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pulsefit/features/home/home_action_resolver.dart';
 import 'package:pulsefit/features/home/home_today_actions.dart';
+import 'package:pulsefit/features/workouts/logic/today_workout_gate.dart';
 import 'package:pulsefit/models/me_models.dart';
 import 'package:pulsefit/models/online_payment_models.dart';
 import 'package:pulsefit/models/workout_tracking_models.dart';
@@ -136,6 +137,18 @@ List<Override> _overrides({
     workoutPlansProvider.overrideWith((ref) async => plans),
     todayAssignedTemplateProvider.overrideWith((ref) async => template),
     activeWorkoutProvider.overrideWith((ref) async => active),
+    todayWorkoutProvider.overrideWith((ref) async {
+      if (active != null &&
+          active.status.toLowerCase() != 'completed' &&
+          !active.pendingCompleteSync) {
+        return TodayWorkoutDecision(action: TodayWorkoutAction.resume, session: active);
+      }
+      if (active != null) {
+        return TodayWorkoutDecision(action: TodayWorkoutAction.viewCompleted, session: active);
+      }
+      return const TodayWorkoutDecision(action: TodayWorkoutAction.start);
+    }),
+    workoutSyncRefreshProvider.overrideWith((ref) {}),
     billingAccessProvider.overrideWith(
       (ref) async =>
           billing ?? const MeBillingAccess(accessBlocked: false, pendingAmount: 0),
@@ -228,6 +241,31 @@ void main() {
       );
       expect(start.workout.kind, HomeWorkoutKind.start);
       expect(start.workout.cta, 'Start');
+    });
+
+    test('completed today opens as view, not a new start', () {
+      final completed = ActiveWorkoutSession(
+        sessionId: 44,
+        memberId: 1,
+        workoutPlanId: 9,
+        planName: 'Push',
+        status: 'Completed',
+        startTimeUtc: DateTime.utc(2026, 10, 3, 10),
+        completionPercent: 100,
+        completedSets: 10,
+        totalSets: 10,
+        totalVolume: 0,
+        exercises: const [],
+      );
+      final actions = resolveHomePrimaryActions(
+        membership: _membership(),
+        plans: const [_plan],
+        template: _template(),
+        completedToday: completed,
+      );
+      expect(actions.workout.kind, HomeWorkoutKind.completed);
+      expect(actions.workout.cta, 'View workout');
+      expect(actions.workout.title, 'Completed today');
     });
 
     test('offline disables scan', () {

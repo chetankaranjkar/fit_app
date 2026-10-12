@@ -1,6 +1,7 @@
 using GymManagement.Core.DTOs.WorkoutTracking;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Services;
+using GymManagement.Core.Workouts;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -55,7 +56,15 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             throw new InvalidOperationException("No exercises scheduled for today on this plan.");
 
         var now = DateTime.UtcNow;
-        var localToday = now.AddMinutes(dto.UtcOffsetMinutes ?? 0).Date;
+        var offset = dto.UtcOffsetMinutes ?? 0;
+        var localToday = WorkoutCalendar.LocalDate(now, offset);
+
+        if (!dto.StartAnotherSession)
+        {
+            var already = await FindCompletedOnLocalDayAsync(member.Id, dto.WorkoutPlanId, localToday, offset, ct);
+            if (already != null)
+                throw new ConflictException($"WORKOUT_ALREADY_COMPLETED_TODAY:{already.Id}");
+        }
 
         var session = new WorkoutSession
         {
@@ -71,7 +80,18 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         };
 
         await _db.WorkoutSessions.AddAsync(session, ct);
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            _db.ChangeTracker.Clear();
+            var raced = await FindActiveSessionEntityAsync(member.Id, ct);
+            if (raced == null) throw;
+            return await MapActiveSessionAsync(raced.Id, plan.Name, ct)
+                ?? throw new InvalidOperationException("Failed to load active session.");
+        }
 
         var rows = new List<WorkoutSessionExercise>();
         foreach (var wpe in lineEntities)
@@ -131,6 +151,41 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             PendingOfflineChanges = false,
             ServerTimeUtc = now,
         };
+    }
+
+    public async Task<TodayWorkoutStateDto> GetTodayAsync(
+        int memberId, int? workoutPlanId, int? utcOffsetMinutes, int? callerUserId, CancellationToken ct = default)
+    {
+        var (member, userId) = await ResolveMemberAsync(memberId, ct);
+        await EnsureCanAccessMemberAsync(member.Id, userId, callerUserId, ct);
+
+        var offset = utcOffsetMinutes ?? 0;
+        var localToday = WorkoutCalendar.LocalDate(DateTime.UtcNow, offset);
+
+        var active = await FindActiveSessionEntityAsync(member.Id, ct);
+        if (active != null && (workoutPlanId == null || active.WorkoutPlanId == workoutPlanId))
+        {
+            var mapped = await MapNamedSessionAsync(active, ct);
+            if (mapped != null)
+                return new TodayWorkoutStateDto { State = "inProgress", Session = mapped };
+        }
+
+        var completed = await FindCompletedOnLocalDayAsync(member.Id, workoutPlanId, localToday, offset, ct);
+        if (completed != null)
+        {
+            var mapped = await MapNamedSessionAsync(completed, ct);
+            if (mapped != null)
+                return new TodayWorkoutStateDto { State = "completed", Session = mapped };
+        }
+
+        if (active != null)
+        {
+            var mapped = await MapNamedSessionAsync(active, ct);
+            if (mapped != null)
+                return new TodayWorkoutStateDto { State = "inProgress", Session = mapped };
+        }
+
+        return new TodayWorkoutStateDto { State = "none" };
     }
 
     public async Task<WorkoutSessionExerciseDto> LogSetAsync(LogWorkoutSetRequestDto dto, int? callerUserId, CancellationToken ct = default)
@@ -605,10 +660,42 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         if (sets.Count == 0) return (0, 0);
         var completed = sets.Count(s => s.IsCompleted);
         var completion = Math.Round(100m * completed / sets.Count, 1);
-        var volume = sets
-            .Where(s => s.IsCompleted && s.ActualReps.HasValue)
-            .Sum(s => (s.ActualWeight ?? 0) * s.ActualReps!.Value);
-        return (completion, volume);
+        var scored = RecordedWork.Score(
+            sets.Count,
+            sets.Where(s => s.IsCompleted)
+                .Select(s => new PerformedSet(s.ActualWeight, s.ActualReps))
+                .ToList());
+        return (completion, scored.Volume ?? 0);
+    }
+
+    private async Task<ActiveWorkoutSessionDto?> MapNamedSessionAsync(WorkoutSession session, CancellationToken ct)
+    {
+        var planName = session.WorkoutPlanId.HasValue
+            ? await _db.WorkoutPlans.AsNoTracking()
+                .Where(p => p.Id == session.WorkoutPlanId)
+                .Select(p => p.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+        return await MapActiveSessionAsync(session.Id, planName, ct);
+    }
+
+    private async Task<WorkoutSession?> FindCompletedOnLocalDayAsync(
+        int memberId, int? workoutPlanId, DateTime localToday, int utcOffsetMinutes, CancellationToken ct)
+    {
+        var recent = await _db.WorkoutSessions.AsNoTracking()
+            .Where(s => s.MemberId == memberId
+                && !s.IsDeleted
+                && (s.IsCompleted || s.Status == WorkoutSessionStatus.Completed)
+                && (workoutPlanId == null || s.WorkoutPlanId == workoutPlanId))
+            .OrderByDescending(s => s.SessionDate)
+            .Take(40)
+            .ToListAsync(ct);
+
+        var utcStart = localToday.AddMinutes(-utcOffsetMinutes);
+        var utcEnd = utcStart.AddDays(1);
+        return recent.FirstOrDefault(s =>
+            (s.WorkoutDate.HasValue && WorkoutCalendar.SameCalendarDay(s.WorkoutDate.Value, localToday))
+            || (!s.WorkoutDate.HasValue && s.SessionDate >= utcStart && s.SessionDate < utcEnd));
     }
 
     private static WorkoutSessionExerciseDto MapExerciseRow(WorkoutSessionExercise s) =>

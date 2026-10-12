@@ -63,6 +63,18 @@ class ProgressInsights {
     return items.where((e) => inRange(dateOf(e), range, now)).toList();
   }
 
+  /// A filtered page is not the full history when the server says more rows exist.
+  static String historyScopeCaption({
+    required int returned,
+    required int totalMatching,
+    required bool truncated,
+  }) {
+    if (truncated || returned < totalMatching) {
+      return 'Showing $returned of $totalMatching recorded workouts. Totals use only the workouts loaded.';
+    }
+    return '$totalMatching recorded workouts';
+  }
+
   static List<WeightPoint> recordedWeights(Iterable<MeBodyMetricLog> rows) {
     final points = <WeightPoint>[];
     for (final row in rows) {

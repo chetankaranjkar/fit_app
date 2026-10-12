@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/formatters.dart';
 import '../../models/me_models.dart';
 import '../../providers/me_providers.dart';
+import '../../providers/workout_tracking_providers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -19,6 +20,7 @@ import '../../widgets/premium_background.dart';
 import '../../widgets/press_scale.dart';
 import '../../services/me_service.dart';
 import '../shell/shell_layout_metrics.dart';
+import '../workouts/logic/recorded_work.dart';
 import 'log_body_metric_sheet.dart';
 import 'progress_insights.dart';
 
@@ -36,7 +38,8 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
   Widget build(BuildContext context) {
     final attendance = ref.watch(attendanceProvider);
     final metrics = ref.watch(bodyMetricsProvider);
-    final workoutHistory = ref.watch(workoutSessionHistoryProvider);
+    final workoutHistory = ref.watch(workoutSessionHistoryProvider(_range));
+    ref.watch(workoutSyncRefreshProvider);
     final profile = ref.watch(profileProvider);
     final photos = ref.watch(progressPhotosProvider);
     final now = DateTime.now();
@@ -222,10 +225,10 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                         loading: () => const SkeletonBlock(height: 120),
                         error: (e, _) => ErrorStateView(
                           message: e.toString(),
-                          onRetry: () => ref.refresh(workoutSessionHistoryProvider),
+                          onRetry: () => ref.refresh(workoutSessionHistoryProvider(_range)),
                         ),
-                        data: (sessions) => _WorkoutHistoryList(
-                          sessions: sessions,
+                        data: (page) => _WorkoutHistoryList(
+                          page: page,
                           range: _range,
                           now: now,
                         ),
@@ -797,60 +800,100 @@ class _BodyFatChart extends StatelessWidget {
 
 class _WorkoutHistoryList extends StatelessWidget {
   const _WorkoutHistoryList({
-    required this.sessions,
+    required this.page,
     required this.range,
     required this.now,
   });
-  final List<MeWorkoutSessionSummary> sessions;
+  final MeWorkoutHistoryPage page;
   final ProgressDateRange range;
   final DateTime now;
 
   @override
   Widget build(BuildContext context) {
     final filtered = ProgressInsights.filterDated(
-      sessions,
-      (s) => s.sessionDateUtc,
+      page.sessions,
+      (s) => s.workoutDate ?? s.sessionDateUtc.toLocal(),
       range,
       now,
     );
+    final scope = ProgressInsights.historyScopeCaption(
+      returned: page.returned,
+      totalMatching: page.totalMatching,
+      truncated: page.truncated,
+    );
 
     if (filtered.isEmpty) {
-      return const GlassCard(
-        child: EmptyState(
-          title: 'No recorded sessions',
-          message: 'Complete a workout from the Workouts tab to see history here. Assigned plans are not counted until you log a session.',
-          icon: CupertinoIcons.flame,
+      return GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const EmptyState(
+              title: 'No recorded sessions',
+              message: 'Complete a workout from the Workouts tab to see history here. Assigned plans are not counted until you log a session.',
+              icon: CupertinoIcons.flame,
+            ),
+            if (page.truncated)
+              Text(
+                scope,
+                style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+              ),
+          ],
         ),
       );
     }
 
+    final sets = filtered.fold<int>(0, (sum, s) => sum + s.setsLogged);
+    double? volume;
+    var volumeComplete = true;
+    for (final session in filtered) {
+      if (session.recordedVolume == null) {
+        volumeComplete = false;
+        continue;
+      }
+      volume = (volume ?? 0) + session.recordedVolume!;
+      if (!session.volumeComplete) volumeComplete = false;
+    }
+
     return GlassCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(scope, style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context))),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '$sets sets · ${recordedVolumeLabel(volume: volume, volumeComplete: volumeComplete)}',
+            style: AppType.footnote.copyWith(color: AppColors.resolveText(context)),
+          ),
+          const SizedBox(height: AppSpacing.md),
           for (var i = 0; i < filtered.length; i++) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(CupertinoIcons.flame_fill, color: AppColors.accent, size: 20),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        filtered[i].planName,
-                        style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
-                      ),
-                      Text(
-                        '${Fmt.date(filtered[i].sessionDateUtc.toLocal())} · '
-                        '${filtered[i].setsLogged} sets'
-                        '${filtered[i].durationMinutes != null ? ' · ${filtered[i].durationMinutes} min' : ''}',
-                        style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
-                      ),
-                    ],
+            GestureDetector(
+              onTap: () => context.push('/progress/session', extra: filtered[i].sessionId),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(CupertinoIcons.flame_fill, color: AppColors.accent, size: 20),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          filtered[i].planName.isEmpty ? 'Workout' : filtered[i].planName,
+                          style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
+                        ),
+                        Text(
+                          '${Fmt.date((filtered[i].workoutDate ?? filtered[i].sessionDateUtc).toLocal())} · '
+                          '${filtered[i].setsLogged}/${filtered[i].totalSets == 0 ? filtered[i].setsLogged : filtered[i].totalSets} sets'
+                          '${filtered[i].durationMinutes != null ? ' · ${filtered[i].durationMinutes} min' : ''}'
+                          ' · ${recordedVolumeLabel(volume: filtered[i].recordedVolume, volumeComplete: filtered[i].volumeComplete)}',
+                          style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  Icon(CupertinoIcons.chevron_right, size: 16, color: AppColors.resolveTextSecondary(context)),
+                ],
+              ),
             ),
             if (i < filtered.length - 1)
               Padding(

@@ -736,6 +736,11 @@ class MeWorkoutSessionSummary {
   final DateTime sessionDateUtc;
   final int? durationMinutes;
   final int setsLogged;
+  final int totalSets;
+  final double? recordedVolume;
+  final bool volumeComplete;
+  final DateTime? workoutDate;
+  final double? completionPercent;
 
   const MeWorkoutSessionSummary({
     required this.sessionId,
@@ -744,6 +749,11 @@ class MeWorkoutSessionSummary {
     required this.sessionDateUtc,
     required this.setsLogged,
     this.durationMinutes,
+    this.totalSets = 0,
+    this.recordedVolume,
+    this.volumeComplete = true,
+    this.workoutDate,
+    this.completionPercent,
   });
 
   factory MeWorkoutSessionSummary.fromJson(Map<String, dynamic> json) => MeWorkoutSessionSummary(
@@ -753,7 +763,42 @@ class MeWorkoutSessionSummary {
         sessionDateUtc: _dt(json['sessionDateUtc']) ?? DateTime.now(),
         durationMinutes: _int(json['durationMinutes']),
         setsLogged: _int(json['setsLogged']) ?? 0,
+        totalSets: _int(json['totalSets']) ?? 0,
+        recordedVolume: json['recordedVolume'] == null ? null : _double(json['recordedVolume']),
+        volumeComplete: json['volumeComplete'] != false,
+        workoutDate: _dt(json['workoutDate']),
+        completionPercent: json['completionPercent'] == null ? null : _double(json['completionPercent']),
       );
+}
+
+class MeWorkoutHistoryPage {
+  const MeWorkoutHistoryPage({
+    required this.sessions,
+    required this.totalMatching,
+    required this.returned,
+    required this.truncated,
+  });
+
+  final List<MeWorkoutSessionSummary> sessions;
+  final int totalMatching;
+  final int returned;
+  final bool truncated;
+
+  factory MeWorkoutHistoryPage.fromJson(Map<String, dynamic> json) {
+    final raw = json['sessions'];
+    final sessions = raw is List
+        ? raw
+            .whereType<Map>()
+            .map((e) => MeWorkoutSessionSummary.fromJson(e.cast<String, dynamic>()))
+            .toList()
+        : <MeWorkoutSessionSummary>[];
+    return MeWorkoutHistoryPage(
+      sessions: sessions,
+      totalMatching: _int(json['totalMatching']) ?? sessions.length,
+      returned: _int(json['returned']) ?? sessions.length,
+      truncated: json['truncated'] == true,
+    );
+  }
 }
 
 class MeDashboard {

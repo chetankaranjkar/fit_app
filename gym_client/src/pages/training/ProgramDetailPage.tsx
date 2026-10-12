@@ -10,6 +10,7 @@ import { useExercisePickerLibrary } from '../../hooks/useExercisePickerLibrary'
 import { programsService } from '../../services/workoutPlans.service'
 import type { CreateWorkoutPlanDto, ProgramWeekDto } from '../../types/workoutPlan'
 import { PlanWarmupStretchTab } from './program/PlanWarmupStretchTab'
+import { ProgramAssignedMembersTab } from './program/ProgramAssignedMembersTab'
 import { WeekScheduleTab, toStructurePayload } from './program/WeekScheduleTab'
 import type { WorkoutPlanStretch } from '../../types/stretch'
 import type { WorkoutPlanWarmup } from '../../types/warmup'
@@ -544,19 +545,7 @@ export function ProgramDetailPage() {
                   </div>
                 )}
 
-                {tab === 'Assigned Members' && (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center text-slate-400">
-                    <p className="text-sm">
-                      {program.assignedMembersCount ?? 0} active assignment(s) linked in schedules.
-                    </p>
-                    <Link
-                      to={`/dashboard/training/workout-assignments?highlightProgram=${id}`}
-                      className="mt-4 inline-block text-cyan-300 underline-offset-2 hover:underline"
-                    >
-                      Manage assignments
-                    </Link>
-                  </div>
-                )}
+                {tab === 'Assigned Members' && <ProgramAssignedMembersTab programId={id} />}
 
                 {tab === 'Analytics' && (
                   <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-slate-300">

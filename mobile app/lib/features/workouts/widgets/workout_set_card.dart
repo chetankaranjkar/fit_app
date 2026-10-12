@@ -16,12 +16,15 @@ class WorkoutSetCard extends StatefulWidget {
     required this.exerciseName,
     required this.saving,
     required this.onComplete,
+    this.lockedReason,
   });
 
   final TrackedWorkoutSet set;
   final String exerciseName;
   final bool saving;
   final Future<void> Function(TrackedWorkoutSet set, int reps, double weight) onComplete;
+  /// Weight stays editable. Swipe stays hidden until the previous set is saved.
+  final String? lockedReason;
 
   @override
   State<WorkoutSetCard> createState() => _WorkoutSetCardState();
@@ -183,6 +186,12 @@ class _WorkoutSetCardState extends State<WorkoutSetCard> {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
+            if (widget.lockedReason != null)
+              Text(
+                widget.lockedReason!,
+                style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+              )
+            else
             SwipeToCompleteSetWidget(
               enabled: !completed,
               isLoading: widget.saving,

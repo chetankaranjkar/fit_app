@@ -3,6 +3,7 @@ import type { SavePlanWarmupStretchDto } from '../types/stretch'
 import type {
   CloneWorkoutPlanDto,
   CreateWorkoutPlanDto,
+  ProgramAssignedMembers,
   SaveProgramStructureDto,
   WorkoutPlan,
 } from '../types/workoutPlan'
@@ -13,6 +14,8 @@ const path = '/Programs'
 export const workoutPlansService = {
   getAll: () => api.get<WorkoutPlan[]>(path),
   getById: (id: number) => api.get<WorkoutPlan>(`${path}/${id}`),
+  getAssignedMembers: (id: number, page = 1, pageSize = 20) =>
+    api.get<ProgramAssignedMembers>(`${path}/${id}/assigned-members`, { params: { page, pageSize } }),
   create: (data: CreateWorkoutPlanDto) => api.post<WorkoutPlan>(path, data),
   update: (id: number, data: CreateWorkoutPlanDto) => api.put<WorkoutPlan>(`${path}/${id}`, data),
   delete: (id: number) => api.delete(`${path}/${id}`),

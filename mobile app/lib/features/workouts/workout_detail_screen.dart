@@ -1,12 +1,17 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/api_exception.dart';
 import '../../models/me_models.dart';
+import '../../models/workout_tracking_models.dart';
 import '../../providers/me_providers.dart';
+import '../../providers/sync_status_provider.dart';
+import '../../providers/workout_tracking_providers.dart';
+import '../../services/workout_tracking_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/fitness_text.dart';
@@ -14,10 +19,14 @@ import '../../widgets/glass_card.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
+import 'logic/recorded_work.dart';
+import 'logic/set_completion_validator.dart';
+import 'logic/today_workout_gate.dart';
 import 'workout_derived_metrics.dart';
 import 'package:flutter/services.dart';
 import 'widgets/plan_set_completion_row.dart';
 import 'workout_flow_launcher.dart';
+import 'workout_session_launcher.dart';
 
 class WorkoutDetailScreen extends ConsumerWidget {
   const WorkoutDetailScreen({super.key, required this.plan});
@@ -61,6 +70,290 @@ class _WorkoutDetailBody extends ConsumerStatefulWidget {
 
 class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
   final Set<int> _expanded = {};
+  final _repo = WorkoutTrackingRepository.instance;
+  ActiveWorkoutSession? _session;
+  int? _savingSetId;
+  bool _finishing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_resumeSession());
+  }
+
+  Future<void> _resumeSession() async {
+    try {
+      final memberId = await ref.read(memberIdProvider.future);
+      final decision = await _repo.resolveToday(
+        memberId: memberId,
+        workoutPlanId: widget.plan.id,
+      );
+      if (!mounted || decision.session == null) return;
+      if (decision.action != TodayWorkoutAction.resume &&
+          decision.action != TodayWorkoutAction.viewCompleted) {
+        return;
+      }
+      if (decision.session!.workoutPlanId != null &&
+          decision.session!.workoutPlanId != widget.plan.id) {
+        return;
+      }
+      setState(() {
+        _session = decision.session;
+        if (_isSaved(decision.session)) {
+          for (final line in widget.tpl.exercises) {
+            _expanded.add(line.planExerciseId);
+          }
+        }
+      });
+    } on Object {
+      // Browsing the plan still works if today's session cannot be loaded.
+    }
+  }
+
+  bool _isSaved(ActiveWorkoutSession? session) =>
+      session != null &&
+      (session.pendingCompleteSync || session.status.toLowerCase() == 'completed');
+
+  List<TrackedWorkoutSet> _setsFor(int exerciseId) {
+    final session = _session;
+    if (session == null) return const [];
+    for (final group in session.exercises) {
+      if (group.exerciseId != exerciseId) continue;
+      final sets = [...group.sets]..sort((a, b) => a.setNumber.compareTo(b.setNumber));
+      return sets;
+    }
+    return const [];
+  }
+
+  Future<void> _logSet(MeWorkoutExerciseLine line, int setNumber, int reps, double weight) async {
+    if (_isSaved(_session)) {
+      _alert('Workout saved', 'Today’s workout is already complete. Start another session if you want to train again.');
+      return;
+    }
+    final trackedBefore = _setsFor(line.exerciseId);
+    final previousDone = setNumber <= 1 ||
+        trackedBefore.any((s) => s.setNumber == setNumber - 1 && s.isCompleted);
+    final blocked = SetCompletionValidation.previousSetRequired(
+      setNumber: setNumber,
+      previousSetCompleted: previousDone,
+    );
+    if (blocked != null) {
+      _alert('Set order', blocked);
+      return;
+    }
+
+    setState(() => _savingSetId = line.exerciseId * 100 + setNumber);
+    try {
+      final session = await _ensureSession();
+      var tracked = _findSet(session, line.exerciseId, setNumber);
+      if (tracked == null) {
+        final reloaded = await _repo.reloadSession(session);
+        if (reloaded != null && mounted) setState(() => _session = reloaded);
+        tracked = reloaded == null ? null : _findSet(reloaded, line.exerciseId, setNumber);
+      }
+      if (tracked == null) {
+        throw const ApiException('This set is not on today\'s workout session.');
+      }
+      await _repo.logSet(
+        session: _session ?? session,
+        workoutSessionExerciseId: tracked.id,
+        actualWeight: weight,
+        actualReps: reps,
+        isCompleted: true,
+      );
+      final refreshed = await _repo.reloadSession(_session ?? session);
+      if (mounted) setState(() => _session = refreshed ?? _session);
+      HapticFeedback.mediumImpact();
+      ref.invalidate(workoutTrackingDashboardProvider);
+      ref.invalidate(workoutSessionHistoryProvider);
+      ref.invalidate(activeWorkoutProvider);
+      invalidateSyncStatus(ref);
+    } on ApiException catch (e) {
+      if (mounted) _alert('Could not save set', e.message);
+      rethrow;
+    } finally {
+      if (mounted) setState(() => _savingSetId = null);
+    }
+  }
+
+  Future<ActiveWorkoutSession> _ensureSession() async {
+    final current = _session;
+    if (_isSaved(current)) {
+      throw const ApiException('This workout is already saved for today.');
+    }
+    if (current != null &&
+        (current.workoutPlanId == null || current.workoutPlanId == widget.plan.id)) {
+      return current;
+    }
+    final memberId = await ref.read(memberIdProvider.future);
+    final decision = await _repo.resolveToday(
+      memberId: memberId,
+      workoutPlanId: widget.plan.id,
+    );
+    if (decision.action == TodayWorkoutAction.viewCompleted && decision.session != null) {
+      if (mounted) setState(() => _session = decision.session);
+      throw const ApiException('This workout is already saved for today.');
+    }
+    if (decision.action == TodayWorkoutAction.otherPlanInProgress) {
+      throw const ApiException(
+        'Another workout is still in progress. Finish that session before logging this plan.',
+      );
+    }
+    final session = decision.action == TodayWorkoutAction.resume && decision.session != null
+        ? decision.session!
+        : await _repo.resolveOrStart(
+            memberId: memberId,
+            workoutPlanId: widget.plan.id,
+          );
+    if (session.workoutPlanId != null && session.workoutPlanId != widget.plan.id) {
+      throw const ApiException(
+        'Another workout is still in progress. Finish that session before logging this plan.',
+      );
+    }
+    if (mounted) setState(() => _session = session);
+    return session;
+  }
+
+  TrackedWorkoutSet? _findSet(ActiveWorkoutSession session, int exerciseId, int setNumber) {
+    for (final group in session.exercises) {
+      if (group.exerciseId != exerciseId) continue;
+      for (final set in group.sets) {
+        if (set.setNumber == setNumber) return set;
+      }
+    }
+    return null;
+  }
+
+  void _alert(String title, String message) {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _finishWorkout() async {
+    final session = _session;
+    if (session == null || _finishing || _isSaved(session)) return;
+    if (session.completedSets < session.totalSets) {
+      final proceed = await showCupertinoDialog<bool>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('Finish incomplete workout?'),
+          content: Text(
+            '${session.completedSets} of ${session.totalSets} sets are logged. '
+            'The rest stay unfinished and this session is saved as partial.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Keep going'),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Finish partial'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+    }
+    setState(() => _finishing = true);
+    try {
+      final done = await _repo.complete(session);
+      if (mounted) {
+        setState(() {
+          _session = done;
+          for (final line in widget.tpl.exercises) {
+            _expanded.add(line.planExerciseId);
+          }
+        });
+      }
+      ref.invalidate(workoutTrackingDashboardProvider);
+      ref.invalidate(workoutSessionHistoryProvider);
+      ref.invalidate(activeWorkoutProvider);
+      ref.invalidate(todayWorkoutProvider);
+      ref.invalidate(dashboardProvider);
+      invalidateSyncStatus(ref);
+      if (mounted) {
+        _alert('Workout saved', _completionSummary(done));
+      }
+    } on ApiException catch (e) {
+      if (mounted) _alert('Could not finish', e.message);
+    } finally {
+      if (mounted) setState(() => _finishing = false);
+    }
+  }
+
+  String _completionSummary(ActiveWorkoutSession session) {
+    final exercises = session.exercises.where((g) => g.sets.any((s) => s.isCompleted)).length;
+    final volume = RecordedWork.score(
+      session.totalSets,
+      [
+        for (final group in session.exercises)
+          for (final set in group.sets)
+            if (set.isCompleted) PerformedSet(weight: set.actualWeight, reps: set.actualReps),
+      ],
+    );
+    final duration = session.startTimeUtc == null
+        ? null
+        : DateTime.now().toUtc().difference(session.startTimeUtc!.toUtc()).inMinutes;
+    final partial = session.completedSets < session.totalSets;
+    return [
+      if (partial) 'Partial completion',
+      '$exercises exercises',
+      '${session.completedSets}/${session.totalSets} sets',
+      if (duration != null && duration > 0) '$duration min',
+      recordedVolumeLabel(volume: volume.volume, volumeComplete: volume.volumeComplete),
+      if (session.pendingCompleteSync) 'Saved on device — waiting to sync',
+    ].join(' · ');
+  }
+
+  Future<void> _startAnother() async {
+    final proceed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Start another session?'),
+        content: const Text('The workout already saved today stays in your history.'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Start another session'),
+          ),
+        ],
+      ),
+    );
+    if (proceed != true || !mounted) return;
+    await launchLiveWorkoutSession(
+      context,
+      ref,
+      plan: widget.plan,
+      template: widget.tpl,
+      startAnother: true,
+    );
+  }
+
+  int? _savingSetNumberFor(int exerciseId) {
+    final saving = _savingSetId;
+    if (saving == null) return null;
+    if (saving ~/ 100 != exerciseId) return null;
+    return saving % 100;
+  }
 
   void _toggle(int id) {
     setState(() {
@@ -155,18 +448,53 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
                           Text('WORKOUT', style: FitnessText.label(context)),
                           const Spacer(),
                           Text(
-                            '${tpl.exercises.length} blocks',
+                            _session == null
+                                ? '${tpl.exercises.length} blocks'
+                                : '${_session!.completedSets} sets saved',
                             style: FitnessText.chip(context, color: AppColors.neonCyan),
                           ),
                         ],
                       ),
+                      if ((_session?.completedSets ?? 0) > 0 && !_isSaved(_session)) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        CupertinoButton(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          color: AppColors.success.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(14),
+                          onPressed: _finishing ? null : _finishWorkout,
+                          child: Text(
+                            _finishing ? 'Saving workout…' : 'Finish workout',
+                            style: FitnessText.chip(context, color: AppColors.success),
+                          ),
+                        ),
+                      ],
+                      if (_isSaved(_session)) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          _session!.pendingCompleteSync
+                              ? 'Saved on device — waiting to sync'
+                              : 'Synced',
+                          style: FitnessText.body(context, color: AppColors.success),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          _completionSummary(_session!),
+                          style: FitnessText.body(context),
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.sm),
                     ],
                     for (var i = 0; i < tpl.exercises.length; i++) ...[
                       _ExerciseLabCard(
+                        key: ValueKey(tpl.exercises[i].planExerciseId),
                         line: tpl.exercises[i],
+                        trackedSets: _setsFor(tpl.exercises[i].exerciseId),
+                        savingSetNumber: _savingSetNumberFor(tpl.exercises[i].exerciseId),
                         expanded: _expanded.contains(tpl.exercises[i].planExerciseId),
+                        readOnly: _isSaved(_session),
                         onToggle: () => _toggle(tpl.exercises[i].planExerciseId),
+                        onLogSet: (setNumber, reps, weight) =>
+                            _logSet(tpl.exercises[i], setNumber, reps, weight),
                       ),
                       if (i != tpl.exercises.length - 1) const SizedBox(height: AppSpacing.md),
                     ],
@@ -218,9 +546,21 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
           child: SafeArea(
             top: false,
             minimum: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
-            child: CupertinoButton(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CupertinoButton(
               padding: EdgeInsets.zero,
-              onPressed: () => launchFullWorkoutFlow(context, ref, plan: plan),
+              onPressed: () {
+                final saved = _isSaved(_session);
+                final live = _session != null && !saved;
+                if (saved) return;
+                if (live) {
+                  launchLiveWorkoutSession(context, ref, plan: plan, template: tpl);
+                  return;
+                }
+                launchFullWorkoutFlow(context, ref, plan: plan);
+              },
               child: Container(
                 height: 54,
                 decoration: BoxDecoration(
@@ -232,10 +572,17 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(CupertinoIcons.play_fill, color: CupertinoColors.white),
+                      Icon(
+                        _isSaved(_session) ? CupertinoIcons.checkmark_alt : CupertinoIcons.play_fill,
+                        color: CupertinoColors.white,
+                      ),
                       const SizedBox(width: 8),
                       Text(
-                        'START WORKOUT',
+                        _isSaved(_session)
+                            ? 'VIEW COMPLETED WORKOUT'
+                            : _session != null
+                                ? 'RESUME WORKOUT'
+                                : 'START WORKOUT',
                         style: FitnessText.chip(context)
                             .copyWith(color: CupertinoColors.white, letterSpacing: 1.1),
                       ),
@@ -243,6 +590,16 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
                   ),
                 ),
               ),
+                ),
+                if (_isSaved(_session))
+                  CupertinoButton(
+                    onPressed: _startAnother,
+                    child: Text(
+                      'Start another session',
+                      style: FitnessText.chip(context, color: AppColors.neonCyan),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -362,44 +719,64 @@ class _DetailHero extends StatelessWidget {
 
 class _ExerciseLabCard extends StatefulWidget {
   const _ExerciseLabCard({
+    super.key,
     required this.line,
+    required this.trackedSets,
     required this.expanded,
     required this.onToggle,
+    required this.onLogSet,
+    this.savingSetNumber,
+    this.readOnly = false,
   });
 
   final MeWorkoutExerciseLine line;
+  final List<TrackedWorkoutSet> trackedSets;
   final bool expanded;
   final VoidCallback onToggle;
+  final Future<void> Function(int setNumber, int reps, double weight) onLogSet;
+  final int? savingSetNumber;
+  final bool readOnly;
 
   @override
   State<_ExerciseLabCard> createState() => _ExerciseLabCardState();
 }
 
-class _ExerciseLabCardState extends State<_ExerciseLabCard> with TickerProviderStateMixin {
+class _ExerciseLabCardState extends State<_ExerciseLabCard> {
   int? _restLeft;
-  Ticker? _restTicker;
+  Timer? _restTimer;
   late final List<TextEditingController> _weightCtrls;
   late final List<TextEditingController> _repsCtrls;
-  final Set<int> _completedSetIndices = {};
-  int? _savingSetIndex;
 
   @override
   void initState() {
     super.initState();
     final line = widget.line;
     final setCount = math.max(1, line.targetSets);
-    final wSeed = line.lastWeightUsed ?? line.suggestedWeight;
-    final rSeed = line.lastRepsDone ?? line.targetReps;
-    _weightCtrls = List.generate(
-      setCount,
-      (_) => TextEditingController(
-        text: wSeed != null && wSeed > 0 ? _fmtNum(wSeed) : '',
-      ),
-    );
-    _repsCtrls = List.generate(
-      setCount,
-      (_) => TextEditingController(text: rSeed > 0 ? '$rSeed' : ''),
-    );
+    _weightCtrls = List.generate(setCount, (i) {
+      final tracked = _tracked(i + 1);
+      final wSeed = tracked?.actualWeight ?? tracked?.targetWeight ?? line.lastWeightUsed ?? line.suggestedWeight;
+      return TextEditingController(text: wSeed != null && wSeed > 0 ? _fmtNum(wSeed) : '');
+    });
+    _repsCtrls = List.generate(setCount, (i) {
+      final tracked = _tracked(i + 1);
+      final rSeed = tracked?.actualReps ?? tracked?.targetReps ?? line.lastRepsDone ?? line.targetReps;
+      return TextEditingController(text: rSeed > 0 ? '$rSeed' : '');
+    });
+  }
+
+  TrackedWorkoutSet? _tracked(int setNumber) {
+    for (final set in widget.trackedSets) {
+      if (set.setNumber == setNumber) return set;
+    }
+    return null;
+  }
+
+  bool _isCompleted(int setNumber) => _tracked(setNumber)?.isCompleted == true;
+
+  bool get _exerciseDone {
+    final needed = math.max(1, widget.line.targetSets);
+    if (widget.trackedSets.length < needed) return false;
+    return widget.trackedSets.every((set) => set.isCompleted);
   }
 
   String _fmtNum(double v) {
@@ -408,8 +785,19 @@ class _ExerciseLabCardState extends State<_ExerciseLabCard> with TickerProviderS
   }
 
   @override
+  void didUpdateWidget(covariant _ExerciseLabCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    for (var i = 0; i < _weightCtrls.length; i++) {
+      final set = _tracked(i + 1);
+      if (set == null || !set.isCompleted) continue;
+      if (set.actualWeight != null) _weightCtrls[i].text = _fmtNum(set.actualWeight!);
+      if (set.actualReps != null) _repsCtrls[i].text = '${set.actualReps}';
+    }
+  }
+
+  @override
   void dispose() {
-    _restTicker?.dispose();
+    _restTimer?.cancel();
     for (final c in _weightCtrls) {
       c.dispose();
     }
@@ -420,26 +808,22 @@ class _ExerciseLabCardState extends State<_ExerciseLabCard> with TickerProviderS
   }
 
   void _startRest() {
-    _restTicker?.dispose();
-    final total = widget.line.restSeconds;
-    final start = DateTime.now();
+    _restTimer?.cancel();
+    final total = widget.line.restSeconds <= 0 ? 60 : widget.line.restSeconds;
     setState(() => _restLeft = total);
-    _restTicker = createTicker((elapsed) {
-      final gone = DateTime.now().difference(start).inSeconds;
-      final left = total - gone;
-      if (!mounted) return;
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final left = (_restLeft ?? 1) - 1;
       if (left <= 0) {
-        _restTicker?.dispose();
+        timer.cancel();
         setState(() => _restLeft = null);
         return;
       }
       setState(() => _restLeft = left);
-    })..start();
-  }
-
-  int _activation() {
-    final h = math.max(1, widget.line.exerciseName.hashCode.abs());
-    return 55 + (h % 41);
+    });
   }
 
   @override
@@ -492,6 +876,13 @@ class _ExerciseLabCardState extends State<_ExerciseLabCard> with TickerProviderS
                         '${line.targetSets} × ${line.targetReps} • Rest ${line.restSeconds}s',
                         style: FitnessText.body(context),
                       ),
+                      if (line.lastWeightUsed != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Previous ${line.lastWeightUsed} kg × ${line.lastRepsDone ?? line.targetReps}',
+                          style: FitnessText.body(context, color: AppColors.success),
+                        ),
+                      ],
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -502,10 +893,14 @@ class _ExerciseLabCardState extends State<_ExerciseLabCard> with TickerProviderS
                             color: AppColors.accent,
                           ),
                           const SizedBox(width: 6),
-                          _TinyPill(
-                            label: '${_activation()}% activation',
-                            color: AppColors.neonCyan,
-                          ),
+                          if (_exerciseDone)
+                            const _TinyPill(label: 'Completed', color: AppColors.success)
+                          else
+                            _TinyPill(
+                              label:
+                                  '${widget.trackedSets.where((s) => s.isCompleted).length}/${math.max(1, line.targetSets)} logged',
+                              color: AppColors.neonCyan,
+                            ),
                         ],
                       ),
                     ],
@@ -530,18 +925,16 @@ class _ExerciseLabCardState extends State<_ExerciseLabCard> with TickerProviderS
                         setNumber: i + 1,
                         weightController: _weightCtrls[i],
                         repsController: _repsCtrls[i],
-                        completed: _completedSetIndices.contains(i),
-                        saving: _savingSetIndex == i,
-                        onCompleted: (reps, weight) async {
-                          setState(() => _savingSetIndex = i);
-                          await Future<void>.delayed(const Duration(milliseconds: 180));
-                          if (!mounted) return;
-                          setState(() {
-                            _completedSetIndices.add(i);
-                            _savingSetIndex = null;
-                          });
-                          HapticFeedback.mediumImpact();
-                        },
+                        completed: _isCompleted(i + 1),
+                        saving: widget.savingSetNumber == i + 1,
+                        lockedReason: widget.readOnly
+                            ? 'Saved'
+                            : SetCompletionValidation.previousSetRequired(
+                                setNumber: i + 1,
+                                previousSetCompleted: i == 0 || _isCompleted(i),
+                              ),
+                        readOnly: widget.readOnly,
+                        onCompleted: (reps, weight) => widget.onLogSet(i + 1, reps, weight),
                       ),
                     const SizedBox(height: AppSpacing.sm),
                     CupertinoButton(

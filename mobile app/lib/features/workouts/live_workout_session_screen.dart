@@ -24,6 +24,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_keyboard_inset.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/premium_background.dart';
+import 'logic/set_completion_validator.dart';
 import 'widgets/exercise_history_sheet.dart';
 import 'widgets/workout_set_card.dart';
 
@@ -570,6 +571,8 @@ class _ExerciseBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ordered = [...group.sets]..sort((a, b) => a.setNumber.compareTo(b.setNumber));
+    final allDone = ordered.isNotEmpty && ordered.every((s) => s.isCompleted);
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,6 +588,24 @@ class _ExerciseBlock extends StatelessWidget {
                   ),
                 ),
               ),
+              if (allDone)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(CupertinoIcons.checkmark_seal_fill, size: 14, color: AppColors.success),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Done',
+                        style: AppType.caption.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(28, 28),
@@ -599,11 +620,15 @@ class _ExerciseBlock extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          for (final set in group.sets)
+          for (var i = 0; i < ordered.length; i++)
             WorkoutSetCard(
-              set: set,
+              set: ordered[i],
               exerciseName: group.exerciseName,
-              saving: savingSetId == set.id,
+              saving: savingSetId == ordered[i].id,
+              lockedReason: SetCompletionValidation.previousSetRequired(
+                setNumber: ordered[i].setNumber,
+                previousSetCompleted: i == 0 || ordered[i - 1].isCompleted,
+              ),
               onComplete: onSave,
             ),
         ],

@@ -40,12 +40,8 @@ class _DietWaterLabState extends State<DietWaterLab> with SingleTickerProviderSt
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (AppA11y.reduceMotion(context)) {
-      _wave.stop();
-      _wave.value = 0;
-    } else if (!_wave.isAnimating) {
-      _wave.repeat();
-    }
+    _wave.stop();
+    _wave.value = 0;
   }
 
   @override

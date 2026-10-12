@@ -108,6 +108,10 @@ class SyncManager {
     isSyncing: false,
   );
 
+  final _onSynced = StreamController<int>.broadcast();
+
+  Stream<int> get onSynced => _onSynced.stream;
+
   int? get boundMemberId => _boundMemberId;
 
   Future<void> bindMember(int memberId) async {
@@ -179,6 +183,7 @@ class SyncManager {
       synced += await _syncLiveSnapshot(memberId, gen);
 
       WorkoutSyncLog.info('Sync finished · uploaded=$synced');
+      if (synced > 0) _onSynced.add(synced);
       return SyncRunResult(syncedCount: synced);
     } catch (e, st) {
       WorkoutSyncLog.error('Sync failed', e, st);

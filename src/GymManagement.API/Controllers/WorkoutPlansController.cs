@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using GymManagement.API.Attributes;
 using GymManagement.API.Extensions;
+using GymManagement.API.Services;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Interfaces;
+using GymManagement.Core.Programs;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +58,103 @@ namespace GymManagement.API.Controllers
             if (workoutPlan == null)
                 return NotFound();
             return Ok(workoutPlan);
+        }
+
+        /// <summary>
+        /// Current members for this program: one row per user with an active schedule slot.
+        /// Does not widen the users directory or coach-scoped schedule lists.
+        /// </summary>
+        [HttpGet("{id}/assigned-members")]
+        public async Task<ActionResult<ProgramAssignedMembersDto>> GetAssignedMembers(
+            int id,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
+            CancellationToken cancellationToken = default)
+        {
+            var entity = await _unitOfWork.WorkoutPlans.GetByIdAsync(id);
+            if (entity == null)
+                return NotFound();
+            if (!await CanAccessPlanAsync(entity))
+                return Forbid();
+
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 20;
+            if (pageSize > 100) pageSize = 100;
+
+            var slotRows = await (
+                from s in _db.UserSchedules.AsNoTracking()
+                join u in _db.Users.AsNoTracking() on s.UserId equals u.Id
+                where s.WorkoutPlanId == id && s.IsActive
+                select new
+                {
+                    s.UserId,
+                    s.CreatedDate,
+                    s.IsActive,
+                    s.IsDeleted,
+                    u.FirstName,
+                    u.LastName,
+                }).ToListAsync(cancellationToken);
+
+            var userIds = slotRows.Select(s => s.UserId).Distinct().ToList();
+            var coachRows = userIds.Count == 0
+                ? new List<CoachRow>()
+                : await (
+                    from ui in _db.UserInstructors.AsNoTracking()
+                    join t in _db.Trainers.AsNoTracking() on ui.TrainerId equals t.Id
+                    join tu in _db.Users.AsNoTracking() on t.UserId equals tu.Id
+                    where userIds.Contains(ui.UserId)
+                    select new CoachRow
+                    {
+                        UserId = ui.UserId,
+                        TrainerId = ui.TrainerId,
+                        AssignmentDate = ui.AssignmentDate,
+                        EndDate = ui.EndDate,
+                        IsActive = ui.IsActive,
+                        IsDeleted = ui.IsDeleted,
+                        FirstName = tu.FirstName,
+                        LastName = tu.LastName,
+                    }).ToListAsync(cancellationToken);
+
+            var hasFullUsersAccess = UserDirectoryScope.HasUsersAccess(HttpContext);
+            int? callerTrainerId = null;
+            if (!hasFullUsersAccess)
+                callerTrainerId = await UserDirectoryScope.ResolveTrainerProfileIdAsync(HttpContext, _db, cancellationToken);
+
+            var members = ProgramRoster.Build(
+                slotRows.Select(s => new ProgramRosterSlot
+                {
+                    UserId = s.UserId,
+                    MemberName = $"{s.FirstName} {s.LastName}".Trim(),
+                    CreatedAt = s.CreatedDate,
+                    IsActive = s.IsActive,
+                    IsDeleted = s.IsDeleted,
+                }),
+                coachRows.Select(c => new ProgramRosterCoach
+                {
+                    UserId = c.UserId,
+                    TrainerId = c.TrainerId,
+                    CoachName = $"{c.FirstName} {c.LastName}".Trim(),
+                    AssignmentDate = c.AssignmentDate,
+                    EndDate = c.EndDate,
+                    IsActive = c.IsActive,
+                    IsDeleted = c.IsDeleted,
+                }),
+                hasFullUsersAccess,
+                callerTrainerId);
+
+            var total = members.Count;
+            var totalPages = pageSize < 1 ? 0 : (int)Math.Ceiling(total / (double)pageSize);
+            var items = members.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+            return Ok(new ProgramAssignedMembersDto
+            {
+                Items = items,
+                TotalCount = total,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+                ProfileAccessLimited = !hasFullUsersAccess,
+            });
         }
 
         [HttpGet("type/{workoutType}")]
@@ -193,6 +292,18 @@ namespace GymManagement.API.Controllers
             var name = user == null ? "User" : $"{user.FirstName} {user.LastName}".Trim();
             if (string.IsNullOrWhiteSpace(name)) name = $"User #{userId}";
             return (userId, name);
+        }
+
+        private sealed class CoachRow
+        {
+            public int UserId { get; set; }
+            public int TrainerId { get; set; }
+            public DateTime AssignmentDate { get; set; }
+            public DateTime? EndDate { get; set; }
+            public bool IsActive { get; set; }
+            public bool IsDeleted { get; set; }
+            public string? FirstName { get; set; }
+            public string? LastName { get; set; }
         }
     }
 }

@@ -65,14 +65,26 @@ class MeService {
   }
 
   Future<List<MeWorkoutSessionSummary>> getWorkoutSessions({int take = 40}) async {
-    final res = await ApiClient.instance.get<List<dynamic>>(
-      '/me/workout-sessions',
-      query: {'take': take},
+    final page = await getWorkoutHistoryPage(take: take);
+    return page.sessions;
+  }
+
+  Future<MeWorkoutHistoryPage> getWorkoutHistoryPage({
+    int take = 200,
+    DateTime? fromLocal,
+  }) async {
+    final offset = DateTime.now().timeZoneOffset.inMinutes;
+    final res = await ApiClient.instance.get<Map<String, dynamic>>(
+      '/me/workout-sessions/page',
+      query: {
+        'take': take,
+        'utcOffsetMinutes': offset,
+        if (fromLocal != null)
+          'fromLocalDate':
+              '${fromLocal.year.toString().padLeft(4, '0')}-${fromLocal.month.toString().padLeft(2, '0')}-${fromLocal.day.toString().padLeft(2, '0')}',
+      },
     );
-    return (res.data ?? const [])
-        .whereType<Map>()
-        .map((e) => MeWorkoutSessionSummary.fromJson(e.cast<String, dynamic>()))
-        .toList();
+    return MeWorkoutHistoryPage.fromJson(res.data ?? {});
   }
 
   /// Retries offline live workouts, sync queue, and legacy batch completions.

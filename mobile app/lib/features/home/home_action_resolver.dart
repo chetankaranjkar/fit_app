@@ -21,6 +21,7 @@ enum HomeWorkoutKind {
   restDay,
   noPlan,
   unavailableOffline,
+  completed,
 }
 
 class HomeCheckInAction {
@@ -52,7 +53,11 @@ class HomeWorkoutAction {
   final MeWorkoutPlanSummary? plan;
   final ActiveWorkoutSession? session;
 
-  bool get canLaunch => cta != null && (kind == HomeWorkoutKind.resume || kind == HomeWorkoutKind.start);
+  bool get canLaunch =>
+      cta != null &&
+      (kind == HomeWorkoutKind.resume ||
+          kind == HomeWorkoutKind.start ||
+          kind == HomeWorkoutKind.completed);
 }
 
 class HomeMembershipAction {
@@ -208,6 +213,7 @@ HomeWorkoutAction resolveHomeWorkoutAction({
   required List<MeWorkoutPlanSummary> plans,
   MeWorkoutSessionTemplate? template,
   ActiveWorkoutSession? activeSession,
+  ActiveWorkoutSession? completedToday,
   bool templateLoadFailed = false,
   bool offline = false,
 }) {
@@ -223,11 +229,29 @@ HomeWorkoutAction resolveHomeWorkoutAction({
       detail: [
         if (name != null && name.isNotEmpty) name,
         '$pct% complete',
-        if (activeSession.isOffline) 'saved on this device',
+        if (activeSession.isOffline) 'Saved on device — waiting to sync',
       ].join(' · '),
       cta: 'Resume',
-      plan: plans.isNotEmpty ? plans.first : null,
+      plan: _planFor(plans, activeSession.workoutPlanId),
       session: activeSession,
+    );
+  }
+
+  final saved = completedToday != null &&
+      (completedToday.pendingCompleteSync || completedToday.status.toLowerCase() == 'completed');
+  if (saved) {
+    return HomeWorkoutAction(
+      kind: HomeWorkoutKind.completed,
+      title: 'Completed today',
+      detail: [
+        if (completedToday.planName != null && completedToday.planName!.trim().isNotEmpty)
+          completedToday.planName!.trim(),
+        '${completedToday.completedSets}/${completedToday.totalSets} sets',
+        if (completedToday.pendingCompleteSync) 'Saved on device — waiting to sync',
+      ].join(' · '),
+      cta: 'View workout',
+      plan: _planFor(plans, completedToday.workoutPlanId),
+      session: completedToday,
     );
   }
 
@@ -296,6 +320,13 @@ HomeWorkoutAction resolveHomeWorkoutAction({
   );
 }
 
+MeWorkoutPlanSummary? _planFor(List<MeWorkoutPlanSummary> plans, int? planId) {
+  for (final plan in plans) {
+    if (plan.id == planId) return plan;
+  }
+  return plans.isNotEmpty ? plans.first : null;
+}
+
 HomeCheckInAction resolveHomeCheckInAction({required bool offline}) {
   if (offline) {
     return const HomeCheckInAction(
@@ -318,6 +349,7 @@ HomePrimaryActions resolveHomePrimaryActions({
   required List<MeWorkoutPlanSummary> plans,
   MeWorkoutSessionTemplate? template,
   ActiveWorkoutSession? activeSession,
+  ActiveWorkoutSession? completedToday,
   bool templateLoadFailed = false,
   bool offline = false,
   bool usingCachedData = false,
@@ -328,6 +360,7 @@ HomePrimaryActions resolveHomePrimaryActions({
       plans: plans,
       template: template,
       activeSession: activeSession,
+      completedToday: completedToday,
       templateLoadFailed: templateLoadFailed,
       offline: offline,
     ),

@@ -1127,26 +1127,121 @@ namespace GymManagement.API.Controllers
                     .ToDictionaryAsync(p => p.Id, p => p.Name, cancellationToken)
                     .ConfigureAwait(false);
 
-            var sessionIds = sessions.Select(s => s.Id).ToList();
-            var setCounts = await _db.WorkoutLogs.AsNoTracking()
-                .Where(wl => sessionIds.Contains(wl.WorkoutSessionId))
-                .GroupBy(wl => wl.WorkoutSessionId)
-                .Select(g => new { SessionId = g.Key, Count = g.Count() })
+            var facts = await LoadPerformedWorkAsync(sessions.Select(s => s.Id).ToList(), cancellationToken).ConfigureAwait(false);
+            return Ok(sessions.Select(ws => MapSessionSummary(ws, planNames, facts)).ToList());
+        }
+
+        /// <summary>Completed sessions for a date window. Truncated is true when more rows match than take.</summary>
+        [HttpGet("workout-sessions/page")]
+        public async Task<ActionResult<MeWorkoutHistoryPageDto>> GetWorkoutSessionPage(
+            [FromQuery] int take = 200,
+            [FromQuery] DateTime? fromLocalDate = null,
+            [FromQuery] int utcOffsetMinutes = 0,
+            CancellationToken cancellationToken = default)
+        {
+            var userId = ResolveUserIdFromClaims();
+            if (userId == null) return Unauthorized();
+
+            if (take <= 0) take = 200;
+            if (take > 200) take = 200;
+
+            var query = _db.WorkoutSessions.AsNoTracking()
+                .Where(ws => ws.UserId == userId && !ws.IsDeleted && ws.IsCompleted);
+
+            if (fromLocalDate.HasValue)
+            {
+                var from = fromLocalDate.Value.Date;
+                var utcStart = from.AddMinutes(-utcOffsetMinutes);
+                query = query.Where(ws =>
+                    (ws.WorkoutDate != null && ws.WorkoutDate >= from)
+                    || (ws.WorkoutDate == null && ws.SessionDate >= utcStart));
+            }
+
+            var total = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+            var sessions = await query
+                .OrderByDescending(ws => ws.SessionDate)
+                .Take(take)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
-            var countMap = setCounts.ToDictionary(x => x.SessionId, x => x.Count);
 
-            var result = sessions.Select(ws => new MeWorkoutSessionSummaryDto
+            var planIds = sessions.Where(s => s.WorkoutPlanId.HasValue).Select(s => s.WorkoutPlanId!.Value).Distinct().ToList();
+            var planNames = planIds.Count == 0
+                ? new Dictionary<int, string>()
+                : await _db.WorkoutPlans.AsNoTracking()
+                    .Where(p => planIds.Contains(p.Id))
+                    .ToDictionaryAsync(p => p.Id, p => p.Name, cancellationToken)
+                    .ConfigureAwait(false);
+
+            var facts = await LoadPerformedWorkAsync(sessions.Select(s => s.Id).ToList(), cancellationToken).ConfigureAwait(false);
+            var mapped = sessions.Select(ws => MapSessionSummary(ws, planNames, facts)).ToList();
+
+            return Ok(new MeWorkoutHistoryPageDto
+            {
+                Sessions = mapped,
+                TotalMatching = total,
+                Returned = mapped.Count,
+                Truncated = total > mapped.Count,
+                Take = take,
+            });
+        }
+
+        private async Task<Dictionary<int, GymManagement.Core.Workouts.RecordedWork>> LoadPerformedWorkAsync(
+            IReadOnlyList<int> sessionIds,
+            CancellationToken cancellationToken)
+        {
+            if (sessionIds.Count == 0)
+                return new Dictionary<int, GymManagement.Core.Workouts.RecordedWork>();
+
+            var trackedRows = await _db.WorkoutSessionExercises.AsNoTracking()
+                .Where(x => sessionIds.Contains(x.WorkoutSessionId))
+                .Select(x => new { x.WorkoutSessionId, x.IsCompleted, x.ActualWeight, x.ActualReps })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var logs = await _db.WorkoutLogs.AsNoTracking()
+                .Where(wl => sessionIds.Contains(wl.WorkoutSessionId))
+                .Select(wl => new { wl.WorkoutSessionId, wl.WeightUsed, wl.RepsDone })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var result = new Dictionary<int, GymManagement.Core.Workouts.RecordedWork>();
+            foreach (var id in sessionIds)
+            {
+                var tracked = trackedRows.Where(x => x.WorkoutSessionId == id).ToList();
+                var trackedCompleted = tracked
+                    .Where(x => x.IsCompleted)
+                    .Select(x => new GymManagement.Core.Workouts.PerformedSet(x.ActualWeight, x.ActualReps))
+                    .ToList();
+                var logSets = logs
+                    .Where(x => x.WorkoutSessionId == id)
+                    .Select(x => new GymManagement.Core.Workouts.PerformedSet(x.WeightUsed, x.RepsDone))
+                    .ToList();
+                result[id] = GymManagement.Core.Workouts.RecordedWork.FromSources(
+                    tracked.Count > 0, tracked.Count, trackedCompleted, logSets);
+            }
+
+            return result;
+        }
+
+        private static MeWorkoutSessionSummaryDto MapSessionSummary(
+            WorkoutSession ws,
+            IReadOnlyDictionary<int, string> planNames,
+            IReadOnlyDictionary<int, GymManagement.Core.Workouts.RecordedWork> facts)
+        {
+            facts.TryGetValue(ws.Id, out var work);
+            return new MeWorkoutSessionSummaryDto
             {
                 SessionId = ws.Id,
                 WorkoutPlanId = ws.WorkoutPlanId,
                 PlanName = ws.WorkoutPlanId.HasValue && planNames.TryGetValue(ws.WorkoutPlanId.Value, out var n) ? n : string.Empty,
                 SessionDateUtc = ws.SessionDate,
                 DurationMinutes = ws.DurationMinutes,
-                SetsLogged = countMap.TryGetValue(ws.Id, out var c) ? c : 0
-            }).ToList();
-
-            return Ok(result);
+                SetsLogged = work.CompletedSets,
+                TotalSets = work.TotalSets,
+                RecordedVolume = work.Volume,
+                VolumeComplete = work.VolumeComplete,
+                WorkoutDate = ws.WorkoutDate,
+                CompletionPercent = ws.CompletionPercent,
+            };
         }
 
         /// <summary>ISO weekday number Monday = 1 … Sunday = 7 (matches typical <c>WorkoutPlanDay.DayNumber</c>).</summary>

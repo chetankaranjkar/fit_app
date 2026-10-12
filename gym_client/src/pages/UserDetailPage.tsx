@@ -34,6 +34,7 @@ import {
 } from '../services/userMemberships.service'
 import { userDietPlansService } from '../services/userDietPlans.service'
 import { memberHasDietAssignment, primaryDietAssignment } from '../lib/userDietPlanUtils'
+import { MemberWorkoutHistoryTab } from '../components/users/MemberWorkoutHistoryTab'
 import { UserOnboardingChecklist } from '../components/users/UserOnboardingChecklist'
 import { MemberOnboardingBillingActions } from '../components/users/MemberOnboardingBillingActions'
 import { buildMemberOnboardingSteps, getNextOnboardingStep } from '../lib/memberOnboarding'
@@ -227,6 +228,14 @@ const TABS_META: TabDef[] = [
     ),
   },
   {
+    id: 'Workout History',
+    icon: (
+      <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
     id: 'In Action',
     label: 'Attendance',
     icon: (
@@ -244,6 +253,7 @@ const TAB_IDS = [
   'Payment History',
   'Membership History',
   'Trainer',
+  'Workout History',
   'In Action',
 ] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -263,6 +273,8 @@ const TAB_FROM_SEARCH_PARAM: Record<string, TabId> = {
   coach: 'Trainer',
   'trainer-history': 'Trainer',
   'coach-history': 'Trainer',
+  'workout-history': 'Workout History',
+  workouts: 'Workout History',
   action: 'In Action',
   attendance: 'In Action',
   'in-action': 'In Action',
@@ -275,6 +287,7 @@ const TAB_TO_SEARCH_PARAM: Partial<Record<TabId, string>> = {
   'Payment History': 'payment-history',
   'Membership History': 'membership-history',
   Trainer: 'trainer',
+  'Workout History': 'workout-history',
   'In Action': 'in-action',
 }
 
@@ -1617,6 +1630,9 @@ export function UserDetailPage() {
               updateTrainerAssignmentNotesMutation.mutate({ assignmentId, notes })
             }
           />
+        )}
+        {activeTab === 'Workout History' && Number.isFinite(id) && id > 0 && (
+          <MemberWorkoutHistoryTab userId={id} />
         )}
         {activeTab === 'In Action' && (
           <InActionTab

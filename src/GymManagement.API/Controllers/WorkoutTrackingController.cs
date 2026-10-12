@@ -1,5 +1,6 @@
 using GymManagement.API.Attributes;
 using GymManagement.API.Middleware;
+using GymManagement.API.Services;
 using GymManagement.Core.Authorization;
 using GymManagement.Core.DTOs.WorkoutTracking;
 using GymManagement.Core.Exceptions;
@@ -217,7 +218,48 @@ public sealed class WorkoutTrackingController : ControllerBase
     {
         try
         {
-            return Ok(await _tracking.GetSessionDetailAsync(sessionId, ResolveUserId(), ct));
+            return Ok(await _tracking.GetSessionDetailAsync(
+                sessionId,
+                ResolveUserId(),
+                UserDirectoryScope.HasUsersAccess(HttpContext),
+                ct));
+        }
+        catch (NotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+    }
+
+    /// <summary>
+    /// Paged synced workout history for a profile user id (<c>Users.Id</c>).
+    /// Does not widen <c>GET trainer/members</c>.
+    /// </summary>
+    [HttpGet("users/{userId:int}/history")]
+    [ProducesResponseType(typeof(MemberWorkoutHistoryPageDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MemberWorkoutHistoryPageDto>> MemberHistory(
+        int userId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int utcOffsetMinutes = 0,
+        [FromQuery] string? status = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            return Ok(await _tracking.GetMemberWorkoutHistoryAsync(
+                userId,
+                new MemberWorkoutHistoryQueryDto
+                {
+                    Page = page,
+                    PageSize = pageSize,
+                    From = from,
+                    To = to,
+                    UtcOffsetMinutes = utcOffsetMinutes,
+                    Status = status,
+                },
+                ResolveUserId(),
+                UserDirectoryScope.HasUsersAccess(HttpContext),
+                ct));
         }
         catch (NotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException) { return Forbid(); }

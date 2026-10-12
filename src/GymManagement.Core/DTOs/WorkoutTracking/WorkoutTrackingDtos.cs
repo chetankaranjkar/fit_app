@@ -130,10 +130,50 @@ public sealed class MemberWorkoutTimelineDto
 public sealed class WorkoutSessionDetailDto
 {
     public ActiveWorkoutSessionDto Session { get; set; } = null!;
-    public int DurationMinutes { get; set; }
+    /// <summary>Null when the session has no stored or computed duration.</summary>
+    public int? DurationMinutes { get; set; }
     public int CompletedExercises { get; set; }
-    public decimal TotalVolume { get; set; }
+    /// <summary>Null when completed work is missing weight or reps. Not zero.</summary>
+    public decimal? TotalVolume { get; set; }
     public decimal AdherencePercent { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class MemberWorkoutHistoryQueryDto
+{
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
+    public DateTime? From { get; set; }
+    public DateTime? To { get; set; }
+    public int UtcOffsetMinutes { get; set; }
+    public string? Status { get; set; }
+}
+
+public sealed class MemberWorkoutHistoryItemDto
+{
+    public int SessionId { get; set; }
+    /// <summary>Members.Id. Live tracking routes use this id, not Users.Id.</summary>
+    public int MemberId { get; set; }
+    /// <summary>Users.Id from the profile route.</summary>
+    public int UserId { get; set; }
+    public string? PlanName { get; set; }
+    public DateTime OccurredAtUtc { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public int? DurationMinutes { get; set; }
+    public int CompletedSets { get; set; }
+    public int TotalSets { get; set; }
+    public decimal? TotalVolume { get; set; }
+    public bool VolumeComplete { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class MemberWorkoutHistoryPageDto
+{
+    public IReadOnlyList<MemberWorkoutHistoryItemDto> Items { get; set; } = Array.Empty<MemberWorkoutHistoryItemDto>();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
 }
 
 public sealed class WorkoutAdminMonitoringDto

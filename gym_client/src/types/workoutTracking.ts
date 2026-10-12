@@ -39,10 +39,34 @@ export type MemberWorkoutTimeline = {
 
 export type WorkoutSessionDetail = {
   session: ActiveWorkoutSession
-  durationMinutes: number
+  durationMinutes?: number | null
   completedExercises: number
-  totalVolume: number
+  totalVolume?: number | null
   adherencePercent: number
+  notes?: string | null
+}
+
+export type MemberWorkoutHistoryItem = {
+  sessionId: number
+  memberId: number
+  userId: number
+  planName?: string | null
+  occurredAtUtc: string
+  status: string
+  durationMinutes?: number | null
+  completedSets: number
+  totalSets: number
+  totalVolume?: number | null
+  volumeComplete: boolean
+  notes?: string | null
+}
+
+export type MemberWorkoutHistoryPage = {
+  items: MemberWorkoutHistoryItem[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
 }
 
 export type WorkoutAdminMonitoring = {

@@ -441,7 +441,147 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         };
     }
 
-    public async Task<WorkoutSessionDetailDto> GetSessionDetailAsync(int sessionId, int? callerUserId, CancellationToken ct = default)
+    public async Task<MemberWorkoutHistoryPageDto> GetMemberWorkoutHistoryAsync(
+        int userId,
+        MemberWorkoutHistoryQueryDto query,
+        int? callerUserId,
+        bool callerHasFullUsersAccess,
+        CancellationToken ct = default)
+    {
+        var member = await _db.Members.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsDeleted, ct)
+            ?? throw new NotFoundException("Member profile not found for this user.");
+
+        var isSelf = callerUserId.HasValue && callerUserId.Value == userId;
+        var activelyAssigned = false;
+        if (!callerHasFullUsersAccess && !isSelf)
+            activelyAssigned = await CallerHasActiveCoachAssignmentAsync(callerUserId, userId, ct);
+
+        if (!MemberWorkoutHistoryRules.CanView(isSelf, callerHasFullUsersAccess, activelyAssigned))
+            throw new UnauthorizedAccessException("Not allowed to view this member's workout history.");
+
+        var page = query.Page < 1 ? 1 : query.Page;
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var offset = MemberWorkoutHistoryRules.ClampOffset(query.UtcOffsetMinutes);
+        var status = string.IsNullOrWhiteSpace(query.Status) ? null : query.Status.Trim();
+
+        var sessions = _db.WorkoutSessions.AsNoTracking()
+            .Where(s => s.MemberId == member.Id && !s.IsDeleted);
+
+        if (query.From.HasValue)
+        {
+            var startUtc = query.From.Value.Date.AddMinutes(-offset);
+            sessions = sessions.Where(s => (s.SessionStartUtc ?? s.SessionDate) >= startUtc);
+        }
+
+        if (query.To.HasValue)
+        {
+            var endUtc = query.To.Value.Date.AddDays(1).AddMinutes(-offset);
+            sessions = sessions.Where(s => (s.SessionStartUtc ?? s.SessionDate) < endUtc);
+        }
+
+        if (string.Equals(status, WorkoutSessionStatus.Completed, StringComparison.OrdinalIgnoreCase))
+            sessions = sessions.Where(s => s.Status == WorkoutSessionStatus.Completed || (s.Status == null && s.IsCompleted));
+        else if (string.Equals(status, WorkoutSessionStatus.Skipped, StringComparison.OrdinalIgnoreCase))
+            sessions = sessions.Where(s => s.Status == WorkoutSessionStatus.Skipped);
+        else if (string.Equals(status, WorkoutSessionStatus.InProgress, StringComparison.OrdinalIgnoreCase))
+            sessions = sessions.Where(s => s.Status == WorkoutSessionStatus.InProgress || (s.Status == null && !s.IsCompleted));
+
+        var total = await sessions.CountAsync(ct);
+        var pageRows = await sessions
+            .OrderByDescending(s => s.SessionStartUtc ?? s.SessionDate)
+            .ThenByDescending(s => s.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        var planIds = pageRows.Where(s => s.WorkoutPlanId.HasValue).Select(s => s.WorkoutPlanId!.Value).Distinct().ToList();
+        var planNames = planIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await _db.WorkoutPlans.AsNoTracking()
+                .Where(p => planIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Name, ct);
+
+        var sessionIds = pageRows.Select(s => s.Id).ToList();
+        var tracked = sessionIds.Count == 0
+            ? new List<TrackedSetRow>()
+            : await _db.WorkoutSessionExercises.AsNoTracking()
+                .Where(e => sessionIds.Contains(e.WorkoutSessionId))
+                .Select(e => new TrackedSetRow
+                {
+                    SessionId = e.WorkoutSessionId,
+                    IsCompleted = e.IsCompleted,
+                    ActualWeight = e.ActualWeight,
+                    ActualReps = e.ActualReps,
+                })
+                .ToListAsync(ct);
+
+        var trackedSessionIds = tracked.Select(t => t.SessionId).ToHashSet();
+        var legacyIds = sessionIds.Where(id => !trackedSessionIds.Contains(id)).ToList();
+        var legacy = legacyIds.Count == 0
+            ? new List<LegacySetRow>()
+            : await _db.WorkoutLogs.AsNoTracking()
+                .Where(l => legacyIds.Contains(l.WorkoutSessionId))
+                .Select(l => new LegacySetRow
+                {
+                    SessionId = l.WorkoutSessionId,
+                    Weight = l.WeightUsed,
+                    Reps = l.RepsDone,
+                })
+                .ToListAsync(ct);
+
+        var items = pageRows.Select(session =>
+        {
+            var sessionSets = tracked.Where(t => t.SessionId == session.Id).ToList();
+            RecordedWork work;
+            if (sessionSets.Count > 0)
+            {
+                work = RecordedWork.Score(
+                    sessionSets.Count,
+                    sessionSets.Where(s => s.IsCompleted).Select(s => new PerformedSet(s.ActualWeight, s.ActualReps)).ToList());
+            }
+            else
+            {
+                var logs = legacy.Where(l => l.SessionId == session.Id).Select(l => new PerformedSet(l.Weight, l.Reps)).ToList();
+                work = RecordedWork.FromSources(false, 0, Array.Empty<PerformedSet>(), logs);
+            }
+
+            string? planName = null;
+            if (session.WorkoutPlanId.HasValue)
+                planNames.TryGetValue(session.WorkoutPlanId.Value, out planName);
+
+            return new MemberWorkoutHistoryItemDto
+            {
+                SessionId = session.Id,
+                MemberId = member.Id,
+                UserId = userId,
+                PlanName = planName,
+                OccurredAtUtc = MemberWorkoutHistoryRules.OccurredUtc(session.SessionStartUtc, session.SessionDate),
+                Status = MemberWorkoutHistoryRules.NormalizeStatus(session.Status, session.IsCompleted),
+                DurationMinutes = MemberWorkoutHistoryRules.DurationMinutes(session.DurationMinutes, session.SessionStartUtc, session.SessionEndUtc),
+                CompletedSets = work.CompletedSets,
+                TotalSets = work.TotalSets,
+                TotalVolume = work.Volume,
+                VolumeComplete = work.VolumeComplete,
+                Notes = session.Notes,
+            };
+        }).ToList();
+
+        return new MemberWorkoutHistoryPageDto
+        {
+            Items = items,
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+            TotalPages = pageSize < 1 ? 0 : (int)Math.Ceiling(total / (double)pageSize),
+        };
+    }
+
+    public async Task<WorkoutSessionDetailDto> GetSessionDetailAsync(
+        int sessionId,
+        int? callerUserId,
+        bool callerHasFullUsersAccess = false,
+        CancellationToken ct = default)
     {
         var session = await _db.WorkoutSessions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, ct)
@@ -450,7 +590,22 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         if (session.MemberId == null)
             throw new InvalidOperationException("Session has no member.");
 
-        await EnsureCanAccessMemberAsync(session.MemberId.Value, session.UserId ?? 0, callerUserId, ct);
+        var memberUserId = session.UserId;
+        if (!memberUserId.HasValue)
+        {
+            memberUserId = await _db.Members.AsNoTracking()
+                .Where(m => m.Id == session.MemberId.Value)
+                .Select(m => (int?)m.UserId)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        if (!callerHasFullUsersAccess)
+        {
+            var isSelf = callerUserId.HasValue && memberUserId.HasValue && callerUserId.Value == memberUserId.Value;
+            var activelyAssigned = !isSelf && await CallerHasActiveCoachAssignmentAsync(callerUserId, memberUserId ?? 0, ct);
+            if (!MemberWorkoutHistoryRules.CanView(isSelf, false, activelyAssigned))
+                throw new UnauthorizedAccessException("Not allowed to access this member's workouts.");
+        }
 
         var planName = session.WorkoutPlanId.HasValue
             ? await _db.WorkoutPlans.AsNoTracking()
@@ -477,19 +632,34 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             ? 0m
             : Math.Round(100m * completedExercises / totalExercises, 1);
 
-        var duration = session.DurationMinutes;
-        if (!duration.HasValue && session.SessionStartUtc.HasValue && session.SessionEndUtc.HasValue)
+        RecordedWork work;
+        if (sets.Count > 0)
         {
-            duration = Math.Max(1, (int)(session.SessionEndUtc.Value - session.SessionStartUtc.Value).TotalMinutes);
+            work = RecordedWork.Score(
+                sets.Count,
+                sets.Where(s => s.IsCompleted).Select(s => new PerformedSet(s.ActualWeight, s.ActualReps)).ToList());
+        }
+        else
+        {
+            var logs = await _db.WorkoutLogs.AsNoTracking()
+                .Where(l => l.WorkoutSessionId == sessionId)
+                .Select(l => new { l.WeightUsed, l.RepsDone })
+                .ToListAsync(ct);
+            work = RecordedWork.FromSources(
+                false,
+                0,
+                Array.Empty<PerformedSet>(),
+                logs.Select(l => new PerformedSet(l.WeightUsed, l.RepsDone)).ToList());
         }
 
         return new WorkoutSessionDetailDto
         {
             Session = mapped,
-            DurationMinutes = duration ?? 0,
+            DurationMinutes = MemberWorkoutHistoryRules.DurationMinutes(session.DurationMinutes, session.SessionStartUtc, session.SessionEndUtc),
             CompletedExercises = completedExercises,
-            TotalVolume = mapped.TotalVolume,
+            TotalVolume = work.Volume,
             AdherencePercent = adherence,
+            Notes = session.Notes,
         };
     }
 
@@ -715,8 +885,8 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
             Notes = s.Notes,
             CompletedAt = s.CompletedAt,
             CompletedByUserId = s.CompletedByUserId,
-            SetVolume = s.IsCompleted && s.ActualReps.HasValue
-                ? (s.ActualWeight ?? 0) * s.ActualReps.Value
+            SetVolume = s.IsCompleted && s.ActualWeight.HasValue && s.ActualReps.HasValue
+                ? s.ActualWeight.Value * s.ActualReps.Value
                 : null,
         };
 
@@ -753,6 +923,26 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         if (byUser != null) return (byUser, byUser.UserId);
 
         throw new NotFoundException("Member not found.");
+    }
+
+    private async Task<bool> CallerHasActiveCoachAssignmentAsync(int? callerUserId, int memberUserId, CancellationToken ct)
+    {
+        if (!callerUserId.HasValue || memberUserId <= 0)
+            return false;
+
+        var trainerId = await _db.Trainers.AsNoTracking()
+            .Where(t => t.UserId == callerUserId.Value && !t.IsDeleted)
+            .Select(t => (int?)t.Id)
+            .FirstOrDefaultAsync(ct);
+        if (!trainerId.HasValue)
+            return false;
+
+        return await _db.UserInstructors.AsNoTracking()
+            .AnyAsync(ui => ui.TrainerId == trainerId.Value
+                            && ui.UserId == memberUserId
+                            && !ui.IsDeleted
+                            && ui.IsActive
+                            && !ui.EndDate.HasValue, ct);
     }
 
     private async Task EnsureCanAccessMemberAsync(int memberId, int memberUserId, int? callerUserId, CancellationToken ct)
@@ -796,6 +986,21 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         }
 
         return streak;
+    }
+
+    private sealed class TrackedSetRow
+    {
+        public int SessionId { get; set; }
+        public bool IsCompleted { get; set; }
+        public decimal? ActualWeight { get; set; }
+        public int? ActualReps { get; set; }
+    }
+
+    private sealed class LegacySetRow
+    {
+        public int SessionId { get; set; }
+        public decimal? Weight { get; set; }
+        public int Reps { get; set; }
     }
 
     private async Task EnsureTrainerCanAccessMemberAsync(

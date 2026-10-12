@@ -2,6 +2,7 @@ import { api } from '../lib/api'
 import type {
   ActiveWorkoutActiveResponse,
   ActiveWorkoutSession,
+  MemberWorkoutHistoryPage,
   MemberWorkoutSummary,
   MemberWorkoutTimeline,
   WorkoutAdminMonitoring,
@@ -53,6 +54,19 @@ export const workoutTrackingService = {
 
   trainerMemberTimeline: (memberId: number, take = 40) =>
     api.get<MemberWorkoutTimeline>(`${base}/trainer/members/${memberId}/timeline`, { params: { take } }),
+
+  /** Profile history. `userId` is Users.Id, not Members.Id. */
+  memberHistory: (
+    userId: number,
+    params: {
+      page?: number
+      pageSize?: number
+      from?: string
+      to?: string
+      utcOffsetMinutes?: number
+      status?: string
+    },
+  ) => api.get<MemberWorkoutHistoryPage>(`${base}/users/${userId}/history`, { params }),
 
   sessionDetail: (sessionId: number) =>
     api.get<WorkoutSessionDetail>(`${base}/session/${sessionId}/detail`),

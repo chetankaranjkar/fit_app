@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-10-12 (program Assigned Members roster).
+**Last updated:** 2026-10-12 (member profile workout history).
 
 **Section map:** [README.md](./README.md#application_flows-section-map). Scheduled work / evidence labels: [PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md).
 
@@ -470,8 +470,11 @@ Catalog + assignments (distinct from legacy `UserSupplements` free-text table an
 |------|-----|-----------|
 | Trainer review hub | `GET /api/workout/trainer/members` | `/dashboard/training/workouts-to-review` |
 | Trainer timeline | `GET /api/workout/trainer/members/{memberId}/timeline` | `/dashboard/training/member-workouts/:memberId` |
-| Session detail (review sets) | `GET /api/workout/session/{sessionId}/detail` | Modal on review + timeline pages |
+| Session detail (review sets) | `GET /api/workout/session/{sessionId}/detail` | `WorkoutSessionReviewModal` on review, timeline, and member profile |
 | Admin monitoring | `GET /api/workout/admin/monitoring` | `/dashboard/training/workout-monitoring` |
+| Member profile history | `GET /api/workout/users/{userId}/history` | `/dashboard/users/:userId?mode=view&tab=workout-history` |
+
+**Member profile → Workout History** (`MemberWorkoutHistoryTab` on `UserDetailPage`): `{userId}` is **`Users.Id`**. The API resolves `Members` by that user id and returns that member’s server-synced `WorkoutSessions`, including sessions from earlier programs. It does not read `UserSchedules` and does not change `GET /api/workout/trainer/members`. Date range and status are filtered on the server; `totalCount` is the full match, and each page is a slice. Volume uses `RecordedWork` (tracked sets when present, otherwise legacy `WorkoutLogs`, never both). Missing weight, reps, or duration stays null. **View session** opens the shared read-only review modal. Callers with `UsersAccess` (including ADMIN, and accounts that also have the Trainer role) can open any member. A trainer without `UsersAccess` can open history and session detail only while an active `UserInstructors` row matches their trainer profile. Ended assignments and shared program membership do not grant access. The web list cannot see workouts that are still only on the phone.
 
 **Active API** `GET /api/workout/active/{memberId}` returns envelope (`session`, `lastSyncedAt`, `serverTimeUtc`). Unique index: one `InProgress` session per member.
 

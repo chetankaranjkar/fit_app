@@ -57,12 +57,23 @@ fi
 ln -sf /etc/nginx/sites-available/gym /etc/nginx/sites-enabled/gym
 rm -f /etc/nginx/sites-enabled/default
 
-# Drop other enabled vhosts that duplicate ${DOMAIN} (common after manual Certbot edits).
+# Drop other enabled vhosts that serve this production domain (common after manual Certbot edits).
+# Do not remove sibling sites such as UAT or other hostnames on the same VPS.
 shopt -s nullglob
 for enabled in /etc/nginx/sites-enabled/*; do
   base="$(basename "${enabled}")"
-  if [[ "${base}" != "gym" ]]; then
-    echo "Removing extra enabled site: ${base}"
+  if [[ "${base}" == "gym" ]]; then
+    continue
+  fi
+  duplicates_domain=false
+  while read -r name; do
+    if [[ "${name}" == "${DOMAIN}" || "${name}" == "www.${DOMAIN}" ]]; then
+      duplicates_domain=true
+      break
+    fi
+  done < <(grep -E '^[[:space:]]*server_name[[:space:]]' "${enabled}" | sed -E 's/^[[:space:]]*server_name[[:space:]]+//; s/;//g')
+  if [[ "${duplicates_domain}" == "true" ]]; then
+    echo "Removing extra enabled site that also serves ${DOMAIN}: ${base}"
     rm -f "${enabled}"
   fi
 done

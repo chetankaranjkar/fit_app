@@ -251,6 +251,57 @@ async function expectFrontDeskSafeLinks(page: Page) {
 }
 
 test.describe('Dashboard daily work list @daily-work', () => {
+  test('admin layout switches trends, expands renewals, and fits both themes and mobile', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await signInAs(page, {
+      appRoles: ['ADMIN'],
+      permissions: ['Reports', 'Config', 'Payments', 'UsersAccess', 'TrainerAccess', 'CreateUsers', 'LEADS_CRM'],
+    })
+    await page.route('**/api/Dashboard/summary', (route) => route.fulfill({ json: {
+      activeMembers: 248, todayAttendance: 64, newMembersToday: 3,
+      expiringMembershipsNext14Days: 12, todayRevenue: 18500,
+    } }))
+    await page.route('**/api/Reports/summary?*', (route) => route.fulfill({ json: {
+      totalRevenue: 186000, churnCount: 2, churnRatePercent: 0.8,
+      revenueTrend: [1, 2, 3, 4, 5].map((day) => ({ date: localDay(day - 5), amount: day * 3000 })),
+      attendanceTrend: [1, 2, 3, 4, 5].map((day) => ({ date: localDay(day - 5), count: day * 12 })),
+    } }))
+    await page.route('**/api/membership-payments/dashboard-summary', (route) => route.fulfill({ json: {
+      totalPendingAmount: 24500, pendingPaymentsCount: 14, overdueMembersCount: 4,
+      todayCollections: 18500, upcomingDueCount: 6, partialMembersCount: 3,
+    } }))
+    await page.route('**/api/Auth/preferences', (route) => route.fulfill({ json: {
+      theme: route.request().method() === 'PUT' ? route.request().postDataJSON().theme : 'dark',
+    } }))
+    await page.goto('/dashboard')
+    await expect(page.getByRole('heading', { name: 'Needs attention' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Business trends' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Peak hours' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Attendance', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Attendance', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await page.getByRole('button', { name: 'Revenue', exact: true }).click()
+    const renewals = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: 'Renewal queue' }) })
+    await expect(renewals).not.toHaveAttribute('open')
+    await renewals.locator('summary').click()
+    await expect(page.getByRole('searchbox', { name: 'Search renewal queue' })).toBeVisible()
+    await renewals.locator('summary').click()
+    await expect(page.getByRole('searchbox', { name: 'Search renewal queue' })).toHaveCount(0)
+    const screenshot = async (name: string) => {
+      await page.locator('#dashboard-main').evaluate((element) => { element.scrollTop = 0 })
+      await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: true, animations: 'disabled' })
+    }
+    await screenshot('desktop-dark')
+    await page.getByRole('button', { name: /Switch to light mode/i }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await screenshot('desktop-light')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(page.getByRole('heading', { name: 'Your gym, today' })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    const memberName = item(page, 'payment-21').getByRole('link', { name: 'Chen Overdue' })
+    expect(await memberName.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    await screenshot('mobile-light')
+  })
+
   test('admin sees every source, overdue before upcoming, sorted by urgency', async ({ page }) => {
     const requested = await signInAs(page, {
       appRoles: ['ADMIN'],

@@ -20,6 +20,7 @@ Companion to [APPLICATION_FLOWS.md](./APPLICATION_FLOWS.md). Check this **before
 
 - Reuse `ThemeToggle` and `useDashboardTheme` (`lib/dashboardTheme.ts`) for theme controls; do not create separate theme state per page.
 - Shared colours use `--dashboard-canvas`, `--dashboard-surface`, `--dashboard-surface-muted`, `--dashboard-text`, `--dashboard-muted`, and `--dashboard-border` from `dashboardTheme.css`. Keep saturated action/Avatar colours distinct from neutral surfaces.
+- Light mode uses a neutral grey canvas and white content panels; add `dashboard-panel` to explicit content surfaces. Reserve muted fills for toolbars and inset areas, and use compact status accents rather than large decorative tints. Dashboard decoration is marked `data-dashboard-decoration` and hidden in light mode. Profile navigation uses `data-member-tabs` for the light-mode blue underline treatment; keep dark-mode styling intact.
 - `MembersSummaryStrip` uses semantic text for totals and `data-summary-tone` for light-mode pastel surfaces and restrained shadows. Avoid white clipped gradients for numeric values on light surfaces.
 - Theme selection belongs to the authenticated `AuthUser`, defaults to dark, and is read/saved through `authService.getPreferences` / `updatePreferences` (`GET` / `PUT /api/Auth/preferences`). Resolve the account from the JWT; never send a member ID. A per-account browser cache restores the palette before rendering and provides an offline fallback. The switch is disabled during synchronization and reports failed saves.
 

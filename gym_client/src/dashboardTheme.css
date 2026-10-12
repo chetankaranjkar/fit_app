@@ -12,12 +12,12 @@ html.dashboard-app {
 
 html.dashboard-app[data-theme="light"] {
   color-scheme: light;
-  --dashboard-canvas: #f3f5fa;
+  --dashboard-canvas: #f5f7fa;
   --dashboard-surface: #ffffff;
-  --dashboard-surface-muted: #eef2f8;
+  --dashboard-surface-muted: #f1f3f6;
   --dashboard-text: #172033;
   --dashboard-muted: #526078;
-  --dashboard-border: #dce2ed;
+  --dashboard-border: #d8dee8;
 }
 
 html.dashboard-app[data-theme="light"] body {
@@ -73,12 +73,6 @@ html.dashboard-app[data-theme="light"] :is(
   :is([class^="bg-white/"], [class*=" bg-white/"]), :is([class^="bg-white/["], [class*=" bg-white/["]), :is([class^="bg-black/20"], [class*=" bg-black/20"])
 ) {
   background-color: var(--dashboard-surface-muted);
-}
-
-/* Tinted gradient panels remain distinct from solid gradient actions/avatars. */
-html.dashboard-app[data-theme="light"] :is(section, article):is([class^="bg-gradient"], [class*=" bg-gradient"]),
-html.dashboard-app[data-theme="light"] :is([class^="bg-[linear-gradient("], [class*=" bg-[linear-gradient("])[class*="rgba("] {
-  background-image: linear-gradient(135deg, #eef3ff, #f6f0ff);
 }
 
 html.dashboard-app[data-theme="light"] :is([class^="border-white/"], [class*=" border-white/"]),
@@ -150,3 +144,91 @@ html.dashboard-app[data-theme="light"] .recharts-default-tooltip {
 html.dashboard-app[data-theme="light"] ::selection { background: #dbeafe; color: #172033; }
 html.dashboard-app[data-theme="light"] * { scrollbar-color: #a8b5cb transparent; }
 html.dashboard-app[data-theme="light"] *::-webkit-scrollbar-thumb { background-color: #a8b5cb; }
+
+/* Neutral light canvas: decoration stays in the dark theme. */
+html.dashboard-app[data-theme="light"] .dashboard-shell { background: var(--dashboard-canvas); }
+html.dashboard-app[data-theme="light"] [data-dashboard-decoration] { display: none; }
+
+/* Give content panels a white surface distinct from the grey page and toolbars.
+   Match neutral legacy panels only, leaving coloured status indicators and actions intact. */
+html.dashboard-app[data-theme="light"] :is(.glass-card, .glass-card-strong, .dashboard-panel),
+html.dashboard-app[data-theme="light"] [class*="rounded-2xl"][class*="border-white/"][class*="bg-white/"] {
+  background: var(--dashboard-surface);
+  border-color: var(--dashboard-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgb(23 32 51 / 0.035);
+  backdrop-filter: none;
+}
+html.dashboard-app[data-theme="light"] :is(section, article):is([class^="bg-gradient"], [class*=" bg-gradient"]),
+html.dashboard-app[data-theme="light"] :is([class^="bg-[linear-gradient("], [class*=" bg-[linear-gradient("])[class*="rgba("] {
+  background: var(--dashboard-surface);
+}
+html.dashboard-app[data-theme="light"] :is(input, textarea, select)[class*="border-white/"] {
+  background: var(--dashboard-surface);
+  border-color: #c5cedc;
+}
+html.dashboard-app[data-theme="light"] :is(input, textarea, select):focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Profile navigation uses one baseline instead of a row of tinted boxes. */
+html.dashboard-app[data-theme="light"] [data-member-tabs] {
+  gap: 20px;
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--dashboard-border);
+}
+html.dashboard-app[data-theme="light"] [data-member-tabs] > button {
+  position: relative;
+  margin-bottom: -1px;
+  padding: 14px 2px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--dashboard-muted);
+}
+html.dashboard-app[data-theme="light"] .member-profile-page [data-member-tabs] > button.text-white[aria-pressed="true"] {
+  border-bottom-color: #2563eb;
+  color: #1d4ed8;
+}
+html.dashboard-app[data-theme="light"] [data-member-tabs] > button > span { color: inherit; }
+html.dashboard-app[data-theme="light"] .member-profile-page [data-member-tabs] > button.text-white[aria-pressed="true"] > span.text-white { color: #1d4ed8; }
+html.dashboard-app[data-theme="light"] [data-member-tabs] > button:hover { background: transparent; color: #1d4ed8; }
+html.dashboard-app[data-theme="light"] [data-member-tabs] > button:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+
+/* Compact onboarding keeps the next action visible without large nested tints. */
+html.dashboard-app[data-theme="light"] [data-testid="member-onboarding"] { padding: 16px 20px; }
+html.dashboard-app[data-theme="light"] [data-testid="member-onboarding-next"] {
+  min-height: 0;
+  border: 0;
+  border-left: 3px solid #2563eb;
+  border-radius: 0;
+  background: transparent;
+  padding: 6px 0 6px 12px;
+}
+html.dashboard-app[data-theme="light"] [data-testid="member-onboarding-next"][data-status="attention"] { border-left-color: #d97706; }
+html.dashboard-app[data-theme="light"] .member-profile-page [aria-hidden][class*="blur-"] { display: none; }
+html.dashboard-app[data-theme="light"] .member-profile-page > section { border-radius: 12px; }
+html.dashboard-app[data-theme="light"] .member-profile-page [data-billing-notifications] {
+  min-height: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-left: 3px solid #d97706;
+  border-radius: 0;
+  background: transparent;
+}
+html.dashboard-app[data-theme="light"] .workout-history-filters {
+  background: #fafbfc;
+  border-bottom: 1px solid var(--dashboard-border);
+}
+@media (max-width: 639px) {
+  html.dashboard-app[data-theme="light"] .workout-history-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html.dashboard-app[data-theme="light"] .workout-history-filters > label { min-width: 0; }
+  html.dashboard-app[data-theme="light"] .workout-history-filters > label:last-child { grid-column: 1 / -1; }
+  html.dashboard-app[data-theme="light"] .workout-history-filters :is(input, select) { min-width: 0; width: 100%; }
+}

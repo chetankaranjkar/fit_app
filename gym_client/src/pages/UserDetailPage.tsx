@@ -196,25 +196,13 @@ const TABS_META: TabDef[] = [
     ),
   },
   {
-    id: 'Payment History',
+    id: 'Membership & Payments',
     icon: (
       <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
           d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: 'Membership History',
-    icon: (
-      <svg className="size-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
         />
       </svg>
     ),
@@ -250,8 +238,7 @@ const TAB_IDS = [
   'Details',
   'Body Metrics',
   'Graph',
-  'Payment History',
-  'Membership History',
+  'Membership & Payments',
   'Trainer',
   'Workout History',
   'In Action',
@@ -264,11 +251,13 @@ const TAB_FROM_SEARCH_PARAM: Record<string, TabId> = {
   'body-metrics': 'Body Metrics',
   graph: 'Graph',
   progress: 'Graph',
-  payments: 'Payment History',
-  'payment-history': 'Payment History',
-  membership: 'Membership History',
-  'membership-history': 'Membership History',
-  memberships: 'Membership History',
+  billing: 'Membership & Payments',
+  'membership-payments': 'Membership & Payments',
+  payments: 'Membership & Payments',
+  'payment-history': 'Membership & Payments',
+  membership: 'Membership & Payments',
+  'membership-history': 'Membership & Payments',
+  memberships: 'Membership & Payments',
   trainer: 'Trainer',
   coach: 'Trainer',
   'trainer-history': 'Trainer',
@@ -284,8 +273,7 @@ const TAB_TO_SEARCH_PARAM: Partial<Record<TabId, string>> = {
   Details: 'details',
   'Body Metrics': 'body-metrics',
   Graph: 'graph',
-  'Payment History': 'payment-history',
-  'Membership History': 'membership-history',
+  'Membership & Payments': 'billing',
   Trainer: 'trainer',
   'Workout History': 'workout-history',
   'In Action': 'in-action',
@@ -434,11 +422,11 @@ export function UserDetailPage() {
     activeTab === 'Details' || activeTab === 'Body Metrics' || activeTab === 'In Action'
   const needsMetricsCurrent = activeTab === 'Body Metrics' || activeTab === 'In Action'
   const needsAttendanceData = activeTab === 'In Action'
-  const needsMembershipList = activeTab === 'Membership History' || editProfileOpen
+  const needsMembershipList = activeTab === 'Membership & Payments' || editProfileOpen
   const needsDetailsAssignments = activeTab === 'Details'
   const needsTrainerAssignments = activeTab === 'Trainer'
   const needsAttendanceForHero =
-    activeTab !== 'Membership History' && activeTab !== 'Payment History'
+    activeTab !== 'Membership & Payments'
 
   const { data: profileSummary, isFetching: profileSummaryFetching } = useQuery({
     queryKey: ['userProfileSummary', id],
@@ -1470,7 +1458,7 @@ export function UserDetailPage() {
 
   return (
     <DashboardLayout userName={userName}>
-      <DashboardPageContent className="max-w-[1800px]">
+      <DashboardPageContent className="member-profile-page max-w-[1800px]">
         {/* Back link */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
@@ -1543,7 +1531,7 @@ export function UserDetailPage() {
         )}
 
         {/* TAB BAR */}
-        <div className="flex min-w-0 gap-2 overflow-x-auto pb-2" aria-label="Member sections">
+        <div data-member-tabs className="flex min-w-0 gap-2 overflow-x-auto pb-2" aria-label="Member sections">
           {TABS_META.map((tab) => {
             const active = activeTab === tab.id
             return (
@@ -1602,17 +1590,30 @@ export function UserDetailPage() {
           />
         )}
         {activeTab === 'Graph' && <GraphTab chartData={chartData} logs={logs} />}
-        {activeTab === 'Payment History' && Number.isFinite(id) && id > 0 && user && (
-          <MemberPaymentHistoryTab
-            userId={id}
-            memberName={userDisplayName}
-            memberPhotoUrl={user.profilePictureUrl}
-            receiveEmailNotifications={user.receiveEmailNotifications ?? false}
-            receiveSmsNotifications={user.receiveSmsNotifications ?? false}
-          />
-        )}
-        {activeTab === 'Membership History' && Number.isFinite(id) && id > 0 && user && (
-          <MemberMembershipManagePanel user={user} onMembershipChanged={handleMembershipChanged} />
+        {activeTab === 'Membership & Payments' && Number.isFinite(id) && id > 0 && user && (
+          <div className="space-y-8" data-testid="member-billing-history">
+            <section aria-labelledby="member-membership-history-heading" className="space-y-4">
+              <header>
+                <h2 id="member-membership-history-heading" className="text-lg font-semibold text-white">Memberships & access</h2>
+                <p className="mt-1 text-sm text-slate-400">Current and previous plans, membership dates, and renewal history.</p>
+              </header>
+              <MemberMembershipManagePanel user={user} onMembershipChanged={handleMembershipChanged} />
+            </section>
+            <section aria-labelledby="member-payment-history-heading" className="space-y-4 border-t border-white/10 pt-6">
+              <header>
+                <h2 id="member-payment-history-heading" className="text-lg font-semibold text-white">Payments & receipts</h2>
+                <p className="mt-1 text-sm text-slate-400">Invoices, instalments, outstanding balances, and transaction receipts. Paying a balance does not extend membership access.</p>
+              </header>
+              <MemberPaymentHistoryTab
+                userId={id}
+                memberName={userDisplayName}
+                memberPhotoUrl={user.profilePictureUrl}
+                showMemberHeader={false}
+                receiveEmailNotifications={user.receiveEmailNotifications ?? false}
+                receiveSmsNotifications={user.receiveSmsNotifications ?? false}
+              />
+            </section>
+          </div>
         )}
         {activeTab === 'Trainer' && (
           <TrainerTab

@@ -92,6 +92,7 @@ export function UserOnboardingChecklist({
                 next.status === 'attention' ? 'border-amber-400/30 bg-amber-500/10' : 'border-blue-400/25 bg-blue-500/10',
               ].join(' ')}
               data-testid="member-onboarding-next"
+              data-status={next.status}
             >
               <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">

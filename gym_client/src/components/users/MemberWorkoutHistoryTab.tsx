@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Info } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { ListPagination } from '../ui/ListPagination'
 import { WorkoutSessionReviewModal } from '../../modules/workout-tracking/components/WorkoutSessionReviewModal'
@@ -66,17 +67,23 @@ export function MemberWorkoutHistoryTab({ userId }: { userId: number }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03]">
+    <div data-testid="member-workout-history" className="dashboard-panel rounded-2xl border border-white/10 bg-white/[0.03]">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-6 py-4">
         <div className="max-w-2xl">
-          <p className="text-sm text-slate-200">
-            {history.isSuccess ? `${totalCount} synced workout${totalCount === 1 ? '' : 's'}` : 'Workout history'}
-          </p>
+          <h2 className="text-base font-semibold text-white">Workout history</h2>
           <p className="mt-1 text-xs text-slate-400">
-            Server-synced sessions from the mobile app, including earlier program assignments. Workout assignments
-            stay on Details. Pending offline logs stay on the phone until they sync.
+            {history.isSuccess ? `${totalCount} synced workout${totalCount === 1 ? '' : 's'}` : 'Recorded workouts'} · Includes previous programs
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        <details className="relative">
+          <summary aria-label="About workout syncing" className="flex size-8 cursor-pointer list-none items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
+            <Info size={17} aria-hidden="true" />
+          </summary>
+          <p className="absolute right-0 top-10 z-20 w-64 max-w-[calc(100vw-3rem)] rounded-xl border border-white/10 bg-slate-900 p-4 text-xs leading-relaxed text-slate-300 shadow-lg">
+            Mobile workouts appear here after syncing, including sessions from previous program assignments. Offline logs stay on the phone until uploaded. Assigned programs are shown on Details.
+          </p>
+        </details>
         <button
           type="button"
           onClick={() => void history.refetch()}
@@ -84,9 +91,10 @@ export function MemberWorkoutHistoryTab({ userId }: { userId: number }) {
         >
           Refresh
         </button>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 px-6 py-4">
+      <div className="workout-history-filters flex flex-wrap items-end gap-3 px-6 py-4">
         <label className="text-xs text-slate-400">
           From
           <input
@@ -135,10 +143,10 @@ export function MemberWorkoutHistoryTab({ userId }: { userId: number }) {
           </button>
         </div>
       ) : totalCount === 0 ? (
-        <p className="px-6 py-10 text-center text-sm text-slate-400">
-          No synced workouts in this range. A workout appears here after the mobile app uploads it. This page cannot
-          see logs that are still only on the phone.
-        </p>
+        <div className="px-6 py-8 text-center">
+          <p className="text-sm font-medium text-slate-200">No workouts recorded in this date range.</p>
+          <p className="mt-2 text-xs text-slate-400">Mobile workouts appear here after syncing.</p>
+        </div>
       ) : (
         <div className="px-2 pb-4 sm:px-4">
           <div className="overflow-x-auto">

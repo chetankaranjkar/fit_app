@@ -77,7 +77,7 @@ export function DashboardLayout({
   }
 
   return (
-    <div className="relative flex h-dvh max-h-dvh w-full max-w-[100vw] overflow-hidden text-slate-100">
+    <div className="dashboard-shell relative flex h-dvh max-h-dvh w-full max-w-[100vw] overflow-hidden text-slate-100">
       <a
         href="#dashboard-main"
         className="skip-to-content"
@@ -88,7 +88,7 @@ export function DashboardLayout({
       >
         Skip to main content
       </a>
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <div aria-hidden data-dashboard-decoration className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className={`absolute -top-32 left-10 size-72 rounded-full blur-3xl animate-float-slow ${orbClasses[0]}`} />
         <div
           className={`absolute right-0 top-1/3 size-[28rem] rounded-full blur-3xl animate-float-slow ${orbClasses[1]}`}

@@ -80,7 +80,7 @@ function queueBadge(item: ExpiringMembershipQueueItem) {
   return null
 }
 
-export function RenewalQueuePanel({ enabled }: { enabled: boolean }) {
+export function RenewalQueuePanel({ enabled, appearance = 'card' }: { enabled: boolean; appearance?: 'card' | 'flat' }) {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [membershipUser, setMembershipUser] = useState<User | null>(null)
@@ -116,6 +116,7 @@ export function RenewalQueuePanel({ enabled }: { enabled: boolean }) {
     <>
       <GlassPanel
         role="admin"
+        appearance={appearance}
         title="Renewal queue"
         subtitle={`Plans ending in ${QUEUE_WITHIN_DAYS} days or recently expired — fully paid members still need renewal before QR check-in`}
         action={

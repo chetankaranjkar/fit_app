@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-10-12 (member profile workout history).
+**Last updated:** 2026-10-12 (member profile workout history; unified membership/payment history; admin dashboard layout; neutral light theme).
 
 **Section map:** [README.md](./README.md#application_flows-section-map). Scheduled work / evidence labels: [PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md).
 
@@ -99,6 +99,8 @@ One **person** = one row in `Users`. Login = `AuthUsers` (email, password) → `
 
 ## 4. Frontend routes (dashboard)
 
+**Member billing navigation (2026-10-12):** Member profiles have one **Membership & Payments** tab (`?tab=billing`), with **Memberships & access** followed by **Payments & receipts**. It reuses `MemberMembershipManagePanel` and `MemberPaymentHistoryTab`, omitting the latter's duplicate member header while retaining financial summaries, invoices, receipt actions, and expandable transaction timelines. Legacy `tab=payment-history`, `payments`, `membership-history`, `membership`, and `memberships` links select the combined tab; selecting it writes the canonical `billing` parameter and preserves `mode=view`. Existing membership actions and Payments permission checks remain in their shared components. Paying an outstanding balance is separate from extending gym access.
+
 | Route | Page | Primary API |
 |-------|------|-------------|
 | `/dashboard/users` | **Grid-first** members directory with compact header + summary strip; light page scroll + tall grid panel (`min-height` ~viewport) | `GET /api/Users/paged?membersOnly=true` (+ `assignedToCoachOnly=true` when coach-scoped) |
@@ -109,7 +111,7 @@ One **person** = one row in `Users`. Login = `AuthUsers` (email, password) → `
 
 Auth: token in client storage; permissions gate menu items (`PermissionCodes`).
 
-**Dashboard appearance:** the sun/moon button in `TopNavbar` switches Light / Dark on desktop and mobile for every persona. Dark is the initial default. The preference is stored in `AuthUsers.Theme` (migration `AddAccountThemePreference`) and follows the login account across browsers/devices. Authenticated `GET /api/Auth/preferences` reads `{ theme }`; `PUT /api/Auth/preferences` accepts only `light` or `dark` and saves it for the JWT account. No additional permission is required. A per-account `gym-dashboard-theme:<email>` browser cache restores the palette before rendering and synchronizes open tabs. The API hydrates the saved preference when entering the dashboard; toggling updates immediately, disables the switch while saving, and shows a message if persistence fails while retaining the local selection. `lib/dashboardTheme.ts` owns this state; `dashboardTheme.css` supplies the shared light palette for the dashboard shell, existing cards, forms, dialogs and chart labels. Public marketing pages retain their brand appearance. Keyboard users get a **Skip to main content** link (first tab stop in `DashboardLayout`) that moves focus to `#dashboard-main`. Shared dialogs (`Modal`, `SlideOverPanel`) trap focus, close on Escape (unless blocked while a payment is saving), and restore focus to the control that opened them.
+**Dashboard appearance:** the sun/moon button in `TopNavbar` switches Light / Dark on desktop and mobile for every persona. Dark is the initial default. The preference is stored in `AuthUsers.Theme` (migration `AddAccountThemePreference`) and follows the login account across browsers/devices. Authenticated `GET /api/Auth/preferences` reads `{ theme }`; `PUT /api/Auth/preferences` accepts only `light` or `dark` and saves it for the JWT account. No additional permission is required. A per-account `gym-dashboard-theme:<email>` browser cache restores the palette before rendering and synchronizes open tabs. The API hydrates the saved preference when entering the dashboard; toggling updates immediately, disables the switch while saving, and shows a message if persistence fails while retaining the local selection. `lib/dashboardTheme.ts` owns this state; `dashboardTheme.css` supplies the shared light palette for the dashboard shell, existing cards, forms, dialogs and chart labels. Light mode uses a neutral grey canvas (#F5F7FA), white content panels, stronger neutral form borders, and subtle dividers/shadows; dashboard background orbs are hidden. Member profile tabs use blue text and an underline, and collapsed onboarding uses compact next-action and billing accents. Workout History shows a concise empty state and keyboard/touch-accessible sync information disclosure. These appearance overrides are scoped to light mode; dark styling and public marketing pages retain their brand appearance. Keyboard users get a **Skip to main content** link (first tab stop in `DashboardLayout`) that moves focus to `#dashboard-main`. Shared dialogs (`Modal`, `SlideOverPanel`) trap focus, close on Escape (unless blocked while a payment is saving), and restore focus to the control that opened them.
 
 The member directory summary uses theme-aware numeric text and pale violet/green/blue cards with subtle shadows in light mode; the table panel uses the same restrained depth. The directory page shell provides 16px inner padding on mobile and 24px from the small breakpoint, keeping the header, summary and table consistently inset from its rounded outer edge. On mobile, header actions wrap below the title so it remains readable.
 
@@ -574,7 +576,7 @@ Staff and trainers work through one coaching path. Catalog administration and au
 | Expired history only | **Renew Membership** (prefills last plan, `intent: renew`) + **+ New Membership** |
 | Inactive history only (voided/cancelled) | **+ Add Membership** |
 
-Both entry points use shared **`AddUserMembershipModal`** → `POST /api/UserMemberships` (optional `creationSource`, `intent`, `priorMembershipId` for audit). Permission: **`Payments`** (`authService.canPaymentsAccess()`). Member is locked in the list modal; `/dashboard/user-memberships` opens the same modal with member picker. **Reactivation:** creating a new membership for an inactive member sets **`Users.IsActive = true`** automatically (`MemberAccountReactivation` in `UserMembershipService` / `UserService`). **Member profile:** onboarding **Manage memberships** opens the same `MemberMembershipsModal`; **Membership History** tab uses shared `MemberMembershipManagePanel` (add / renew buttons identical to the grid modal).
+Both entry points use shared **`AddUserMembershipModal`** → `POST /api/UserMemberships` (optional `creationSource`, `intent`, `priorMembershipId` for audit). Permission: **`Payments`** (`authService.canPaymentsAccess()`). Member is locked in the list modal; `/dashboard/user-memberships` opens the same modal with member picker. **Reactivation:** creating a new membership for an inactive member sets **`Users.IsActive = true`** automatically (`MemberAccountReactivation` in `UserMembershipService` / `UserService`). **Member profile:** onboarding **Manage memberships** opens the same `MemberMembershipsModal`; **Membership & Payments** tab uses shared `MemberMembershipManagePanel` (add / renew buttons identical to the grid modal).
 
 **`/dashboard/user-memberships` (member plans page):** `MembershipBillingNav`; **`GET /api/UserMemberships/summary`** KPI cards; paged list with `search` (incl. membership ID), `status`, `needsPayment`, `expiringWithinDays`, `includeTerminal`, `membershipId`; grid columns **Membership dates**, **Gym access**, **Payment status**, **Outstanding** (see *Membership standing* below); URL `?quick=needsPayment|expiring14|…&membershipId=`. Collapsible **Renewal focus** strip (`UserMembershipRenewalFocusStrip`). ID / **View details** opens **`UserMembershipDetailDrawer`** (billing summary, audit, actions). **Export CSV** (up to 500 filtered rows). Sectioned **Edit** modal; paid rows use **`RequestMembershipChangeModal`** → approvals. **Help** module `user_memberships`. Components: `UserMembershipsSummaryStrip`, `UserMembershipsToolbar`, `UserMembershipsGrid`, `EditUserMembershipModal`.
 
@@ -602,7 +604,7 @@ Every membership screen shows four separately labelled facts from one derivation
 
 **Next step** priority: collect when a balance is due → resolve (frozen / pending approval) or renew when access is blocked → renew when ending within 14 days.
 
-**Used on:** member directory (`UsersPage` columns Membership, Gym access, Payment status, Outstanding; trainers see no payment columns), member detail **Membership History** (`MemberMembershipHistoryTab`), `/dashboard/user-memberships` grid + **`UserMembershipDetailDrawer`**, and `/dashboard/payments/collect` (panel + blocked explanation). Directory data comes from `UserDto` fields `MembershipId`, `MembershipStatus`, `MembershipPlanName`, `MembershipStartDate`, `MembershipEndDate`, `MembershipBillingStatus`, `OutstandingBalance` (paged list with `includeBillingSummary`, display membership via `MemberOnboardingRules.ResolveDisplayMembership`). **E2E:** `gym_client/tests/e2e/membership-standing.spec.ts`.
+**Used on:** member directory (`UsersPage` columns Membership, Gym access, Payment status, Outstanding; trainers see no payment columns), member detail **Membership & Payments** (`MemberMembershipHistoryTab`), `/dashboard/user-memberships` grid + **`UserMembershipDetailDrawer`**, and `/dashboard/payments/collect` (panel + blocked explanation). Directory data comes from `UserDto` fields `MembershipId`, `MembershipStatus`, `MembershipPlanName`, `MembershipStartDate`, `MembershipEndDate`, `MembershipBillingStatus`, `OutstandingBalance` (paged list with `includeBillingSummary`, display membership via `MemberOnboardingRules.ResolveDisplayMembership`). **E2E:** `gym_client/tests/e2e/membership-standing.spec.ts`.
 
 **Existing duplicates** (e.g. two `ActivePendingPayment` rows for Rajesh Yadav) must be fixed manually: void/cancel or expire one row, then use the remaining membership for payment or upgrade.
 
@@ -623,13 +625,13 @@ Every membership screen shows four separately labelled facts from one derivation
 | `Voided` | Admin-approved void | Red |
 | `Transferred` | Transferred out | Blue |
 
-**Void flow:** Memberships grid → **Request void** (not delete) → `POST /api/membership-requests` (`RequestType: Void`) → membership → `VoidPending` → admin **Membership approvals** → **Approve** (ADMIN role or `APPROVE_MEMBERSHIP_REQUEST`) → `Voided`. Voided rows are hidden from the default membership list; history remains under member **Membership History** and `GET /api/membership-audit`. Payments and audit rows are retained. **Created** audit entries show who originally added a duplicate row.
+**Void flow:** Memberships grid → **Request void** (not delete) → `POST /api/membership-requests` (`RequestType: Void`) → membership → `VoidPending` → admin **Membership approvals** → **Approve** (ADMIN role or `APPROVE_MEMBERSHIP_REQUEST`) → `Voided`. Voided rows are hidden from the default membership list; history remains under member **Membership & Payments** and `GET /api/membership-audit`. Payments and audit rows are retained. **Created** audit entries show who originally added a duplicate row.
 
 **Renew / extend access:** Staff renew extends the same row (plan + end date). Mistaken renewals can be undone with **Revert last renewal** (`POST /api/UserMemberships/{id}/revert-last-renewal`), which restores plan, dates, and status from the last `Renewed` audit entry. Does not remove payment records. Preview: `GET …/last-renewal-revert-preview`.
 
 **Post-payment edits:** Arbitrary plan/date/status changes on an existing paid period (via **Edit**) require an approval request (`DateChange`, `PlanChange`, etc.). **Renew / extend access** is a normal staff action and does not require approval.
 
-**Routes:** `/dashboard/payments/membership-approvals` (admin queue), user detail → **Membership History** tab (all statuses visible).
+**Routes:** `/dashboard/payments/membership-approvals` (admin queue), user detail → **Membership & Payments** tab (all statuses visible).
 
 **APIs:** `POST/GET /api/membership-requests`, `POST …/approve`, `POST …/reject`, `GET /api/membership-audit`. `DELETE /api/UserMemberships/{id}` returns **400** with *"Membership deletion is not allowed. Submit a void request."*
 
@@ -670,7 +672,7 @@ Only transactions with **Status = Completed** count toward paid/outstanding. **V
 | `/dashboard/payments/waive-offs` | Request list; admin approve/reject |
 | `/dashboard/payments/membership-approvals` | Membership void/cancel/change approvals |
 | `/dashboard/payments/reports` | Collection, outstanding, coupon, waive-off, void/refund reports + CSV export |
-| User detail → **Payment History** tab | Financial summary card, member ledger, billing table; **Send email** / **Send SMS** per completed installment (`POST /api/membership-payments/transactions/{id}/send-receipt`) — respects member opt-in and gym SMTP / WhatsApp webhook config |
+| User detail → **Membership & Payments** tab | Financial summary card, member ledger, billing table; **Send email** / **Send SMS** per completed installment (`POST /api/membership-payments/transactions/{id}/send-receipt`) — respects member opt-in and gym SMTP / WhatsApp webhook config |
 
 ### Collect payment flow (web)
 
@@ -913,7 +915,9 @@ Billing sub-pages (payment history, waive-offs, membership approvals, billing re
 
 ## 12e. Dashboard daily work list ("Today's work")
 
-**Where:** Owner `AdminDashboardPage` (after Membership billing) and front-desk `FrontDeskDashboardPage` (after Quick actions), above the Renewal queue. Component `DailyWorkListPanel`; derivation in `gym_client/src/lib/dailyWorkList.ts`.
+**Where:** Owner `AdminDashboardPage` (labelled **Needs attention**, directly below the overview metrics) and front-desk `FrontDeskDashboardPage` (labelled **Today's work**, after Quick actions). Component `DailyWorkListPanel`; derivation in `gym_client/src/lib/dailyWorkList.ts`.
+
+**Admin layout (2026-10-12):** Compact greeting/date and permission-gated actions; one overview metrics strip with dividers; the unified daily work queue; a Revenue / Attendance chart switch showing the existing **month-to-date** reporting period and a monthly summary; then compact billing, trainer workload, recent payments, and alerts. Sections use the opt-in `GlassPanel` flat appearance (dividers without card backgrounds, shadows, or hover movement). Detailed **Renewal queue** search and **Reminder operations** are collapsed by default and mounted when expanded. Renewal actions remain available in Needs attention, with the expanded queue reusing its existing query/cache. Theme colours use the dashboard semantic variables and metrics wrap into two columns on phones. Front-desk, trainer, and member dashboards retain their existing layouts.
 
 **Groups:** **Overdue** first, then **Upcoming**; inside each group sorted by days overdue / days until due. Badges show e.g. *5 days overdue*, *Expired 3 days ago*, *Ends in 2 days*, *Waiting 1 day*. Filter: All / Overdue / Upcoming.
 

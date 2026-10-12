@@ -15,6 +15,7 @@ export function GlassPanel({
   title,
   subtitle,
   action,
+  appearance = 'card',
 }: {
   children: ReactNode
   className?: string
@@ -22,13 +23,14 @@ export function GlassPanel({
   title?: string
   subtitle?: string
   action?: ReactNode
+  appearance?: 'card' | 'flat'
 }) {
   return (
     <section
       className={[
-        'glass-card group relative overflow-hidden rounded-2xl border border-white/[0.08] p-5 sm:p-6',
-        'transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15',
-        glow[role],
+        appearance === 'flat'
+          ? 'relative min-w-0 border-t border-[var(--dashboard-border)] py-5 sm:py-6'
+          : `glass-card group relative overflow-hidden rounded-2xl border border-white/[0.08] p-5 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15 ${glow[role]}`,
         className,
       ].join(' ')}
     >

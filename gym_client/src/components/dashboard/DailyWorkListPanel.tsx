@@ -66,7 +66,11 @@ function restrictToRole(items: DailyWorkItem[], role: DashboardRole): DailyWorkI
  * Today's actionable queue built from existing APIs only. Each source is fetched only when the viewer
  * holds the permission its endpoint requires.
  */
-export function DailyWorkListPanel({ role }: { role: DashboardRole }) {
+export function DailyWorkListPanel({ role, title = "Today's work", appearance = 'card' }: {
+  role: DashboardRole
+  title?: string
+  appearance?: 'card' | 'flat'
+}) {
   const access = useMemo(() => getDailyWorkAccess(), [])
   const canPayments = access.payments
   const canLeads = access.leads
@@ -267,7 +271,8 @@ export function DailyWorkListPanel({ role }: { role: DashboardRole }) {
     <>
       <GlassPanel
         role={role}
-        title="Today's work"
+        title={title}
+        appearance={appearance}
         subtitle="Overdue first, then what is due soon — each item opens its existing workflow"
         action={
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter today's work">

@@ -73,7 +73,7 @@ test.describe('Dashboard theme @theme', () => {
     await expect(root).toHaveAttribute('data-theme', 'dark')
     await page.getByRole('button', { name: 'Switch to light mode' }).click()
     await expect(root).toHaveAttribute('data-theme', 'light')
-    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(243, 245, 250)')
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(245, 247, 250)')
     await expect(page.getByRole('heading', { name: 'Riya Sharma' })).toHaveCSS('color', 'rgb(23, 32, 51)')
     await page.getByRole('button', { name: 'Progress', exact: true }).click()
     await expect(root).toHaveAttribute('data-theme', 'light')
@@ -83,7 +83,7 @@ test.describe('Dashboard theme @theme', () => {
     await expect(dialog).toHaveCSS('background-color', 'rgb(255, 255, 255)')
     await expect(dialog.getByRole('heading', { name: 'Add user', exact: true })).toHaveCSS('color', 'rgb(23, 32, 51)')
     await dialog.getByRole('button', { name: 'Close', exact: true }).click()
-    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(243, 245, 250)')
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(245, 247, 250)')
     // A fresh browser has no local cache; the persisted API preference wins.
     await page.evaluate(() => localStorage.removeItem('gym-dashboard-theme:staff@test.local'))
     await page.reload()
@@ -259,5 +259,109 @@ test.describe('Member onboarding checklist @onboarding', () => {
     await expect(next).toContainText('Staff with billing access can do this.')
     await expect(next.getByRole('button')).toHaveCount(0)
     await expect(checklist.getByRole('button', { name: /membership/i })).toHaveCount(0)
+  })
+})
+
+test.describe('Unified member billing @member-billing', () => {
+  test('legacy history links open one tab with membership periods and transaction receipts', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await openProfile(page, { ...ADMIN, summary: {} })
+    await page.route('**/api/UserMemberships/by-user/501', (route) => route.fulfill({ json: [{
+      id: 77, userId: 501, planId: 1, planName: 'Monthly',
+      startDate: '2026-08-01T00:00:00', endDate: '2026-09-01T00:00:00',
+      status: 'Expired', paymentStatus: 'Paid', pendingAmount: 0, isFullyPaid: true,
+    }] }))
+    await page.route('**/api/membership-payments/by-user/501', (route) => route.fulfill({ json: [{
+      id: 91, membershipId: 77, userId: 501, planName: 'Monthly', paymentNumber: 'PAY-91',
+      totalAmount: 2000, originalAmount: 2000, netPayableAmount: 2000,
+      discountAmount: 0, waiverAmount: 0, couponDiscountAmount: 0,
+      paidAmount: 2000, pendingAmount: 0, paymentStatus: 'Paid',
+      transactions: [{ id: 92, transactionDate: '2026-08-01T12:00:00Z',
+        transactionAmount: 2000, transactionMethod: 'Cash', receiptNumber: 'REC-92', status: 'Completed' }],
+    }] }))
+    await page.route('**/api/membership-payments/member-ledger/501', (route) => route.fulfill({ json: { periods: [] } }))
+    await page.route('**/api/membership-payments/financial-summary/by-membership/77', (route) => route.fulfill({ json: {
+      membershipFee: 2000, couponDiscount: 0, approvedWaiveOff: 0,
+      netPayableAmount: 2000, totalPaid: 2000, outstandingBalance: 0, isOverdue: false,
+    } }))
+    await page.route('**/api/membership-audit?*', (route) => route.fulfill({ json: [] }))
+    for (const alias of ['payment-history', 'membership-history', 'membership', 'payments', 'billing']) {
+      await page.goto(`/dashboard/users/501?mode=view&tab=${alias}`)
+      const billingTab = page.getByRole('button', { name: 'Membership & Payments', exact: true })
+      await expect(billingTab).toHaveAttribute('aria-pressed', 'true')
+      await expect(page.getByRole('button', { name: /^(Payment History|Membership History)$/ })).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Memberships & access' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Payments & receipts' })).toBeVisible()
+    }
+    const billing = page.getByTestId('member-billing-history')
+    await expect(billing.locator('[data-membership-row="77"]')).toContainText('Expired')
+    await expect(billing.getByRole('row').filter({ hasText: 'PAY-91' })).toContainText('Paid')
+    await billing.getByRole('button', { name: 'Show timeline', exact: true }).click()
+    await expect(billing.getByText(/REC-92/)).toBeVisible()
+    await page.getByRole('button', { name: 'Details', exact: true }).click()
+    await page.getByRole('button', { name: 'Membership & Payments', exact: true }).click()
+    await expect(page).toHaveURL(/mode=view&tab=billing$/)
+    await billing.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: testInfo.outputPath('unified-billing.png'), animations: 'disabled' })
+  })
+
+  test('accounts without Payments do not fetch transaction data', async ({ page }) => {
+    const billingRequests: string[] = []
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.toLowerCase().startsWith('/api/membership-payments/')) billingRequests.push(request.url())
+    })
+    await openProfile(page, { appRoles: ['RECEPTIONIST'], permissions: ['UsersAccess'], summary: {} })
+    await page.goto('/dashboard/users/501?mode=view&tab=payment-history')
+    await expect(page.getByRole('heading', { name: 'Memberships & access' })).toBeVisible()
+    await expect(page.getByText('You need Payments permission to view membership billing history.')).toBeVisible()
+    expect(billingRequests).toEqual([])
+  })
+})
+
+test.describe('Neutral light profile @light-profile', () => {
+  test('separates white content from the canvas and keeps dark styling available', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 1100 })
+    await openProfile(page, {
+      ...ADMIN, theme: 'light',
+      summary: { currentMembershipId: 77, currentMembershipStatus: 'ActivePendingPayment',
+        currentMembershipPlanName: 'Monthly', hasOpenBalance: true, openMembershipId: 77 },
+    })
+    await page.route('**/api/membership-payments/by-user/501', (route) => route.fulfill({ json: [{
+      id: 91, membershipId: 77, pendingAmount: 6899, transactions: [],
+    }] }))
+    await page.route('**/api/workout/users/501/history?*', (route) => route.fulfill({ json: {
+      items: [], page: 1, pageSize: 20, totalCount: 0,
+    } }))
+    await page.goto('/dashboard/users/501?mode=view&tab=workout-history')
+    const panel = page.getByTestId('member-workout-history')
+    const tabs = page.locator('[data-member-tabs]')
+    const activeTab = tabs.getByRole('button', { name: 'Workout History', exact: true })
+    await expect(panel.getByText('No workouts recorded in this date range.')).toBeVisible()
+    await expect(page.locator('.dashboard-shell')).toHaveCSS('background-color', 'rgb(245, 247, 250)')
+    await expect(page.locator('[data-dashboard-decoration]')).toHaveCSS('display', 'none')
+    await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+    await expect(page.getByTestId('member-onboarding')).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+    await expect(activeTab).toHaveCSS('background-image', 'none')
+    await expect(activeTab).toHaveCSS('border-bottom-color', 'rgb(37, 99, 235)')
+    await expect(activeTab).toHaveCSS('color', 'rgb(29, 78, 216)')
+    await expect(activeTab.locator('span').first()).toHaveCSS('color', 'rgb(29, 78, 216)')
+    await expect(panel.getByLabel('From', { exact: true })).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+    await expect(panel.getByLabel('From', { exact: true })).toHaveCSS('border-color', 'rgb(197, 206, 220)')
+    await panel.getByLabel('About workout syncing').click()
+    await expect(panel.getByText(/Offline logs stay on the phone until uploaded/)).toBeVisible()
+    await panel.getByLabel('About workout syncing').click()
+    await page.getByTestId('member-onboarding').scrollIntoViewIfNeeded()
+    await page.screenshot({ path: testInfo.outputPath('light-profile-desktop.png'), animations: 'disabled' })
+    for (const width of [768, 390]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await panel.getByRole('heading', { name: 'Workout history' }).scrollIntoViewIfNeeded()
+      expect(await page.locator('#dashboard-main').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+      await expect(panel.getByLabel('Status')).toBeVisible()
+      await page.screenshot({ path: testInfo.outputPath(`light-profile-${width}.png`), animations: 'disabled' })
+    }
+    await page.getByRole('button', { name: 'Switch to dark mode' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(page.locator('[data-dashboard-decoration]')).not.toHaveCSS('display', 'none')
+    await expect(activeTab).not.toHaveCSS('background-image', 'none')
   })
 })

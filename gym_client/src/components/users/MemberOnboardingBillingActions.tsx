@@ -144,7 +144,7 @@ export function MemberOnboardingBillingActions({
   const overdue = user.isPaymentOverdue ?? isPaymentOverdue ?? false
 
   return (
-    <details open={compact ? undefined : true} className="min-h-24 rounded-xl border border-amber-400/20 bg-amber-500/5 p-4">
+    <details data-billing-notifications open={compact ? undefined : true} className="min-h-24 rounded-xl border border-amber-400/20 bg-amber-500/5 p-4">
       <summary className="cursor-pointer text-sm text-slate-300">
         <h3 className="inline text-sm font-semibold text-amber-100">Billing notifications</h3>
         {hasPending ? <span className="mt-1 block text-lg font-semibold text-amber-200">{formatInr(pendingAmount)} pending{overdue ? ' · Overdue' : ''}</span> : null}

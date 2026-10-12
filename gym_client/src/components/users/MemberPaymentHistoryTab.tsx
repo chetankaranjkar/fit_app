@@ -214,12 +214,14 @@ export function MemberPaymentHistoryTab({
   userId,
   memberName,
   memberPhotoUrl,
+  showMemberHeader = true,
   receiveEmailNotifications = false,
   receiveSmsNotifications = false,
 }: {
   userId: number
   memberName?: string
   memberPhotoUrl?: string | null
+  showMemberHeader?: boolean
   receiveEmailNotifications?: boolean
   receiveSmsNotifications?: boolean
 }) {
@@ -388,7 +390,7 @@ export function MemberPaymentHistoryTab({
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-        <div className="flex flex-wrap items-start gap-4">
+        {showMemberHeader && <div className="flex flex-wrap items-start gap-4">
           {photo ? (
             <img src={photo} alt="" className="size-16 rounded-full border border-white/15 object-cover" />
           ) : (
@@ -421,7 +423,7 @@ export function MemberPaymentHistoryTab({
               </Button>
             )}
           </div>
-        </div>
+        </div>}
         {summary && (
           <MembershipFinancialSummaryCard
             className="mt-4"

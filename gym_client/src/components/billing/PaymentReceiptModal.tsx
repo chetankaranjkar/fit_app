@@ -100,11 +100,15 @@ export function PaymentReceiptModal({
   onClose,
   receipt,
   onNotificationPrefsChange,
+  onFinish,
+  finishLabel = 'Finish & open member',
 }: {
   open: boolean
   onClose: () => void
   receipt: PaymentReceiptData | null
   onNotificationPrefsChange?: (prefs: { email: boolean; sms: boolean }) => void
+  onFinish?: () => void
+  finishLabel?: string
 }) {
   const printRef = useRef<HTMLDivElement>(null)
   const [sending, setSending] = useState<'email' | 'sms' | null>(null)
@@ -307,9 +311,10 @@ export function PaymentReceiptModal({
           </Button>
         )}
 
-        <Button type="button" onClick={onClose} className="sm:ml-auto">
+        <Button type="button" variant={onFinish ? 'secondary' : 'primary'} onClick={onClose} className="sm:ml-auto">
           Close
         </Button>
+        {onFinish && <Button type="button" onClick={onFinish}>{finishLabel}</Button>}
       </div>
     </Modal>
   )

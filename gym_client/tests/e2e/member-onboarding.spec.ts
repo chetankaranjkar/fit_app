@@ -365,3 +365,42 @@ test.describe('Neutral light profile @light-profile', () => {
     await expect(activeTab).not.toHaveCSS('background-image', 'none')
   })
 })
+
+test.describe('Membership collection handoff @membership-handoff', () => {
+  for (const collectNow of [true, false]) {
+    test(`new membership offers collection ${collectNow ? 'now' : 'later'} without taking a payment`, async ({ page }) => {
+      await openProfile(page, { ...ADMIN, summary: {} })
+      const membership = { id: 77, userId: 501, planId: 1, planName: 'Monthly',
+        startDate: '2026-10-15', endDate: '2026-11-14', status: 'ActivePendingPayment',
+        membershipPaymentId: 91, pendingAmount: 2000, paymentStatus: 'Pending' }
+      let created = false
+      const paymentPosts: string[] = []
+      page.on('request', (request) => {
+        if (request.method() === 'POST' && request.url().includes('/installments')) paymentPosts.push(request.url())
+      })
+      await page.route('**/api/UserMemberships/by-user/501', (route) => route.fulfill({ json: created ? [membership] : [] }))
+      await page.route('**/api/UserMemberships/active-conflict/501', (route) => route.fulfill({ status: 404, json: {} }))
+      await page.route('**/api/MembershipPlans', (route) => route.fulfill({ json: [{ id: 1, planName: 'Monthly', price: 2000, durationDays: 30 }] }))
+      await page.route('**/api/UserMemberships', (route) => {
+        created = true
+        return route.fulfill({ json: membership })
+      })
+      await page.getByRole('button', { name: 'Membership & Payments', exact: true }).click()
+      await page.getByRole('button', { name: '+ Add Membership', exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: 'Add membership', exact: true })
+      await dialog.getByLabel('Select plan').selectOption('1')
+      await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+      await expect(dialog.getByRole('heading', { name: 'Membership saved' })).toBeVisible()
+      await expect(dialog.getByRole('button', { name: 'Collect payment now' })).toBeVisible()
+      if (collectNow) {
+        await dialog.getByRole('button', { name: 'Collect payment now' }).click()
+        await expect(page).toHaveURL(/\/payments\/collect\?membershipId=77&userId=501&returnTo=/)
+      } else {
+        await dialog.getByRole('button', { name: 'Done for now' }).click()
+        await expect(dialog).toBeHidden()
+        await expect(page).toHaveURL(/tab=billing$/)
+      }
+      expect(paymentPosts).toEqual([])
+    })
+  }
+})

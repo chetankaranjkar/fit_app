@@ -89,6 +89,7 @@ export function AssignDietPlansPage() {
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const presetUserId = Number.parseInt(searchParams.get('userId') ?? '', 10)
+  const hasPresetUser = Number.isInteger(presetUserId) && presetUserId > 0
   const memberIdsQuery = searchParams.get('memberIds') ?? ''
   const returnToSafe = useMemo(
     () => getSafeDashboardReturnPath(searchParams.get('returnTo')),
@@ -133,6 +134,16 @@ export function AssignDietPlansPage() {
       return data.items ?? []
     },
   })
+
+  // A profile can belong to a member outside the first page of the picker.
+  const { data: presetUser } = useQuery({
+    queryKey: ['user', presetUserId],
+    queryFn: () => usersService.getById(presetUserId).then((r) => r.data),
+    enabled: hasPresetUser && !users.some((u) => u.id === presetUserId),
+  })
+  const assignableUsers = presetUser && !users.some((u) => u.id === presetUser.id)
+    ? [presetUser, ...users]
+    : users
 
   const { data: assignments = [], isLoading } = useQuery({
     queryKey: ['user-diet-plans'],
@@ -229,7 +240,7 @@ export function AssignDietPlansPage() {
           return
         }
       }
-      const dtoBase: CreateUserDietPlanDto = {
+      const dtoBase: Omit<CreateUserDietPlanDto, 'userId'> = {
         dietPlanId: form.dietPlanId,
         startDate: form.startDate,
         endDate: form.endDate || undefined,
@@ -303,6 +314,13 @@ export function AssignDietPlansPage() {
     setBulkUserIds([])
     setForm(getDefaultForm())
     setModalOpen(true)
+  }
+
+  function closeAssignModal() {
+    setModalOpen(false)
+    setFormError(null)
+    const target = resolveAssignReturnPath(searchParams.get('returnTo'), presetUserId)
+    if (target) navigate(target, { replace: true })
   }
 
   const handleUnassign = (a: UserDietPlanDto) => {
@@ -503,10 +521,7 @@ export function AssignDietPlansPage() {
       {/* Assign modal */}
       <Modal
         open={modalOpen}
-        onClose={() => {
-          setModalOpen(false)
-          setFormError(null)
-        }}
+        onClose={closeAssignModal}
         title="Assign diet plan"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -531,6 +546,7 @@ export function AssignDietPlansPage() {
                 }
                 if (!on) {
                   setBulkUserIds([])
+                  if (hasPresetUser) setForm((f) => ({ ...f, userId: presetUserId }))
                 }
               }}
               className="h-4 w-4 rounded border-white/20 bg-white/5 text-amber-500 focus:ring-amber-400/40"
@@ -541,11 +557,11 @@ export function AssignDietPlansPage() {
             <div>
               <p className={labelClass}>Members ({bulkUserIds.length} selected)</p>
               <div className="max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.03] p-2">
-                {users.length === 0 ? (
+                {assignableUsers.length === 0 ? (
                   <p className="px-2 py-3 text-sm text-slate-500">No members loaded.</p>
                 ) : (
                   <ul className="space-y-1">
-                    {users.map((u) => (
+                    {assignableUsers.map((u) => (
                       <li key={u.id}>
                         <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-200 hover:bg-white/[0.06]">
                           <input
@@ -570,15 +586,21 @@ export function AssignDietPlansPage() {
               <label className={labelClass}>Member</label>
               <select
                 aria-label="Select user"
+                disabled={hasPresetUser}
                 value={form.userId || ''}
                 onChange={(e) => setForm((f) => ({ ...f, userId: Number(e.target.value) }))}
-                className={selectClass}
+                className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
                 required
               >
                 <option value="" className="bg-slate-900">
                   Select member
                 </option>
-                {users.map((u) => (
+                {hasPresetUser && !assignableUsers.some((u) => u.id === presetUserId) && (
+                  <option value={presetUserId} className="bg-slate-900">
+                    Member #{presetUserId}
+                  </option>
+                )}
+                {assignableUsers.map((u) => (
                   <option key={u.id} value={u.id} className="bg-slate-900">
                     {formatMemberLabel(u)} ({u.email})
                   </option>
@@ -641,7 +663,7 @@ export function AssignDietPlansPage() {
             <span className="text-sm text-slate-300">Mark as active now</span>
           </label>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
+            <Button type="button" variant="secondary" onClick={closeAssignModal}>
               Cancel
             </Button>
             <Button type="submit" disabled={assignMutation.isPending || bulkSubmitting}>

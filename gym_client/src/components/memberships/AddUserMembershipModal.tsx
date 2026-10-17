@@ -9,6 +9,7 @@ import { userMembershipsService } from '../../services/userMemberships.service'
 import { usersService } from '../../services/users.service'
 import { membershipPlansService } from '../../services/membershipPlans.service'
 import { getApiErrorMessage } from '../../lib/apiErrors'
+import { formatInr } from '../../lib/formatInr'
 import {
   findOccupyingMembershipConflict,
 } from '../../lib/membershipRules'
@@ -33,6 +34,7 @@ import {
   collectPaymentPath,
   memberMembershipHistoryPath,
   membershipStatusOpensCollectPayment,
+  getMembershipCollectPaymentPath,
 } from '../../lib/membershipPaymentNavigation'
 import { ActiveMembershipConflictModal } from './ActiveMembershipConflictModal'
 import type { ActiveMembershipConflict } from '../../types/activeMembershipConflict'
@@ -98,6 +100,11 @@ export function AddUserMembershipModal({
   const navigate = useNavigate()
   const [form, setForm] = useState<CreateUserMembershipDto>(defaultCreate)
   const [formError, setFormError] = useState<string | null>(null)
+  const [createdMembership, setCreatedMembership] = useState<UserMembership | null>(null)
+  const closeCreatedMembership = () => {
+    setCreatedMembership(null)
+    onClose()
+  }
   const [memberSearch, setMemberSearch] = useState('')
   const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('')
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
@@ -256,7 +263,7 @@ export function AddUserMembershipModal({
     onSuccess: (res) => {
       const created = res.data
       toast.success(intent === 'renew' ? 'Membership renewed.' : 'Membership created.')
-      onClose()
+      setCreatedMembership(created)
       onCreated?.(created)
       void invalidateAfterCreate(form.userId)
     },
@@ -309,7 +316,7 @@ export function AddUserMembershipModal({
     onError: (err: unknown) => {
       const msg = getApiErrorMessage(err, 'Failed to renew membership')
       if (/collect|outstanding payment/i.test(msg)) {
-        setActiveConflict(existingActiveConflict)
+        setActiveConflict(existingActiveConflict ?? null)
         setFormError(msg)
         return
       }
@@ -327,7 +334,7 @@ export function AddUserMembershipModal({
 
     if (isExtendRenew && existingActiveConflict) {
       if (renewNeedsCollect) {
-        setActiveConflict(existingActiveConflict)
+        setActiveConflict(existingActiveConflict ?? null)
         return
       }
       if (!extendEndDate) {
@@ -374,8 +381,22 @@ export function AddUserMembershipModal({
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title={title}>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <Modal open={open} onClose={closeCreatedMembership} title={title}>
+        {createdMembership ? (
+          <section className="space-y-4" data-testid="membership-created">
+            <h3 className="text-lg font-semibold text-white">Membership saved</h3>
+            <p className="text-sm text-slate-300">{createdMembership.planName ?? selectedPlan?.planName ?? 'Membership'} · {formatConflictDate(createdMembership.startDate)} – {formatConflictDate(createdMembership.endDate)}</p>
+            <p className="text-sm text-slate-400">No payment was recorded by this step. Collect payment now, or return to Membership & Payments later.</p>
+            {createdMembership.pendingAmount != null && <p className="font-semibold text-white">Outstanding: {formatInr(createdMembership.pendingAmount)}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={closeCreatedMembership}>Done for now</Button>
+              {getMembershipCollectPaymentPath(createdMembership) && <Button type="button" onClick={() => {
+                const path = getMembershipCollectPaymentPath(createdMembership, memberMembershipHistoryPath(createdMembership.userId))
+                if (path) { closeCreatedMembership(); navigate(path) }
+              }}>Collect payment now</Button>}
+            </div>
+          </section>
+        ) : <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {formError ? (
             <p
               className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
@@ -661,7 +682,7 @@ export function AddUserMembershipModal({
               {renewContextLoading ? 'Loading…' : intent === 'renew' ? 'Renew' : 'Create'}
             </Button>
           </div>
-        </form>
+        </form>}
       </Modal>
 
       <ActiveMembershipConflictModal

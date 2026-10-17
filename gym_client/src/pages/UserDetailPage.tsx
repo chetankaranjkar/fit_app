@@ -40,6 +40,7 @@ import { MemberOnboardingBillingActions } from '../components/users/MemberOnboar
 import { buildMemberOnboardingSteps, getNextOnboardingStep } from '../lib/memberOnboarding'
 import { canAccessPaymentsNav, canAccessTrainingNav } from '../features/auth/navPermissions'
 import { DietAssignmentsSection } from '../components/users/DietAssignmentsSection'
+import { AssignedPlanDetailsModal, type AssignedPlanSelection } from '../components/users/AssignedPlanDetailsModal'
 import { MemberReportExports } from '../components/users/MemberReportExports'
 import { TrainerHealthAlertPanel } from '../modules/health-profile/components/TrainerHealthAlertPanel'
 import { healthProfileService } from '../modules/health-profile/services/healthProfile.service'
@@ -2789,6 +2790,7 @@ function DetailsTab({
 }) {
   const activeWorkoutSchedules = userSchedules.filter((s) => s.isActive)
   const activeWorkoutPlanIds = new Set(activeWorkoutSchedules.map((s) => s.workoutPlanId))
+  const [planDetails, setPlanDetails] = useState<AssignedPlanSelection | null>(null)
   const hasWorkoutAssignment = activeWorkoutSchedules.length > 0
 
   const { data: healthSummary, isLoading: healthSummaryLoading } = useQuery({
@@ -2976,6 +2978,7 @@ function DetailsTab({
         onAssignDiet={onAssignDiet}
         onChangeDiet={onChangeDiet}
         onRemoveDiet={onRemoveDiet}
+        onViewDiet={(assignment) => setPlanDetails({ kind: 'diet', assignment })}
       />
 
       <section className="relative overflow-hidden rounded-3xl border border-blue-500/25 bg-gradient-to-br from-blue-950/45 via-[rgba(18,18,42,0.88)] to-indigo-950/35 shadow-lg shadow-blue-950/25">
@@ -3043,7 +3046,10 @@ function DetailsTab({
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                       <div className="flex flex-wrap items-center gap-2.5">
-                        <p className="text-base font-semibold text-white">{schedule.workoutPlanName}</p>
+                        <button type="button" onClick={() => setPlanDetails({ kind: 'workout', schedule })}
+                          className="text-left text-base font-semibold text-white underline decoration-blue-400/40 underline-offset-4 hover:text-blue-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400">
+                          {schedule.workoutPlanName || `Plan #${schedule.workoutPlanId}`}
+                        </button>
                         <span className="rounded-full bg-blue-500/15 px-2.5 py-1 text-xs font-semibold text-blue-200 ring-1 ring-blue-400/30">
                           {schedule.scheduleType}
                         </span>
@@ -3109,6 +3115,7 @@ function DetailsTab({
           </div>
         </div>
       </section>
+      <AssignedPlanDetailsModal selection={planDetails} onClose={() => setPlanDetails(null)} />
     </div>
   )
 }

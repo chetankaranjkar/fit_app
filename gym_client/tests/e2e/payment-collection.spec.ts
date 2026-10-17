@@ -188,6 +188,7 @@ async function openCollect(page: Page) {
     permissions: [
       { id: 1, code: 'UsersAccess' },
       { id: 2, code: 'Payments' },
+      { id: 3, code: 'CREATE_MEMBER' },
     ],
   }
   await page.addInitScript(
@@ -367,4 +368,106 @@ test.describe('Collect membership payment @payments', () => {
     expect(api.posts).toHaveLength(2)
     expect(api.posts[1]).toMatchObject({ amount: 1000, method: 'BankTransfer', referenceNumber: 'NEFT-42' })
   })
+})
+
+test.describe('Payment handoff @payment-handoff', () => {
+  test('finishes directly from the saved receipt', async ({ page }, testInfo) => {
+    const api = await stubBilling(page)
+    await openCollect(page)
+    await page.getByRole('button', { name: 'Full amount' }).click()
+    await page.getByRole('button', { name: 'Review & pay' }).click()
+    await review(page).getByRole('button', { name: 'Confirm payment' }).click()
+    const receipt = page.getByRole('dialog', { name: 'Payment receipt' })
+    await expect(receipt).toContainText('RCP-100')
+    await page.screenshot({ path: testInfo.outputPath('receipt-finish.png'), animations: 'disabled' })
+    await receipt.getByRole('button', { name: 'Finish & open member' }).click()
+    await expect(page).toHaveURL(/\/dashboard\/users\/501$/)
+    expect(api.posts).toHaveLength(1)
+  })
+
+  test('missing billing selection has a way back instead of a loading screen', async ({ page }) => {
+    await stubBilling(page)
+    await openCollect(page)
+    await page.goto('/dashboard/payments/collect')
+    await expect(page.getByRole('heading', { name: 'Could not open membership billing' })).toBeVisible()
+    await page.getByRole('button', { name: 'Back to memberships' }).click()
+    await expect(page).toHaveURL(/\/dashboard\/user-memberships$/)
+  })
+
+  test('billing load failure provides retry and recovery', async ({ page }) => {
+    await stubBilling(page)
+    await openCollect(page)
+    let unavailable = true
+    await page.route(`**/api/membership-payments/by-membership/${MEMBERSHIP_ID}`, async (route) => {
+      if (unavailable) return route.fulfill({ status: 503, json: { message: 'Billing unavailable' } })
+      return route.fallback()
+    })
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Could not open membership billing' })).toBeVisible({ timeout: 20_000 })
+    unavailable = false
+    await page.getByRole('button', { name: 'Retry', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Record payment' })).toBeVisible()
+  })
+
+  test('payments hub opens the same installment receipt after collection', async ({ page }) => {
+    const api = await stubBilling(page)
+    await openCollect(page)
+    await page.route('**/api/UserMemberships/paged?*', (route) => route.fulfill({ json: {
+      items: [{ id: MEMBERSHIP_ID, userId: MEMBER_ID, planId: 3, userName: 'Riya Sharma', planName: 'Quarterly',
+        startDate: '2026-10-01', endDate: '2026-12-31', status: 'ActivePendingPayment',
+        pendingAmount: FEE, paymentStatus: 'Pending', membershipPaymentId: PAYMENT_ID }], totalCount: 1, page: 1, pageSize: 200,
+    } }))
+    await page.goto('/dashboard/payments')
+    await page.getByRole('button', { name: '+ Add payment' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Record Payment', exact: true })
+    await dialog.locator('select').first().selectOption(String(MEMBERSHIP_ID))
+    await dialog.getByRole('button', { name: /Review payment/ }).click()
+    await review(page).getByRole('button', { name: 'Confirm payment' }).click()
+    const receipt = page.getByRole('dialog', { name: 'Payment receipt' })
+    await expect(receipt).toContainText('RCP-100')
+    await expect(receipt.getByRole('button', { name: 'Email receipt' })).toBeVisible()
+    await receipt.getByRole('button', { name: 'Finish & open member' }).click()
+    await expect(page).toHaveURL(/mode=view&tab=billing$/)
+    expect(api.posts).toHaveLength(1)
+  })
+})
+
+test.describe('New member billing @new-member-billing', () => {
+  for (const collectNow of [true, false]) {
+    test(`creates a member and ${collectNow ? 'continues to collection' : 'defers collection'}`, async ({ page }, testInfo) => {
+      const api = await stubBilling(page)
+      await openCollect(page)
+      await page.route('**/api/MembershipPlans', (route) => route.fulfill({ json: [{ id: 3, planName: 'Quarterly', price: FEE, durationDays: 90 }] }))
+      await page.route('**/api/Users/check-mobile?*', (route) => route.fulfill({ json: { isAvailable: true } }))
+      await page.route('**/api/Users/check-username?*', (route) => route.fulfill({ json: { isAvailable: true } }))
+      const membersCreated: unknown[] = []
+      await page.route('**/api/Users', (route) => {
+        membersCreated.push(route.request().postDataJSON())
+        return route.fulfill({ json: { id: MEMBER_ID, pendingPaymentCollection: {
+          userId: MEMBER_ID, membershipId: MEMBERSHIP_ID, membershipPaymentId: PAYMENT_ID,
+        } } })
+      })
+      await page.getByRole('button', { name: 'New Member', exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: 'Add user' })
+      await dialog.getByLabel('First name', { exact: true }).fill('Riya')
+      await dialog.getByLabel('Last name', { exact: true }).fill('Sharma')
+      await dialog.getByLabel('Email (login)', { exact: true }).fill('newmember@test.local')
+      await dialog.getByLabel('Phone', { exact: true }).fill('9876543210')
+      await dialog.getByLabel('Password', { exact: true }).fill('Test-member-123')
+      await dialog.getByLabel('Preferred gym shift').selectOption('Morning')
+      await dialog.getByLabel('Membership plan', { exact: true }).selectOption('3')
+      await dialog.getByLabel('Membership start date', { exact: true }).fill(isoInDays(0))
+      await expect(dialog.getByText('✓ Mobile number available')).toBeVisible()
+      await expect(dialog.getByText('✓ Email available for login')).toBeVisible()
+      await dialog.getByLabel('Continue to payment after creating this member').setChecked(collectNow)
+      const createButton = dialog.getByRole('button', { name: collectNow ? 'Create member & continue to payment' : 'Create member', exact: true })
+      await createButton.scrollIntoViewIfNeeded()
+      await page.screenshot({ path: testInfo.outputPath('member-payment-choice.png'), animations: 'disabled' })
+      await createButton.click()
+      if (collectNow) await expect(page).toHaveURL(/\/payments\/collect\?membershipId=77&userId=501&returnTo=/)
+      else await expect(page).toHaveURL(/\/dashboard\/users\/501$/)
+      expect(membersCreated).toHaveLength(1)
+      expect(api.posts).toEqual([])
+    })
+  }
 })

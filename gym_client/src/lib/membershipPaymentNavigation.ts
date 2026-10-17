@@ -8,7 +8,7 @@ export function memberProfilePath(userId: number): string {
 }
 
 export function memberMembershipHistoryPath(userId: number): string {
-  return `/dashboard/users/${userId}?mode=view&tab=membership-history`
+  return `/dashboard/users/${userId}?mode=view&tab=billing`
 }
 
 export function collectPaymentPath(

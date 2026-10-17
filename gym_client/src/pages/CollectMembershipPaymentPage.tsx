@@ -18,10 +18,10 @@ import { MembershipFinancialSummaryCard } from '../components/billing/Membership
 import { PaymentConfirmationModal } from '../components/billing/PaymentConfirmationModal'
 import { PaymentReceiptModal, type PaymentReceiptData } from '../components/billing/PaymentReceiptModal'
 import { PaymentCollectedPanel } from '../components/billing/PaymentCollectedPanel'
+import { recordedPaymentReceipt } from '../components/billing/recordedPaymentReceipt'
 import {
   MEMBERSHIP_PAYMENT_METHODS,
   computeNetPayable,
-  findRecordedTransaction,
   getMembershipAmount,
   getRemainingBalance,
   paymentMethodLabel,
@@ -81,7 +81,7 @@ export function CollectMembershipPaymentPage() {
   const [waiveAmount, setWaiveAmount] = useState('')
   const [waiveReason, setWaiveReason] = useState('')
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError: billingError, error: billingLoadError, refetch: reloadBilling } = useQuery({
     queryKey: ['membership-payment', membershipId],
     queryFn: async () => {
       const { data: d } = await membershipPaymentsService.byMembership(membershipId)
@@ -283,21 +283,14 @@ export function CollectMembershipPaymentPage() {
           pendingAfter > 0.02 ? (nextDue ? new Date(`${nextDue}T12:00:00`).toISOString() : undefined) : undefined,
       }
       const { data: res } = await membershipPaymentsService.addInstallment(data.id, body)
-      const recorded = findRecordedTransaction(res.transactions ?? [], priorTransactionIds)
-      let prefs: { email?: boolean; sms?: boolean } = {}
-      if (recorded) {
-        // The receipt's "Enable email/SMS" action rewrites both flags, so it needs the member's real preferences.
-        try {
-          const { data: rows } = await membershipPaymentsService.listTransactions({ userId: res.userId })
-          const row = rows.find((r) => r.id === recorded.id)
-          if (row) prefs = { email: row.receiveEmailNotifications, sms: row.receiveSmsNotifications }
-        } catch {
-          prefs = {}
-        }
-      }
-      return { res, recorded, prefs }
+      const receipt = await recordedPaymentReceipt(res, priorTransactionIds, {
+        name: financialSummary?.memberName ?? membership?.userName,
+        code: financialSummary?.memberCode,
+        photoUrl: financialSummary?.memberPhotoUrl,
+      })
+      return { res, receipt }
     },
-    onSuccess: ({ res, recorded, prefs }) => {
+    onSuccess: ({ res, receipt }) => {
       const profileUserId =
         userIdFromUrl > 0 ? userIdFromUrl : (res.userId ?? data?.userId ?? 0)
       const redirectPath = resolvePostCollectPaymentPath(profileUserId, returnToParam)
@@ -314,37 +307,18 @@ export function CollectMembershipPaymentPage() {
       setDuplicateWarn(null)
 
       const msg = fullySettled
-        ? 'Full payment recorded. Membership is now active.'
+        ? 'Full payment recorded. Balance settled.'
         : res.paymentStatus === 'Partial' || res.isPartiallyPaid
           ? `Partial payment recorded. Pending ${formatInr(res.pendingAmount)}.`
           : 'Payment recorded.'
       toast.success(msg)
 
-      if (recorded) {
-        setCollected({
-          fullySettled,
-          redirectPath: redirectPath || null,
-          receipt: {
-            transactionId: recorded.id,
-            userId: res.userId,
-            receiptNumber: recorded.receiptNumber ?? `#${recorded.id}`,
-            memberName: financialSummary?.memberName ?? membership?.userName ?? 'Member',
-            memberId: financialSummary?.memberCode ?? `M-${res.userId}`,
-            memberPhotoUrl: financialSummary?.memberPhotoUrl,
-            planName: res.planName,
-            amountPaid: recorded.transactionAmount,
-            paymentMethod: recorded.transactionMethod,
-            remainingBalance: res.pendingAmount,
-            paymentDate: recorded.transactionDate,
-            receiveEmailNotifications: prefs.email ?? false,
-            receiveSmsNotifications: prefs.sms ?? false,
-          },
-        })
+      if (receipt) {
+        setCollected({ fullySettled, redirectPath: redirectPath || null, receipt })
         setReceiptOpen(true)
-      } else if (redirectPath) {
-        navigate(redirectPath, { replace: true })
       } else {
-        toast.error('Payment recorded but member profile could not be opened (missing user id).')
+        toast.error('Payment recorded. Open Membership & Payments to view its receipt. Do not submit this payment again.')
+        if (redirectPath) navigate(redirectPath, { replace: true })
       }
 
       queryClient.invalidateQueries({ queryKey: ['payment-transactions'] })
@@ -421,10 +395,19 @@ export function CollectMembershipPaymentPage() {
     )
   }
 
-  if (!membershipId) {
+  if (!collected && (!Number.isInteger(membershipId) || membershipId <= 0 || billingError || (!isLoading && !data))) {
     return (
       <DashboardLayout userName={userName}>
-        <p className="px-6 text-slate-400">Missing membershipId in URL.</p>
+        <DashboardPageContent className="max-w-4xl px-4 py-6">
+          <h1 className="text-xl font-semibold text-white">Could not open membership billing</h1>
+          <p role="alert" className="text-sm text-slate-400">{membershipId > 0
+            ? getApiErrorMessage(billingLoadError, 'The billing record is unavailable. No payment has been submitted.')
+            : 'Select a membership before collecting payment.'}</p>
+          <div className="flex gap-3">
+            {Number.isInteger(membershipId) && membershipId > 0 && <Button type="button" onClick={() => void reloadBilling()}>Retry</Button>}
+            <Button type="button" variant="secondary" onClick={() => navigate(backPath ?? '/dashboard/user-memberships')}>Back to memberships</Button>
+          </div>
+        </DashboardPageContent>
       </DashboardLayout>
     )
   }
@@ -435,6 +418,7 @@ export function CollectMembershipPaymentPage() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Billing</p>
           <h1 className="mt-1 text-2xl font-bold text-white">Collect membership payment</h1>
+          <p className="mt-2 text-sm text-slate-400">Enter payment → Review & confirm → Receipt & finish. A receipt is issued after the payment is saved.</p>
         </div>
 
         {collected ? (
@@ -782,6 +766,8 @@ export function CollectMembershipPaymentPage() {
           open={receiptOpen && collected != null}
           onClose={() => setReceiptOpen(false)}
           receipt={collected?.receipt ?? null}
+          onFinish={collected?.redirectPath ? finishCollection : undefined}
+          finishLabel={collected?.redirectPath?.startsWith('/dashboard/users/') ? 'Finish & open member' : 'Finish & return'}
           onNotificationPrefsChange={(prefs) =>
             setCollected((c) =>
               c

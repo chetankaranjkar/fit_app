@@ -18,6 +18,7 @@ export function DietAssignmentsSection({
   onAssignDiet,
   onChangeDiet,
   onRemoveDiet,
+  onViewDiet,
 }: {
   assignments: UserDietPlanDto[]
   dietLoading: boolean
@@ -28,6 +29,7 @@ export function DietAssignmentsSection({
   onAssignDiet: () => void
   onChangeDiet: () => void
   onRemoveDiet: (assignment: UserDietPlanDto) => void
+  onViewDiet: (assignment: UserDietPlanDto) => void
 }) {
   const hasActiveDiet = memberHasDietAssignment(assignments)
   const assignDisabled = dietActionPending || !canAssignTrainingServices
@@ -108,9 +110,10 @@ export function DietAssignmentsSection({
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                       <div className="flex flex-wrap items-center gap-2.5">
-                        <p className="text-base font-semibold text-white">
+                        <button type="button" onClick={() => onViewDiet(assignment)}
+                          className="text-left text-base font-semibold text-white underline decoration-amber-400/40 underline-offset-4 hover:text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
                           {assignment.dietPlanName ?? `Plan #${assignment.dietPlanId}`}
-                        </p>
+                        </button>
                         {assignment.isActive ? (
                           <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-200 ring-1 ring-emerald-400/30">
                             Active

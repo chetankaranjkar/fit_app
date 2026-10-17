@@ -35,6 +35,11 @@ export function Modal({
   const panelRef = useRef<HTMLDivElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
   const wasOpenRef = useRef(false)
+  // Keep latest onClose without re-running open effects (unstable callbacks steal input focus).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const closeOnEscapeRef = useRef(closeOnEscape)
+  closeOnEscapeRef.current = closeOnEscape
 
   useEffect(() => {
     const onFocusIn = (e: FocusEvent) => {
@@ -65,14 +70,19 @@ export function Modal({
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
+    // Focus the panel only when the dialog first opens — not on parent re-renders.
     const focusFrame = window.requestAnimationFrame(() => {
-      panelRef.current?.focus()
+      const panel = panelRef.current
+      if (!panel) return
+      const active = document.activeElement
+      if (active instanceof Node && panel.contains(active)) return
+      panel.focus()
     })
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && closeOnEscape) {
+      if (e.key === 'Escape' && closeOnEscapeRef.current) {
         e.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
       const panel = panelRef.current
@@ -85,7 +95,7 @@ export function Modal({
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = prevOverflow
     }
-  }, [open, onClose, closeOnEscape])
+  }, [open])
 
   if (!open) return null
 

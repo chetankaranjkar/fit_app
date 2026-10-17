@@ -255,6 +255,7 @@ const defaultCreateForm: CreateUserDto = {
 export function UsersPage() {
   const { start: startMembersTour } = useWalkthrough('members')
   const navigate = useNavigate()
+  const [collectAfterCreate, setCollectAfterCreate] = useState(true)
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const { userName } = getDashboardUser()
@@ -443,12 +444,13 @@ export function UsersPage() {
       setDateOfBirthError(null)
       setMembershipStartDateError(null)
       const p = created?.pendingPaymentCollection
-      if (p?.membershipId && p.membershipPaymentId) {
+      if (p?.membershipId && p.membershipPaymentId && collectAfterCreate && authService.canPaymentsAccess()) {
         const profilePath = memberProfilePath(p.userId)
         if (location.pathname !== profilePath) {
           navigate(collectPaymentPath(p.membershipId, p.userId, profilePath), { replace: true })
         }
       } else if (created?.id) {
+        toast.success(p?.membershipId ? 'Member and membership created. Payment can be collected later.' : 'User created.')
         navigate(memberProfilePath(created.id))
       }
     },
@@ -467,6 +469,7 @@ export function UsersPage() {
 
   const handleStartAdd = () => {
     setIsAdding(true)
+    setCollectAfterCreate(true)
     setForm({ ...defaultCreateForm, role: 1 })
     setFormError(null)
     setEmailError(null)
@@ -491,6 +494,7 @@ export function UsersPage() {
     }
     if (!shouldOpen) return
     setIsAdding(true)
+    setCollectAfterCreate(true)
     setForm({ ...defaultCreateForm, role: 1 })
     setFormError(null)
     setEmailError(null)
@@ -1526,6 +1530,13 @@ export function UsersPage() {
               {(form.role === 1 || form.role === 'User') && (
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                   <h3 className="mb-2 text-sm font-semibold text-white">Membership & trainer (optional)</h3>
+                  <p className="mb-3 text-xs text-slate-400">Selecting a plan creates its bill. A payment receipt is issued only after you confirm a payment.</p>
+                  {form.planId != null && form.planId > 0 && authService.canPaymentsAccess() && (
+                    <label className="mb-3 flex items-center gap-2 text-sm text-slate-300">
+                      <input type="checkbox" checked={collectAfterCreate} onChange={(event) => setCollectAfterCreate(event.target.checked)} />
+                      Continue to payment after creating this member
+                    </label>
+                  )}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-400">Membership plan</label>
@@ -1600,7 +1611,7 @@ export function UsersPage() {
                     Cancel
                   </Button>
                   <Button type="submit" size="sm" isLoading={createMutation.isPending}>
-                    Save user
+                    {form.planId && collectAfterCreate && authService.canPaymentsAccess() ? 'Create member & continue to payment' : (form.role === 1 || form.role === 'User') ? 'Create member' : 'Create user'}
                   </Button>
                 </div>
               </div>

@@ -36,6 +36,8 @@ Companion to [APPLICATION_FLOWS.md](./APPLICATION_FLOWS.md). Check this **before
 
 ### Services
 
+- Payment collection entry points share `recordedPaymentReceipt` (saved installment identity and notification preferences), `PaymentReceiptModal` (print/download/send and optional finish action), and `PaymentCollectedPanel`. Keep invoices distinct from installment receipts; reuse the confirmation and duplicate checks before saving.
+
 - All HTTP via `lib/api.ts` (axios instance with auth).
 - One `*.service.ts` per API controller group; no raw `fetch` in pages.
 

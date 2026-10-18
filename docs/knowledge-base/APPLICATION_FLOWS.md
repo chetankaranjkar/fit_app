@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-10-18 (workout session review presentation; profile diet assignment member selection and dismissal; member creation, membership collection handoffs, and receipt completion).
+**Last updated:** 2026-10-18 (owner QR console and workout session review presentation; profile diet assignment member selection and dismissal; member creation, membership collection handoffs, and receipt completion).
 
 **Section map:** [README.md](./README.md#application_flows-section-map). Scheduled work / evidence labels: [PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md).
 
@@ -710,6 +710,8 @@ Void and refund (history page) recalculate the bill through `BillingCalculationS
 ---
 
 ## 12b. QR attendance check-in (membership gate)
+
+**Owner QR console:** `/dashboard/access/owner-qr` (`OwnerQrDashboard`, ADMIN/STAFF) uses the shared dashboard theme. The branch selector and saved access summary precede a prominent venue QR/expiry/download panel alongside branch entry settings; recent scans follow below, with local-time timestamps. QR PNGs keep a four-module quiet zone and render at 576px for display/export. Generation replaces the existing token (the page reminds staff to update the entrance display). Settings reuse `PUT /api/branches/{id}/qr-access` for GPS, the optional ESP32 URL, and a radius offset from the 100m default; presets and +/-10m controls keep the existing 10–10,000m effective range. Only **Save branch settings** persists drafts; Reset restores saved values. Invalid coordinates do not submit or show success. Missing coordinates, no branches, inactive branches, API failures/retry, and impending expiry have explicit states; actions requiring loaded branch data stay disabled until it is available. A saved device URL indicates configuration, not an online door. Tests: `gym_client/tests/e2e/owner-qr.spec.ts`.
 
 **Goal:** Block gym entry via QR unless the signed-in user has the MEMBER role and a valid membership. Admin, trainer, and staff accounts cannot check in on this flow.
 

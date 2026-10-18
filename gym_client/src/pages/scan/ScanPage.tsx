@@ -26,6 +26,68 @@ function getDashboardUser() {
 
 type Step = 'loc' | 'scan' | 'result'
 
+const LOCATION_BLOCKED =
+  'Location is blocked for this site. In the address bar, open site settings, allow Location, then tap Share precise location again.'
+
+function geolocationErrorMessage(err: GeolocationPositionError): string {
+  switch (err.code) {
+    case 1:
+      return LOCATION_BLOCKED
+    case 2:
+      return 'This device could not determine a position. Turn on system Location (GPS) and retry.'
+    case 3:
+      return 'Location timed out. Keep Location on, move near a window, and retry.'
+    default:
+      return 'Could not read your location. Grant permission and retry (required for geo-fenced check-in).'
+  }
+}
+
+function requestPosition(options: PositionOptions): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options)
+  })
+}
+
+async function readCheckInPosition(): Promise<GeolocationPosition> {
+  if (!window.isSecureContext) {
+    throw new Error('Location only works over HTTPS. Reload this page using the https:// address.')
+  }
+  if (!navigator.geolocation) {
+    throw new Error(
+      'This browser cannot share location. Use Chrome or Safari and allow Location for this site.',
+    )
+  }
+
+  try {
+    const perm = await navigator.permissions?.query({ name: 'geolocation' })
+    if (perm?.state === 'denied') {
+      throw new Error(LOCATION_BLOCKED)
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message === LOCATION_BLOCKED) throw e
+  }
+
+  try {
+    return await requestPosition({ enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 })
+  } catch (err) {
+    const geo = err as GeolocationPositionError
+    if (geo?.code === 1) throw new Error(geolocationErrorMessage(geo))
+    try {
+      return await requestPosition({
+        enableHighAccuracy: false,
+        timeout: 20_000,
+        maximumAge: 120_000,
+      })
+    } catch (fallbackErr) {
+      const fallback = fallbackErr as GeolocationPositionError
+      if (typeof fallback?.code === 'number') throw new Error(geolocationErrorMessage(fallback))
+      throw new Error(
+        'Could not read your location. Grant permission and retry (required for geo-fenced check-in).',
+      )
+    }
+  }
+}
+
 function coerceScanError(e: unknown): AttendanceScanResponseDto | null {
   if (!axios.isAxiosError(e)) return null
   const status = e.response?.status
@@ -85,6 +147,7 @@ export function ScanPage() {
   const [step, setStep] = useState<Step>('loc')
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [locBusy, setLocBusy] = useState(false)
+  const [locError, setLocError] = useState<string | null>(null)
   const [submitBusy, setSubmitBusy] = useState(false)
   const [outcome, setOutcome] = useState<AttendanceScanResponseDto | null>(null)
 
@@ -98,20 +161,21 @@ export function ScanPage() {
 
   const acquireLocation = useCallback(() => {
     setLocBusy(true)
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
+    setLocError(null)
+    void readCheckInPosition()
+      .then((p) => {
         setCoords({ lat: p.coords.latitude, lng: p.coords.longitude })
         toast.success('Location locked for proximity check.')
-        setLocBusy(false)
-      },
-      () => {
-        toast.error(
-          'Could not read your location. Grant permission and retry (required for geo-fenced check-in).',
-        )
-        setLocBusy(false)
-      },
-      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
-    )
+      })
+      .catch((e: unknown) => {
+        const message =
+          e instanceof Error
+            ? e.message
+            : 'Could not read your location. Grant permission and retry (required for geo-fenced check-in).'
+        setLocError(message)
+        toast.error(message)
+      })
+      .finally(() => setLocBusy(false))
   }, [])
 
   const onDecoded = useCallback(
@@ -202,6 +266,11 @@ export function ScanPage() {
                   </Button>
                   {coords && (
                     <p className="text-center font-mono text-[11px] text-slate-500">{coordsLabel}</p>
+                  )}
+                  {locError && (
+                    <p className="max-w-sm text-center text-sm text-rose-300" role="alert">
+                      {locError}
+                    </p>
                   )}
                   <Button
                     type="button"

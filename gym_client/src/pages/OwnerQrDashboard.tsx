@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { formatDistanceStrict, intervalToDuration } from 'date-fns'
-import { motion } from 'framer-motion'
+import { intervalToDuration } from 'date-fns'
 import toast from 'react-hot-toast'
-import { AlertTriangle, Download, Loader2, Minus, Plus, QrCode, RefreshCw } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowUpRight, Building2, Check, ChevronRight, Clock3, DoorOpen, Download, Loader2, MapPin, Minus, Plus, QrCode, RefreshCw, ScanLine, Settings2, ShieldCheck } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
-import { DashboardSubpageShell } from '../components/layout/DashboardSubpageShell'
+import { DashboardPageContent } from '../components/layout/DataPageShell'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { authService } from '../services/auth.service'
 import { branchesService } from '../services/branches.service'
 import { qrService } from '../services/qr.service'
 import type { BranchQrAccessPutDto } from '../types/qr'
+import './ownerQrDashboard.css'
 
 function getDashboardUser() {
   try {
@@ -70,9 +70,9 @@ function useCountdownTarget(isoUtc: string | undefined) {
 async function qrPngDataUrl(payload: string) {
   const QR = (await import('qrcode')).default
   return QR.toDataURL(payload, {
-    margin: 1,
-    width: 288,
-    color: { dark: '#0f172a', light: '#f8fafc' },
+    margin: 4,
+    width: 576,
+    color: { dark: '#0f172a', light: '#ffffff' },
   })
 }
 
@@ -125,8 +125,8 @@ export function OwnerQrDashboard() {
   }, [dashQuery.data, branchId, branchSelected])
 
   const saveAccessMut = useMutation({
-    mutationFn: async (): Promise<void> => {
-      if (!branchSelected) return
+    mutationFn: async (): Promise<boolean> => {
+      if (!branchSelected) return false
       const parseCoord = (raw: string): number | null | undefined => {
         const t = raw.trim()
         if (!t) return null
@@ -137,15 +137,15 @@ export function OwnerQrDashboard() {
       const lng = parseCoord(lngInput)
       if (lat === undefined || lng === undefined) {
         toast.error('Latitude and longitude must be valid numbers (or empty to clear).')
-        return
+        return false
       }
       if (lat != null && (lat < -90 || lat > 90)) {
         toast.error('Latitude must be between -90 and 90.')
-        return
+        return false
       }
       if (lng != null && (lng < -180 || lng > 180)) {
         toast.error('Longitude must be between -180 and 180.')
-        return
+        return false
       }
       if (
         radiusOffsetMeters < CHECK_IN_RADIUS_OFFSET_MIN ||
@@ -154,7 +154,7 @@ export function OwnerQrDashboard() {
         toast.error(
           `Radius offset must be between ${CHECK_IN_RADIUS_OFFSET_MIN} and ${CHECK_IN_RADIUS_OFFSET_MAX} meters.`,
         )
-        return
+        return false
       }
       const payload: BranchQrAccessPutDto = {
         latitude: lat,
@@ -163,8 +163,10 @@ export function OwnerQrDashboard() {
         checkInRadiusOffsetMeters: radiusOffsetMeters,
       }
       await branchesService.updateQrAccess(branchId, payload)
+      return true
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      if (!saved) return
       toast.success('Branch access settings saved.')
       void queryClient.invalidateQueries({ queryKey: ['qr'] })
       void queryClient.invalidateQueries({ queryKey: ['branches'] })
@@ -252,480 +254,121 @@ export function OwnerQrDashboard() {
     return <Navigate to="/dashboard" replace />
   }
 
-  const glassCard =
-    'rounded-3xl border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl'
+  const dashboard = dashQuery.data
+  const activeQr = dashboard?.activeQr
+  const branchName = dashboard?.branchName || branchesQuery.data?.find((branch) => branch.id === branchId)?.branchName || 'Select a branch'
+  const qrExpired = countdown === 'Expired'
+  const qrReady = Boolean(activeQr) && !qrExpired
+  const settingsReady = branchSelected && Boolean(dashboard) && !dashQuery.isError && !qrPanelFetching
+  const radius = effectiveCheckInRadiusMeters(radiusOffsetMeters)
+  const statusLabel = !branchSelected ? 'No branch selected' : !dashboard ? 'Awaiting branch data' : dashboard.branchIsActive === false ? 'Branch inactive' : qrExpired ? 'QR expired' : activeQr ? 'QR active' : 'No active QR'
+  const formatWhen = (value: string) => {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+  }
+  const resetSettings = () => {
+    if (!dashboard) return
+    setLatInput(dashboard.branchLatitude != null ? String(dashboard.branchLatitude) : '')
+    setLngInput(dashboard.branchLongitude != null ? String(dashboard.branchLongitude) : '')
+    setDoorUrlInput(dashboard.esp32DoorBaseUrl ?? '')
+    setRadiusOffsetMeters(dashboard.checkInRadiusOffsetMeters ?? 0)
+  }
 
   return (
     <DashboardLayout userName={userName}>
-      <DashboardSubpageShell
-        eyebrow="Access control"
-        titleGradient="Venue QR & entry"
-        subtitle="Monthly rotating QR · premium glass console · ESP32-ready unlock pipeline."
-        showExport={false}
-      >
-        <div className="min-h-[60vh] space-y-6 bg-gradient-to-b from-slate-950 via-indigo-950/40 to-slate-950 p-6 text-slate-100">
-          <div className="mx-auto flex max-w-6xl flex-col gap-6">
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-              className={`${glassCard} p-6`}
-            >
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold tracking-tight">Branch</h2>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Generate rotating codes per venue. Set GPS + optional per-branch ESP32 URL below.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <select
-                    aria-label="Branch for QR operations"
-                    className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-400/40"
-                    value={branchId ?? ''}
-                    onChange={(e) => {
-                      const raw = e.target.value
-                      if (raw === '') {
-                        setBranchId(null)
-                        return
-                      }
-                      const n = Number(raw)
-                      setBranchId(Number.isFinite(n) && n > 0 ? n : null)
-                    }}
-                  >
-                    {branchesQuery.isPending && <option className="bg-slate-900 text-slate-100" value="">Loading…</option>}
-                    {!branchesQuery.isPending && (
-                      <option value="" className="bg-slate-900">
-                        Select branch…
-                      </option>
-                    )}
-                    {(branchesQuery.data ?? []).map((b) => (
-                      <option className="bg-slate-900 text-slate-100" key={b.id} value={b.id}>
-                        {b.branchName}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => void branchesQuery.refetch()}
-                    disabled={branchesQuery.isFetching}
-                  >
-                    {branchesQuery.isFetching ? (
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
-                    ) : (
-                      <RefreshCw className="size-4" aria-hidden />
-                    )}
-                    <span className="sr-only md:not-sr-only md:ml-2">Reload</span>
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
+      <DashboardPageContent className="owner-qr-page">
+        <header className="owner-qr-page-header">
+          <div><span className="owner-qr-eyebrow"><ShieldCheck size={14} aria-hidden="true" />ACCESS CONTROL</span><h1>Venue QR <span>& entry</span></h1><p>One place to manage your branch QR, entry rules, and recent check-ins.</p></div>
+          <Link to="/dashboard/access/branches" className="owner-qr-text-link">Manage branches <ArrowUpRight size={15} aria-hidden="true" /></Link>
+        </header>
 
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className={`${glassCard} p-6`}
-            >
-              <h3 className="text-lg font-semibold tracking-tight text-white">Branch GPS &amp; door relay</h3>
-              <p className="mt-1 text-sm text-slate-400">
-                Default check-in radius is 100 m; use the offset below to widen or tighten (effective range 10–10,000
-                m). Each branch can pin its own ESP32 (e.g.{' '}
-                <code className="rounded bg-black/40 px-1">http://192.168.1.50</code>); otherwise the global{' '}
-                <code className="rounded bg-black/40 px-1">DoorDevice:Esp32BaseUrl</code> is used.
-              </p>
-              <div className="mt-6 grid gap-4 md:grid-cols-3">
-                <Input
-                  label="Latitude (WGS84)"
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  placeholder="-33.8688"
-                  value={latInput}
-                  onChange={(e) => setLatInput(e.target.value)}
-                />
-                <Input
-                  label="Longitude (WGS84)"
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  placeholder="151.2093"
-                  value={lngInput}
-                  onChange={(e) => setLngInput(e.target.value)}
-                />
-                <Input
-                  label="ESP32 base URL (optional)"
-                  type="url"
-                  placeholder="http://device-ip"
-                  value={doorUrlInput}
-                  onChange={(e) => setDoorUrlInput(e.target.value)}
-                />
-              </div>
-
-              <div className="mt-6 rounded-2xl border border-white/10 bg-black/25 p-4">
-                <p className="text-sm font-medium text-white">Check-in radius offset (meters)</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  Applied to the 100 m default: negative tightens (min ~10 m total), positive widens. Current effective
-                  radius:{' '}
-                  <span className="font-mono text-emerald-200/95">
-                    {effectiveCheckInRadiusMeters(radiusOffsetMeters)} m
-                  </span>
-                  {dashQuery.data?.effectiveCheckInRadiusMeters != null ? (
-                    <span className="text-slate-500"> (saved: {dashQuery.data.effectiveCheckInRadiusMeters} m)</span>
-                  ) : null}
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0 px-3"
-                    onClick={() =>
-                      setRadiusOffsetMeters((v) =>
-                        Math.max(CHECK_IN_RADIUS_OFFSET_MIN, v - 10),
-                      )
-                    }
-                  >
-                    <Minus className="size-4" aria-hidden />
-                    <span className="sr-only">Decrease 10</span>
-                    <span className="ml-1 text-xs">10</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0 px-3"
-                    onClick={() =>
-                      setRadiusOffsetMeters((v) =>
-                        Math.max(CHECK_IN_RADIUS_OFFSET_MIN, v - 5),
-                      )
-                    }
-                  >
-                    <Minus className="size-4" aria-hidden />
-                    <span className="ml-1 text-xs">5</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0 px-2.5"
-                    onClick={() =>
-                      setRadiusOffsetMeters((v) =>
-                        Math.max(CHECK_IN_RADIUS_OFFSET_MIN, v - 1),
-                      )
-                    }
-                  >
-                    <Minus className="size-4" aria-hidden />
-                  </Button>
-                  <Input
-                    label="Offset"
-                    type="number"
-                    inputMode="numeric"
-                    className="max-w-[120px]"
-                    value={String(radiusOffsetMeters)}
-                    onChange={(e) => {
-                      const t = e.target.value.trim()
-                      if (t === '' || t === '-') {
-                        setRadiusOffsetMeters(0)
-                        return
-                      }
-                      const n = Number(t)
-                      if (!Number.isFinite(n)) return
-                      setRadiusOffsetMeters(
-                        Math.min(
-                          CHECK_IN_RADIUS_OFFSET_MAX,
-                          Math.max(CHECK_IN_RADIUS_OFFSET_MIN, Math.round(n)),
-                        ),
-                      )
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0 px-2.5"
-                    onClick={() =>
-                      setRadiusOffsetMeters((v) =>
-                        Math.min(CHECK_IN_RADIUS_OFFSET_MAX, v + 1),
-                      )
-                    }
-                  >
-                    <Plus className="size-4" aria-hidden />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0 px-3"
-                    onClick={() =>
-                      setRadiusOffsetMeters((v) =>
-                        Math.min(CHECK_IN_RADIUS_OFFSET_MAX, v + 5),
-                      )
-                    }
-                  >
-                    <Plus className="size-4" aria-hidden />
-                    <span className="ml-1 text-xs">5</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0 px-3"
-                    onClick={() =>
-                      setRadiusOffsetMeters((v) =>
-                        Math.min(CHECK_IN_RADIUS_OFFSET_MAX, v + 10),
-                      )
-                    }
-                  >
-                    <Plus className="size-4" aria-hidden />
-                    <span className="ml-1 text-xs">10</span>
-                  </Button>
-                </div>
-                <p className="mt-2 text-[11px] text-slate-500">
-                  Allowed offset {CHECK_IN_RADIUS_OFFSET_MIN}…{CHECK_IN_RADIUS_OFFSET_MAX} m (server clamps effective
-                  radius).
-                </p>
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={saveAccessMut.isPending}
-                  onClick={() => {
-                    const d = dashQuery.data
-                    if (!d) return
-                    setLatInput(d.branchLatitude != null ? String(d.branchLatitude) : '')
-                    setLngInput(d.branchLongitude != null ? String(d.branchLongitude) : '')
-                    setDoorUrlInput(d.esp32DoorBaseUrl ?? '')
-                    setRadiusOffsetMeters(
-                      typeof d.checkInRadiusOffsetMeters === 'number' &&
-                        !Number.isNaN(d.checkInRadiusOffsetMeters)
-                        ? d.checkInRadiusOffsetMeters
-                        : 0,
-                    )
-                  }}
-                >
-                  Reset
-                </Button>
-                <Button
-                  type="button"
-                  disabled={!branchSelected}
-                  isLoading={saveAccessMut.isPending}
-                  onClick={() => saveAccessMut.mutate()}
-                >
-                  Save branch settings
-                </Button>
-              </div>
-            </motion.div>
-
-            {branchSelected && dashQuery.data && dashQuery.data.branchIsActive === false && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className={`${glassCard} flex items-start gap-3 border-rose-500/40 bg-rose-500/[0.1] p-4 text-rose-50`}
-              >
-                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-rose-300" aria-hidden />
-                <div className="text-sm">
-                  <p className="font-medium">Branch is inactive</p>
-                  <p className="mt-1 text-rose-100/90">
-                    Reactivate this branch on{' '}
-                    <Link
-                      to="/dashboard/access/branches"
-                      className="font-semibold text-white underline underline-offset-2 hover:text-rose-50"
-                    >
-                      Branches
-                    </Link>{' '}
-                    before generating a venue QR code.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-
-            {branchSelected && dashQuery.data && !dashQuery.data.branchGeoConfigured && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className={`${glassCard} flex items-start gap-3 border-amber-500/35 bg-amber-500/[0.08] p-4 text-amber-100`}
-              >
-                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-400" aria-hidden />
-                <div className="text-sm">
-                  <p className="font-medium">Branch coordinates missing</p>
-                  <p className="mt-1 text-amber-200/85">
-                    Enter latitude and longitude in the form above (WGS84) so the check-in distance gate can be
-                    enforced (default 100 m radius, adjustable with offset).
-                  </p>
-                </div>
-              </motion.div>
-            )}
-
-            {branchSelected && dashQuery.data && !dashQuery.data.branchDoorUrlConfigured && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className={`${glassCard} flex items-start gap-3 border-sky-500/35 bg-sky-500/[0.07] p-4 text-sky-50`}
-              >
-                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-sky-300" aria-hidden />
-                <div className="text-sm">
-                  <p className="font-medium">No branch-specific door URL</p>
-                  <p className="mt-1 text-sky-100/90">
-                    Scans will fall back to the global API <code className="rounded bg-black/40 px-1">DoorDevice:Esp32BaseUrl</code>.
-                    Set one per branch above if each site has its own ESP32.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-
-            {branchSelected && dashQuery.data?.expiresWithinThreeDays && dashQuery.data?.activeQr && (
-              <motion.div
-                layout
-                className={`${glassCard} flex items-start gap-3 border-rose-500/40 bg-rose-500/[0.12] p-4 text-rose-50`}
-              >
-                <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden />
-                <div>
-                  <p className="font-semibold tracking-tight">Expiry window · last 3 days</p>
-                  <p className="mt-1 text-sm text-rose-100/90">
-                    This token expires{' '}
-                    {formatDistanceStrict(new Date(dashQuery.data.activeQr.expiryDateUtc), new Date(), {
-                      addSuffix: true,
-                    })}
-                    . In-app reminders are queued for ADMIN users in the organisation.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-
-            <div className="grid gap-6 lg:grid-cols-12">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05, duration: 0.5 }}
-                className={`${glassCard} p-6 lg:col-span-5`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex size-11 items-center justify-center rounded-2xl bg-cyan-500/15 ring-1 ring-cyan-400/35">
-                    <QrCode className="size-6 text-cyan-200" aria-hidden />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold tracking-tight">Live venue QR</h3>
-                    <p className="text-sm text-slate-400">Rotates monthly · GUID payload</p>
-                  </div>
-                </div>
-
-                <div className="mt-8 flex justify-center rounded-3xl bg-gradient-to-br from-white/15 to-transparent p-6 ring-1 ring-white/15">
-                  {!branchSelected ? (
-                    <p className="text-center text-sm text-slate-400">
-                      {branchesQuery.isFetching
-                        ? 'Loading branches…'
-                        : branchesQuery.data?.length
-                          ? 'Select a branch above.'
-                          : 'No branches in the database · add branches first.'}
-                    </p>
-                  ) : dashQuery.isError ? (
-                    <div className="max-w-xs text-center text-sm text-rose-300">
-                      Could not load venue QR: {axiosErrorDetail(dashQuery.error) ?? 'Request failed'}
-                    </div>
-                  ) : qrPanelFetching || previewPngBusy ? (
-                    <Loader2 className="size-10 animate-spin text-cyan-200" aria-label="Loading" />
-                  ) : previewDataUrl ? (
-                    <img
-                      alt="Venue QR"
-                      width={288}
-                      height={288}
-                      className="rounded-3xl shadow-2xl shadow-black/70"
-                      src={previewDataUrl}
-                    />
-                  ) : (
-                    <p className="text-center text-sm text-slate-400">
-                      No active QR · generate one below.
-                    </p>
-                  )}
-                </div>
-
-                {dashQuery.data?.activeQr && (
-                  <div className="mt-6 grid gap-2 text-center text-sm">
-                    <p className="text-slate-400">Expires UTC</p>
-                    <p className="font-mono text-xs text-emerald-200/90 md:text-sm">
-                      {new Date(dashQuery.data.activeQr.expiryDateUtc).toISOString()}
-                    </p>
-                    <p className="text-lg font-semibold tracking-tight text-white">
-                      {countdown ?? '—'}
-                      <span className="ml-2 text-xs font-normal text-slate-500">until expiry</span>
-                    </p>
-                  </div>
-                )}
-
-                <div className="mt-8 flex flex-wrap gap-3">
-                  <Button
-                    type="button"
-                    onClick={() => branchSelected && generateMut.mutate()}
-                    disabled={
-                      !branchSelected ||
-                      generateMut.isPending ||
-                      dashQuery.data?.branchIsActive === false
-                    }
-                  >
-                    {generateMut.isPending ? (
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
-                    ) : (
-                      <RefreshCw className="size-4" aria-hidden />
-                    )}
-                    <span className="ml-2">Generate new QR</span>
-                  </Button>
-                  <Button type="button" variant="secondary" onClick={() => void downloadQr()}>
-                    <Download className="size-4" aria-hidden />
-                    <span className="ml-2">Download PNG</span>
-                  </Button>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.12, duration: 0.5 }}
-                className={`${glassCard} p-0 lg:col-span-7`}
-              >
-                <div className="border-b border-white/10 px-6 py-4">
-                  <h3 className="text-lg font-semibold tracking-tight">Recent QR scans</h3>
-                  <p className="text-sm text-slate-400">Latest check-ins for tokens issued to this branch</p>
-                </div>
-                <div className="max-h-[480px] overflow-auto">
-                  <table className="w-full min-w-[520px] text-left text-sm">
-                    <thead className="sticky top-0 bg-slate-950/90 text-xs uppercase tracking-wide text-slate-500 backdrop-blur">
-                      <tr>
-                        <th className="px-6 py-3 font-medium">When (UTC)</th>
-                        <th className="px-6 py-3 font-medium">Member</th>
-                        <th className="px-6 py-3 font-medium">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {(dashQuery.data?.recentScans ?? []).length === 0 ? (
-                        <tr>
-                          <td colSpan={3} className="px-6 py-10 text-center text-slate-500">
-                            No scans yet.
-                          </td>
-                        </tr>
-                      ) : (
-                        (dashQuery.data?.recentScans ?? []).map((row) => (
-                          <tr key={row.attendanceLogId} className="hover:bg-white/[0.03]">
-                            <td className="px-6 py-3 font-mono text-xs text-slate-300">
-                              {new Date(row.checkInTimeUtc).toISOString()}
-                            </td>
-                            <td className="px-6 py-3 text-slate-200">
-                              {row.memberName ?? '—'}
-                              {row.userId != null && (
-                                <span className="ml-2 text-xs text-slate-500">#{row.userId}</span>
-                              )}
-                            </td>
-                            <td className="max-w-xs truncate px-6 py-3 text-xs text-slate-500">
-                              {row.notes ?? '—'}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </motion.div>
-            </div>
+        <section className="owner-qr-branch-bar" aria-label="Branch selection">
+          <span className="owner-qr-branch-icon"><Building2 size={21} aria-hidden="true" /></span>
+          <div className="owner-qr-branch-copy"><span className="owner-qr-meta-label">CURRENT VENUE</span><h2>{branchName}</h2></div>
+          <div className="owner-qr-branch-controls">
+            <select aria-label="Branch for QR operations" value={branchId ?? ''} disabled={branchesQuery.isFetching || saveAccessMut.isPending || generateMut.isPending}
+              onChange={(event) => { const next = Number(event.target.value); setBranchId(Number.isFinite(next) && next > 0 ? next : null) }}>
+              <option value="">{branchesQuery.isPending ? 'Loading branches…' : 'Select branch…'}</option>
+              {(branchesQuery.data ?? []).map((branch) => <option key={branch.id} value={branch.id}>{branch.branchName}</option>)}
+            </select>
+            <button type="button" className="owner-qr-icon-button" aria-label="Reload branches" disabled={branchesQuery.isFetching} onClick={() => void branchesQuery.refetch()}><RefreshCw size={16} className={branchesQuery.isFetching ? 'animate-spin' : ''} aria-hidden="true" /></button>
           </div>
+        </section>
+        {branchesQuery.isError && <div role="alert" className="owner-qr-alert"><AlertTriangle size={17} aria-hidden="true" /><p>Could not load branches. {axiosErrorDetail(branchesQuery.error)} Use Reload branches to try again.</p></div>}
+        {branchesQuery.isSuccess && !branchesQuery.data.length && <div className="owner-qr-alert"><Building2 size={18} aria-hidden="true" /><p>No branches yet. <Link to="/dashboard/access/branches">Add a branch</Link> to set up member entry.</p></div>}
+
+        <div className="owner-qr-summary" aria-label="Branch access summary">
+          <div><QrCode size={17} aria-hidden="true" /><span>Venue code<strong className={qrReady && dashboard?.branchIsActive !== false ? 'owner-qr-positive' : ''}>{statusLabel}</strong></span></div>
+          <div><MapPin size={17} aria-hidden="true" /><span>Location gate<strong>{!dashboard ? '—' : dashboard.branchGeoConfigured ? 'Coordinates saved' : 'Location needed'}</strong></span></div>
+          <div><ScanLine size={17} aria-hidden="true" /><span>Saved entry radius<strong>{dashboard ? `${dashboard.effectiveCheckInRadiusMeters ?? effectiveCheckInRadiusMeters(dashboard.checkInRadiusOffsetMeters ?? 0)} m` : '—'}</strong></span></div>
+          <div><DoorOpen size={17} aria-hidden="true" /><span>Door connection<strong>{!dashboard ? '—' : dashboard.branchDoorUrlConfigured ? 'Branch device set' : 'Using global settings'}</strong></span></div>
         </div>
-      </DashboardSubpageShell>
+
+        <div className="owner-qr-main-grid">
+          <section className="owner-qr-code-card">
+            <div className="owner-qr-card-heading"><div><span className="owner-qr-eyebrow">READY AT THE FRONT DESK</span><h2><QrCode size={20} aria-hidden="true" />Your venue QR</h2></div><span className={`owner-qr-status ${qrReady ? 'active' : ''}`}><i />{qrReady ? 'Active code' : 'Not active'}</span></div>
+            <p className="owner-qr-description">Display this code at your entrance for members to scan.</p>
+            <div className="owner-qr-code-stage">
+              <span className="owner-qr-scan-corner top-left" aria-hidden="true" /><span className="owner-qr-scan-corner bottom-right" aria-hidden="true" />
+              {!branchSelected ? <div className="owner-qr-placeholder"><QrCode size={44} aria-hidden="true" /><h3>{branchesQuery.isFetching ? 'Loading your venues' : 'Choose a venue'}</h3><p>Select a branch to view its entry code.</p></div>
+                : dashQuery.isError ? <div role="alert" className="owner-qr-placeholder"><AlertTriangle size={30} aria-hidden="true" /><h3>Unable to load QR</h3><p>{axiosErrorDetail(dashQuery.error) ?? 'Please try again.'}</p><button type="button" onClick={() => void dashQuery.refetch()} className="owner-qr-text-link">Try again <RefreshCw size={13} aria-hidden="true" /></button></div>
+                : qrPanelFetching || previewPngBusy ? <div role="status" className="owner-qr-placeholder"><Loader2 size={32} className="animate-spin" aria-hidden="true" /><p>Preparing venue QR…</p></div>
+                : previewDataUrl ? <img alt={`Venue QR for ${branchName}`} width={288} height={288} src={previewDataUrl} />
+                : <div className="owner-qr-placeholder"><QrCode size={44} aria-hidden="true" /><h3>No active QR yet</h3><p>Generate a code below to set up member check-in.</p></div>}
+            </div>
+            <div className="owner-qr-code-caption"><ScanLine size={14} aria-hidden="true" /><span>{branchName}</span><span className="owner-qr-caption-dot" />Member check-in</div>
+
+            {activeQr && <div className={`owner-qr-expiry ${dashboard?.expiresWithinThreeDays || qrExpired ? 'expiring' : ''}`}>
+              <Clock3 size={18} aria-hidden="true" /><div><span className="owner-qr-meta-label">{qrExpired ? 'CODE EXPIRED' : 'TIME UNTIL EXPIRY'}</span><strong>{countdown ?? '—'}</strong><p>Expires {formatWhen(activeQr.expiryDateUtc)} <span>(local time)</span></p></div>
+            </div>}
+            {dashboard?.expiresWithinThreeDays && activeQr && <p className="owner-qr-expiry-note"><AlertTriangle size={14} aria-hidden="true" />{qrExpired ? 'Generate a new code to restore entry.' : 'Expires soon. Generate and display a fresh code before expiry.'}</p>}
+            {dashboard?.branchIsActive === false && <div role="alert" className="owner-qr-alert"><AlertTriangle size={17} aria-hidden="true" /><p>Branch inactive. <Link to="/dashboard/access/branches">Reactivate this branch</Link> before generating a code.</p></div>}
+            <div className="owner-qr-code-actions">
+              <Button type="button" className="owner-qr-primary" disabled={!settingsReady || generateMut.isPending || dashboard?.branchIsActive === false} isLoading={generateMut.isPending} onClick={() => generateMut.mutate()}><RefreshCw size={15} aria-hidden="true" />Generate new QR</Button>
+              <Button type="button" variant="secondary" disabled={!settingsReady || !activeQr || previewPngBusy} onClick={() => void downloadQr()}><Download size={15} aria-hidden="true" />Download PNG</Button>
+            </div>
+            <p className="owner-qr-fine-print"><ShieldCheck size={13} aria-hidden="true" />Generating a new QR replaces the current code. Update your entrance display afterward.</p>
+            <div className="owner-qr-entry-guide"><span>HOW MEMBERS ENTER</span><ol><li><b>01</b>Scan the venue QR</li><li><b>02</b>Confirm location near the gym</li><li><b>03</b>Membership is checked before entry</li></ol></div>
+          </section>
+
+          <section className="owner-qr-settings-card">
+            <div className="owner-qr-card-heading"><div><span className="owner-qr-eyebrow">MAKE EVERY CHECK-IN COUNT</span><h2><Settings2 size={20} aria-hidden="true" />Branch entry settings</h2></div></div>
+            <p className="owner-qr-description">Set where members can check in and which door device to use.</p>
+            <form onSubmit={(event) => { event.preventDefault(); saveAccessMut.mutate() }}>
+              <fieldset disabled={!settingsReady || saveAccessMut.isPending}>
+                <div className="owner-qr-setting-section">
+                  <div className="owner-qr-section-title"><span className="owner-qr-setting-icon"><MapPin size={17} aria-hidden="true" /></span><div><h3>Gym location</h3><p>Pin the entrance used for member check-ins.</p></div><span className={`owner-qr-small-badge ${dashboard?.branchGeoConfigured ? 'ready' : ''}`}>{dashboard?.branchGeoConfigured ? 'Configured' : 'Setup needed'}</span></div>
+                  <div className="owner-qr-coordinate-fields"><Input label="Latitude (WGS84)" type="text" inputMode="decimal" autoComplete="off" placeholder="e.g. 19.0760" value={latInput} onChange={(event) => setLatInput(event.target.value)} /><Input label="Longitude (WGS84)" type="text" inputMode="decimal" autoComplete="off" placeholder="e.g. 72.8777" value={lngInput} onChange={(event) => setLngInput(event.target.value)} /></div>
+                  {dashboard && !dashboard.branchGeoConfigured && <p className="owner-qr-inline-notice"><AlertTriangle size={13} aria-hidden="true" />Save both coordinates to configure the distance check.</p>}
+                </div>
+
+                <div className="owner-qr-setting-section">
+                  <div className="owner-qr-section-title"><span className="owner-qr-setting-icon"><ScanLine size={17} aria-hidden="true" /></span><div><h3>Check-in radius</h3><p>How close members must be to the gym.</p></div></div>
+                  <div className="owner-qr-radius-panel"><div className="owner-qr-radius-display"><span>Effective radius</span><strong>{radius.toLocaleString()}<small>m</small></strong><p>100 m default + {radiusOffsetMeters} m offset</p></div><div className="owner-qr-radius-controls">
+                    <div className="owner-qr-stepper"><button type="button" aria-label="Decrease radius by 10 meters" disabled={radiusOffsetMeters <= CHECK_IN_RADIUS_OFFSET_MIN} onClick={() => setRadiusOffsetMeters((value) => Math.max(CHECK_IN_RADIUS_OFFSET_MIN, value - 10))}><Minus size={16} aria-hidden="true" /></button><Input label="Offset (meters)" type="number" step={1} min={CHECK_IN_RADIUS_OFFSET_MIN} max={CHECK_IN_RADIUS_OFFSET_MAX} value={radiusOffsetMeters} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value)) setRadiusOffsetMeters(Math.min(CHECK_IN_RADIUS_OFFSET_MAX, Math.max(CHECK_IN_RADIUS_OFFSET_MIN, Math.round(value)))) }} /><button type="button" aria-label="Increase radius by 10 meters" disabled={radiusOffsetMeters >= CHECK_IN_RADIUS_OFFSET_MAX} onClick={() => setRadiusOffsetMeters((value) => Math.min(CHECK_IN_RADIUS_OFFSET_MAX, value + 10))}><Plus size={16} aria-hidden="true" /></button></div>
+                    <div className="owner-qr-presets" aria-label="Radius presets">{[50, 100, 200, 500].map((value) => <button key={value} type="button" aria-pressed={radius === value} onClick={() => setRadiusOffsetMeters(value - 100)}>{value} m</button>)}</div>
+                  </div></div>
+                  <p className="owner-qr-field-hint">Allowed radius: 10–10,000 m. Changes apply after saving.</p>
+                </div>
+
+                <div className="owner-qr-setting-section">
+                  <div className="owner-qr-section-title"><span className="owner-qr-setting-icon"><DoorOpen size={17} aria-hidden="true" /></span><div><h3>Door connection</h3><p>Optional device address for this branch.</p></div></div>
+                  <Input label="ESP32 base URL (optional)" type="url" placeholder="http://192.168.1.50" value={doorUrlInput} onChange={(event) => setDoorUrlInput(event.target.value)} />
+                  <p className="owner-qr-field-hint">Leave empty to use the gym's global door settings. A saved address does not confirm the device is online.</p>
+                </div>
+                <div className="owner-qr-settings-footer"><button type="button" className="owner-qr-text-link" onClick={resetSettings}><RefreshCw size={13} aria-hidden="true" />Reset changes</button><Button type="submit" className="owner-qr-primary" isLoading={saveAccessMut.isPending}><Check size={15} aria-hidden="true" />Save branch settings</Button></div>
+              </fieldset>
+            </form>
+          </section>
+        </div>
+
+        <section className="owner-qr-history-card">
+          <div className="owner-qr-history-heading"><div><span className="owner-qr-eyebrow">AT YOUR ENTRANCE</span><h2><Activity size={20} aria-hidden="true" />Recent QR scans</h2><p>Latest check-ins recorded for {branchSelected ? branchName : 'the selected branch'}. Times shown in your local timezone.</p></div><button type="button" className="owner-qr-text-link" disabled={!branchSelected || dashQuery.isFetching} onClick={() => void dashQuery.refetch()}><RefreshCw size={14} className={dashQuery.isFetching ? 'animate-spin' : ''} aria-hidden="true" />Refresh activity</button></div>
+          {!branchSelected || !dashboard || !dashboard.recentScans.length ? <div className="owner-qr-history-empty"><span><ScanLine size={27} aria-hidden="true" /></span><h3>{dashQuery.isError ? 'Activity unavailable' : qrPanelFetching ? 'Loading activity…' : 'Your next check-in starts here'}</h3><p>{dashQuery.isError ? 'Refresh activity to try again.' : branchSelected ? 'Member check-ins will appear here after a successful QR scan.' : 'Select a branch to see its recent check-ins.'}</p></div>
+            : <div className="owner-qr-scans-table"><table><thead><tr><th>MEMBER</th><th>CHECK-IN TIME</th><th>NOTES</th></tr></thead><tbody>{dashboard.recentScans.map((scan) => <tr key={scan.attendanceLogId}><td><div className="owner-qr-member-cell"><span className="owner-qr-member-avatar" aria-hidden="true">{scan.memberName?.trim().slice(0, 1).toUpperCase() || '?'}</span><div><strong>{scan.memberName || 'Unknown member'}</strong>{scan.userId != null && <small>Member #{scan.userId}</small>}</div></div></td><td><time dateTime={scan.checkInTimeUtc}>{formatWhen(scan.checkInTimeUtc)}</time></td><td>{scan.notes || '—'}</td></tr>)}</tbody></table></div>}
+          <Link to="/dashboard/attendance" className="owner-qr-history-footer">View attendance records <ChevronRight size={14} aria-hidden="true" /></Link>
+        </section>
+      </DashboardPageContent>
     </DashboardLayout>
   )
 }

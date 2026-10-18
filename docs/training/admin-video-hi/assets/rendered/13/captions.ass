@@ -1,0 +1,32 @@
+﻿[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Title,Nirmala UI,54,&H00F5F4F0,&H00000000,&H000D1019,&H000D1019,1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Step,Nirmala UI,38,&H00F0E6D7,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Note,Nirmala UI,28,&H008EC5FF,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Subtitle,Nirmala UI,33,&H00FFFFFF,&H00000000,&H00101723,&H00101723,0,0,0,0,100,100,0,0,1,1,0,2,90,90,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:42.37,Note,,0,0,0,,{\pos(1100,122)}अध्याय 13 / 13
+Dialogue: 0,0:00:00.00,0:00:42.37,Title,,0,0,0,,{\pos(1100,170)}रोज़ की पाँच जाँच
+Dialogue: 0,0:00:00.00,0:00:42.37,Step,,0,0,0,,{\pos(1110,340)}1. डैशबोर्ड और ऑनबोर्डिंग
+Dialogue: 0,0:00:00.00,0:00:42.37,Step,,0,0,0,,{\pos(1110,480)}2. पेमेंट तथा रसीद का मिलान
+Dialogue: 0,0:00:00.00,0:00:42.37,Step,,0,0,0,,{\pos(1110,620)}3. अटेंडेंस और आने वाले रिन्यूअल
+Dialogue: 0,0:00:00.00,0:00:42.37,Note,,0,0,0,,{\pos(1110,815)}सही सदस्य • सही कार्रवाई • परिणाम की जाँच
+Dialogue: 0,0:00:00.50,0:00:03.61,Subtitle,,0,0,0,,रोज़ पाँच बातें याद रखें।
+Dialogue: 0,0:00:03.61,0:00:06.01,Subtitle,,0,0,0,,डैशबोर्ड देखें।
+Dialogue: 0,0:00:06.01,0:00:09.54,Subtitle,,0,0,0,,नए मेंबर की ऑनबोर्डिंग पूरी करें।
+Dialogue: 0,0:00:09.54,0:00:12.24,Subtitle,,0,0,0,,पेमेंट और रसीद मिलाएँ।
+Dialogue: 0,0:00:12.24,0:00:14.56,Subtitle,,0,0,0,,अटेंडेंस जाँचें।
+Dialogue: 0,0:00:14.56,0:00:17.87,Subtitle,,0,0,0,,और आने वाले रिन्यूअल सँभालें।
+Dialogue: 0,0:00:17.87,0:00:23.86,Subtitle,,0,0,0,,हर कार्रवाई सही सदस्य पर करें और सेव होने के बाद परिणाम पढ़ें।
+Dialogue: 0,0:00:23.86,0:00:30.45,Subtitle,,0,0,0,,नया जिम समय देने के लिए रिन्यूअल करें, और बकाया चुकाने के लिए पेमेंट लें।
+Dialogue: 0,0:00:30.45,0:00:36.08,Subtitle,,0,0,0,,इस क्रम से फ्रंट डेस्क और एडमिन का काम व्यवस्थित रहता है।
+Dialogue: 0,0:00:36.08,0:00:41.60,Subtitle,,0,0,0,,Tiger Fitness के हिंदी एडमिन प्रशिक्षण को देखने के लिए धन्यवाद।

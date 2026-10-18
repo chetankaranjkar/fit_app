@@ -1,0 +1,29 @@
+﻿[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Title,Nirmala UI,54,&H00F5F4F0,&H00000000,&H000D1019,&H000D1019,1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Step,Nirmala UI,38,&H00F0E6D7,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Note,Nirmala UI,28,&H008EC5FF,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Subtitle,Nirmala UI,33,&H00FFFFFF,&H00000000,&H00101723,&H00101723,0,0,0,0,100,100,0,0,1,1,0,2,90,90,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:45.33,Note,,0,0,0,,{\pos(1100,122)}अध्याय 06 / 13
+Dialogue: 0,0:00:00.00,0:00:45.33,Title,,0,0,0,,{\pos(1100,170)}सदस्यता और रिन्यूअल
+Dialogue: 0,0:00:00.00,0:00:45.33,Step,,0,0,0,,{\pos(1110,340)}1. Membership History में प्लान\Nदेखें
+Dialogue: 0,0:00:00.00,0:00:45.33,Step,,0,0,0,,{\pos(1110,480)}2. शुरुआत और अंतिम तारीख जाँचें
+Dialogue: 0,0:00:00.00,0:00:45.33,Step,,0,0,0,,{\pos(1110,620)}3. Renew membership से अवधि बढ़ाएँ
+Dialogue: 0,0:00:00.00,0:00:45.33,Note,,0,0,0,,{\pos(1110,815)}पेमेंट लेने से सदस्यता की अवधि नहीं बढ़ती
+Dialogue: 0,0:00:00.50,0:00:06.28,Subtitle,,0,0,0,,Membership History में मौजूदा प्लान, उसकी अवधि और स्थिति देखें।
+Dialogue: 0,0:00:06.28,0:00:12.60,Subtitle,,0,0,0,,Renew membership का विकल्प इसी सदस्यता पर काम करने के लिए मिलता है।
+Dialogue: 0,0:00:12.60,0:00:19.11,Subtitle,,0,0,0,,एक चलती हुई पात्र सदस्यता को रिन्यू करने पर उसकी अवधि बढ़ती है।
+Dialogue: 0,0:00:19.11,0:00:25.87,Subtitle,,0,0,0,,समाप्त सदस्यता के लिए नई सदस्यता वाला रिन्यूअल प्रवाह इस्तेमाल होता है।
+Dialogue: 0,0:00:25.87,0:00:31.77,Subtitle,,0,0,0,,अगर मौजूदा अवधि में बकाया है, तो पहले पेमेंट का काम पूरा करें।
+Dialogue: 0,0:00:31.77,0:00:36.97,Subtitle,,0,0,0,,सदस्यता जोड़ते समय सही मेंबर, प्लान और तारीख चुनें।
+Dialogue: 0,0:00:36.97,0:00:44.53,Subtitle,,0,0,0,,हमेशा याद रखें, बकाया चुकाना और जिम का समय बढ़ाना अलग-अलग कार्रवाई हैं।

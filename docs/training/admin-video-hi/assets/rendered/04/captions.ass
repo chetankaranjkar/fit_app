@@ -1,0 +1,29 @@
+﻿[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Title,Nirmala UI,54,&H00F5F4F0,&H00000000,&H000D1019,&H000D1019,1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Step,Nirmala UI,38,&H00F0E6D7,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Note,Nirmala UI,28,&H008EC5FF,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Subtitle,Nirmala UI,33,&H00FFFFFF,&H00000000,&H00101723,&H00101723,0,0,0,0,100,100,0,0,1,1,0,2,90,90,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:44.27,Note,,0,0,0,,{\pos(1100,122)}अध्याय 04 / 13
+Dialogue: 0,0:00:00.00,0:00:44.27,Title,,0,0,0,,{\pos(1100,170)}समय, प्लान और कोच
+Dialogue: 0,0:00:00.00,0:00:44.27,Step,,0,0,0,,{\pos(1110,340)}1. Training schedule चुनें
+Dialogue: 0,0:00:00.00,0:00:44.27,Step,,0,0,0,,{\pos(1110,480)}2. Membership plan और तारीख देखें
+Dialogue: 0,0:00:00.00,0:00:44.27,Step,,0,0,0,,{\pos(1110,620)}3. Trainer चुनें; फिर Save user
+Dialogue: 0,0:00:00.00,0:00:44.27,Note,,0,0,0,,{\pos(1110,815)}Notification preferences सोच-समझकर चुनें
+Dialogue: 0,0:00:00.50,0:00:07.14,Subtitle,,0,0,0,,फ़ॉर्म के नीचे Training schedule में फिक्स्ड शिफ्ट या कस्टम समय चुन सकते हैं।
+Dialogue: 0,0:00:07.14,0:00:12.35,Subtitle,,0,0,0,,Membership and trainer में सदस्यता का प्लान और कोच चुनें।
+Dialogue: 0,0:00:12.35,0:00:16.51,Subtitle,,0,0,0,,प्लान चुनने पर शुरुआत की तारीख भी जाँचें।
+Dialogue: 0,0:00:16.51,0:00:22.23,Subtitle,,0,0,0,,सदस्य की सुविधा और कोच की उपलब्धता के अनुसार समय तय करें।
+Dialogue: 0,0:00:22.23,0:00:27.86,Subtitle,,0,0,0,,ईमेल और एसएमएस की प्राथमिकताएँ भी इसी फ़ॉर्म में हैं।
+Dialogue: 0,0:00:27.86,0:00:35.44,Subtitle,,0,0,0,,वास्तविक संदेश भेजने के लिए सदस्य की अनुमति और जिम का तैयार चैनल ज़रूरी है।
+Dialogue: 0,0:00:35.44,0:00:43.49,Subtitle,,0,0,0,,सारी आवश्यक जानकारी और लॉगिन संबंधी फ़ील्ड सही होने पर Save user से मेंबर बनता\Nहै।

@@ -1,0 +1,29 @@
+﻿[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Title,Nirmala UI,54,&H00F5F4F0,&H00000000,&H000D1019,&H000D1019,1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Step,Nirmala UI,38,&H00F0E6D7,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Note,Nirmala UI,28,&H008EC5FF,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Subtitle,Nirmala UI,33,&H00FFFFFF,&H00000000,&H00101723,&H00101723,0,0,0,0,100,100,0,0,1,1,0,2,90,90,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:41.43,Note,,0,0,0,,{\pos(1100,122)}अध्याय 01 / 13
+Dialogue: 0,0:00:00.00,0:00:41.43,Title,,0,0,0,,{\pos(1100,170)}जिम एडमिन का रोज़ का काम
+Dialogue: 0,0:00:00.00,0:00:41.43,Step,,0,0,0,,{\pos(1110,340)}1. Dashboard से दिन की शुरुआत
+Dialogue: 0,0:00:00.00,0:00:41.43,Step,,0,0,0,,{\pos(1110,480)}2. मेंबर → सदस्यता → पेमेंट
+Dialogue: 0,0:00:00.00,0:00:41.43,Step,,0,0,0,,{\pos(1110,620)}3. कोच → वर्कआउट → डाइट
+Dialogue: 0,0:00:00.00,0:00:41.43,Note,,0,0,0,,{\pos(1110,815)}Tiger Fitness | असली UAT स्क्रीन
+Dialogue: 0,0:00:00.50,0:00:02.10,Subtitle,,0,0,0,,नमस्कार।
+Dialogue: 0,0:00:02.10,0:00:07.83,Subtitle,,0,0,0,,Tiger Fitness के हिंदी एडमिन प्रशिक्षण में आपका स्वागत है।
+Dialogue: 0,0:00:07.83,0:00:13.78,Subtitle,,0,0,0,,इस वीडियो में हम असली ऐप की स्क्रीन पर जिम का रोज़ का काम समझेंगे।
+Dialogue: 0,0:00:13.78,0:00:23.18,Subtitle,,0,0,0,,नया मेंबर जोड़ना, सदस्यता देखना, पेमेंट के विकल्प, कोच, वर्कआउट, डाइट और\Nअटेंडेंस, सभी का क्रम देखेंगे।
+Dialogue: 0,0:00:23.18,0:00:30.07,Subtitle,,0,0,0,,स्क्रीन के साथ दिए गए हिंदी निर्देश आपको हर चरण याद रखने में मदद करेंगे।
+Dialogue: 0,0:00:30.07,0:00:33.32,Subtitle,,0,0,0,,यह स्क्रीन वॉकथ्रू है।
+Dialogue: 0,0:00:33.32,0:00:40.66,Subtitle,,0,0,0,,अंतिम सेव और भुगतान की कार्रवाई अपने सही रिकॉर्ड पर जानकारी जाँचने के बाद\Nकरें।

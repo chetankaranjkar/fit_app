@@ -1,0 +1,31 @@
+﻿[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Title,Nirmala UI,54,&H00F5F4F0,&H00000000,&H000D1019,&H000D1019,1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Step,Nirmala UI,38,&H00F0E6D7,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Note,Nirmala UI,28,&H008EC5FF,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Subtitle,Nirmala UI,33,&H00FFFFFF,&H00000000,&H00101723,&H00101723,0,0,0,0,100,100,0,0,1,1,0,2,90,90,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:46.53,Note,,0,0,0,,{\pos(1100,122)}अध्याय 10 / 13
+Dialogue: 0,0:00:00.00,0:00:46.53,Title,,0,0,0,,{\pos(1100,170)}डाइट प्लान असाइन करना
+Dialogue: 0,0:00:00.00,0:00:46.53,Step,,0,0,0,,{\pos(1110,340)}1. Diet Plans → Assign to Users
+Dialogue: 0,0:00:00.00,0:00:46.53,Step,,0,0,0,,{\pos(1110,480)}2. Member और Diet plan चुनें
+Dialogue: 0,0:00:00.00,0:00:46.53,Step,,0,0,0,,{\pos(1110,620)}3. तारीख, नोट्स और active स्थिति
+Dialogue: 0,0:00:00.00,0:00:46.53,Note,,0,0,0,,{\pos(1110,815)}इस रिकॉर्डिंग में असाइनमेंट सेव नहीं किया\Nगया
+Dialogue: 0,0:00:00.50,0:00:05.79,Subtitle,,0,0,0,,डाइट के लिए Diet Plans खोलें और Assign to Users चुनें।
+Dialogue: 0,0:00:05.79,0:00:08.90,Subtitle,,0,0,0,,Assign plan से फ़ॉर्म खुलेगा।
+Dialogue: 0,0:00:08.90,0:00:12.39,Subtitle,,0,0,0,,सही सदस्य और डाइट प्लान चुनें।
+Dialogue: 0,0:00:12.39,0:00:19.26,Subtitle,,0,0,0,,शुरुआत की तारीख, आवश्यक हो तो समाप्ति की तारीख, और उपयोगी नोट्स भरें।
+Dialogue: 0,0:00:19.26,0:00:24.41,Subtitle,,0,0,0,,Mark as active now का विकल्प जाँचकर सही स्थिति रखें।
+Dialogue: 0,0:00:24.41,0:00:28.14,Subtitle,,0,0,0,,सदस्यता की पात्रता पहले देख लें।
+Dialogue: 0,0:00:28.14,0:00:35.26,Subtitle,,0,0,0,,डाइट प्लान का असाइन होना और सदस्य ने भोजन दर्ज किया होना अलग बातें हैं।
+Dialogue: 0,0:00:35.26,0:00:41.65,Subtitle,,0,0,0,,ऐप में जो असाइनमेंट दिख रहा है, उसे कोच द्वारा दिया गया प्लान समझें।
+Dialogue: 0,0:00:41.65,0:00:45.76,Subtitle,,0,0,0,,अंतिम Assign से पहले सारी जानकारी पढ़ें।

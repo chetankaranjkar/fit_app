@@ -1,0 +1,30 @@
+﻿[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Title,Nirmala UI,54,&H00F5F4F0,&H00000000,&H000D1019,&H000D1019,1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Step,Nirmala UI,38,&H00F0E6D7,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Note,Nirmala UI,28,&H008EC5FF,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Subtitle,Nirmala UI,33,&H00FFFFFF,&H00000000,&H00101723,&H00101723,0,0,0,0,100,100,0,0,1,1,0,2,90,90,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:45.70,Note,,0,0,0,,{\pos(1100,122)}अध्याय 02 / 13
+Dialogue: 0,0:00:00.00,0:00:45.70,Title,,0,0,0,,{\pos(1100,170)}डैशबोर्ड और मेन्यू
+Dialogue: 0,0:00:00.00,0:00:45.70,Step,,0,0,0,,{\pos(1110,340)}1. Revenue और Active members देखें
+Dialogue: 0,0:00:00.00,0:00:45.70,Step,,0,0,0,,{\pos(1110,480)}2. Membership billing जाँचें
+Dialogue: 0,0:00:00.00,0:00:45.70,Step,,0,0,0,,{\pos(1110,620)}3. Renewal queue से काम चुनें
+Dialogue: 0,0:00:00.00,0:00:45.70,Note,,0,0,0,,{\pos(1110,815)}मेन्यू खाते की permissions पर निर्भर है
+Dialogue: 0,0:00:00.50,0:00:05.29,Subtitle,,0,0,0,,लॉगिन के बाद Business control center खुलता है।
+Dialogue: 0,0:00:05.29,0:00:12.69,Subtitle,,0,0,0,,यहाँ आज की आय, सक्रिय मेंबर, नए मेंबर और अटेंडेंस की जानकारी मिलती है।
+Dialogue: 0,0:00:12.69,0:00:17.07,Subtitle,,0,0,0,,Membership billing में बकाया और कलेक्शन देखें।
+Dialogue: 0,0:00:17.07,0:00:21.93,Subtitle,,0,0,0,,Renewal queue में खत्म होने वाली सदस्यताओं पर काम करें।
+Dialogue: 0,0:00:21.93,0:00:26.52,Subtitle,,0,0,0,,इस UAT स्क्रीन पर कतार अभी खाली है।
+Dialogue: 0,0:00:26.52,0:00:30.90,Subtitle,,0,0,0,,ऊपर का मेन्यू बटन दबाकर अलग मॉड्यूल खोलें।
+Dialogue: 0,0:00:30.90,0:00:38.86,Subtitle,,0,0,0,,Users के अंदर मेंबर सूची, User membership plans और Membership plan के विकल्प\Nहैं।
+Dialogue: 0,0:00:38.86,0:00:44.91,Subtitle,,0,0,0,,आपके खाते की अनुमति के अनुसार उपलब्ध विकल्प बदल सकते हैं।

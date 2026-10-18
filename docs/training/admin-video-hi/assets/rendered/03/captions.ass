@@ -1,0 +1,30 @@
+﻿[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Title,Nirmala UI,54,&H00F5F4F0,&H00000000,&H000D1019,&H000D1019,1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Step,Nirmala UI,38,&H00F0E6D7,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Note,Nirmala UI,28,&H008EC5FF,&H00000000,&H000D1019,&H000D1019,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Subtitle,Nirmala UI,33,&H00FFFFFF,&H00000000,&H00101723,&H00101723,0,0,0,0,100,100,0,0,1,1,0,2,90,90,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:44.77,Note,,0,0,0,,{\pos(1100,122)}अध्याय 03 / 13
+Dialogue: 0,0:00:00.00,0:00:44.77,Title,,0,0,0,,{\pos(1100,170)}नया मेंबर जोड़ना
+Dialogue: 0,0:00:00.00,0:00:44.77,Step,,0,0,0,,{\pos(1110,340)}1. Users (members) → Add Member
+Dialogue: 0,0:00:00.00,0:00:44.77,Step,,0,0,0,,{\pos(1110,480)}2. नाम, ईमेल और मोबाइल जाँचें
+Dialogue: 0,0:00:00.00,0:00:44.77,Step,,0,0,0,,{\pos(1110,620)}3. जन्मतिथि और बाकी विवरण भरें
+Dialogue: 0,0:00:00.00,0:00:44.77,Note,,0,0,0,,{\pos(1110,815)}इस उदाहरण का फ़ॉर्म सेव नहीं किया गया है
+Dialogue: 0,0:00:00.50,0:00:06.64,Subtitle,,0,0,0,,नया मेंबर जोड़ने के लिए Users members खोलें और Add Member चुनें।
+Dialogue: 0,0:00:06.64,0:00:10.90,Subtitle,,0,0,0,,खुलने वाले फ़ॉर्म का नाम Add user है।
+Dialogue: 0,0:00:10.90,0:00:16.12,Subtitle,,0,0,0,,पहले नाम, उपनाम, लॉगिन ईमेल और मोबाइल नंबर भरें।
+Dialogue: 0,0:00:16.12,0:00:23.58,Subtitle,,0,0,0,,ईमेल और मोबाइल सही तथा अलग होने चाहिए, ताकि दूसरे सदस्य के साथ रिकॉर्ड न मिले।
+Dialogue: 0,0:00:23.58,0:00:28.68,Subtitle,,0,0,0,,जन्मतिथि और जेंडर सहित आवश्यक जानकारी पूरी करें।
+Dialogue: 0,0:00:28.68,0:00:32.31,Subtitle,,0,0,0,,आधार का फ़ील्ड वैकल्पिक है।
+Dialogue: 0,0:00:32.31,0:00:39.32,Subtitle,,0,0,0,,इस स्क्रीन पर केवल प्रशिक्षण के लिए डेमो नाम और उदाहरण ईमेल भरा गया है।
+Dialogue: 0,0:00:39.32,0:00:43.99,Subtitle,,0,0,0,,अंतिम सेव से पहले अपने सदस्य के विवरण जाँचें।

@@ -1,9 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { Check } from 'lucide-react'
+import { Activity, CalendarDays, Check, CircleDashed, Clock3, Dumbbell, Layers3, LockKeyhole, NotebookPen, Weight } from 'lucide-react'
 import { Modal } from '../../../components/ui/Modal'
+import { Button } from '../../../components/ui/Button'
+import { getApiErrorMessage } from '../../../lib/apiErrors'
 import { workoutTrackingService } from '../../../services/workoutTracking.service'
 import type { WorkoutSessionGroup } from '../../../types/workoutTracking'
 import { isLiveWorkoutStatus, workoutStatusLabel } from '../lib/workoutSessionUi'
+import './workoutSessionReview.css'
 
 export function WorkoutSessionReviewModal({
   sessionId,
@@ -14,7 +17,7 @@ export function WorkoutSessionReviewModal({
   open: boolean
   onClose: () => void
 }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['workout-session-detail', sessionId],
     enabled: open && sessionId != null && sessionId > 0,
     queryFn: async () => {
@@ -27,50 +30,44 @@ export function WorkoutSessionReviewModal({
 
   const session = data?.session
   const live = isLiveWorkoutStatus(session?.status ?? '')
+  const completion = Math.min(100, Math.max(0, session?.completionPercent ?? 0))
+  const when = session?.startTimeUtc || session?.workoutDate
+  const sessionDate = when ? new Date(when) : null
+  const formattedDate = sessionDate && !Number.isNaN(sessionDate.getTime())
+    ? sessionDate.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : 'Date unavailable'
 
   return (
-    <Modal open={open} onClose={onClose} title={session?.planName ?? 'Workout session'} size="wide" scrollable>
-      {isLoading || !session || !data ? (
-        <p className="py-8 text-center text-sm text-slate-400">Loading session…</p>
+    <Modal open={open} onClose={onClose} title="Workout session review" size="wide" scrollable
+      footer={<Button type="button" variant="secondary" onClick={onClose}>Back to history</Button>}>
+      {isLoading ? (
+        <p role="status" className="py-8 text-center text-sm text-slate-400">Loading session…</p>
+      ) : isError ? (
+        <div role="alert" className="space-y-3 py-6 text-sm text-slate-300"><p>{getApiErrorMessage(error, 'Could not load this session.')}</p><Button variant="secondary" onClick={() => void refetch()}>Retry</Button></div>
+      ) : !session || !data ? (
+        <p className="py-8 text-center text-sm text-slate-400">Session details are unavailable.</p>
       ) : (
-        <div className="space-y-5">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                live
-                  ? 'border border-emerald-400/40 bg-emerald-500/15 text-emerald-200'
-                  : 'border border-white/10 bg-white/5 text-slate-300'
-              }`}
-            >
-              {live ? 'Live now' : workoutStatusLabel(session.status)}
-            </span>
-            <span className="text-slate-400">
-              {Math.round(session.completionPercent)}% · {session.completedSets}/{session.totalSets} sets
-            </span>
-            {data.durationMinutes != null && data.durationMinutes > 0 ? (
-              <span className="text-slate-500">{data.durationMinutes} min</span>
-            ) : (
-              <span className="text-slate-500">Duration unavailable</span>
-            )}
-            <span className="text-slate-500">
-              {data.totalVolume == null ? 'Volume unavailable' : `${Math.round(data.totalVolume)} kg volume`}
-            </span>
-          </div>
-
-          {data.notes?.trim() ? (
-            <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
-              {data.notes}
-            </p>
-          ) : null}
-
-          <div className="h-2 overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all"
-              style={{ width: `${Math.min(100, session.completionPercent)}%` }}
-            />
-          </div>
-
+        <div className="session-review space-y-5">
+          <section className="session-review-hero">
+            <div className="session-review-hero-main">
+              <span className="session-review-eyebrow"><Activity size={14} aria-hidden="true" />SESSION PERFORMANCE</span>
+              <h3>{session.planName || 'Workout session'}</h3>
+              <div className="session-review-context"><span className={`session-review-status ${live ? 'live' : session.status === 'Completed' ? 'complete' : ''}`}><span />{live ? 'Live now' : workoutStatusLabel(session.status)}</span><span><CalendarDays size={12} aria-hidden="true" />{formattedDate}</span></div>
+              <p className="session-review-readonly"><LockKeyhole size={11} aria-hidden="true" />Read only · {live ? 'Updates every 15 seconds' : 'Synced workout record'}</p>
+            </div>
+            <div className="session-review-ring" style={{ background: `conic-gradient(from -90deg, var(--session-accent) ${completion}%, var(--session-border) ${completion}% 100%)` }}>
+              <div><strong>{Math.round(completion)}<small>%</small></strong><span>sets completed</span></div>
+            </div>
+          </section>
+          <section className="session-review-metrics" aria-label="Session summary">
+            <div><span><Layers3 size={15} aria-hidden="true" />Completed sets</span><p><strong>{session.completedSets}<small> / {session.totalSets}</small></strong></p></div>
+            <div><span><Clock3 size={15} aria-hidden="true" />Duration</span><p><strong>{data.durationMinutes != null && data.durationMinutes > 0 ? data.durationMinutes : '—'}</strong><small>{data.durationMinutes != null && data.durationMinutes > 0 ? 'min' : 'unavailable'}</small></p></div>
+            <div><span><Weight size={15} aria-hidden="true" />Recorded volume</span><p><strong>{data.totalVolume == null ? '—' : Math.round(data.totalVolume).toLocaleString()}</strong><small>{data.totalVolume == null ? 'unavailable' : 'kg'}</small></p></div>
+          </section>
+          {data.notes?.trim() && <aside className="session-review-notes"><NotebookPen size={17} aria-hidden="true" /><div><h4>Session notes</h4><p>{data.notes}</p></div></aside>}
+          <div className="session-review-section-heading"><div><span className="session-review-eyebrow">THE SESSION BREAKDOWN</span><h4><Dumbbell size={18} aria-hidden="true" />Exercise performance</h4></div><span>{session.exercises.length} {session.exercises.length === 1 ? 'exercise' : 'exercises'}</span></div>
           <WorkoutSessionSetReview exercises={session.exercises} />
+          <p className="session-review-footnote"><LockKeyhole size={12} aria-hidden="true" />Targets show the prescribed routine. Recorded values show synced performance; missing values stay unavailable.</p>
         </div>
       )}
     </Modal>
@@ -94,34 +91,31 @@ export function WorkoutSessionSetReview({
   exercises: WorkoutSessionGroup[]
 }) {
   if (!exercises.length) {
-    return <p className="py-6 text-center text-sm text-slate-500">No logged sets yet.</p>
+    return <p className="session-review-empty">No logged sets yet.</p>
   }
 
   return (
-    <div className="space-y-4">
-      {exercises.map((group) => (
-        <div key={group.exerciseId} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-          <p className="font-medium text-white">{group.exerciseName}</p>
-          <ul className="mt-3 space-y-2">
+    <div className="session-review session-review-exercises">
+      {exercises.map((group, index) => (
+        <section key={group.exerciseId} className="session-review-exercise">
+          <header><span className="session-review-exercise-number">{String(index + 1).padStart(2, '0')}</span><div><h5>{group.exerciseName}</h5><p>{group.sets.filter((set) => set.isCompleted).length} of {group.sets.length} sets completed</p></div><Dumbbell size={17} aria-hidden="true" /></header>
+          <div className="session-review-table-head" aria-hidden="true"><span>SET</span><span>TARGET</span><span>RECORDED</span><span>STATUS</span></div>
+          <ul className="session-review-sets">
             {group.sets.map((set) => (
-              <li key={set.id} className="rounded-lg border border-white/5 px-3 py-2 text-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-slate-400">Set {set.setNumber}</p>
-                    <p className="mt-1 text-slate-500">Target {formatTarget(set.targetReps, set.targetWeight)}</p>
-                    <p className="text-slate-200">Recorded {formatActual(set.actualReps, set.actualWeight)}</p>
-                    {set.notes?.trim() ? <p className="mt-1 text-xs text-slate-400">{set.notes}</p> : null}
-                  </div>
+              <li key={set.id} className="session-review-set">
+                  <span className="session-review-set-number">Set {set.setNumber}</span>
+                  <div className="session-review-target"><span className="session-review-mobile-label">Target</span><p>{formatTarget(set.targetReps, set.targetWeight)}</p></div>
+                  <div className="session-review-actual"><span className="session-review-mobile-label">Recorded</span><p>{formatActual(set.actualReps, set.actualWeight)}</p></div>
                   {set.isCompleted ? (
-                    <Check className="size-4 shrink-0 text-emerald-400" aria-label="Completed" />
+                    <span className="session-review-set-status done"><Check size={13} aria-hidden="true" />Completed</span>
                   ) : (
-                    <span className="text-xs text-slate-500">Pending</span>
+                    <span className="session-review-set-status"><CircleDashed size={13} aria-hidden="true" />Pending</span>
                   )}
-                </div>
+                  {set.notes?.trim() && <p className="session-review-set-note">{set.notes}</p>}
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       ))}
     </div>
   )

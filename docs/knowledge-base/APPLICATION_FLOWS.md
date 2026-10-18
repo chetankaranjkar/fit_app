@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-10-16 (profile diet assignment member selection and dismissal; member creation, membership collection handoffs, and receipt completion).
+**Last updated:** 2026-10-18 (workout session review presentation; profile diet assignment member selection and dismissal; member creation, membership collection handoffs, and receipt completion).
 
 **Section map:** [README.md](./README.md#application_flows-section-map). Scheduled work / evidence labels: [PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md).
 
@@ -554,6 +554,7 @@ Staff and trainers work through one coaching path. Catalog administration and au
 - **Program detail → Assigned Members** (`ProgramAssignedMembersTab`) lists current members from `GET /api/Programs/{id}/assigned-members`. A member is current when they have at least one active, non-deleted `UserSchedules` row for that plan (same distinct-user count as `assignedMembersCount`). Weekday slots do not duplicate the row. Start is the earliest active slot `CreatedDate`; there is no end date while the assignment is current, so the tab shows the start and **Ongoing**. Replaced assignments (`IsActive = false`) are omitted. Columns are member name, assigned coach, and those dates — no phone, email, billing, or health fields. **Manage assignments** still opens `/dashboard/training/workout-assignments?highlightProgram={id}` under the existing assignment permissions. Admins and anyone with `UsersAccess` can open every listed profile. A trainer without `UsersAccess` sees the full roster, but names link to `/dashboard/users/{userId}` only for members with an active `UserInstructors` row on that trainer’s profile. Other coaches’ members show a plain name and **Assigned to another coach** (the other coach’s name is not returned). Members with no active coach show **No coach assigned**. The tab explains that profile access is limited to the trainer’s assigned members. Direct profile URLs stay enforced by `UserDirectoryScope.CanAccessMemberAsync` on `GET /api/Users/{id}`, `/{id}/aggregate`, and `/{id}/profile-summary`.
 - **Monitoring** = admin live board (`UsersAccess` or ADMIN). Trainers use **Review** for their clients.
 - **Reviews** = completed/live sessions + health-summary on assign and member workout screens.
+- **Session review popup** (`WorkoutSessionReviewModal`, also opened from profile **Workout history → View session**): a theme-aware performance header shows the program name, date, status, and set-completion ring; summary cards show completed sets, duration, and recorded volume. Numbered exercise cards compare each set's **Target** with **Recorded** performance and show completion/pending status and notes. Mobile rows stack those labels; missing actual values stay unavailable. It reuses `GET /api/workout/session/{id}/detail`, retains 15-second live refresh, and supplies load/error/retry states. **Back to history**, X, and Escape dismiss in place without changing the originating route. The dialog is read-only and does not update workout records.
 
 **Nav:** `gym_client/src/features/auth/trainingNav.ts` feeds admin `SidebarNav` and trainer `roleNavConfig`. Journey chrome: `TrainingJourneyNav` on the primary screens.
 

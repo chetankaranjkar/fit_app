@@ -1,0 +1,87 @@
+.session-review {
+  --session-text: var(--dashboard-text,#f1f5f9);
+  --session-muted: var(--dashboard-muted,#94a3b8);
+  --session-surface: var(--dashboard-surface,#111127);
+  --session-border: var(--dashboard-border,rgba(255,255,255,.1));
+  --session-accent: #a78bfa;
+  --session-success: #34d399;
+  color: var(--session-text);
+}
+.session-review-hero { position: relative; display: flex; align-items: center; gap: 25px; padding: 25px; border: 1px solid var(--session-border); border-radius: 22px; background: radial-gradient(ellipse at 0 0,#8b5cf624,transparent 65%),var(--session-surface); overflow: hidden; }
+.session-review-hero::before { content: ''; position: absolute; inset: 0 25px auto; height: 2px; background: linear-gradient(90deg,#60a5fa,#a78bfa,transparent); }
+.session-review-hero-main { flex: 1; min-width: 0; }
+.session-review-eyebrow { display: flex; gap: 7px; align-items: center; font-size: 10px; letter-spacing: .14em; font-weight: 700; color: var(--session-accent); }
+.session-review-hero h3 { font-size: clamp(23px,3vw,30px); font-weight: 700; letter-spacing: -.035em; line-height: 1.2; margin: 12px 0 15px; overflow-wrap: anywhere; }
+.session-review-context { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 10px; color: var(--session-muted); }
+.session-review-context > span { display: inline-flex; align-items: center; gap: 5px; }
+.session-review-status { border: 1px solid var(--session-border); border-radius: 100px; padding: 5px 9px; font-weight: 600; }
+.session-review-status > span { width: 5px; height: 5px; border-radius: 50%; background: var(--session-muted); }
+.session-review-status:is(.complete,.live) { color: var(--session-success); border-color: color-mix(in srgb,var(--session-success) 25%,transparent); background: color-mix(in srgb,var(--session-success) 7%,transparent); }
+.session-review-status:is(.complete,.live) > span { background: var(--session-success); }
+.session-review-readonly { display: flex; align-items: center; gap: 5px; margin-top: 14px; font-size: 10px; color: var(--session-muted); }
+.session-review-ring { border-radius: 50%; width: 126px; height: 126px; padding: 6px; flex-shrink: 0; }
+.session-review-ring > div { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; border-radius: 50%; background: var(--session-surface); }
+.session-review-ring strong { font-size: 31px; font-weight: 700; letter-spacing: -.045em; }
+.session-review-ring small { font-size: 16px; margin-left: 2px; font-weight: 500; color: var(--session-accent); }
+.session-review-ring div > span { font-size: 9px; color: var(--session-muted); }
+.session-review-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.session-review-metrics > div { padding: 15px; border: 1px solid var(--session-border); border-radius: 16px; background: var(--session-surface); }
+.session-review-metrics > div > span { display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--session-muted); }
+.session-review-metrics svg { color: var(--session-accent); flex-shrink: 0; }
+.session-review-metrics > div:nth-child(2) svg { color: #60a5fa; }
+.session-review-metrics > div:nth-child(3) svg { color: #fb923c; }
+.session-review-metrics p { display: flex; align-items: baseline; gap: 5px; margin-top: 9px; flex-wrap: wrap; }
+.session-review-metrics strong { font-size: 25px; font-weight: 650; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.session-review-metrics small { font-size: 10px; font-weight: 400; color: var(--session-muted); letter-spacing: 0; }
+.session-review-notes { display: flex; align-items: flex-start; gap: 10px; border: 1px solid var(--session-border); padding: 14px 16px; border-radius: 14px; background: #a78bfa08; }
+.session-review-notes > svg { color: var(--session-accent); flex-shrink: 0; margin-top: 2px; }
+.session-review-notes h4 { font-size: 11px; font-weight: 600; }
+.session-review-notes p { font-size: 12px; color: var(--session-muted); line-height: 1.7; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.session-review-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.session-review-section-heading h4 { display: flex; gap: 8px; align-items: center; font-size: 19px; font-weight: 650; letter-spacing: -.025em; margin-top: 7px; }
+.session-review-section-heading h4 svg { color: var(--session-accent); flex-shrink: 0; }
+.session-review-section-heading > span { padding: 5px 9px; border-radius: 100px; border: 1px solid var(--session-border); font-size: 10px; color: var(--session-muted); flex-shrink: 0; }
+.session-review-exercises { display: grid; gap: 15px; }
+.session-review-exercise { border: 1px solid var(--session-border); border-radius: 17px; overflow: hidden; background: var(--session-surface); }
+.session-review-exercise header { display: flex; gap: 11px; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--session-border); }
+.session-review-exercise-number { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--session-accent); background: #a78bfa14; font-size: 12px; font-weight: 650; flex-shrink: 0; }
+.session-review-exercise h5 { font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.session-review-exercise header p { font-size: 10px; color: var(--session-muted); margin-top: 4px; }
+.session-review-exercise header > svg { margin-left: auto; color: var(--session-accent); flex-shrink: 0; }
+.session-review-table-head,.session-review-set { display: grid; grid-template-columns: 55px minmax(0,1fr) minmax(0,1.2fr) 84px; align-items: center; gap: 12px; padding: 13px 18px; }
+.session-review-table-head { font-size: 8px; font-weight: 650; letter-spacing: .1em; color: var(--session-muted); background: color-mix(in srgb,var(--session-text) 2%,transparent); }
+.session-review-table-head > span:last-child { text-align: right; }
+.session-review-sets { list-style: none; padding: 0; margin: 0; }
+.session-review-set + .session-review-set { border-top: 1px solid var(--session-border); }
+.session-review-set-number { font-size: 11px; font-weight: 600; color: var(--session-muted); }
+.session-review-target p { font-size: 11px; line-height: 1.6; color: var(--session-muted); overflow-wrap: anywhere; }
+.session-review-actual p { font-size: 12px; line-height: 1.6; font-weight: 600; overflow-wrap: anywhere; }
+.session-review-set-status { display: inline-flex; gap: 4px; align-items: center; justify-self: end; font-size: 9px; color: var(--session-muted); }
+.session-review-set-status.done { color: var(--session-success); }
+.session-review-set-status svg { flex-shrink: 0; }
+.session-review-set-note { grid-column: 2 / -1; font-size: 11px; line-height: 1.7; padding-left: 8px; border-left: 2px solid #a78bfa55; color: var(--session-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.session-review-mobile-label { display: none; }
+.session-review-footnote { display: flex; gap: 7px; align-items: flex-start; font-size: 10px; line-height: 1.7; color: var(--session-muted); }
+.session-review-footnote svg { flex-shrink: 0; margin-top: 2px; }
+.session-review-empty { padding: 25px; text-align: center; font-size: 12px; color: var(--session-muted,var(--dashboard-muted)); border: 1px dashed var(--session-border,var(--dashboard-border)); border-radius: 15px; }
+html[data-theme='light'] .session-review { --session-accent: #7c3aed; --session-success: #047857; }
+@media(max-width:540px) {
+  .session-review-hero { padding: 20px; gap: 18px; flex-direction: column; align-items: stretch; }
+  .session-review-ring { width: 99px; height: 99px; padding: 5px; }
+  .session-review-ring strong { font-size: 27px; }
+  .session-review-ring div > span { font-size: 8px; }
+  .session-review-metrics { gap: 7px; }
+  .session-review-metrics > div { padding: 12px 10px; }
+  .session-review-metrics > div > span { font-size: 9px; flex-direction: column; align-items: flex-start; gap: 6px; }
+  .session-review-metrics strong { font-size: 22px; }
+  .session-review-metrics small { font-size: 8px; }
+  .session-review-section-heading h4 { font-size: 17px; }
+  .session-review-section-heading > span { font-size: 9px; }
+  .session-review-exercise header { padding: 14px; }
+  .session-review-table-head { display: none; }
+  .session-review-set { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 14px; }
+  .session-review-set-number { grid-column: 1; grid-row: 1; }
+  .session-review-set-status { grid-column: 2; grid-row: 1; }
+  .session-review-mobile-label { display: block; color: var(--session-muted); font-size: 8px; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 3px; }
+  .session-review-set-note { grid-column: 1 / -1; }
+}

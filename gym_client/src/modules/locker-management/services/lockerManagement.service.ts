@@ -41,6 +41,7 @@ interface ApiLocker {
   size: string
   status: string
   location?: string | null
+  branchId?: number | null
 }
 
 interface ApiAssignment {
@@ -104,6 +105,7 @@ const mapLocker = (a: ApiLocker): Locker => ({
   size: toSize(a.size),
   status: toStatus(a.status),
   location: a.location ?? undefined,
+  branchId: a.branchId ?? undefined,
 })
 
 const mapAssignment = (a: ApiAssignment): LockerAssignment => ({
@@ -168,6 +170,7 @@ export interface LockerInput {
   size: LockerSize
   status: LockerStatus
   location?: string
+  branchId?: number
 }
 
 export interface AssignmentInput {
@@ -197,6 +200,7 @@ const toApiLockerPayload = (i: LockerInput) => ({
   size: i.size,
   status: i.status,
   location: i.location ?? null,
+  branchId: i.branchId ?? null,
 })
 
 const toApiAssignmentPayload = (i: AssignmentInput) => ({

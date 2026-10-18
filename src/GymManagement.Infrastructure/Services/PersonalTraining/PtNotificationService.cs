@@ -1,4 +1,5 @@
 using GymManagement.Core.DTOs.PersonalTraining;
+using GymManagement.Core.Services;
 using GymManagement.Core.Services.PersonalTraining;
 using GymManagement.Domain.Entities.PersonalTraining;
 using GymManagement.Infrastructure.Data;
@@ -9,12 +10,25 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
     public sealed class PtNotificationService : IPtNotificationService
     {
         private readonly ApplicationDbContext _db;
+        private readonly IBranchScopeService _scope;
 
-        public PtNotificationService(ApplicationDbContext db) => _db = db;
+        public PtNotificationService(ApplicationDbContext db, IBranchScopeService scope)
+        {
+            _db = db;
+            _scope = scope;
+        }
 
         public async Task<IReadOnlyList<PTNotificationDto>> GetForUserAsync(int? userId, int? trainerId, bool unreadOnly, CancellationToken ct = default)
         {
             var query = _db.PTNotifications.AsNoTracking().Where(n => !n.IsDeleted);
+            var scope = await _scope.CurrentAsync(ct);
+            if (!scope.IsUnrestricted)
+            {
+                var ids = scope.BranchIds.ToArray();
+                query = query.Where(n =>
+                    n.UserId == scope.ActorUserId
+                    || _db.Users.Any(u => u.Id == n.UserId && u.HomeBranchId != null && ids.Contains(u.HomeBranchId.Value)));
+            }
             if (userId.HasValue) query = query.Where(n => n.UserId == userId);
             if (trainerId.HasValue) query = query.Where(n => n.TrainerId == trainerId);
             if (unreadOnly) query = query.Where(n => !n.IsRead);

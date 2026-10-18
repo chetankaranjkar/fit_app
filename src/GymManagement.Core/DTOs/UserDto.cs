@@ -33,6 +33,8 @@ namespace GymManagement.Core.DTOs
         public bool ReceiveSmsNotifications { get; set; } = true;
         /// <summary>Login role when the user has an account: User (Member), Instructor, or Admin.</summary>
         public Role? Role { get; set; }
+        public int? HomeBranchId { get; set; }
+        public string? HomeBranchName { get; set; }
         /// <summary>Login email when the user has an account (same as <see cref="Email"/> when linked to <c>AuthUsers</c>).</summary>
         public string? Username { get; set; }
         /// <summary>User types (e.g. Admin, Instructor, Staff) - a user can have many.</summary>
@@ -143,6 +145,9 @@ namespace GymManagement.Core.DTOs
         public List<int> UserTypeIds { get; set; } = new();
         /// <summary>CSV line number (1-based, including header) for bulk import preview/errors. Ignored by single create.</summary>
         public int? SourceRowNumber { get; set; }
+        public int? HomeBranchId { get; set; }
+        /// <summary>Extra branches for trainers and staff. Members must leave this empty.</summary>
+        public List<int> AdditionalBranchIds { get; set; } = new();
     }
 
     public class UpdateUserDto

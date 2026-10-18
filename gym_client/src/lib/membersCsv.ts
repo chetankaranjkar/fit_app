@@ -72,6 +72,7 @@ export type ParsedMemberRow = {
   isActive: boolean
   username?: string
   password?: string
+  homeBranch?: string
 }
 
 export type MemberCsvIssue = {
@@ -112,6 +113,12 @@ export const MEMBER_IMPORT_COLUMNS: MemberImportColumn[] = [
     name: 'password',
     required: false,
     hint: 'Optional. Defaults to the phone number. Login is created immediately, same as Add Member — there is no invitation-only import path.',
+  },
+  {
+    name: 'homeBranch',
+    required: false,
+    aliases: ['branch', 'homeBranchId'],
+    hint: 'Branch name or id. Required in the file when the import screen does not select one branch for every row.',
   },
 ]
 
@@ -295,6 +302,14 @@ export function rowsToMemberImports(rows: string[][]): {
       continue
     }
 
+    const homeBranch = idx.has('homebranch')
+      ? get('homebranch').trim()
+      : idx.has('branch')
+        ? get('branch').trim()
+        : idx.has('homebranchid')
+          ? get('homebranchid').trim()
+          : ''
+
     out.push({
       sourceRowNumber: lineNo,
       firstName,
@@ -307,14 +322,15 @@ export function rowsToMemberImports(rows: string[][]): {
       isActive,
       username,
       password,
+      homeBranch: homeBranch || undefined,
     })
   }
 
   return { rows: out, issues, errors: issues.map((i) => i.message) }
 }
 
-export const MEMBERS_CSV_TEMPLATE = `firstName,lastName,email,phone,aadhaarNumber,dateOfBirth,gender,isActive
-Jane,Doe,jane.doe@example.com,9876543210,123412341234,1990-05-15,Female,true`
+export const MEMBERS_CSV_TEMPLATE = `firstName,lastName,email,phone,aadhaarNumber,dateOfBirth,gender,isActive,homeBranch
+Jane,Doe,jane.doe@example.com,9876543210,123412341234,1990-05-15,Female,true,`
 
 export function downloadMembersCsv(filename: string, headers: string[], lines: string[][]) {
   const esc = (v: string) => {

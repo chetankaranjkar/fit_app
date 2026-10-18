@@ -22,6 +22,8 @@ import {
   type DataGridColumnDef,
 } from '../components/data-grid'
 import { Button } from '../components/ui/Button'
+import { useBranchScope } from '../features/branch/BranchScopeContext'
+import { BranchChoiceField } from '../features/branch/BranchChoiceField'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { usePermission } from '../features/auth/hooks/usePermission'
@@ -259,6 +261,11 @@ export function AttendancePage() {
   const [checkInUserId, setCheckInUserId] = useState(0)
   const [checkInMethod, setCheckInMethod] = useState('FrontDesk')
   const [checkInNotes, setCheckInNotes] = useState('')
+  const [checkInBranchId, setCheckInBranchId] = useState<number | undefined>()
+  const branchScope = useBranchScope()
+  const setVisitBranch = useCallback((branchId: number | undefined) => {
+    setCheckInBranchId((current) => (current === branchId ? current : branchId))
+  }, [])
   const [checkoutNotes, setCheckoutNotes] = useState('')
   const [selectedCheckout, setSelectedCheckout] = useState<AttendanceLogDto | null>(null)
   const [selectedMember, setSelectedMember] = useState<HistoryMember | null>(null)
@@ -343,6 +350,7 @@ export function AttendancePage() {
         loggedByUserId: (userId ?? 0) > 0 ? userId : undefined,
         checkInMethod,
         notes: checkInNotes.trim() || null,
+        branchId: checkInBranchId,
       }),
     onSuccess: () => {
       invalidateAttendance()
@@ -818,6 +826,14 @@ export function AttendancePage() {
             </div>
           )}
           <AttendanceMemberPicker selectedUserId={checkInUserId} onSelect={setCheckInUserId} />
+          <BranchChoiceField
+            branches={branchScope ? branchScope.branches : null}
+            value={checkInBranchId}
+            onChange={setVisitBranch}
+            defaultBranchId={branchScope?.defaultBranchId}
+            label="Visited branch"
+            reason="Check-in records the branch the member is entering. The membership must allow that branch."
+          />
           <div className="space-y-2">
             <Input
               label="Check-in method"

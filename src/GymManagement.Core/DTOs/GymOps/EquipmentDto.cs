@@ -13,6 +13,7 @@ namespace GymManagement.Core.DTOs.GymOps
         public string Status { get; set; } = "OPERATIONAL";
         public DateTime? NextServiceDate { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class CreateEquipmentDto
@@ -27,6 +28,7 @@ namespace GymManagement.Core.DTOs.GymOps
         public string Status { get; set; } = "OPERATIONAL";
         public DateTime? NextServiceDate { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class UpdateEquipmentDto

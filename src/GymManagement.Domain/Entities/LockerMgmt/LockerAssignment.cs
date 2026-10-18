@@ -18,5 +18,7 @@ namespace GymManagement.Domain.Entities.LockerMgmt
         public string MemberName { get; set; } = string.Empty;
         public DateTime AssignedDate { get; set; }
         public DateTime ExpiryDate { get; set; }
+        /// <summary>Branch of the locker when this allocation was made. A later locker move does not change it.</summary>
+        public int? BranchId { get; set; }
     }
 }

@@ -22,6 +22,7 @@ namespace GymManagement.Infrastructure.Services
         private readonly IEmailSettingsService _emailSettings;
         private readonly ISmsTransportService _smsTransport;
         private readonly IAppCache _cache;
+        private readonly IBranchScopeService _scope;
 
         public DashboardService(
             IUnitOfWork unitOfWork,
@@ -29,7 +30,8 @@ namespace GymManagement.Infrastructure.Services
             IOptions<NotificationWebhookOptions> notificationOptions,
             IEmailSettingsService emailSettings,
             ISmsTransportService smsTransport,
-            IAppCache cache)
+            IAppCache cache,
+            IBranchScopeService scope)
         {
             _unitOfWork = unitOfWork;
             _context = context;
@@ -37,14 +39,20 @@ namespace GymManagement.Infrastructure.Services
             _emailSettings = emailSettings;
             _smsTransport = smsTransport;
             _cache = cache;
+            _scope = scope;
         }
 
         public async Task<DashboardSummaryDto> GetSummaryAsync(CancellationToken cancellationToken = default)
         {
-            const string cacheKey = DashboardCacheKeys.Summary;
-            var cached = await _cache.GetAsync<DashboardSummaryDto>(cacheKey, cancellationToken);
-            if (cached != null)
-                return cached;
+            var scope = await _scope.CurrentAsync(cancellationToken);
+            var unrestricted = scope.IsUnrestricted;
+            var branchIds = scope.BranchIds.ToArray();
+            if (unrestricted)
+            {
+                var cached = await _cache.GetAsync<DashboardSummaryDto>(DashboardCacheKeys.Summary, cancellationToken);
+                if (cached != null)
+                    return cached;
+            }
 
             var today = DateTime.UtcNow.Date;
             var monthStart = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -60,11 +68,14 @@ namespace GymManagement.Infrastructure.Services
                         r.Id == ur.RoleId
                         && !r.IsDeleted
                         && r.IsActive
-                        && r.Name == ApplicationRoleCodes.Member)));
+                        &&                         r.Name == ApplicationRoleCodes.Member)));
+            if (!unrestricted)
+                membersQuery = membersQuery.Where(u => u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value));
 
             var totalMembers = await membersQuery.CountAsync(cancellationToken);
             var activeMembers = await _context.UserMemberships.AsNoTracking()
                 .Where(m => !m.IsDeleted && m.Status == MembershipStatus.Active)
+                .Where(m => unrestricted || _context.Users.Any(u => u.Id == m.UserId && u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value)))
                 .Select(m => m.UserId)
                 .Distinct()
                 .CountAsync(cancellationToken);
@@ -73,11 +84,13 @@ namespace GymManagement.Infrastructure.Services
                 cancellationToken);
 
             var expiredMemberships = await _context.UserMemberships.AsNoTracking()
+                .Where(m => unrestricted || _context.Users.Any(u => u.Id == m.UserId && u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value)))
                 .CountAsync(
                     m => m.Status == MembershipStatus.Expired || m.EndDate.Date < today,
                     cancellationToken);
 
             var expiringSoon = await _context.UserMemberships.AsNoTracking()
+                .Where(m => unrestricted || _context.Users.Any(u => u.Id == m.UserId && u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value)))
                 .CountAsync(
                     m => m.Status == MembershipStatus.Active
                          && m.EndDate.Date >= today
@@ -86,10 +99,12 @@ namespace GymManagement.Infrastructure.Services
 
             var attendanceToday = GymCalendar.AttendanceDateFromUtc(DateTime.UtcNow);
             var todayAttendance = await _context.AttendanceLogs.AsNoTracking()
+                .Where(a => unrestricted || (a.BranchId != null && branchIds.Contains(a.BranchId.Value)))
                 .CountAsync(a => a.AttendanceDate == attendanceToday, cancellationToken);
 
             var now = DateTime.UtcNow;
             var pendingPayments = await _context.Invoices.AsNoTracking()
+                .Where(i => unrestricted || _context.UserMemberships.Any(m => m.Id == i.UserMembershipId && m.SellingBranchId != null && branchIds.Contains(m.SellingBranchId.Value)))
                 .CountAsync(
                     i => i.Status == EntityInvoiceStatus.Overdue
                          || ((i.Status == EntityInvoiceStatus.Draft || i.Status == EntityInvoiceStatus.Sent)
@@ -110,7 +125,8 @@ namespace GymManagement.Infrastructure.Services
                     _context.MembershipPayments.AsNoTracking().Where(mp => !mp.IsDeleted),
                     t => t.PaymentId,
                     mp => mp.Id,
-                    (t, mp) => new { t.TransactionAmount, t.TransactionDate, mp.MembershipId });
+                    (t, mp) => new { t.TransactionAmount, t.TransactionDate, mp.MembershipId, mp.SellingBranchId })
+                .Where(x => unrestricted || (x.SellingBranchId != null && branchIds.Contains(x.SellingBranchId.Value)));
 
             var monthlyRevenue = await completedTransactions
                 .Where(x => x.TransactionDate >= monthStart && x.TransactionDate < monthEnd)
@@ -124,6 +140,9 @@ namespace GymManagement.Infrastructure.Services
 
             var trainerCount = await _context.Trainers.AsNoTracking()
                 .WhereUserHasTrainerRole(_context)
+                .Where(t => unrestricted
+                    || _context.Users.Any(u => u.Id == t.UserId && u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value))
+                    || _context.UserBranchAssignments.Any(a => a.UserId == t.UserId && branchIds.Contains(a.BranchId)))
                 .CountAsync(cancellationToken);
 
             var summary = new DashboardSummaryDto
@@ -140,20 +159,32 @@ namespace GymManagement.Infrastructure.Services
                 ExpiringMembershipsNext14Days = expiringSoon,
             };
 
-            await _cache.SetAsync(cacheKey, summary, TimeSpan.FromMinutes(2), cancellationToken);
+            if (unrestricted)
+                await _cache.SetAsync(DashboardCacheKeys.Summary, summary, TimeSpan.FromMinutes(2), cancellationToken);
             return summary;
         }
 
         public async Task<DashboardStatisticsDto> GetStatisticsAsync()
         {
-            var totalUsers = await _context.Users.AsNoTracking().CountAsync();
+            var scope = await _scope.CurrentAsync();
+            var unrestricted = scope.IsUnrestricted;
+            var branchIds = scope.BranchIds.ToArray();
+            var totalUsers = await _context.Users.AsNoTracking()
+                .Where(u => unrestricted || u.Id == scope.ActorUserId || (u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value)))
+                .CountAsync();
             var totalTrainers = await _context.Trainers.AsNoTracking()
                 .WhereUserHasTrainerRole(_context)
+                .Where(t => unrestricted
+                    || _context.Users.Any(u => u.Id == t.UserId && u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value))
+                    || _context.UserBranchAssignments.Any(a => a.UserId == t.UserId && branchIds.Contains(a.BranchId)))
                 .CountAsync();
 
             // Aggregate client counts per trainer in SQL (avoids loading all schedules).
             var trainersWithUserCount = await (
                 from t in _context.Trainers.AsNoTracking().WhereUserHasTrainerRole(_context)
+                    .Where(t => unrestricted
+                        || _context.Users.Any(u => u.Id == t.UserId && u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value))
+                        || _context.UserBranchAssignments.Any(a => a.UserId == t.UserId && branchIds.Contains(a.BranchId)))
                 join u in _context.Users.AsNoTracking() on t.UserId equals u.Id
                 join au in _context.AuthUsers.AsNoTracking() on u.Id equals au.UserId into authJoin
                 from au in authJoin.DefaultIfEmpty()
@@ -182,18 +213,23 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<DashboardNotificationsDto> GetNotificationsAsync()
         {
+            var scope = await _scope.CurrentAsync();
+            var unrestricted = scope.IsUnrestricted;
+            var branchIds = scope.BranchIds.ToArray();
             var now = DateTime.UtcNow;
             var expiryWindowEnd = now.Date.AddDays(7);
             var attendanceWindowStart = now.Date.AddDays(-3);
 
             var expiringMembershipCount = await _context.UserMemberships
                 .AsNoTracking()
+                .Where(m => unrestricted || _context.Users.Any(u => u.Id == m.UserId && u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value)))
                 .CountAsync(m => m.Status == MembershipStatus.Active &&
                                  m.EndDate.Date >= now.Date &&
                                  m.EndDate.Date <= expiryWindowEnd);
 
             var failedPaymentCount = await _context.Invoices
                 .AsNoTracking()
+                .Where(i => unrestricted || _context.UserMemberships.Any(m => m.Id == i.UserMembershipId && m.SellingBranchId != null && branchIds.Contains(m.SellingBranchId.Value)))
                 .CountAsync(i =>
                     i.Status == EntityInvoiceStatus.Overdue ||
                     ((i.Status == EntityInvoiceStatus.Draft || i.Status == EntityInvoiceStatus.Sent) && i.DueDate < now));
@@ -201,6 +237,7 @@ namespace GymManagement.Infrastructure.Services
             var activeMembershipUserIds = await _context.UserMemberships
                 .AsNoTracking()
                 .Where(m => m.Status == MembershipStatus.Active)
+                .Where(m => unrestricted || _context.Users.Any(u => u.Id == m.UserId && u.HomeBranchId != null && branchIds.Contains(u.HomeBranchId.Value)))
                 .Select(m => m.UserId)
                 .Distinct()
                 .ToListAsync();
@@ -208,6 +245,7 @@ namespace GymManagement.Infrastructure.Services
             var attendedUserIds = await _context.AttendanceLogs
                 .AsNoTracking()
                 .Where(a => a.UserId.HasValue && a.AttendanceDate >= attendanceWindowStart)
+                .Where(a => unrestricted || (a.BranchId != null && branchIds.Contains(a.BranchId.Value)))
                 .Select(a => a.UserId!.Value)
                 .Distinct()
                 .ToListAsync();
@@ -215,6 +253,7 @@ namespace GymManagement.Infrastructure.Services
             var missingAttendanceCount = activeMembershipUserIds.Except(attendedUserIds).Count();
             var staleCheckInCount = await _context.AttendanceLogs
                 .AsNoTracking()
+                .Where(a => unrestricted || (a.BranchId != null && branchIds.Contains(a.BranchId.Value)))
                 .CountAsync(a => a.CheckOutTime == null && a.CheckInTime <= now.AddHours(-12));
 
             var attendanceAnomalyCount = missingAttendanceCount + staleCheckInCount;

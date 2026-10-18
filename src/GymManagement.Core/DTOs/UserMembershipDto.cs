@@ -67,6 +67,19 @@ namespace GymManagement.Core.DTOs
     }
 
     /// <summary>Extend the current membership end date by one plan duration (staff renew access).</summary>
+    public sealed class SetMembershipVisitAccessDto
+    {
+        public string AccessScope { get; set; } = "HomeOnly";
+        public List<int>? BranchIds { get; set; }
+    }
+
+    public sealed class MembershipVisitAccessDto
+    {
+        public int MembershipId { get; set; }
+        public string AccessScope { get; set; } = "HomeOnly";
+        public List<int> BranchIds { get; set; } = new();
+    }
+
     public sealed class RenewMembershipAccessDto
     {
         public int? PlanId { get; set; }

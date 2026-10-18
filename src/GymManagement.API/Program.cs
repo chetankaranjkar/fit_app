@@ -307,6 +307,9 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Register Services
 builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
+builder.Services.AddScoped<IBranchAssignmentService, BranchAssignmentService>();
+builder.Services.AddScoped<IOperationalBranchService, OperationalBranchService>();
+builder.Services.AddScoped<IBranchScopeService, BranchScopeService>();
 builder.Services.AddScoped<ICurrentUserAccessContext, HttpCurrentUserAccessContext>();
 builder.Services.AddScoped<IMobileNumberAvailabilityService, MobileNumberAvailabilityService>();
 builder.Services.AddScoped<IUsernameAvailabilityService, UsernameAvailabilityService>();

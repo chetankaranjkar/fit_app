@@ -1501,10 +1501,13 @@ namespace GymManagement.API.Controllers
                 .ThenByDescending(d => d.Id)
                 .FirstOrDefaultAsync(cancellationToken)
                 .ConfigureAwait(false);
-            return MapProfile(user, email, detail);
+            var branchName = user.HomeBranchId is int branchId
+                ? await _db.Branches.AsNoTracking().Where(b => b.Id == branchId).Select(b => b.BranchName).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
+                : null;
+            return MapProfile(user, email, detail, branchName);
         }
 
-        private static MeProfileDto MapProfile(User user, string? email, UserDetail? detail = null)
+        private static MeProfileDto MapProfile(User user, string? email, UserDetail? detail = null, string? homeBranchName = null)
         {
             decimal? heightCm = detail != null && detail.Height > 0 ? detail.Height : null;
             return new MeProfileDto
@@ -1520,6 +1523,8 @@ namespace GymManagement.API.Controllers
                 ProfilePictureUrl = user.ProfilePictureUrl,
                 RegistrationDate = user.RegistrationDate,
                 PreferredGymTime = user.PreferredGymTime,
+                HomeBranchId = user.HomeBranchId,
+                HomeBranchName = homeBranchName,
                 TargetWeightKg = detail?.TargetWeight is > 0 ? detail.TargetWeight : null,
                 AssignedGoalType = string.IsNullOrWhiteSpace(detail?.GoalType) ? null : detail!.GoalType,
                 HeightCm = heightCm

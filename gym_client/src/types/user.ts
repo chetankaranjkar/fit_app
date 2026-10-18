@@ -21,6 +21,8 @@ export function getRoleLabel(role: UserRole | UserRoleString | number | string |
 
 export interface User {
   id: number
+  homeBranchId?: number | null
+  homeBranchName?: string | null
   firstName: string
   lastName: string
   email: string
@@ -133,6 +135,8 @@ export interface CreateUserDto {
   userTypeIds?: number[]
   /** CSV line number (1-based, including header) for bulk import. Ignored by single create. */
   sourceRowNumber?: number
+  homeBranchId?: number | null
+  additionalBranchIds?: number[]
 }
 
 export interface UpdateUserDto {

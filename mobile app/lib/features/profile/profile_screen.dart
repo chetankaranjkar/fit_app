@@ -127,6 +127,15 @@ class ProfileScreen extends ConsumerWidget {
                                       ),
                                     ),
                                   ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'Home branch: ${p.homeBranchName != null && p.homeBranchName!.isNotEmpty ? p.homeBranchName : 'Not assigned'}',
+                                    style: AppType.subhead.copyWith(
+                                      color: AppColors.resolveTextSecondary(context),
+                                    ),
+                                  ),
+                                ),
                                 if (p.phone != null)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 2),

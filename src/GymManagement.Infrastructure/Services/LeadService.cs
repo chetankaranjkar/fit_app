@@ -32,17 +32,21 @@ public sealed class LeadService : ILeadService
     private readonly ApplicationDbContext _db;
     private readonly IUnitOfWork _uow;
     private readonly IUserService _userService;
+    private readonly IBranchAssignmentService _branches;
+    private readonly IBranchScopeService _scope;
 
-    public LeadService(ApplicationDbContext db, IUnitOfWork uow, IUserService userService)
+    public LeadService(ApplicationDbContext db, IUnitOfWork uow, IUserService userService, IBranchAssignmentService branches, IBranchScopeService scope)
     {
         _db = db;
         _uow = uow;
         _userService = userService;
+        _branches = branches;
+        _scope = scope;
     }
 
     public async Task<LeadKanbanDto> GetKanbanAsync(LeadAccessScope scope, CancellationToken cancellationToken = default)
     {
-        var baseQuery = FilterByScope(_db.GymLeads.AsNoTracking(), scope);
+        var baseQuery = await FilterByScopeAsync(_db.GymLeads.AsNoTracking(), scope, cancellationToken).ConfigureAwait(false);
         var statuses = new[]
         {
             LeadPipelineStatus.NEW,
@@ -71,6 +75,8 @@ public sealed class LeadService : ILeadService
                     NextFollowUpAt = l.NextFollowUpAt,
                     CreatedDate = l.CreatedDate,
                     ConvertedMemberId = l.ConvertedMemberId,
+                    InterestedBranchId = l.InterestedBranchId,
+                    InterestedBranchName = l.InterestedBranch != null ? l.InterestedBranch.BranchName : null,
                 })
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -85,7 +91,7 @@ public sealed class LeadService : ILeadService
         LeadAccessScope scope,
         CancellationToken cancellationToken = default)
     {
-        var q = FilterByScope(_db.GymLeads.AsNoTracking(), scope);
+        var q = await FilterByScopeAsync(_db.GymLeads.AsNoTracking(), scope, cancellationToken).ConfigureAwait(false);
         if (status.HasValue)
             q = q.Where(l => l.Status == status.Value);
         return await q
@@ -102,6 +108,8 @@ public sealed class LeadService : ILeadService
                 NextFollowUpAt = l.NextFollowUpAt,
                 CreatedDate = l.CreatedDate,
                 ConvertedMemberId = l.ConvertedMemberId,
+                InterestedBranchId = l.InterestedBranchId,
+                InterestedBranchName = l.InterestedBranch != null ? l.InterestedBranch.BranchName : null,
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -109,7 +117,7 @@ public sealed class LeadService : ILeadService
 
     public async Task<GymLeadDetailDto?> GetLeadDetailAsync(int id, LeadAccessScope scope, CancellationToken cancellationToken = default)
     {
-        var q = FilterByScope(_db.GymLeads.AsNoTracking(), scope);
+        var q = await FilterByScopeAsync(_db.GymLeads.AsNoTracking(), scope, cancellationToken).ConfigureAwait(false);
         var head = await q.FirstOrDefaultAsync(l => l.Id == id, cancellationToken).ConfigureAwait(false);
         if (head == null) return null;
 
@@ -153,6 +161,8 @@ public sealed class LeadService : ILeadService
     public async Task<GymLeadDetailDto> CreateLeadAsync(CreateGymLeadDto dto, CancellationToken cancellationToken = default)
     {
         ValidateLead(dto.FullName, dto.Phone, dto.Email, dto.Age);
+        await _branches.EnsureActiveBranchExistsAsync(cancellationToken).ConfigureAwait(false);
+        var branch = await _scope.RequireAssignableBranchAsync(dto.InterestedBranchId, null, cancellationToken).ConfigureAwait(false);
         var (src, custom) = NormalizeLeadSourceInput(dto.LeadSource, dto.CustomLeadSource, required: true);
         var lead = new GymLead
         {
@@ -169,6 +179,7 @@ public sealed class LeadService : ILeadService
             Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
             Status = LeadPipelineStatus.NEW,
             OrganizationId = dto.OrganizationId,
+            InterestedBranchId = branch.BranchId,
         };
         await _uow.GymLeads.AddAsync(lead);
         await _uow.SaveChangesAsync();
@@ -242,6 +253,24 @@ public sealed class LeadService : ILeadService
             lead.OrganizationId = dto.OrganizationId;
         lead.UpdatedDate = DateTime.UtcNow;
         _uow.GymLeads.Update(lead);
+        await _uow.SaveChangesAsync();
+        return await GetLeadDetailAsync(id, new LeadAccessScope(true, null), cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GymLeadDetailDto?> AssignInterestedBranchAsync(int id, int branchId, CancellationToken cancellationToken = default)
+    {
+        var lead = await _db.GymLeads.FirstOrDefaultAsync(l => l.Id == id, cancellationToken).ConfigureAwait(false);
+        if (lead == null)
+            return null;
+        if (lead.Status == LeadPipelineStatus.CONVERTED && lead.ConvertedMemberId != null)
+            throw new ConflictException("Cannot edit a converted lead.");
+        if (lead.InterestedBranchId != null)
+            throw new InvalidOperationException("This lead already has an interested branch.");
+        var branch = await _scope.RequireAssignableBranchAsync(branchId, lead.OrganizationId, cancellationToken).ConfigureAwait(false);
+        lead.InterestedBranchId = branch.BranchId;
+        if (lead.OrganizationId == null && branch.OrganizationId != null)
+            lead.OrganizationId = branch.OrganizationId;
+        lead.UpdatedDate = DateTime.UtcNow;
         await _uow.SaveChangesAsync();
         return await GetLeadDetailAsync(id, new LeadAccessScope(true, null), cancellationToken).ConfigureAwait(false);
     }
@@ -427,6 +456,7 @@ public sealed class LeadService : ILeadService
             TrainerId = dto.TrainerId,
             Password = dto.Password,
             Role = Role.User,
+            HomeBranchId = dto.HomeBranchId ?? lead.InterestedBranchId,
             UserTypeIds = dto.MemberUserTypeIds ?? new List<int>(),
         };
 
@@ -708,6 +738,16 @@ public sealed class LeadService : ILeadService
         if (c.Length > 150)
             throw new ArgumentException("Custom lead source must be 150 characters or less.");
         return ("OTHER", c);
+    }
+
+    private async Task<IQueryable<GymLead>> FilterByScopeAsync(IQueryable<GymLead> query, LeadAccessScope scope, CancellationToken cancellationToken)
+    {
+        query = FilterByScope(query, scope);
+        var branchScope = await _scope.CurrentAsync(cancellationToken).ConfigureAwait(false);
+        if (branchScope.IsUnrestricted)
+            return query;
+        var ids = branchScope.BranchIds.ToArray();
+        return query.Where(l => l.InterestedBranchId != null && ids.Contains(l.InterestedBranchId.Value));
     }
 
     private static IQueryable<GymLead> FilterByScope(IQueryable<GymLead> query, LeadAccessScope scope)

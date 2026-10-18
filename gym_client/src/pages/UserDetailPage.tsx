@@ -19,6 +19,9 @@ import { Modal } from '../components/ui/Modal'
 import { getApiErrorMessage } from '../lib/apiErrors'
 import { collectPaymentPath, memberProfilePath } from '../lib/membershipPaymentNavigation'
 import { usersService } from '../services/users.service'
+import { useBranchScope } from '../features/branch/BranchScopeContext'
+import { BranchChoiceField, MEMBER_BRANCH_REASON } from '../features/branch/BranchChoiceField'
+import { MemberBranchEntryPanel } from '../components/users/MemberBranchEntryPanel'
 import { fileUploadService } from '../services/fileUpload.service'
 import { bodyMetricsService } from '../services/bodyMetrics.service'
 import { attendanceService } from '../services/attendance.service'
@@ -301,6 +304,17 @@ export function UserDetailPage() {
   const dashboardRole = useDashboardRoleOrCurrent()
   const isAdmin = dashboardRole === 'admin'
   const queryClient = useQueryClient()
+  const scope = useBranchScope()
+  const [assignBranchOpen, setAssignBranchOpen] = useState(false)
+  const [assignBranchId, setAssignBranchId] = useState<number | undefined>()
+  const assignHomeMutation = useMutation({
+    mutationFn: (branchId: number) => usersService.assignHomeBranch(id, branchId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['user', id] })
+      await queryClient.invalidateQueries({ queryKey: ['users-paged'] })
+      setAssignBranchOpen(false)
+    },
+  })
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const key = tabFromUrl?.trim().toLowerCase() ?? ''
     return TAB_FROM_SEARCH_PARAM[key] ?? 'Details'
@@ -2607,6 +2621,45 @@ function ProfileHero({
                   <span className="text-[10px] uppercase tracking-widest">ID</span>
                   <span className="font-mono text-slate-300">#{user.id}</span>
                 </span>
+                <span className="inline-flex items-center gap-2">
+                  Home branch: {user.homeBranchName || 'Not assigned'}
+                  <MemberBranchEntryPanel
+                    userId={user.id}
+                    membershipId={user.openMembershipId}
+                    homeBranchName={user.homeBranchName}
+                  />
+                  {!user.homeBranchId && !viewMode ? (
+                    <button
+                      type="button"
+                      className="text-amber-300 underline"
+                      onClick={() => setAssignBranchOpen(true)}
+                    >
+                      Assign branch
+                    </button>
+                  ) : null}
+                </span>
+                <Modal open={assignBranchOpen} title="Assign home branch" onClose={() => setAssignBranchOpen(false)}>
+                  <div className="space-y-4">
+                    <BranchChoiceField
+                      branches={scope ? scope.branches : null}
+                      value={assignBranchId}
+                      onChange={setAssignBranchId}
+                      reason={MEMBER_BRANCH_REASON}
+                      label="Home branch"
+                      defaultBranchId={scope?.defaultBranchId}
+                      returnTo={`/dashboard/users/${user.id}`}
+                    />
+                    {assignHomeMutation.isError ? (
+                      <p className="text-sm text-rose-300">{getApiErrorMessage(assignHomeMutation.error)}</p>
+                    ) : null}
+                    <Button
+                      disabled={!assignBranchId || assignHomeMutation.isPending}
+                      onClick={() => assignBranchId && assignHomeMutation.mutate(assignBranchId)}
+                    >
+                      Assign branch
+                    </Button>
+                  </div>
+                </Modal>
               </div>
             </div>
 
@@ -2833,6 +2886,7 @@ function DetailsTab({
           }
         >
           <InfoRow label="Full name" value={`${user.firstName} ${user.lastName}`.trim() || '—'} />
+          <InfoRow label="Home branch" value={user.homeBranchName || 'Not assigned'} />
           <InfoRow label="Login email" value={user.email ?? '—'} />
           <InfoRow label="Gender" value={user.gender || '—'} />
           <InfoRow label="Date of birth" value={formatDate(user.dateOfBirth)} />

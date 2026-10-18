@@ -4,7 +4,8 @@ namespace GymManagement.Core.Services
 {
     public interface ICommercialSignupService
     {
-        Task<IReadOnlyList<PublicMembershipPlanDto>> GetPublicPlansAsync(CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<PublicMembershipPlanDto>> GetPublicPlansAsync(int branchId, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<PublicBranchOptionDto>> GetPublicBranchesAsync(CancellationToken cancellationToken = default);
         Task<PublicSignupResultDto> SignupAsync(PublicSignupRequestDto request, CancellationToken cancellationToken = default);
     }
 

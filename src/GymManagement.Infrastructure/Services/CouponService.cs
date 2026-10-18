@@ -75,11 +75,11 @@ namespace GymManagement.Infrastructure.Services
                 UsedCount = 0,
                 PerUserLimit = dto.PerUserLimit,
                 ApplicableMembershipIds = SerializeIds(dto.ApplicableMembershipIds),
-                ApplicableBranchIds = SerializeIds(dto.ApplicableBranchIds),
                 ApplicableUserTypes = dto.ApplicableUserTypes?.Count > 0 ? JsonSerializer.Serialize(dto.ApplicableUserTypes) : null,
                 Status = CouponStatus.Active,
                 CreatedByUserId = createdByUserId,
             };
+            ApplyBranchScope(coupon, dto.BranchScope, dto.ApplicableBranchIds);
 
             await _db.Coupons.AddAsync(coupon, ct);
             await _db.SaveChangesAsync(ct);
@@ -107,7 +107,8 @@ namespace GymManagement.Infrastructure.Services
             if (dto.UsageLimit.HasValue) coupon.UsageLimit = dto.UsageLimit.Value;
             if (dto.PerUserLimit.HasValue) coupon.PerUserLimit = dto.PerUserLimit.Value;
             if (dto.ApplicableMembershipIds != null) coupon.ApplicableMembershipIds = SerializeIds(dto.ApplicableMembershipIds);
-            if (dto.ApplicableBranchIds != null) coupon.ApplicableBranchIds = SerializeIds(dto.ApplicableBranchIds);
+            if (dto.BranchScope != null || dto.ApplicableBranchIds != null)
+                ApplyBranchScope(coupon, dto.BranchScope ?? coupon.BranchScope, dto.ApplicableBranchIds ?? DeserializeIds(coupon.ApplicableBranchIds));
             if (dto.ApplicableUserTypes != null) coupon.ApplicableUserTypes = dto.ApplicableUserTypes.Count > 0 ? JsonSerializer.Serialize(dto.ApplicableUserTypes) : null;
             if (dto.Status.HasValue) coupon.Status = dto.Status.Value;
 
@@ -192,6 +193,12 @@ namespace GymManagement.Infrastructure.Services
 
                 var invoiceAmount = header.OriginalAmount > 0 ? header.OriginalAmount : header.TotalAmount;
                 request.InvoiceAmount = invoiceAmount;
+                if (header.SellingBranchId is int recordedBranch)
+                {
+                    if (request.BranchId is int clientBranch && clientBranch != recordedBranch)
+                        return Fail(GymManagement.Core.Branching.BranchAccessRules.PaymentBranchMessage);
+                    request.BranchId = recordedBranch;
+                }
             }
 
             // Minimum amount
@@ -203,10 +210,23 @@ namespace GymManagement.Infrastructure.Services
             if (membershipIds.Count > 0 && !membershipIds.Contains(request.MembershipPlanId))
                 return Fail("This coupon is not applicable to the selected membership plan.");
 
-            // Branch applicability
             var branchIds = DeserializeIds(coupon.ApplicableBranchIds);
-            if (branchIds.Count > 0 && request.BranchId.HasValue && !branchIds.Contains(request.BranchId.Value))
-                return Fail("This coupon is not applicable to your branch.");
+            var scope = string.Equals(coupon.BranchScope, "SelectedBranches", StringComparison.OrdinalIgnoreCase)
+                ? GymManagement.Core.Branching.BranchAccessRules.CouponBranchScope.SelectedBranches
+                : GymManagement.Core.Branching.BranchAccessRules.CouponBranchScope.AllBranches;
+            if (scope == GymManagement.Core.Branching.BranchAccessRules.CouponBranchScope.SelectedBranches && request.BranchId is not int)
+                return Fail("Select the purchase branch before applying this coupon.");
+            int? purchaseOrganizationId = null;
+            if (request.BranchId is int purchaseBranch)
+            {
+                purchaseOrganizationId = await _db.Branches.AsNoTracking()
+                    .Where(b => b.Id == purchaseBranch)
+                    .Select(b => b.OrganizationId)
+                    .FirstOrDefaultAsync(ct);
+                if (!GymManagement.Core.Branching.BranchAccessRules.CouponApplies(
+                        scope, branchIds, purchaseBranch, coupon.OrganizationId, purchaseOrganizationId))
+                    return Fail("This coupon is not applicable to your branch.");
+            }
 
             // Calculate discount
             var discount = CalculateDiscount(coupon, request.InvoiceAmount);
@@ -241,6 +261,27 @@ namespace GymManagement.Infrastructure.Services
                 .CountAsync(u => u.CouponId == couponId && u.UserId == userId && !u.IsDeleted, ct);
             if (userUsageCount >= coupon.PerUserLimit)
                 throw new BadRequestException("Per-user coupon limit reached.");
+
+            var header = await _db.MembershipPayments.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == membershipPaymentId && !p.IsDeleted, ct);
+            if (header != null)
+            {
+                invoiceAmount = header.OriginalAmount > 0 ? header.OriginalAmount : header.TotalAmount;
+                if (header.SellingBranchId is int recordedBranch)
+                {
+                    var branchIds = DeserializeIds(coupon.ApplicableBranchIds);
+                    var scope = string.Equals(coupon.BranchScope, "SelectedBranches", StringComparison.OrdinalIgnoreCase)
+                        ? GymManagement.Core.Branching.BranchAccessRules.CouponBranchScope.SelectedBranches
+                        : GymManagement.Core.Branching.BranchAccessRules.CouponBranchScope.AllBranches;
+                    var purchaseOrganizationId = await _db.Branches.AsNoTracking()
+                        .Where(b => b.Id == recordedBranch)
+                        .Select(b => b.OrganizationId)
+                        .FirstOrDefaultAsync(ct);
+                    if (!GymManagement.Core.Branching.BranchAccessRules.CouponApplies(
+                            scope, branchIds, recordedBranch, coupon.OrganizationId, purchaseOrganizationId))
+                        throw new BadRequestException("This coupon is not applicable to your branch.");
+                }
+            }
 
             var discount = CalculateDiscount(coupon, invoiceAmount);
 
@@ -422,6 +463,28 @@ namespace GymManagement.Infrastructure.Services
         private static string? SerializeIds(List<int>? ids) =>
             ids == null || ids.Count == 0 ? null : JsonSerializer.Serialize(ids);
 
+        private static void ApplyBranchScope(Coupon coupon, string? scope, List<int>? ids)
+        {
+            var selected = string.Equals(scope, "SelectedBranches", StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(scope))
+                selected = ids is { Count: > 0 };
+            if (!selected && !string.IsNullOrWhiteSpace(scope)
+                && !string.Equals(scope, "AllBranches", StringComparison.OrdinalIgnoreCase))
+                throw new BadRequestException("Branch scope must be SelectedBranches or AllBranches.");
+            if (selected)
+            {
+                if (ids == null || ids.Count == 0)
+                    throw new BadRequestException("Select at least one branch, or choose all branches.");
+                coupon.BranchScope = "SelectedBranches";
+                coupon.ApplicableBranchIds = SerializeIds(ids);
+            }
+            else
+            {
+                coupon.BranchScope = "AllBranches";
+                coupon.ApplicableBranchIds = null;
+            }
+        }
+
         private static List<int> DeserializeIds(string? json)
         {
             if (string.IsNullOrWhiteSpace(json)) return new List<int>();
@@ -446,6 +509,9 @@ namespace GymManagement.Infrastructure.Services
             PerUserLimit = c.PerUserLimit,
             ApplicableMembershipIds = DeserializeIds(c.ApplicableMembershipIds),
             ApplicableBranchIds = DeserializeIds(c.ApplicableBranchIds),
+            BranchScope = string.Equals(c.BranchScope, "SelectedBranches", StringComparison.OrdinalIgnoreCase)
+                ? "SelectedBranches"
+                : "AllBranches",
             ApplicableUserTypes = !string.IsNullOrWhiteSpace(c.ApplicableUserTypes)
                 ? JsonSerializer.Deserialize<List<string>>(c.ApplicableUserTypes) : null,
             Status = c.Status,

@@ -19,6 +19,8 @@ namespace GymManagement.Core.DTOs
         public int PerUserLimit { get; set; }
         public List<int>? ApplicableMembershipIds { get; set; }
         public List<int>? ApplicableBranchIds { get; set; }
+        /// <summary>SelectedBranches or AllBranches. AllBranches includes future branches in the coupon organization.</summary>
+        public string BranchScope { get; set; } = "AllBranches";
         public List<string>? ApplicableUserTypes { get; set; }
         public CouponStatus Status { get; set; }
         public bool AllowMultipleUsage { get; set; }
@@ -47,6 +49,8 @@ namespace GymManagement.Core.DTOs
         public int PerUserLimit { get; set; } = 1;
         public List<int>? ApplicableMembershipIds { get; set; }
         public List<int>? ApplicableBranchIds { get; set; }
+        /// <summary>SelectedBranches or AllBranches. Omitted keeps the previous inference from branch ids.</summary>
+        public string? BranchScope { get; set; }
         public List<string>? ApplicableUserTypes { get; set; }
     }
 
@@ -64,6 +68,7 @@ namespace GymManagement.Core.DTOs
         public int? PerUserLimit { get; set; }
         public List<int>? ApplicableMembershipIds { get; set; }
         public List<int>? ApplicableBranchIds { get; set; }
+        public string? BranchScope { get; set; }
         public List<string>? ApplicableUserTypes { get; set; }
         public CouponStatus? Status { get; set; }
     }

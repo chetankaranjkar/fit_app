@@ -23,6 +23,8 @@ namespace GymManagement.Infrastructure.Services
         private readonly IMemberPushNotificationService _push;
         private readonly INotificationWebhookDispatcher _notificationDispatcher;
         private readonly IWebRootPathResolver _webRootPaths;
+        private readonly IBranchScopeService _scope;
+        private readonly IBranchAssignmentService _branches;
 
         public MembershipPaymentService(
             IUnitOfWork unitOfWork,
@@ -34,10 +36,14 @@ namespace GymManagement.Infrastructure.Services
             IAppCache cache,
             IMemberPushNotificationService push,
             INotificationWebhookDispatcher notificationDispatcher,
-            IWebRootPathResolver webRootPaths)
+            IWebRootPathResolver webRootPaths,
+            IBranchScopeService scope,
+            IBranchAssignmentService branches)
         {
             _ = unitOfWork;
             _db = db;
+            _scope = scope;
+            _branches = branches;
             _invoiceService = invoiceService;
             _couponService = couponService;
             _billing = billing;
@@ -97,12 +103,24 @@ namespace GymManagement.Infrastructure.Services
             }
 
             var trial = IsTrialPlan(plan);
-            var total = trial ? 0m : plan.Price;
+            decimal total;
+            if (trial)
+                total = 0m;
+            else if (membership.AgreedPrice is decimal agreed)
+                total = agreed;
+            else if (membership.SellingBranchId is int sellingBranchId)
+            {
+                total = await _branches.ResolveSalePriceAsync(plan.Id, sellingBranchId, plan.Price, cancellationToken);
+                membership.AgreedPrice = total;
+            }
+            else
+                total = plan.Price;
             var header = new MembershipPayment
             {
                 PaymentNumber = await GeneratePaymentNumberAsync(cancellationToken),
                 UserId = user.Id,
                 MembershipId = membership.Id,
+                SellingBranchId = membership.SellingBranchId,
                 TotalAmount = total,
                 OriginalAmount = total,
                 FinalBillAmount = total,
@@ -128,6 +146,17 @@ namespace GymManagement.Infrastructure.Services
 
             await _db.MembershipPayments.AddAsync(header, cancellationToken);
             _db.UserMemberships.Update(membership);
+            await _db.SaveChangesAsync(cancellationToken);
+            _db.MembershipBillingPeriods.Add(new MembershipBillingPeriod
+            {
+                UserMembershipId = membership.Id,
+                MembershipPaymentId = header.Id,
+                SellingBranchId = membership.SellingBranchId,
+                AgreedPrice = total,
+                FeeType = "Plan",
+                PeriodStart = membership.StartDate,
+                PeriodEnd = membership.EndDate,
+            });
             await _db.SaveChangesAsync(cancellationToken);
 
             if (trial)
@@ -227,9 +256,23 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<MembershipPaymentDto?> GetByMembershipIdAsync(int membershipId, CancellationToken cancellationToken = default)
         {
-            var dto = await LoadMembershipPaymentDtoAsync(membershipId, cancellationToken);
-            if (dto != null)
-                return dto;
+            var existing = await _db.MembershipPayments.AsNoTracking()
+                .Where(p => p.MembershipId == membershipId && !p.IsDeleted)
+                .Select(p => new { p.UserId, p.SellingBranchId })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (existing != null)
+            {
+                if (!await PaymentVisibleAsync(existing.UserId, existing.SellingBranchId, cancellationToken))
+                    return null;
+                return await LoadMembershipPaymentDtoAsync(membershipId, cancellationToken);
+            }
+
+            var membership = await _db.UserMemberships.AsNoTracking()
+                .Where(m => m.Id == membershipId && !m.IsDeleted)
+                .Select(m => new { m.UserId, m.SellingBranchId })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (membership == null || !await PaymentVisibleAsync(membership.UserId, membership.SellingBranchId, cancellationToken))
+                return null;
 
             await EnsureBillingForMembershipIdAsync(membershipId, cancellationToken);
             return await LoadMembershipPaymentDtoAsync(membershipId, cancellationToken);
@@ -256,6 +299,9 @@ namespace GymManagement.Infrastructure.Services
                 .Where(p => p.UserId == userId && !p.IsDeleted)
                 .OrderByDescending(p => p.CreatedDate)
                 .ToListAsync(cancellationToken);
+            var paymentScope = await _scope.CurrentAsync(cancellationToken);
+            if (!paymentScope.IsUnrestricted && userId != paymentScope.ActorUserId)
+                list = list.Where(p => paymentScope.Includes(p.SellingBranchId)).ToList();
             var result = new List<MembershipPaymentDto>();
             foreach (var h in list)
                 result.Add(await MapToDtoAsync(h, cancellationToken));
@@ -300,6 +346,10 @@ namespace GymManagement.Infrastructure.Services
                 PaymentNumber = h.PaymentNumber,
                 UserId = h.UserId,
                 MembershipId = h.MembershipId,
+                SellingBranchId = h.SellingBranchId,
+                SellingBranchName = h.SellingBranchId is int sellingBranchId
+                    ? await _db.Branches.AsNoTracking().Where(b => b.Id == sellingBranchId).Select(b => b.BranchName).FirstOrDefaultAsync(ct)
+                    : null,
                 InvoiceNumber = h.InvoiceNumber,
                 InvoiceId = h.InvoiceId,
                 TotalAmount = h.TotalAmount,
@@ -718,6 +768,12 @@ namespace GymManagement.Infrastructure.Services
             await _db.SaveChangesAsync(ct);
         }
 
+        private async Task<bool> PaymentVisibleAsync(int userId, int? sellingBranchId, CancellationToken cancellationToken)
+        {
+            var scope = await _scope.CurrentAsync(cancellationToken);
+            return scope.IsUnrestricted || userId == scope.ActorUserId || scope.Includes(sellingBranchId);
+        }
+
         private async Task<string> GenerateInvoiceNumberAsync(CancellationToken ct)
         {
             var year = DateTime.UtcNow.Year;
@@ -729,19 +785,27 @@ namespace GymManagement.Infrastructure.Services
         {
             var today = DateTime.UtcNow.Date;
             var tomorrow = today.AddDays(1);
-            var pending = await _db.MembershipPayments.AsNoTracking()
-                .Where(p => !p.IsDeleted && p.PaymentStatus != MembershipPaymentStatus.Paid)
-                .ToListAsync(cancellationToken);
+            var paymentScope = await _scope.CurrentAsync(cancellationToken);
+            var pendingQuery = _db.MembershipPayments.AsNoTracking()
+                .Where(p => !p.IsDeleted && p.PaymentStatus != MembershipPaymentStatus.Paid);
+            var collectionQuery = _db.MembershipPaymentTransactions.AsNoTracking()
+                .Where(t => !t.IsDeleted
+                            && t.Status == MembershipPaymentTransactionStatus.Completed
+                            && t.TransactionDate >= today && t.TransactionDate < tomorrow);
+            if (!paymentScope.IsUnrestricted)
+            {
+                var branchIds = paymentScope.BranchIds.ToArray();
+                pendingQuery = pendingQuery.Where(p => p.SellingBranchId != null && branchIds.Contains(p.SellingBranchId.Value));
+                collectionQuery = collectionQuery.Where(t =>
+                    _db.MembershipPayments.Any(p => p.Id == t.PaymentId && p.SellingBranchId != null && branchIds.Contains(p.SellingBranchId.Value)));
+            }
+            var pending = await pendingQuery.ToListAsync(cancellationToken);
             return new MembershipPaymentDashboardDto
             {
                 PendingPaymentsCount = pending.Count,
                 TotalPendingAmount = pending.Sum(p => p.PendingAmount),
                 OverdueMembersCount = pending.Count(p => p.PaymentStatus == MembershipPaymentStatus.Overdue),
-                TodayCollections = await _db.MembershipPaymentTransactions.AsNoTracking()
-                    .Where(t => !t.IsDeleted
-                                && t.Status == MembershipPaymentTransactionStatus.Completed
-                                && t.TransactionDate >= today && t.TransactionDate < tomorrow)
-                    .SumAsync(t => t.TransactionAmount, cancellationToken),
+                TodayCollections = await collectionQuery.SumAsync(t => t.TransactionAmount, cancellationToken),
                 UpcomingDueCount = pending.Count(p =>
                     p.NextDueDate.HasValue && p.NextDueDate.Value.Date <= today.AddDays(7) && p.PendingAmount > 0),
                 PartialMembersCount = pending.Count(p => p.PaymentStatus == MembershipPaymentStatus.Partial),
@@ -856,7 +920,7 @@ namespace GymManagement.Infrastructure.Services
         {
             var header = await _db.MembershipPayments.AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == membershipPaymentId && !p.IsDeleted, cancellationToken);
-            if (header?.InvoiceId == null)
+            if (header?.InvoiceId == null || !await PaymentVisibleAsync(header.UserId, header.SellingBranchId, cancellationToken))
                 return null;
             return await _invoiceService.GeneratePdfBytesAsync(header.InvoiceId.Value);
         }

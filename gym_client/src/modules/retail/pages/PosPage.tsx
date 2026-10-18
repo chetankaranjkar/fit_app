@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useBranchScope } from '../../../features/branch/BranchScopeContext'
+import { BranchChoiceField } from '../../../features/branch/BranchChoiceField'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../../../components/layout/DashboardLayout'
@@ -42,6 +44,11 @@ export function PosPage() {
   const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>('Cash')
   const [paymentRef, setPaymentRef] = useState('')
   const [notes, setNotes] = useState('')
+  const branchScope = useBranchScope()
+  const [branchId, setBranchId] = useState<number | undefined>()
+  const chooseBranch = useCallback((id: number | undefined) => {
+    setBranchId((current) => (current === id ? current : id))
+  }, [])
   const [completedOrder, setCompletedOrder] = useState<PosOrder | null>(null)
 
   const { data: products = [] } = useQuery({
@@ -108,6 +115,7 @@ export function PosPage() {
   const checkoutMutation = useMutation({
     mutationFn: async () => {
       const dto: CreatePosOrderDto = {
+        branchId,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         discountAmount: Number(orderDiscount) || 0,
@@ -118,7 +126,7 @@ export function PosPage() {
         items: cart.map((l) => ({
           productId: l.product.id,
           quantity: l.quantity,
-          unitPrice: l.product.sellingPrice,
+          unitPrice: undefined,
           discountAmount: l.discount,
         })),
       }
@@ -211,6 +219,14 @@ export function PosPage() {
           {/* Customer & Payment */}
           <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
             <div className="grid grid-cols-2 gap-2">
+              <BranchChoiceField
+                branches={branchScope ? branchScope.branches : null}
+                value={branchId}
+                onChange={chooseBranch}
+                defaultBranchId={branchScope?.defaultBranchId}
+                label="Selling branch"
+                reason="The sale and its stock movement stay on this branch."
+              />
               <Input label="Customer name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Walk-in" />
               <Input label="Phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
             </div>

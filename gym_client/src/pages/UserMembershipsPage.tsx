@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { branchScopeQueryKey, useBranchScope } from '../features/branch/BranchScopeContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -126,6 +127,7 @@ function buildPagedQueryParams(options: {
 
 export function UserMembershipsPage() {
   const { userName } = getDashboardUser()
+  const branchScopeKey = branchScopeQueryKey(useBranchScope())
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -197,7 +199,7 @@ export function UserMembershipsPage() {
   }, [listSearch])
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: [...MEMBERSHIPS_QUERY_KEY, 'summary'],
+    queryKey: [...MEMBERSHIPS_QUERY_KEY, 'summary', branchScopeKey],
     queryFn: () => userMembershipsService.getSummary(),
     staleTime: 30_000,
   })
@@ -213,6 +215,7 @@ export function UserMembershipsPage() {
       statusFilter,
       highlightMembershipId,
       pagedFilters,
+      branchScopeKey,
     ],
     queryFn: () =>
       userMembershipsService.getPaged({

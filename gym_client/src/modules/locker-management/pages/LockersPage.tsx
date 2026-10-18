@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useBranchScope } from '../../../features/branch/BranchScopeContext'
+import { BranchChoiceField } from '../../../features/branch/BranchChoiceField'
 import toast from 'react-hot-toast'
 import gsap from 'gsap'
 import { getApiErrorMessage } from '../../../lib/apiErrors'
@@ -435,7 +437,7 @@ function LockerFormModal({
         <LockerForm
           key={editing?.id ?? 'new'}
           locker={editing}
-          existingNumbers={lockers.map((l) => l.lockerNumber)}
+          existingLockers={lockers}
           submitting={createMut.isPending || updateMut.isPending}
           onCancel={onClose}
           onSubmit={(input) => {
@@ -455,18 +457,19 @@ function LockerFormModal({
 
 function LockerForm({
   locker,
-  existingNumbers,
+  existingLockers,
   onSubmit,
   onCancel,
   submitting,
 }: {
   locker: Locker | null
-  existingNumbers: string[]
+  existingLockers: Locker[]
   onSubmit: (input: {
     lockerNumber: string
     size: LockerSize
     status: LockerStatus
     location?: string
+    branchId?: number
   }) => void
   onCancel: () => void
   submitting: boolean
@@ -475,15 +478,23 @@ function LockerForm({
   const [size, setSize] = useState<LockerSize>(locker?.size ?? 'Medium')
   const [status, setStatus] = useState<LockerStatus>(locker?.status ?? 'AVAILABLE')
   const [location, setLocation] = useState(locker?.location ?? '')
+  const branchScope = useBranchScope()
+  const [branchId, setBranchId] = useState<number | undefined>(locker?.branchId)
+  const chooseBranch = useCallback((id: number | undefined) => {
+    setBranchId((current) => (current === id ? current : id))
+  }, [])
 
   const trimmedNumber = lockerNumber.trim()
   const duplicateNumber = useMemo(() => {
     if (!trimmedNumber) return false
     const key = trimmedNumber.toLowerCase()
-    return existingNumbers.some(
-      (n) => n.toLowerCase() === key && n.toLowerCase() !== (locker?.lockerNumber ?? '').toLowerCase(),
+    return existingLockers.some(
+      (row) =>
+        row.lockerNumber.toLowerCase() === key
+        && row.id !== locker?.id
+        && (branchId == null || row.branchId == null || row.branchId === branchId),
     )
-  }, [trimmedNumber, existingNumbers, locker?.lockerNumber])
+  }, [trimmedNumber, existingLockers, locker?.id, branchId])
 
   const valid = trimmedNumber !== '' && !duplicateNumber
 
@@ -495,11 +506,24 @@ function LockerForm({
       size,
       status,
       location: location.trim() || undefined,
+      branchId,
     })
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {locker ? (
+        <p className="text-sm text-slate-400">This locker stays at its current branch. Past assignments keep the branch they were given.</p>
+      ) : (
+        <BranchChoiceField
+          branches={branchScope ? branchScope.branches : null}
+          value={branchId}
+          onChange={chooseBranch}
+          defaultBranchId={branchScope?.defaultBranchId}
+          label="Branch"
+          reason="Locker numbers are unique inside one branch."
+        />
+      )}
       <LabeledInput
         label="Locker number"
         value={lockerNumber}

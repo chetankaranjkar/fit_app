@@ -20,6 +20,8 @@ namespace GymManagement.Core.DTOs
         public string PaymentNumber { get; set; } = string.Empty;
         public int UserId { get; set; }
         public int MembershipId { get; set; }
+        public int? SellingBranchId { get; set; }
+        public string? SellingBranchName { get; set; }
         public string? InvoiceNumber { get; set; }
         public int? InvoiceId { get; set; }
         public decimal TotalAmount { get; set; }

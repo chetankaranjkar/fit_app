@@ -38,7 +38,16 @@ namespace GymManagement.Domain.Entities
         /// <summary>Optional reason for freezing.</summary>
         public string? FreezeReason { get; set; }
 
+        /// <summary>Branch that sold this membership. Historical; not rewritten when the member transfers.</summary>
+        public int? SellingBranchId { get; set; }
+        /// <summary>Price agreed at sale. Null on rows created before branch pricing.</summary>
+        public decimal? AgreedPrice { get; set; }
+        /// <summary>HomeOnly, Selected, or AllOrganization. Null on legacy rows until an administrator sets access.</summary>
+        public string? AccessScope { get; set; }
+
         public User User { get; set; } = null!;
+        public Branch? SellingBranch { get; set; }
+        public ICollection<UserMembershipAccessBranch> AccessBranches { get; set; } = new List<UserMembershipAccessBranch>();
         public MembershipPlan Plan { get; set; } = null!;
         public ICollection<Payment> Payments { get; set; } = new List<Payment>();
         public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();

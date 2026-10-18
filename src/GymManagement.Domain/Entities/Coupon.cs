@@ -47,8 +47,10 @@ namespace GymManagement.Domain.Entities
         /// <summary>JSON array of membership plan IDs this coupon applies to. Empty = all plans.</summary>
         public string? ApplicableMembershipIds { get; set; }
 
-        /// <summary>JSON array of branch IDs this coupon applies to. Empty = all branches.</summary>
+        /// <summary>JSON array of branch IDs when <see cref="BranchScope"/> is SelectedBranches.</summary>
         public string? ApplicableBranchIds { get; set; }
+        /// <summary>SelectedBranches or AllBranches. AllBranches includes future branches in the coupon organization.</summary>
+        public string BranchScope { get; set; } = "AllBranches";
 
         /// <summary>JSON array of user type names this coupon applies to. Empty = all user types.</summary>
         public string? ApplicableUserTypes { get; set; }

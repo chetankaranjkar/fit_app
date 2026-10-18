@@ -22,6 +22,7 @@ export async function recordedPaymentReceipt(
     memberId: member.code ?? `M-${String(bill.userId).padStart(5, '0')}`,
     memberPhotoUrl: row?.memberPhotoUrl ?? member.photoUrl,
     planName: bill.planName,
+    sellingBranchName: bill.sellingBranchName,
     amountPaid: transaction.transactionAmount,
     paymentMethod: transaction.transactionMethod,
     remainingBalance: bill.pendingAmount,

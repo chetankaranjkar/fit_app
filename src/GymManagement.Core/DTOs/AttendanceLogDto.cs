@@ -18,6 +18,7 @@ namespace GymManagement.Core.DTOs
         public bool IsManualCorrection { get; set; }
         public int? CorrectedByUserId { get; set; }
         public DateTime? CorrectedAt { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class CreateAttendanceLogDto
@@ -26,6 +27,7 @@ namespace GymManagement.Core.DTOs
         public DateTime? CheckInTime { get; set; }
         public string? CheckInMethod { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class UpdateAttendanceLogDto
@@ -43,6 +45,7 @@ namespace GymManagement.Core.DTOs
         public int? LoggedByUserId { get; set; }
         public string? CheckInMethod { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class CheckOutDto

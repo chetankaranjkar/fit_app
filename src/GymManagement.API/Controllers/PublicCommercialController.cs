@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using GymManagement.Core.Branching;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Exceptions;
 using GymManagement.Core.Options;
@@ -76,13 +77,34 @@ namespace GymManagement.API.Controllers
 
         [HttpGet("membership-plans")]
         public async Task<ActionResult<IReadOnlyList<PublicMembershipPlanDto>>> GetMembershipPlans(
+            [FromQuery] int? branchId,
             CancellationToken cancellationToken)
         {
             if (!_options.EnableSelfSignup)
                 return Ok(Array.Empty<PublicMembershipPlanDto>());
+            if (branchId is not int selectedBranch)
+                return Ok(Array.Empty<PublicMembershipPlanDto>());
 
-            var plans = await _signupService.GetPublicPlansAsync(cancellationToken).ConfigureAwait(false);
-            return Ok(plans);
+            try
+            {
+                var plans = await _signupService.GetPublicPlansAsync(selectedBranch, cancellationToken).ConfigureAwait(false);
+                return Ok(plans);
+            }
+            catch (InvalidOperationException ex) when (BranchAccessRules.IsClientBranchError(ex.Message))
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("branches")]
+        public async Task<ActionResult<IReadOnlyList<PublicBranchOptionDto>>> Branches(CancellationToken cancellationToken)
+        {
+            var branches = await _signupService.GetPublicBranchesAsync(cancellationToken).ConfigureAwait(false);
+            return Ok(branches);
         }
 
         [HttpPost("signup")]
@@ -97,6 +119,10 @@ namespace GymManagement.API.Controllers
             {
                 var result = await _signupService.SignupAsync(request, cancellationToken).ConfigureAwait(false);
                 return Ok(result);
+            }
+            catch (InvalidOperationException ex) when (BranchAccessRules.IsClientBranchError(ex.Message))
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (InvalidOperationException ex)
             {

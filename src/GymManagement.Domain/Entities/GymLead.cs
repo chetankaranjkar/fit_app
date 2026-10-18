@@ -26,6 +26,8 @@ public class GymLead : BaseEntity
     public DateTime? ConvertedAtUtc { get; set; }
 
     public int? OrganizationId { get; set; }
+        public int? InterestedBranchId { get; set; }
+        public Branch? InterestedBranch { get; set; }
 
     public User? ConvertedMember { get; set; }
     public Organization? Organization { get; set; }

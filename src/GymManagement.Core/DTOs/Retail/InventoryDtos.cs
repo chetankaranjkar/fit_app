@@ -25,6 +25,7 @@ namespace GymManagement.Core.DTOs.Retail
         public decimal UnitPrice { get; set; }
         public string? ReferenceNumber { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public sealed class CreateStockAdjustmentDto
@@ -35,6 +36,7 @@ namespace GymManagement.Core.DTOs.Retail
         public decimal? UnitPrice { get; set; }
         public string? ReferenceNumber { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public sealed class InventoryAlertDto

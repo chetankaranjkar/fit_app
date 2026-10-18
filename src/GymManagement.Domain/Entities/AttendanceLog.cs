@@ -10,6 +10,8 @@ namespace GymManagement.Domain.Entities
         public int? DurationMinutes { get; set; }
         public string? Notes { get; set; }
         public string? CheckInMethod { get; set; }
+        /// <summary>Branch actually visited. Independent of notes and of the member's home branch.</summary>
+        public int? BranchId { get; set; }
         public string? CheckOutMethod { get; set; }
         public string? ExceptionReason { get; set; }
         public string? CorrectionAuditNote { get; set; }
@@ -19,6 +21,7 @@ namespace GymManagement.Domain.Entities
 
         public User? User { get; set; }
         public User? LoggedByUser { get; set; }
+        public Branch? Branch { get; set; }
     }
 }
 

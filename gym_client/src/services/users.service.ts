@@ -54,6 +54,7 @@ export const usersService = {
       isActive?: boolean
       /** Morning, Afternoon, Evening, or Night */
       preferredGymTime?: string
+      homeBranchId?: number
       /** Skip payment summary joins for faster typeahead search. */
       includeBilling?: boolean
       /** Limit to members assigned to the signed-in coach (trainer persona / coach-only access). */
@@ -70,6 +71,7 @@ export const usersService = {
     if (params.membersOnly) query.set('membersOnly', 'true')
     if (typeof params.isActive === 'boolean') query.set('isActive', String(params.isActive))
     if (params.preferredGymTime?.trim()) query.set('preferredGymTime', params.preferredGymTime.trim())
+    if (params.homeBranchId) query.set('homeBranchId', String(params.homeBranchId))
     if (params.includeBilling === false) query.set('includeBilling', 'false')
     if (params.assignedToCoachOnly) query.set('assignedToCoachOnly', 'true')
     if (params.countOnly) query.set('countOnly', 'true')
@@ -168,6 +170,8 @@ export const usersService = {
     }
   },
   create: (data: CreateUserDto) => api.post<User>('/Users', data),
+  assignHomeBranch: (id: number, branchId: number) =>
+    api.put<User>(`/Users/${id}/home-branch`, { branchId }),
   previewBulkImportMembers: (members: CreateUserDto[], options?: { timeoutMs?: number }) =>
     api.post<BulkImportMembersResult>(
       '/Users/bulk-import/preview',

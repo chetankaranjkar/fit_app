@@ -18,6 +18,7 @@ public sealed class CreateGymLeadDto
     public string? ReferenceName { get; set; }
     public string? Notes { get; set; }
     public int? OrganizationId { get; set; }
+    public int? InterestedBranchId { get; set; }
 }
 
 public sealed class UpdateGymLeadDto
@@ -48,6 +49,8 @@ public class GymLeadSummaryDto
     public DateTime? NextFollowUpAt { get; set; }
     public DateTime CreatedDate { get; set; }
     public int? ConvertedMemberId { get; set; }
+    public int? InterestedBranchId { get; set; }
+    public string? InterestedBranchName { get; set; }
 }
 
 public sealed class GymLeadDetailDto : GymLeadSummaryDto
@@ -122,6 +125,8 @@ public sealed class ConvertLeadToMemberDto
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public List<int>? MemberUserTypeIds { get; set; }
+    /// <summary>Overrides the lead's interested branch when conversion must choose a home branch.</summary>
+    public int? HomeBranchId { get; set; }
 }
 
 public sealed class LeadConversionResultDto

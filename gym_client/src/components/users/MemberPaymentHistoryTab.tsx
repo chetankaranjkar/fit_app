@@ -404,6 +404,7 @@ export function MemberPaymentHistoryTab({
             {primary?.planName && (
               <p className="mt-1 text-sm text-slate-300">
                 Current plan: {primary.planName}
+                {primary.sellingBranchName ? ` · ${primary.sellingBranchName}` : ''}
                 <span
                   className={`ml-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${paymentStatusBadgeClass(primary.paymentStatus)}`}
                 >

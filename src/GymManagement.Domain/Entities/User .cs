@@ -35,9 +35,13 @@ namespace GymManagement.Domain.Entities
         public string? QrCode { get; set; }
         public string? MembershipStatus { get; set; }
         public int? OrganizationId { get; set; }
+        /// <summary>Home branch. Null means an administrator still needs to assign one. Never inferred from scans.</summary>
+        public int? HomeBranchId { get; set; }
 
         // Navigation properties
         public Organization? Organization { get; set; }
+        public Branch? HomeBranch { get; set; }
+        public ICollection<UserBranchAssignment> BranchAssignments { get; set; } = new List<UserBranchAssignment>();
         public ICollection<UserDetail> UserDetails { get; set; } = new List<UserDetail>();
         public ICollection<UserSchedule> Schedules { get; set; } = new List<UserSchedule>();
         public ICollection<UserInstructor> InstructorAssignments { get; set; } = new List<UserInstructor>();

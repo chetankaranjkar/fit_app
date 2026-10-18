@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DataPageSection, DataPageShell } from '../components/layout/DataPageShell'
@@ -21,8 +21,10 @@ import { useDashboardRoleOrCurrent } from '../features/auth/DashboardRoleContext
 import { shouldScopeUsersToAssignedCoach } from '../features/auth/navPermissions'
 import { authService } from '../services/auth.service'
 import { usersService } from '../services/users.service'
-import { membershipPlansService } from '../services/membershipPlans.service'
+import { branchesService } from '../services/branches.service'
 import { trainersService } from '../services/trainers.service'
+import { useBranchScope } from '../features/branch/BranchScopeContext'
+import { BranchChoiceField, MEMBER_BRANCH_REASON } from '../features/branch/BranchChoiceField'
 import type { User, CreateUserDto } from '../types/user'
 import { downloadMembersCsv } from '../lib/membersCsv'
 import type { Trainer } from '../types/trainer'
@@ -164,6 +166,33 @@ function OutstandingCell({ user, onCollect }: { user: User; onCollect?: (u: User
   )
 }
 
+function HomeBranchField({
+  form,
+  setForm,
+}: {
+  form: CreateUserDto
+  setForm: Dispatch<SetStateAction<CreateUserDto>>
+}) {
+  const scope = useBranchScope()
+  const onChange = useCallback((branchId: number | undefined) => {
+    setForm((current) => (current.homeBranchId === branchId ? current : { ...current, homeBranchId: branchId }))
+  }, [setForm])
+  return (
+    <BranchChoiceField
+      branches={scope ? scope.branches : null}
+      value={form.homeBranchId}
+      onChange={onChange}
+      reason={MEMBER_BRANCH_REASON}
+      label="Home branch"
+      defaultBranchId={scope?.defaultBranchId}
+      returnTo="/dashboard/users?resume=member"
+      onBeforeCreateBranch={() => {
+        sessionStorage.setItem('gym.memberCreateDraft', JSON.stringify(form))
+      }}
+    />
+  )
+}
+
 function memberDisplayName(user: Pick<User, 'firstName' | 'lastName'>) {
   return `${user.firstName} ${user.lastName}`.trim() || '—'
 }
@@ -250,6 +279,7 @@ const defaultCreateForm: CreateUserDto = {
   instructorBio: '',
   instructorHireDate: undefined,
   userTypeIds: [],
+  homeBranchId: undefined,
 }
 
 export function UsersPage() {
@@ -289,6 +319,10 @@ export function UsersPage() {
   const MIN_LOGIN_PASSWORD_LENGTH = 6
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [branchFilter, setBranchFilter] = useState<string>('all')
+  const [assignUser, setAssignUser] = useState<User | null>(null)
+  const [assignBranchId, setAssignBranchId] = useState<number | undefined>()
+  const scope = useBranchScope()
   const [shiftFilter, setShiftFilter] = useState<MemberShiftFilter>('all')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [page, setPage] = useState(1)
@@ -311,7 +345,7 @@ export function UsersPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [effectiveSearch, statusFilter, shiftFilter])
+  }, [effectiveSearch, statusFilter, shiftFilter, branchFilter])
 
   const listIsActiveFilter =
     statusFilter === 'all' ? undefined : statusFilter === 'active'
@@ -331,7 +365,7 @@ export function UsersPage() {
   })
 
   const { data: usersPage, isLoading, error, isFetching } = useQuery({
-    queryKey: ['users-paged', page, pageSize, effectiveSearch, statusFilter, shiftFilter, coachClientsOnly],
+    queryKey: ['users-paged', page, pageSize, effectiveSearch, statusFilter, shiftFilter, branchFilter, coachClientsOnly],
     queryFn: async ({ signal }) => {
       const { data } = await usersService.getPaged(
         {
@@ -341,6 +375,7 @@ export function UsersPage() {
           membersOnly: true,
           isActive: listIsActiveFilter,
           preferredGymTime: listPreferredGymTimeFilter,
+          homeBranchId: branchFilter === 'all' ? undefined : Number(branchFilter),
           assignedToCoachOnly: coachClientsOnly,
         },
         { signal },
@@ -350,18 +385,20 @@ export function UsersPage() {
     placeholderData: (previousData, previousQuery) => {
       const prevKey = previousQuery?.queryKey
       if (!prevKey || !previousData) return undefined
-      const [, prevPage, prevPageSize, prevSearch, prevStatus, prevShift] = prevKey as [
+      const [, prevPage, prevPageSize, prevSearch, prevStatus, prevShift, prevBranch] = prevKey as [
         string,
         number,
         number,
         string | undefined,
         string,
         MemberShiftFilter,
+        string,
       ]
       if (
         prevSearch !== effectiveSearch
         || prevStatus !== statusFilter
         || prevShift !== shiftFilter
+        || prevBranch !== branchFilter
       ) {
         return undefined
       }
@@ -379,15 +416,15 @@ export function UsersPage() {
   const directoryMemberCount = directoryTotalCount ?? filteredMemberCount
 
   const { data: membershipPlans = [] } = useQuery({
-    queryKey: ['membershipPlans'],
+    queryKey: ['membership-plan-offers', form.homeBranchId],
+    enabled: Boolean(form.homeBranchId),
     queryFn: async () => {
-      const { data } = await membershipPlansService.getAll()
-      const list = Array.isArray(data) ? data : []
-      return list.map((p: { id?: number; Id?: number; planName?: string; PlanName?: string; durationDays?: number; DurationDays?: number; price?: number; Price?: number }) => ({
-        id: p.id ?? p.Id ?? 0,
-        planName: p.planName ?? p.PlanName ?? '',
-        durationDays: p.durationDays ?? p.DurationDays ?? 0,
-        price: p.price ?? p.Price ?? 0,
+      const { data } = await branchesService.planOffers(form.homeBranchId!)
+      return (data ?? []).map((p) => ({
+        id: p.planId,
+        planName: p.planName,
+        durationDays: p.durationDays,
+        price: p.price,
       }))
     },
   })
@@ -457,6 +494,17 @@ export function UsersPage() {
     onError: (err: unknown) => setFormError(getCreateUserErrorMessage(err)),
   })
 
+  const assignHomeMutation = useMutation({
+    mutationFn: ({ id, branchId }: { id: number; branchId: number }) =>
+      usersService.assignHomeBranch(id, branchId),
+    onSuccess: () => {
+      setAssignUser(null)
+      void queryClient.invalidateQueries({ queryKey: ['users-paged'] })
+      toast.success('Home branch assigned.')
+    },
+    onError: (err: unknown) => toast.error(getCreateUserErrorMessage(err)),
+  })
+
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: { isActive: boolean } }) =>
       usersService.update(id, payload),
@@ -507,6 +555,41 @@ export function UsersPage() {
       navigate(location.pathname, { replace: true, state: {} })
     }
   }, [location.state, location.pathname, navigate])
+
+  useEffect(() => {
+    if (searchParams.get('resume') !== 'member') return
+    const branchId = Number(searchParams.get('branchId') || 0)
+    let draft: CreateUserDto | null = null
+    try {
+      const raw = sessionStorage.getItem('gym.memberCreateDraft')
+      if (raw) draft = JSON.parse(raw) as CreateUserDto
+      sessionStorage.removeItem('gym.memberCreateDraft')
+    } catch {
+      draft = null
+    }
+    setIsAdding(true)
+    setForm({
+      ...(draft ?? defaultCreateForm),
+      role: 1,
+      homeBranchId: branchId > 0 ? branchId : draft?.homeBranchId,
+    })
+    const next = new URLSearchParams(searchParams)
+    next.delete('resume')
+    next.delete('branchId')
+    navigate({ pathname: location.pathname, search: next.toString() ? `?${next}` : '' }, { replace: true })
+  }, [searchParams, navigate, location.pathname])
+
+  const [importBranchSeed, setImportBranchSeed] = useState<number | undefined>()
+  useEffect(() => {
+    if (searchParams.get('resume') !== 'import') return
+    const branchId = Number(searchParams.get('branchId') || 0)
+    if (branchId > 0) setImportBranchSeed(branchId)
+    setImportOpen(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('resume')
+    next.delete('branchId')
+    navigate({ pathname: location.pathname, search: next.toString() ? `?${next}` : '' }, { replace: true })
+  }, [searchParams, navigate, location.pathname])
 
   const handleCancelAdd = () => {
     setIsAdding(false)
@@ -871,6 +954,28 @@ export function UsersPage() {
         accessorFn: (u) => u.phone ?? '',
       },
       {
+        id: 'branch',
+        header: 'Home branch',
+        minWidth: 140,
+        width: 160,
+        accessorFn: (u) => u.homeBranchName ?? '',
+        cell: ({ row }) =>
+          row.homeBranchName ? (
+            <span className="text-sm text-slate-200">{row.homeBranchName}</span>
+          ) : (
+            <button
+              type="button"
+              className="text-xs text-amber-200 underline"
+              onClick={() => {
+                setAssignUser(row)
+                setAssignBranchId(undefined)
+              }}
+            >
+              Assign branch
+            </button>
+          ),
+      },
+      {
         id: 'membership',
         header: 'Membership',
         minWidth: 190,
@@ -1098,6 +1203,15 @@ export function UsersPage() {
             ]}
           />
           <DataFilterSelect
+            value={branchFilter}
+            onChange={setBranchFilter}
+            ariaLabel="Filter by home branch"
+            options={[
+              { value: 'all', label: 'All branches' },
+              ...(scope?.branches ?? []).map((branch) => ({ value: String(branch.id), label: branch.name })),
+            ]}
+          />
+          <DataFilterSelect
             value={shiftFilter}
             onChange={(v) => setShiftFilter(v as MemberShiftFilter)}
             ariaLabel={coachClientsOnly ? 'Filter by batch' : 'Filter by shift'}
@@ -1257,6 +1371,8 @@ export function UsersPage() {
                   role (gym member list and mobile login).
                 </p>
               </div>
+
+              <HomeBranchField form={form} setForm={setForm} />
 
               {/* Step 2: Personal info and rest of form */}
               {/* Personal info */}
@@ -1548,7 +1664,9 @@ export function UsersPage() {
                         }
                         className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 transition-colors focus:border-blue-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-400/20"
                       >
-                        <option value="" className="bg-slate-900">None</option>
+                        <option value="" className="bg-slate-900">
+                          {form.homeBranchId ? 'None' : 'Select a branch to see plans and fees'}
+                        </option>
                         {membershipPlans.map((p) => (
                           <option key={p.id} value={p.id} className="bg-slate-900">
                             {p.planName} ({p.durationDays} days – {formatInr(p.price)})
@@ -1623,8 +1741,39 @@ export function UsersPage() {
             </form>
           </Modal>
 
+          <Modal
+            open={assignUser != null}
+            onClose={() => setAssignUser(null)}
+            title="Assign home branch"
+          >
+            <p className="mb-3 text-sm text-slate-300">{MEMBER_BRANCH_REASON}</p>
+            <BranchChoiceField
+              branches={scope ? scope.branches : null}
+              value={assignBranchId}
+              onChange={setAssignBranchId}
+              reason={MEMBER_BRANCH_REASON}
+              label="Home branch"
+              defaultBranchId={scope?.defaultBranchId}
+              returnTo="/dashboard/users"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={() => setAssignUser(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!assignUser || !assignBranchId || assignHomeMutation.isPending}
+                onClick={() => assignUser && assignBranchId && assignHomeMutation.mutate({ id: assignUser.id, branchId: assignBranchId })}
+              >
+                Assign branch
+              </Button>
+            </div>
+          </Modal>
+
           <MemberCsvImportModal
             open={importOpen}
+            initialBranchId={importBranchSeed}
             onClose={() => setImportOpen(false)}
             onImported={async () => {
               await queryClient.invalidateQueries({ queryKey: ['users-paged'] })

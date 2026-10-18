@@ -3,7 +3,10 @@ using Microsoft.Extensions.Hosting;
 
 namespace GymManagement.API.Hosting
 {
-    /// <summary>Daily overdue refresh + in-app due notifications for membership billing.</summary>
+    /// <summary>
+    /// Daily overdue refresh + in-app due notifications for membership billing.
+    /// Runs with no signed-in actor, so branch scope stays organization-wide and the job does not assign a home branch.
+    /// </summary>
     public sealed class PaymentBillingReminderHostedService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;

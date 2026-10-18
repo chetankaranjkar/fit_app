@@ -15,6 +15,8 @@ namespace GymManagement.Domain.Entities.PersonalTraining
         public int UserId { get; set; }
         public int TrainerId { get; set; }
         public int PackageId { get; set; }
+        /// <summary>Branch that sold this package. Later trainer or member moves do not change it.</summary>
+        public int? SellingBranchId { get; set; }
 
         public int SessionCount { get; set; }
         public int ValidityDays { get; set; }

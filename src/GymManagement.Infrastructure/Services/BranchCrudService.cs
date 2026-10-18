@@ -1,3 +1,4 @@
+using GymManagement.Core.Branching;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.Services;
 using GymManagement.Domain.Entities;
@@ -10,8 +11,13 @@ namespace GymManagement.Infrastructure.Services;
 public sealed class BranchCrudService : IBranchCrudService
 {
     private readonly ApplicationDbContext _db;
+    private readonly IOperationalBranchService _operations;
 
-    public BranchCrudService(ApplicationDbContext db) => _db = db;
+    public BranchCrudService(ApplicationDbContext db, IOperationalBranchService operations)
+    {
+        _db = db;
+        _operations = operations;
+    }
 
     private static readonly Expression<Func<Branch, BranchCrudDto>> ProjectRow = b => new BranchCrudDto
     {
@@ -118,19 +124,45 @@ public sealed class BranchCrudService : IBranchCrudService
         branch.Latitude = dto.Latitude;
         branch.Longitude = dto.Longitude;
         branch.Esp32DoorBaseUrl = NormalizeDoor(dto.Esp32DoorBaseUrl);
+        var branchWasActive = branch.IsActive;
         branch.IsActive = dto.IsActive;
+
+        if (!dto.IsActive && branchWasActive)
+            await EnsureClosureAllowedAsync(id, handlingPolicy: null, actingUserId: null, cancellationToken).ConfigureAwait(false);
 
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return (await GetByIdAsync(id, cancellationToken).ConfigureAwait(false))!;
     }
 
-    public async Task SoftDeactivateAsync(int id, CancellationToken cancellationToken = default)
+    public Task<BranchDeactivationCounts> PreviewDeactivationAsync(int id, CancellationToken cancellationToken = default) =>
+        _operations.PreviewDeactivationAsync(id, cancellationToken);
+
+    public async Task SoftDeactivateAsync(int id, string? handlingPolicy, int? actingUserId, CancellationToken cancellationToken = default)
     {
         var branch = await _db.Branches.FirstOrDefaultAsync(b => b.Id == id, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Branch {id} was not found.");
+        if (branch.IsActive)
+            await EnsureClosureAllowedAsync(id, handlingPolicy, actingUserId, cancellationToken).ConfigureAwait(false);
         branch.IsActive = false;
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnsureClosureAllowedAsync(int id, string? handlingPolicy, int? actingUserId, CancellationToken cancellationToken)
+    {
+        var counts = await _operations.PreviewDeactivationAsync(id, cancellationToken).ConfigureAwait(false);
+        if (OperationalBranchRules.CanDeactivate(counts))
+            return;
+        if (string.IsNullOrWhiteSpace(handlingPolicy))
+            throw new InvalidOperationException("This branch still has members, staff, lockers, equipment, stock, bookings, or unpaid bills. Resolve them or record a handling policy. Nothing was moved or deleted.");
+
+        _db.BranchClosureRecords.Add(new BranchClosureRecord
+        {
+            BranchId = id,
+            HandlingPolicy = handlingPolicy.Trim(),
+            CountsSnapshot = OperationalBranchService.Snapshot(counts),
+            ActingUserId = actingUserId,
+        });
     }
 
     public async Task<IReadOnlyList<OrganizationOptionDto>> OrganizationOptionsAsync(

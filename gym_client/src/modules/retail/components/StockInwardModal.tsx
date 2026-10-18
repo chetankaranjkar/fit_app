@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useBranchScope } from '../../../features/branch/BranchScopeContext'
+import { BranchChoiceField } from '../../../features/branch/BranchChoiceField'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Button } from '../../../components/ui/Button'
@@ -15,10 +17,16 @@ export function StockInwardModal({ product, onClose }: { product: StockInwardTar
   const [unitPrice, setUnitPrice] = useState(String(product.purchasePrice || ''))
   const [referenceNumber, setReferenceNumber] = useState('')
   const [notes, setNotes] = useState('')
+  const branchScope = useBranchScope()
+  const [branchId, setBranchId] = useState<number | undefined>()
+  const chooseBranch = useCallback((id: number | undefined) => {
+    setBranchId((current) => (current === id ? current : id))
+  }, [])
   const [error, setError] = useState<string | null>(null)
 
   const mutation = useMutation({
     mutationFn: async () => (await retailInventoryService.recordInward({
+      branchId,
       productId: product.id,
       quantity: Number(quantity) || 0,
       unitPrice: Number(unitPrice) || 0,
@@ -46,6 +54,14 @@ export function StockInwardModal({ product, onClose }: { product: StockInwardTar
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      <BranchChoiceField
+        branches={branchScope ? branchScope.branches : null}
+        value={branchId}
+        onChange={chooseBranch}
+        defaultBranchId={branchScope?.defaultBranchId}
+        label="Receiving branch"
+        reason="This purchase increases stock at the selected branch."
+      />
       <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm">
         <p className="text-slate-300">{product.name}</p>
         <p className="text-xs text-slate-500">SKU: {product.sku} · Current stock: {product.stockQuantity}</p>

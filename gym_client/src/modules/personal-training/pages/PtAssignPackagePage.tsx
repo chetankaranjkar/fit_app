@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useBranchScope } from '../../../features/branch/BranchScopeContext'
+import { BranchChoiceField } from '../../../features/branch/BranchChoiceField'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '../../../components/layout/DashboardLayout'
@@ -24,6 +26,11 @@ export function PtAssignPackagePage() {
   const [userId, setUserId] = useState('')
   const [trainerId, setTrainerId] = useState('')
   const [packageId, setPackageId] = useState('')
+  const branchScope = useBranchScope()
+  const [branchId, setBranchId] = useState<number | undefined>()
+  const chooseBranch = useCallback((id: number | undefined) => {
+    setBranchId((current) => (current === id ? current : id))
+  }, [])
   const [paidAmount, setPaidAmount] = useState('')
 
   const { data: users = [] } = useQuery({
@@ -45,6 +52,7 @@ export function PtAssignPackagePage() {
         userId: Number(userId),
         trainerId: Number(trainerId),
         packageId: Number(packageId),
+        branchId,
         paidAmount: paidAmount ? Number(paidAmount) : undefined,
       }),
     onSuccess: () => {
@@ -59,6 +67,14 @@ export function PtAssignPackagePage() {
     <DashboardLayout userName={getDashboardUser()}>
       <DashboardSubpageShell eyebrow="Personal Training" titleGradient="Assign package" subtitle="Link a member to a trainer and PT package; generates a PT invoice.">
         <div className="glass-card max-w-xl space-y-4 p-6">
+          <BranchChoiceField
+            branches={branchScope ? branchScope.branches : null}
+            value={branchId}
+            onChange={chooseBranch}
+            defaultBranchId={branchScope?.defaultBranchId}
+            label="Selling branch"
+            reason="Price, invoice, and later sessions use this branch."
+          />
           <label className="block text-sm text-slate-300">
             Member
             <select value={userId} onChange={(e) => setUserId(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white">

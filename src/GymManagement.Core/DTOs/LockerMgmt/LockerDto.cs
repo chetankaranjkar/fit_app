@@ -7,6 +7,7 @@ namespace GymManagement.Core.DTOs.LockerMgmt
         public string Size { get; set; } = "Medium";
         public string Status { get; set; } = "AVAILABLE";
         public string? Location { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class CreateLockerDto
@@ -15,6 +16,7 @@ namespace GymManagement.Core.DTOs.LockerMgmt
         public string Size { get; set; } = "Medium";
         public string Status { get; set; } = "AVAILABLE";
         public string? Location { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class UpdateLockerDto
@@ -23,5 +25,6 @@ namespace GymManagement.Core.DTOs.LockerMgmt
         public string? Size { get; set; }
         public string? Status { get; set; }
         public string? Location { get; set; }
+        public int? BranchId { get; set; }
     }
 }

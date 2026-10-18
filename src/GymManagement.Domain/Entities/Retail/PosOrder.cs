@@ -63,6 +63,7 @@ namespace GymManagement.Domain.Entities.Retail
         public int? CashierUserId { get; set; }
 
         public int? OrganizationId { get; set; }
+        public int? BranchId { get; set; }
 
         // Navigation
         public ICollection<PosOrderItem> Items { get; set; } = new List<PosOrderItem>();

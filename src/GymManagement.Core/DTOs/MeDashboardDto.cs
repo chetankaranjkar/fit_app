@@ -27,6 +27,8 @@ namespace GymManagement.Core.DTOs
         public string? ProfilePictureUrl { get; set; }
         public DateTime RegistrationDate { get; set; }
         public string? PreferredGymTime { get; set; }
+        public int? HomeBranchId { get; set; }
+        public string? HomeBranchName { get; set; }
         /// <summary>Assigned goal weight from UserDetails (not a recorded weigh-in).</summary>
         public decimal? TargetWeightKg { get; set; }
         /// <summary>Assigned goal type from UserDetails (e.g. Weight Loss).</summary>

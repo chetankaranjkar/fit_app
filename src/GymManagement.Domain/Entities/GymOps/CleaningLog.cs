@@ -7,6 +7,7 @@ namespace GymManagement.Domain.Entities.GymOps
         public string Shift { get; set; } = string.Empty; // Morning / Afternoon / Evening
         public string? PerformedBy { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
 
         public ICollection<CleaningTaskItem> Tasks { get; set; } = new List<CleaningTaskItem>();
     }

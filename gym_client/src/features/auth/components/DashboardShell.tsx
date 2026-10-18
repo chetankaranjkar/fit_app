@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { MemberPaymentBlockedHost } from '../../billing/MemberPaymentBlockedHost'
 import { DashboardSessionProvider } from '../DashboardSessionContext'
+import { BranchScopeProvider } from '../../branch/BranchScopeContext'
 import { DashboardRoleProvider, usePersona } from '../DashboardRoleContext'
 import { getPersonaHomePath, isPathAllowedForRole } from '../roleRouting'
 
@@ -18,8 +19,10 @@ function DashboardShellInner() {
 
   return (
     <DashboardSessionProvider>
-      <MemberPaymentBlockedHost />
-      <Outlet />
+      <BranchScopeProvider>
+        <MemberPaymentBlockedHost />
+        <Outlet />
+      </BranchScopeProvider>
     </DashboardSessionProvider>
   )
 }

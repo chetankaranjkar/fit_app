@@ -11,8 +11,13 @@ namespace GymManagement.Infrastructure.Services.Notifications;
 public sealed class NotificationHistoryService : INotificationHistoryService
 {
     private readonly ApplicationDbContext _db;
+    private readonly IBranchScopeService _scope;
 
-    public NotificationHistoryService(ApplicationDbContext db) => _db = db;
+    public NotificationHistoryService(ApplicationDbContext db, IBranchScopeService scope)
+    {
+        _db = db;
+        _scope = scope;
+    }
 
     public async Task RecordAsync(
         int? memberId,
@@ -50,6 +55,14 @@ public sealed class NotificationHistoryService : INotificationHistoryService
     public async Task<IReadOnlyList<NotificationHistoryDto>> ListAsync(int? memberId, int take, CancellationToken ct = default)
     {
         var q = _db.NotificationHistories.AsNoTracking().Where(h => !h.IsDeleted);
+        var scope = await _scope.CurrentAsync(ct);
+        if (!scope.IsUnrestricted)
+        {
+            var ids = scope.BranchIds.ToArray();
+            q = q.Where(h => h.MemberId != null && _db.Users.Any(u =>
+                u.Id == h.MemberId
+                && (u.Id == scope.ActorUserId || (u.HomeBranchId != null && ids.Contains(u.HomeBranchId.Value)))));
+        }
         if (memberId.HasValue)
             q = q.Where(h => h.MemberId == memberId);
 

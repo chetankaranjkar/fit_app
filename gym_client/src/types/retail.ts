@@ -140,6 +140,7 @@ export interface CreateStockInwardDto {
 }
 
 export interface CreateStockAdjustmentDto {
+  branchId?: number | null
   productId: number
   quantity: number
   transactionType: InventoryTransactionType
@@ -203,6 +204,7 @@ export interface CreatePosOrderItemDto {
 }
 
 export interface CreatePosOrderDto {
+  branchId?: number | null
   customerUserId?: number | null
   customerName?: string
   customerPhone?: string

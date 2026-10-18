@@ -1,0 +1,23 @@
+-- Stage 3. Do not run until the unassigned-branch report is empty
+-- and an administrator has approved the mapping.
+-- Startup migration does not execute this script.
+-- Expenses may stay branchless when IsOrganizationWide = 1.
+-- Shared catalogs are intentionally absent from this list.
+
+-- Example, after reconciliation, for each column below:
+-- ALTER TABLE Users ALTER COLUMN HomeBranchId int NOT NULL;
+-- Then repeat for:
+-- gym_leads.InterestedBranchId
+-- AttendanceLogs.BranchId
+-- GymOps_Equipment.BranchId
+-- GymOps_MaintenanceLogs.BranchId
+-- LockerMgmt_Lockers.BranchId
+-- LockerMgmt_Assignments.BranchId
+-- GymOps_CleaningLogs.BranchId
+-- Retail_PosOrders.BranchId
+-- Retail_InventoryTransactions.BranchId
+-- PT_Sessions.BranchId
+-- PT_MemberPackages.SellingBranchId
+-- PT_PackageInvoices.SellingBranchId
+-- user_memberships.SellingBranchId
+-- membership_payments.SellingBranchId

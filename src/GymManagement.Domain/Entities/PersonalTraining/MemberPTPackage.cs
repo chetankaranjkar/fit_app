@@ -37,6 +37,7 @@ namespace GymManagement.Domain.Entities.PersonalTraining
 
         [Column(TypeName = "decimal(12,2)")]
         public decimal PaidAmount { get; set; }
+        public int? SellingBranchId { get; set; }
 
         public PTPaymentStatus PaymentStatus { get; set; } = PTPaymentStatus.Pending;
 

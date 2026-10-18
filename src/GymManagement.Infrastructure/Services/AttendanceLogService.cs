@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using GymManagement.Core.Attendance;
+using GymManagement.Core.Branching;
+using GymManagement.Core.Validation;
 using GymManagement.Core.DTOs;
 using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.Exceptions;
@@ -15,15 +17,21 @@ namespace GymManagement.Infrastructure.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _context;
         private readonly INotificationEventService _notifications;
+        private readonly IBranchScopeService _scope;
+        private readonly IBranchAssignmentService _branches;
 
         public AttendanceLogService(
             IUnitOfWork unitOfWork,
             ApplicationDbContext context,
-            INotificationEventService notifications)
+            INotificationEventService notifications,
+            IBranchScopeService scope,
+            IBranchAssignmentService branches)
         {
             _unitOfWork = unitOfWork;
             _context = context;
             _notifications = notifications;
+            _scope = scope;
+            _branches = branches;
         }
 
         public async Task<PagedResultDto<AttendanceLogDto>> GetPagedAsync(
@@ -49,6 +57,7 @@ namespace GymManagement.Infrastructure.Services
                 search,
                 status,
                 lateThresholdMinutes);
+            query = await ApplyAttendanceScopeAsync(query).ConfigureAwait(false);
 
             var isAsc = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
             query = (sortBy ?? "checkin").Trim().ToLowerInvariant() switch
@@ -79,6 +88,7 @@ namespace GymManagement.Infrastructure.Services
                 search: null,
                 status: null,
                 lateThresholdMinutes: AttendanceLateRules.DefaultLateThresholdMinutes);
+            query = await ApplyAttendanceScopeAsync(query).ConfigureAwait(false);
 
             var totalVisits = await query.CountAsync();
             var activeVisits = await query.CountAsync(a => a.CheckOutTime == null);
@@ -190,7 +200,8 @@ namespace GymManagement.Infrastructure.Services
                 CheckInTime = checkInTime,
                 AttendanceDate = today,
                 CheckInMethod = checkInDto.CheckInMethod ?? "Manual",
-                Notes = checkInDto.Notes
+                Notes = checkInDto.Notes,
+                BranchId = await ResolveVisitBranchAsync(userId, checkInDto.BranchId).ConfigureAwait(false)
             };
 
             await _unitOfWork.AttendanceLogs.AddAsync(attendanceLog);
@@ -201,6 +212,27 @@ namespace GymManagement.Infrastructure.Services
             var logs = new[] { attendanceLog };
             var dtos = await MapAttendanceLogsToDtoAsync(logs);
             return dtos.First();
+        }
+
+        private async Task<int> ResolveVisitBranchAsync(int userId, int? requestedBranchId)
+        {
+            var branchId = (await _scope.RequireAssignableBranchAsync(requestedBranchId, null).ConfigureAwait(false)).BranchId;
+            var rows = await _context.UserMemberships.AsNoTracking()
+                .Where(m => m.UserId == userId && !m.IsDeleted)
+                .OrderByDescending(m => m.EndDate)
+                .Select(m => new { m.Status, m.EndDate })
+                .ToListAsync()
+                .ConfigureAwait(false);
+            if (!rows.Any(m => UserMembershipRules.AllowsGymCheckIn(m.Status, m.EndDate)))
+            {
+                throw new BadRequestException(rows.Count == 0
+                    ? "No active membership on file. Renew or purchase a plan at reception to check in."
+                    : "No active membership. Renew at reception to check in.");
+            }
+
+            if (!await _branches.MembershipAllowsBranchAsync(userId, branchId).ConfigureAwait(false))
+                throw new BadRequestException(BranchAccessRules.BranchNotPermittedMessage);
+            return branchId;
         }
 
         public async Task<AttendanceLogDto?> CheckOutAsync(CheckOutDto checkOutDto)
@@ -245,7 +277,10 @@ namespace GymManagement.Infrastructure.Services
                 CheckInTime = checkInTime,
                 AttendanceDate = checkInTime.Date,
                 CheckInMethod = createDto.CheckInMethod ?? "Manual",
-                Notes = createDto.Notes
+                Notes = createDto.Notes,
+                BranchId = createDto.UserId > 0
+                    ? await ResolveVisitBranchAsync(createDto.UserId, createDto.BranchId).ConfigureAwait(false)
+                    : (await _scope.RequireAssignableBranchAsync(createDto.BranchId, null).ConfigureAwait(false)).BranchId
             };
 
             await _unitOfWork.AttendanceLogs.AddAsync(attendanceLog);
@@ -350,6 +385,8 @@ namespace GymManagement.Infrastructure.Services
         {
             var attendanceLog = await _unitOfWork.AttendanceLogs.GetByIdAsync(id);
             if (attendanceLog == null) return false;
+            if (!(await MapAttendanceLogsToDtoAsync(new[] { attendanceLog })).Any())
+                return false;
 
             _unitOfWork.AttendanceLogs.Delete(attendanceLog);
             await _unitOfWork.SaveChangesAsync();
@@ -360,8 +397,9 @@ namespace GymManagement.Infrastructure.Services
         {
             var logs = await _unitOfWork.AttendanceLogs.FindAsync(al => 
                 al.AttendanceDate.Date >= startDate.Date && al.AttendanceDate.Date <= endDate.Date);
-            
-            return logs
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            var visible = logs.Where(l => scope.IsUnrestricted || scope.Includes(l.BranchId) || l.UserId == scope.ActorUserId);
+            return visible
                 .GroupBy(l => l.AttendanceDate.Date)
                 .ToDictionary(g => g.Key, g => g.Count());
         }
@@ -370,6 +408,8 @@ namespace GymManagement.Infrastructure.Services
         {
             var day = date.Date;
             var logs = (await _unitOfWork.AttendanceLogs.FindAsync(a => a.AttendanceDate.Date == day)).ToList();
+            var anomalyScope = await _scope.CurrentAsync().ConfigureAwait(false);
+            logs = logs.Where(l => anomalyScope.IsUnrestricted || anomalyScope.Includes(l.BranchId) || l.UserId == anomalyScope.ActorUserId).ToList();
             var schedules = (await _unitOfWork.UserSchedules.FindAsync(s => s.IsActive && s.DayOfWeek == day.DayOfWeek)).ToList();
             var userIds = logs.Where(x => x.UserId.HasValue).Select(x => x.UserId!.Value)
                 .Concat(schedules.Select(s => s.UserId))
@@ -424,9 +464,20 @@ namespace GymManagement.Infrastructure.Services
             return result.OrderBy(r => r.Type).ThenBy(r => r.UserName).ToList();
         }
 
+        private async Task<IQueryable<AttendanceLog>> ApplyAttendanceScopeAsync(IQueryable<AttendanceLog> query)
+        {
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (scope.IsUnrestricted)
+                return query;
+            var ids = scope.BranchIds.ToArray();
+            var actor = scope.ActorUserId;
+            return query.Where(a => a.UserId == actor || (a.BranchId != null && ids.Contains(a.BranchId.Value)));
+        }
+
         private async Task<IEnumerable<AttendanceLogDto>> MapAttendanceLogsToDtoAsync(IEnumerable<AttendanceLog> logs)
         {
-            var logsList = logs.ToList();
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            var logsList = logs.Where(log => scope.IsUnrestricted || scope.Includes(log.BranchId) || log.UserId == scope.ActorUserId).ToList();
             var userIds = logsList.Where(l => l.UserId.HasValue).Select(l => l.UserId!.Value).Distinct().ToList();
             var users = userIds.Any() ? await _unitOfWork.Users.FindAsync(u => userIds.Contains(u.Id)) : new List<User>();
             var userDict = users.ToDictionary(u => u.Id);
@@ -447,6 +498,7 @@ namespace GymManagement.Infrastructure.Services
                 CheckOutMethod = log.CheckOutMethod,
                 IsCheckedIn = log.CheckOutTime == null,
                 ExceptionReason = log.ExceptionReason,
+                BranchId = log.BranchId,
                 CorrectionAuditNote = log.CorrectionAuditNote,
                 IsManualCorrection = log.IsManualCorrection,
                 CorrectedByUserId = log.CorrectedByUserId,

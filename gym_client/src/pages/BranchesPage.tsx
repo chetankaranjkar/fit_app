@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { MapPin } from 'lucide-react'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { DashboardSubpageShell } from '../components/layout/DashboardSubpageShell'
 import { Button } from '../components/ui/Button'
+import { Modal } from '../components/ui/Modal'
 import { Input } from '../components/ui/Input'
 import { authService } from '../services/auth.service'
 import { branchesService } from '../services/branches.service'
@@ -110,10 +111,13 @@ function emptyForm(): BranchFormFields {
 export function BranchesPage() {
   const { userName } = getDashboardUser()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const returnTo = searchParams.get('returnTo')
   const canManageBranches = authService.hasQrOwnerAccess()
 
   const [tab, setTab] = useState<TabFilter>('active')
-  const [isAdding, setIsAdding] = useState(false)
+  const [isAdding, setIsAdding] = useState(Boolean(returnTo))
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<BranchFormFields>(emptyForm())
   const [formError, setFormError] = useState<string | null>(null)
@@ -152,11 +156,17 @@ export function BranchesPage() {
 
   const createMut = useMutation({
     mutationFn: (body: BranchCreatePayload) => branchesService.create(body),
-    onSuccess: () => {
+    onSuccess: (res) => {
       invalidateBranches()
       setIsAdding(false)
       setForm(emptyForm())
       setFormError(null)
+      const createdId = res.data?.id
+      if (returnTo && createdId && returnTo.startsWith('/') && !returnTo.startsWith('//')) {
+        const target = new URL(returnTo, window.location.origin)
+        target.searchParams.set('branchId', String(createdId))
+        navigate(`${target.pathname}${target.search}`)
+      }
     },
     onError: (e: unknown) => setFormError(errMsg(e)),
   })
@@ -173,8 +183,14 @@ export function BranchesPage() {
   })
 
   const deactivateMut = useMutation({
-    mutationFn: (id: number) => branchesService.deactivate(id),
-    onSuccess: () => invalidateBranches(),
+    mutationFn: ({ id, handlingPolicy }: { id: number; handlingPolicy: string }) =>
+      branchesService.close(id, handlingPolicy),
+    onSuccess: () => {
+      invalidateBranches()
+      setClosing(null)
+      setHandlingPolicy('')
+    },
+    onError: (e: unknown) => setFormError(errMsg(e)),
   })
 
   const createOrgMut = useMutation({
@@ -311,10 +327,17 @@ export function BranchesPage() {
     updateMut.mutate({ id: editingId, body: payload })
   }
 
+  const [closing, setClosing] = useState<BranchCrudDto | null>(null)
+  const [handlingPolicy, setHandlingPolicy] = useState('')
+  const previewQuery = useQuery({
+    queryKey: ['branch-deactivation', closing?.id],
+    enabled: Boolean(closing),
+    queryFn: async () => (await branchesService.deactivationPreview(closing!.id)).data,
+  })
+
   function confirmDeactivate(row: BranchCrudDto) {
-    const name = row.branchName || `Branch #${row.id}`
-    if (!window.confirm(`Deactivate "${name}"? It will disappear from QR and member dropdowns.`)) return
-    deactivateMut.mutate(row.id)
+    setHandlingPolicy('')
+    setClosing(row)
   }
 
   if (!canManageBranches) {
@@ -643,6 +666,46 @@ export function BranchesPage() {
           )}
         </div>
       </DashboardSubpageShell>
+      <Modal open={Boolean(closing)} title="Deactivate branch" onClose={() => setClosing(null)}>
+        <div className="space-y-3 text-sm text-slate-300">
+          <p>Nothing is moved or deleted. If anything is still at this branch, write how it will be handled.</p>
+          {previewQuery.data ? (
+            <ul className="space-y-1 text-slate-200">
+              <li>Active memberships: {previewQuery.data.activeMembers}</li>
+              <li>People with this home branch: {previewQuery.data.homeUsers}</li>
+              <li>Staff and trainer assignments: {previewQuery.data.staffAssignments}</li>
+              <li>Occupied lockers: {previewQuery.data.occupiedLockers}</li>
+              <li>Equipment: {previewQuery.data.equipmentAssets}</li>
+              <li>Stock on hand: {previewQuery.data.stockOnHand}</li>
+              <li>Open bookings: {previewQuery.data.openBookings}</li>
+              <li>Outstanding bills: {previewQuery.data.outstandingBills}</li>
+            </ul>
+          ) : (
+            <p>Loading what is still at this branch…</p>
+          )}
+          {!previewQuery.data?.canDeactivateWithoutPolicy ? (
+            <label className="block text-xs uppercase tracking-wide text-slate-400">
+              Handling note
+              <textarea
+                className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-slate-100"
+                rows={3}
+                value={handlingPolicy}
+                onChange={(event) => setHandlingPolicy(event.target.value)}
+              />
+            </label>
+          ) : null}
+          {formError ? <p className="text-rose-300">{formError}</p> : null}
+          <Button
+            disabled={
+              deactivateMut.isPending
+              || (!previewQuery.data?.canDeactivateWithoutPolicy && !handlingPolicy.trim())
+            }
+            onClick={() => closing && deactivateMut.mutate({ id: closing.id, handlingPolicy })}
+          >
+            Deactivate
+          </Button>
+        </div>
+      </Modal>
     </DashboardLayout>
   )
 }

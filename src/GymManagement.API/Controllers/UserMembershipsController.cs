@@ -201,6 +201,33 @@ namespace GymManagement.API.Controllers
 
         }
 
+        [HttpGet("{id}/visit-access")]
+        public async Task<ActionResult<MembershipVisitAccessDto>> GetVisitAccess(int id)
+        {
+            var item = await _service.GetVisitAccessAsync(id);
+            if (item == null) return NotFound();
+            return Ok(item);
+        }
+
+        [HttpPut("{id}/visit-access")]
+        public async Task<ActionResult<MembershipVisitAccessDto>> SetVisitAccess(int id, SetMembershipVisitAccessDto dto)
+        {
+            var userId = ResolveUserId();
+            if (!userId.HasValue) return Unauthorized();
+            try
+            {
+                return Ok(await _service.SetVisitAccessAsync(id, dto, userId.Value));
+            }
+            catch (NotFoundException)
+            {
+                return NotFound();
+            }
+            catch (BadRequestException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPost("{id}/renew-access")]
         public async Task<ActionResult<UserMembershipDto>> RenewAccess(int id, RenewMembershipAccessDto? dto)
         {

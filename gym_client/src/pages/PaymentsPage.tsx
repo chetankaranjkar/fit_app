@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { branchScopeQueryKey, useBranchScope } from '../features/branch/BranchScopeContext'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -108,6 +109,7 @@ export function PaymentsPage() {
   const navigate = useNavigate()
   const canManagePayments = usePermission(authService.permissionCodes.payments)
   const queryClient = useQueryClient()
+  const branchScopeKey = branchScopeQueryKey(useBranchScope())
   const [modalOpen, setModalOpen] = useState(false)
   const [latestReceipt, setLatestReceipt] = useState<PaymentReceiptData | null>(null)
   const [receiptOpen, setReceiptOpen] = useState(false)
@@ -141,7 +143,7 @@ export function PaymentsPage() {
   }, [reportFromDate, reportToDate])
 
   const { data: paymentsPage, isLoading, isFetching } = useQuery({
-    queryKey: ['payments-paged', page, pageSize, reportFromDate, reportToDate],
+    queryKey: ['payments-paged', page, pageSize, reportFromDate, reportToDate, branchScopeKey],
     queryFn: async () =>
       (
         await paymentsService.getPaged({
@@ -159,7 +161,7 @@ export function PaymentsPage() {
   const totalPayments = paymentsPage?.totalRecords ?? 0
 
   const { data: statsPayments = [] } = useQuery({
-    queryKey: ['payments-stats', reportFromDate, reportToDate],
+    queryKey: ['payments-stats', reportFromDate, reportToDate, branchScopeKey],
     queryFn: async () => {
       const { data } = await paymentsService.getPaged({
         page: 1,

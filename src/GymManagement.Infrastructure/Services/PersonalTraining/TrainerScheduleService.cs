@@ -153,6 +153,7 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
                 s.Status != PTSessionStatus.Cancelled &&
                 (excludeSessionId == null || s.Id != excludeSessionId) &&
                 s.ScheduledStartUtc < endUtc && s.ScheduledEndUtc > startUtc, ct);
+            // Overlap is checked for the trainer, including sessions at other branches.
             return !overlap;
         }
 

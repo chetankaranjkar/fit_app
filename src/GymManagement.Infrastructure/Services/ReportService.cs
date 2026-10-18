@@ -10,10 +10,12 @@ namespace GymManagement.Infrastructure.Services
     public sealed class ReportService : IReportService
     {
         private readonly ApplicationDbContext _context;
+        private readonly IBranchScopeService _scope;
 
-        public ReportService(ApplicationDbContext context)
+        public ReportService(ApplicationDbContext context, IBranchScopeService scope)
         {
             _context = context;
+            _scope = scope;
         }
 
         public async Task<ReportSummaryDto> GetSummaryAsync(DateTime fromDate, DateTime toDate)
@@ -28,6 +30,9 @@ namespace GymManagement.Infrastructure.Services
                 .ToListAsync();
 
             var toExclusive = rangeTo.AddDays(1);
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            var unrestricted = scope.IsUnrestricted;
+            var branchIds = scope.BranchIds.ToArray();
             var revenueRows = await (
                 from t in _context.MembershipPaymentTransactions.AsNoTracking()
                 join mp in _context.MembershipPayments.AsNoTracking() on t.PaymentId equals mp.Id
@@ -37,6 +42,7 @@ namespace GymManagement.Infrastructure.Services
                       && t.TransactionDate >= rangeFrom
                       && t.TransactionDate < toExclusive
                       && !voidedMembershipIds.Contains(mp.MembershipId)
+                      && (unrestricted || (mp.SellingBranchId != null && branchIds.Contains(mp.SellingBranchId.Value)))
                 select new { t.TransactionAmount, t.TransactionDate, mp.MembershipId }
             ).ToListAsync();
 
@@ -44,12 +50,14 @@ namespace GymManagement.Infrastructure.Services
                 .AsNoTracking()
                 .Include(m => m.Plan)
                 .Where(m => m.StartDate.Date <= rangeTo && m.EndDate.Date >= rangeFrom)
+                .Where(m => unrestricted || (m.SellingBranchId != null && branchIds.Contains(m.SellingBranchId.Value)))
                 .ToListAsync();
             var membershipById = memberships.ToDictionary(m => m.Id);
 
             var attendanceLogs = await _context.AttendanceLogs
                 .AsNoTracking()
                 .Where(a => a.AttendanceDate.Date >= rangeFrom && a.AttendanceDate.Date <= rangeTo)
+                .Where(a => unrestricted || (a.BranchId != null && branchIds.Contains(a.BranchId.Value)))
                 .ToListAsync();
 
             var revenueTrend = revenueRows
@@ -83,12 +91,14 @@ namespace GymManagement.Infrastructure.Services
 
             var churnCount = await _context.UserMemberships
                 .AsNoTracking()
+                .Where(m => unrestricted || (m.SellingBranchId != null && branchIds.Contains(m.SellingBranchId.Value)))
                 .CountAsync(m =>
                     (m.Status == MembershipStatus.Expired || m.Status == MembershipStatus.Cancelled) &&
                     m.EndDate.Date >= rangeFrom && m.EndDate.Date <= rangeTo);
 
             var activeAtStart = await _context.UserMemberships
                 .AsNoTracking()
+                .Where(m => unrestricted || (m.SellingBranchId != null && branchIds.Contains(m.SellingBranchId.Value)))
                 .CountAsync(m =>
                     m.Status == MembershipStatus.Active &&
                     m.StartDate.Date <= rangeFrom &&
@@ -150,30 +160,36 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<byte[]> ExportPaymentsCsvAsync(DateTime fromDate, DateTime toDate)
         {
-            var from = fromDate.Date;
-            var to = toDate.Date;
-            if (to < from) (from, to) = (to, from);
+            var rangeFrom = fromDate.Date;
+            var rangeTo = toDate.Date;
+            if (rangeTo < rangeFrom) (rangeFrom, rangeTo) = (rangeTo, rangeFrom);
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            var unrestricted = scope.IsUnrestricted;
+            var branchIds = scope.BranchIds.ToArray();
 
-            var rows = await _context.Payments
-                .AsNoTracking()
-                .Where(p => p.PaymentDate.Date >= from && p.PaymentDate.Date <= to)
-                .Select(p => new
+            var rows = await (
+                from p in _context.Payments.AsNoTracking()
+                join m in _context.UserMemberships.AsNoTracking() on p.MembershipId equals m.Id
+                where p.PaymentDate.Date >= rangeFrom && p.PaymentDate.Date <= rangeTo
+                      && (unrestricted || (m.SellingBranchId != null && branchIds.Contains(m.SellingBranchId.Value)))
+                select new
                 {
                     p.Id,
                     p.MembershipId,
                     p.Amount,
                     p.PaymentDate,
                     p.PaymentMode,
-                    p.ReceiptNo
+                    p.ReceiptNo,
+                    m.SellingBranchId
                 })
                 .OrderByDescending(p => p.PaymentDate)
                 .ToListAsync();
 
             var sb = new StringBuilder();
-            sb.AppendLine("PaymentId,MembershipId,Amount,PaymentDate,PaymentMode,ReceiptNo");
+            sb.AppendLine("PaymentId,MembershipId,Amount,PaymentDate,PaymentMode,ReceiptNo,SellingBranchId");
             foreach (var r in rows)
             {
-                sb.AppendLine($"{r.Id},{r.MembershipId},{r.Amount:F2},{r.PaymentDate:yyyy-MM-dd},{r.PaymentMode},{CsvEscape(r.ReceiptNo ?? string.Empty)}");
+                sb.AppendLine($"{r.Id},{r.MembershipId},{r.Amount:F2},{r.PaymentDate:yyyy-MM-dd},{r.PaymentMode},{CsvEscape(r.ReceiptNo ?? string.Empty)},{r.SellingBranchId}");
             }
             return Encoding.UTF8.GetBytes(sb.ToString());
         }

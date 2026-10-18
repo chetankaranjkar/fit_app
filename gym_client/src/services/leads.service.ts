@@ -21,6 +21,7 @@ export type ConvertLeadToMemberDto = {
   email?: string | null
   phone?: string | null
   memberUserTypeIds?: number[] | null
+  homeBranchId?: number | null
 }
 
 export const leadsService = {
@@ -53,6 +54,8 @@ export const leadsService = {
   updateTrial: (leadId: number, trialId: number, body: { feedback?: string | null; conversionProbability?: number | null }) =>
     api.patch<LeadTrial>(`/Leads/${leadId}/trials/${trialId}`, body),
 
+  assignInterestedBranch: (id: number, branchId: number) =>
+    api.put<GymLeadDetail>(`/Leads/${id}/interested-branch`, { branchId }),
   convert: (id: number, dto: ConvertLeadToMemberDto) =>
     api.post<{ lead: GymLeadDetail; member: unknown }>(`/Leads/${id}/convert`, {
       planId: dto.planId,

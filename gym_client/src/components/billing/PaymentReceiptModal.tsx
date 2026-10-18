@@ -18,6 +18,7 @@ export interface PaymentReceiptData {
   memberId: string
   memberPhotoUrl?: string | null
   planName?: string | null
+  sellingBranchName?: string | null
   amountPaid: number
   paymentMethod: MembershipPaymentMethod
   remainingBalance: number
@@ -84,6 +85,7 @@ function buildPrintDocument(receipt: PaymentReceiptData, branding: GymBranding |
     <strong>${receipt.memberName}</strong>
     <div>${receipt.memberId}</div>
     ${receipt.planName ? `<div>Plan: ${receipt.planName}</div>` : ''}
+    ${receipt.sellingBranchName ? `<div>Branch: ${receipt.sellingBranchName}</div>` : ''}
   </div>
   <div class="box">
     <div class="row"><span>Amount paid</span><strong>${formatInr(receipt.amountPaid)}</strong></div>
@@ -242,6 +244,7 @@ export function PaymentReceiptModal({
         </div>
 
         {receipt.planName && <p className="text-slate-600">Plan: {receipt.planName}</p>}
+        {receipt.sellingBranchName && <p className="text-slate-600">Branch: {receipt.sellingBranchName}</p>}
 
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1.5">
           <div className="flex justify-between gap-2">

@@ -15,7 +15,9 @@ public interface IBranchCrudService
 
     Task<BranchCrudDto> UpdateAsync(int id, BranchUpdateDto dto, CancellationToken cancellationToken = default);
 
-    Task SoftDeactivateAsync(int id, CancellationToken cancellationToken = default);
+    Task SoftDeactivateAsync(int id, string? handlingPolicy, int? actingUserId, CancellationToken cancellationToken = default);
+
+    Task<GymManagement.Core.Branching.BranchDeactivationCounts> PreviewDeactivationAsync(int id, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<OrganizationOptionDto>> OrganizationOptionsAsync(CancellationToken cancellationToken = default);
 }

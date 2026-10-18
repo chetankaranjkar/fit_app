@@ -12,6 +12,7 @@ export type CheckInBody = {
   loggedByUserId?: number
   checkInMethod?: string | null
   notes?: string | null
+  branchId?: number | null
 }
 
 export type CheckOutBody = {

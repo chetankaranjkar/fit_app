@@ -15,6 +15,7 @@ export interface Locker {
   size: LockerSize
   status: LockerStatus
   location?: string
+  branchId?: number
 }
 
 export interface LockerAssignment {

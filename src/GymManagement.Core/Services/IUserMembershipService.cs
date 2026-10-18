@@ -28,6 +28,10 @@ namespace GymManagement.Core.Services
         Task<UserMembershipDto> CreateAsync(CreateUserMembershipDto dto, int performedByUserId);
         Task<UserMembershipDto?> UpdateAsync(int id, UpdateUserMembershipDto dto, int performedByUserId);
         Task<UserMembershipDto> RenewAccessAsync(int id, RenewMembershipAccessDto? dto, int performedByUserId);
+
+        Task<MembershipVisitAccessDto> SetVisitAccessAsync(int id, SetMembershipVisitAccessDto dto, int performedByUserId);
+
+        Task<MembershipVisitAccessDto?> GetVisitAccessAsync(int id);
         Task<LastRenewalRevertPreviewDto?> GetLastRenewalRevertPreviewAsync(int membershipId);
         Task<UserMembershipDto> RevertLastRenewalAsync(int id, int performedByUserId);
     }

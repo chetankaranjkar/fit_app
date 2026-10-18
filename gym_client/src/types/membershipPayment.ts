@@ -91,6 +91,8 @@ export interface MembershipPaymentDetail {
   paymentNumber: string
   userId: number
   membershipId: number
+  sellingBranchId?: number | null
+  sellingBranchName?: string | null
   invoiceNumber?: string | null
   invoiceId?: number | null
   totalAmount: number

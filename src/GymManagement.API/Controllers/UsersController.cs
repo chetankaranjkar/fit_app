@@ -105,6 +105,7 @@ namespace GymManagement.API.Controllers
             [FromQuery] bool includeBilling = true,
             [FromQuery] string? preferredGymTime = null,
             [FromQuery] bool countOnly = false,
+            [FromQuery] int? homeBranchId = null,
             CancellationToken cancellationToken = default)
         {
             var safePage = page < 1 ? 1 : page;
@@ -130,7 +131,8 @@ namespace GymManagement.API.Controllers
                 includeBilling,
                 preferredGymTime,
                 assignedTrainerProfileId,
-                countOnly);
+                countOnly,
+                homeBranchId);
             return Ok(result);
         }
 
@@ -251,6 +253,10 @@ namespace GymManagement.API.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
             catch (DbUpdateException ex) when (IsDuplicatePhoneException(ex))
             {
                 return Conflict(new { message = "A user with this phone number already exists." });
@@ -262,6 +268,27 @@ namespace GymManagement.API.Controllers
             catch (DbUpdateException ex) when (IsDuplicateActiveMembershipIndex(ex))
             {
                 return Conflict(new { message = UserMembershipConflictCodes.Message });
+            }
+        }
+
+        public sealed class AssignHomeBranchRequest
+        {
+            public int BranchId { get; set; }
+        }
+
+        /// <summary>Sets a home branch only when the person does not already have one.</summary>
+        [HttpPut("{id:int}/home-branch")]
+        [HasPermission(PermissionCodes.CREATE_MEMBER)]
+        public async Task<ActionResult<UserDto>> AssignHomeBranch(int id, [FromBody] AssignHomeBranchRequest request)
+        {
+            try
+            {
+                var user = await _userService.AssignHomeBranchAsync(id, request.BranchId);
+                return user == null ? NotFound() : Ok(user);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
         }
 

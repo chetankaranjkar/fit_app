@@ -13,36 +13,46 @@ namespace GymManagement.Infrastructure.Services
         private readonly ApplicationDbContext _db;
         private readonly IUserService _userService;
         private readonly IAuthService _authService;
+        private readonly IBranchAssignmentService _branches;
         private readonly CommercialOptions _options;
 
         public CommercialSignupService(
             ApplicationDbContext db,
             IUserService userService,
             IAuthService authService,
+            IBranchAssignmentService branches,
             IOptions<CommercialOptions> options)
         {
             _db = db;
             _userService = userService;
             _authService = authService;
+            _branches = branches;
             _options = options.Value;
         }
 
-        public async Task<IReadOnlyList<PublicMembershipPlanDto>> GetPublicPlansAsync(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<PublicMembershipPlanDto>> GetPublicPlansAsync(
+            int branchId,
+            CancellationToken cancellationToken = default)
         {
-            var plans = await _db.MembershipPlans.AsNoTracking()
-                .Where(p => !p.IsDeleted)
-                .OrderBy(p => p.Price)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            return plans.Select(p => new PublicMembershipPlanDto
+            var offers = await _branches.ListOffersAsync(branchId, cancellationToken).ConfigureAwait(false);
+            return offers.Select(p => new PublicMembershipPlanDto
             {
-                Id = p.Id,
+                Id = p.PlanId,
                 PlanName = p.PlanName,
                 DurationDays = p.DurationDays,
                 Price = p.Price,
                 Description = p.Description,
             }).ToList();
+        }
+
+        public async Task<IReadOnlyList<PublicBranchOptionDto>> GetPublicBranchesAsync(CancellationToken cancellationToken = default)
+        {
+            return await _db.Branches.AsNoTracking()
+                .Where(b => b.IsActive)
+                .OrderBy(b => b.BranchName)
+                .Select(b => new PublicBranchOptionDto { Id = b.Id, Name = b.BranchName })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
         }
 
         public async Task<PublicSignupResultDto> SignupAsync(
@@ -94,6 +104,7 @@ namespace GymManagement.Infrastructure.Services
                 Gender = gender,
                 IsActive = true,
                 PlanId = request.PlanId,
+                HomeBranchId = request.HomeBranchId,
                 MembershipStartDate = DateTime.UtcNow.Date,
                 Role = Role.User,
             };

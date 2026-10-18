@@ -44,6 +44,8 @@ namespace GymManagement.Domain.Entities.Retail
         public int? PerformedByUserId { get; set; }
 
         public string? Notes { get; set; }
+        /// <summary>Branch whose stock this movement changed. Null on rows written before branch stock.</summary>
+        public int? BranchId { get; set; }
 
         // Navigation
         public Product Product { get; set; } = null!;

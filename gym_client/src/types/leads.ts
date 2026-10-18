@@ -19,6 +19,8 @@ export type GymLeadSummary = {
   nextFollowUpAt?: string | null
   createdDate: string
   convertedMemberId?: number | null
+  interestedBranchId?: number | null
+  interestedBranchName?: string | null
 }
 
 export type LeadFollowup = {
@@ -57,6 +59,7 @@ export type GymLeadDetail = GymLeadSummary & {
 
 export type CreateGymLeadDto = {
   fullName: string
+  interestedBranchId?: number | null
   phone?: string | null
   email?: string | null
   gender: string

@@ -1,4 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { useBranchScope } from '../../../features/branch/BranchScopeContext'
+import { BranchChoiceField } from '../../../features/branch/BranchChoiceField'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
@@ -1081,6 +1083,11 @@ function EquipmentForm({
   const toDateInput = (iso?: string) => (iso ? iso.slice(0, 10) : '')
 
   const [name, setName] = useState(equipment?.name ?? '')
+  const branchScope = useBranchScope()
+  const [branchId, setBranchId] = useState<number | undefined>()
+  const chooseBranch = useCallback((id: number | undefined) => {
+    setBranchId((current) => (current === id ? current : id))
+  }, [])
   const [category, setCategory] = useState<EquipmentCategory>(
     equipment?.category ?? 'Cardio',
   )
@@ -1126,11 +1133,20 @@ function EquipmentForm({
         ? new Date(nextServiceDate).toISOString()
         : undefined,
       notes: notes.trim() || undefined,
+      branchId,
     })
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <BranchChoiceField
+        branches={branchScope ? branchScope.branches : null}
+        value={branchId}
+        onChange={chooseBranch}
+        defaultBranchId={branchScope?.defaultBranchId}
+        label="Home branch of this asset"
+        reason="Each physical asset belongs to one branch. Maintenance keeps the branch where the work happened."
+      />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <LabeledInput
           label="Equipment name"

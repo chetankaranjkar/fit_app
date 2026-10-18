@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useClientPagination } from '../hooks/useClientPagination'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -16,6 +16,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { membershipPlansService } from '../services/membershipPlans.service'
+import { branchesService, type PlanBranchPriceSetting } from '../services/branches.service'
 import { formatInr, formatInrWhole } from '../lib/formatInr'
 import type {
   MembershipPlan,
@@ -66,6 +67,7 @@ export function MembershipPlansPage() {
   const [editing, setEditing] = useState<MembershipPlan | null>(null)
   const [form, setForm] = useState<CreateMembershipPlanDto>(defaultCreate)
   const [formError, setFormError] = useState<string | null>(null)
+  const [pricingPlan, setPricingPlan] = useState<MembershipPlan | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
 
@@ -234,6 +236,7 @@ export function MembershipPlansPage() {
             row={row}
             actions={[
               { id: 'edit', label: 'Edit', onClick: openEdit },
+              { id: 'prices', label: 'Branch prices', onClick: setPricingPlan },
               { id: 'delete', label: 'Delete', variant: 'danger', onClick: handleDelete },
             ]}
           />
@@ -248,7 +251,7 @@ export function MembershipPlansPage() {
       <DashboardSubpageShell
         eyebrow="Catalog"
         titleGradient="membership plans"
-        subtitle="Define billing tiers with duration and price for member subscriptions."
+        subtitle="Shared plans. Branch prices and availability are set per gym and used at sale time."
         primaryAction={{ label: '+ Add plan', onClick: openAdd }}
       >
         <DataPageSection>
@@ -354,6 +357,95 @@ export function MembershipPlansPage() {
           </div>
         </form>
       </Modal>
+      <BranchPlanPricesModal plan={pricingPlan} onClose={() => setPricingPlan(null)} />
     </DashboardLayout>
+  )
+}
+
+function BranchPlanPricesModal({ plan, onClose }: { plan: MembershipPlan | null; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [drafts, setDrafts] = useState<Record<number, { price: string; isAvailable: boolean }>>({})
+  const [error, setError] = useState<string | null>(null)
+
+  const pricesQuery = useQuery({
+    queryKey: ['plan-branch-prices', plan?.id],
+    enabled: plan != null,
+    queryFn: async () => (await branchesService.planPrices(plan!.id)).data,
+  })
+
+  useEffect(() => {
+    const next: Record<number, { price: string; isAvailable: boolean }> = {}
+    for (const row of pricesQuery.data ?? []) {
+      next[row.branchId] = {
+        price: row.price == null ? '' : String(row.price),
+        isAvailable: row.isAvailable,
+      }
+    }
+    setDrafts(next)
+  }, [pricesQuery.data])
+
+  const saveMutation = useMutation({
+    mutationFn: async (row: PlanBranchPriceSetting) => {
+      const draft = drafts[row.branchId]
+      const price = Number(draft?.price)
+      if (!Number.isFinite(price) || price < 0) throw new Error('Enter a price of zero or more.')
+      await branchesService.savePlanPrice({
+        planId: plan!.id,
+        branchId: row.branchId,
+        price,
+        isAvailable: draft?.isAvailable ?? false,
+      })
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['plan-branch-prices', plan?.id] })
+      setError(null)
+      toast.success('Branch price saved.')
+    },
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : 'Could not save the branch price.'),
+  })
+
+  return (
+    <Modal open={plan != null} onClose={onClose} title={plan ? `${plan.planName} branch prices` : 'Branch prices'} size="wide" scrollable>
+      <div className="space-y-3 text-sm">
+        <p className="text-slate-400">
+          The catalog price is used only while this plan has no branch prices. After a branch price exists, a sale at another branch needs its own price. Unavailable branches are not offered.
+        </p>
+        {error ? <p className="text-rose-300">{error}</p> : null}
+        {(pricesQuery.data ?? []).map((row) => {
+          const draft = drafts[row.branchId] ?? { price: '', isAvailable: false }
+          return (
+            <div key={row.branchId} className="grid items-end gap-2 rounded-xl border border-white/10 p-3 sm:grid-cols-[1fr_140px_auto_auto]">
+              <div>
+                <p className="font-medium text-white">{row.branchName}</p>
+                <p className="text-xs text-slate-500">{row.branchActive ? 'Active' : 'Inactive'}{row.isConfigured ? '' : ' · catalog price until saved'}</p>
+              </div>
+              <Input
+                label="Price (₹)"
+                type="number"
+                min={0}
+                step={0.01}
+                value={draft.price}
+                onChange={(e) =>
+                  setDrafts((current) => ({ ...current, [row.branchId]: { ...draft, price: e.target.value } }))
+                }
+              />
+              <label className="mb-2 flex items-center gap-2 text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={draft.isAvailable}
+                  onChange={(e) =>
+                    setDrafts((current) => ({ ...current, [row.branchId]: { ...draft, isAvailable: e.target.checked } }))
+                  }
+                />
+                Available
+              </label>
+              <Button type="button" size="sm" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate(row)}>
+                Save
+              </Button>
+            </div>
+          )
+        })}
+      </div>
+    </Modal>
   )
 }

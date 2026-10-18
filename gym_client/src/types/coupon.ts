@@ -17,6 +17,7 @@ export interface Coupon {
   perUserLimit: number
   applicableMembershipIds?: number[] | null
   applicableBranchIds?: number[] | null
+  branchScope?: 'SelectedBranches' | 'AllBranches' | string | null
   applicableUserTypes?: string[] | null
   status: CouponStatus
   createdByUserId?: number | null
@@ -39,6 +40,7 @@ export interface CreateCouponDto {
   perUserLimit: number
   applicableMembershipIds?: number[]
   applicableBranchIds?: number[]
+  branchScope?: 'SelectedBranches' | 'AllBranches'
   applicableUserTypes?: string[]
 }
 
@@ -55,6 +57,7 @@ export interface UpdateCouponDto {
   perUserLimit?: number
   applicableMembershipIds?: number[]
   applicableBranchIds?: number[]
+  branchScope?: 'SelectedBranches' | 'AllBranches'
   applicableUserTypes?: string[]
   status?: CouponStatus
 }

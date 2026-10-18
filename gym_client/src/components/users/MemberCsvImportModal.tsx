@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useBranchScope } from '../../features/branch/BranchScopeContext'
+import { BranchChoiceField, MEMBER_BRANCH_REASON } from '../../features/branch/BranchChoiceField'
 import toast from 'react-hot-toast'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
@@ -24,9 +26,10 @@ type Props = {
   open: boolean
   onClose: () => void
   onImported: () => Promise<void>
+  initialBranchId?: number
 }
 
-function toPayload(r: ParsedMemberRow): CreateUserDto {
+function toPayload(r: ParsedMemberRow, homeBranchId?: number): CreateUserDto {
   return {
     firstName: r.firstName,
     lastName: r.lastName,
@@ -50,6 +53,7 @@ function toPayload(r: ParsedMemberRow): CreateUserDto {
     instructorBio: undefined,
     instructorHireDate: undefined,
     sourceRowNumber: r.sourceRowNumber,
+    homeBranchId,
   }
 }
 
@@ -79,7 +83,7 @@ function mergePreviewRows(
   return [...fromClient, ...fromServer].sort((a, b) => a.sourceRowNumber - b.sourceRowNumber)
 }
 
-export function MemberCsvImportModal({ open, onClose, onImported }: Props) {
+export function MemberCsvImportModal({ open, onClose, onImported, initialBranchId }: Props) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [fileName, setFileName] = useState<string | null>(null)
   const [payloads, setPayloads] = useState<CreateUserDto[]>([])
@@ -88,6 +92,8 @@ export function MemberCsvImportModal({ open, onClose, onImported }: Props) {
   const [result, setResult] = useState<BulkImportMembersResult | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [importBranchId, setImportBranchId] = useState<number | undefined>()
+  const scope = useBranchScope()
 
   useEffect(() => {
     if (!open) return
@@ -99,7 +105,8 @@ export function MemberCsvImportModal({ open, onClose, onImported }: Props) {
     setResult(null)
     setProgress(null)
     setError(null)
-  }, [open])
+    if (initialBranchId) setImportBranchId(initialBranchId)
+  }, [open, initialBranchId])
 
   const displayRows = mergePreviewRows(clientIssues, result ?? preview)
   const failedRows = displayRows.filter((r) => r.outcome === 'failed')
@@ -118,8 +125,41 @@ export function MemberCsvImportModal({ open, onClose, onImported }: Props) {
       const text = await file.text()
       const grid = parseCsvLines(text)
       const parsed = rowsToMemberImports(grid)
-      setClientIssues(parsed.issues)
-      const nextPayloads = parsed.rows.map(toPayload)
+      const issues = [...parsed.issues]
+      const branches = scope?.branches ?? []
+      const nextPayloads = parsed.rows.flatMap((row) => {
+        const raw = row.homeBranch?.trim()
+        let branchId = importBranchId
+        if (raw) {
+          const asNumber = Number(raw)
+          const match = Number.isInteger(asNumber) && asNumber > 0
+            ? branches.find((branch) => branch.id === asNumber)
+            : branches.find((branch) => branch.name.toLowerCase() === raw.toLowerCase())
+          if (!match) {
+            issues.push({
+              sourceRowNumber: row.sourceRowNumber,
+              field: 'homeBranch',
+              code: 'unknown_branch',
+              message: `Row ${row.sourceRowNumber}: branch "${raw}" was not found.`,
+              howToFix: 'Use an active branch name or id, or choose the branch on this screen.',
+            })
+            return []
+          }
+          branchId = match.id
+        }
+        if (!branchId && branches.length !== 1 && !(scope?.defaultBranchId && branches.some((branch) => branch.id === scope.defaultBranchId))) {
+          issues.push({
+            sourceRowNumber: row.sourceRowNumber,
+            field: 'homeBranch',
+            code: 'branch_required',
+            message: `Row ${row.sourceRowNumber}: home branch is required.`,
+            howToFix: 'Select a branch for this import or add a homeBranch column.',
+          })
+          return []
+        }
+        return [toPayload(row, branchId ?? (branches.length === 1 ? branches[0].id : scope?.defaultBranchId ?? undefined))]
+      })
+      setClientIssues(issues)
       setPayloads(nextPayloads)
       if (nextPayloads.length === 0) {
         setPhase('ready')
@@ -223,6 +263,15 @@ export function MemberCsvImportModal({ open, onClose, onImported }: Props) {
   return (
     <Modal open={open} onClose={() => !busy && onClose()} title="Import members from CSV" size="wide" scrollable>
       <div className="space-y-4 text-sm" data-testid="member-csv-import-modal">
+        <BranchChoiceField
+          branches={scope ? scope.branches : null}
+          value={importBranchId}
+          onChange={setImportBranchId}
+          reason={MEMBER_BRANCH_REASON}
+          label="Home branch for rows without a homeBranch column"
+          defaultBranchId={scope?.defaultBranchId}
+          returnTo="/dashboard/users?resume=import"
+        />
         <div data-testid="member-csv-required-columns" className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Required columns</p>
           <ul className="space-y-1.5 text-slate-300">

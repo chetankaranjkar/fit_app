@@ -23,6 +23,7 @@ public sealed class GymQrService : IGymQrService
     private readonly IUnitOfWork _uow;
     private readonly IDoorUnlockService _doorUnlock;
     private readonly ILogger<GymQrService> _logger;
+    private readonly IBranchAssignmentService _branches;
 
     /// <summary>Default 100 m plus per-branch offset, clamped to 10…10,000 m.</summary>
     public static int EffectiveCheckInRadiusMeters(int checkInRadiusOffsetMeters) =>
@@ -35,12 +36,14 @@ public sealed class GymQrService : IGymQrService
         ApplicationDbContext db,
         IUnitOfWork uow,
         IDoorUnlockService doorUnlock,
-        ILogger<GymQrService> logger)
+        ILogger<GymQrService> logger,
+        IBranchAssignmentService branches)
     {
         _db = db;
         _uow = uow;
         _doorUnlock = doorUnlock;
         _logger = logger;
+        _branches = branches;
     }
 
     public async Task<QrGenerateResponseDto> GenerateAsync(int branchId, CancellationToken cancellationToken = default)
@@ -171,10 +174,14 @@ public sealed class GymQrService : IGymQrService
             return denial;
         }
 
+        if (!await _branches.MembershipAllowsBranchAsync(memberUserId, branch.Id, cancellationToken).ConfigureAwait(false))
+            return Fail(GymManagement.Core.Branching.BranchAccessRules.BranchNotPermittedMessage, "branch_not_allowed");
+
         var notes = $"lat:{request.Latitude:F6}|lng:{request.Longitude:F6}|token:{token}|distM:{meters:F1}";
         var log = new AttendanceLog
         {
             UserId = memberUserId,
+            BranchId = branch.Id,
             LoggedByUserId = null,
             CheckInTime = nowUtc,
             AttendanceDate = GymCalendar.AttendanceDateFromUtc(nowUtc),

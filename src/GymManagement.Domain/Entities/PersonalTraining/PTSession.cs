@@ -19,6 +19,7 @@ namespace GymManagement.Domain.Entities.PersonalTraining
         public string? Notes { get; set; }
 
         public int? OrganizationId { get; set; }
+        public int? BranchId { get; set; }
 
         public MemberPTPackage MemberPTPackage { get; set; } = null!;
         public User User { get; set; } = null!;

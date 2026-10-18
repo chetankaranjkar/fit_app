@@ -10,6 +10,7 @@ import { getApiErrorMessage } from '../lib/apiErrors'
 import { getPostLoginPath, resolveDashboardRole } from '../features/auth/roleRouting'
 import { useRazorpayCheckout } from '../features/commercial/useRazorpayCheckout'
 import { formatInr } from '../lib/formatInr'
+import { BranchChoiceField, SIGNUP_BRANCH_REASON } from '../features/branch/BranchChoiceField'
 
 export function SignupPage() {
   const navigate = useNavigate()
@@ -21,12 +22,6 @@ export function SignupPage() {
     queryFn: async () => (await commercialService.getConfig()).data,
   })
 
-  const plansQuery = useQuery({
-    queryKey: ['public-membership-plans'],
-    queryFn: async () => (await commercialService.getPlans()).data,
-    enabled: Boolean(configQuery.data?.enableSelfSignup),
-  })
-
   const initialPlanId = Number(searchParams.get('planId') ?? 0)
 
   const [firstName, setFirstName] = useState('')
@@ -35,6 +30,19 @@ export function SignupPage() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [planId, setPlanId] = useState(initialPlanId > 0 ? initialPlanId : 0)
+  const [homeBranchId, setHomeBranchId] = useState<number | undefined>()
+
+  const branchesQuery = useQuery({
+    queryKey: ['public-branches'],
+    queryFn: async () => (await commercialService.getBranches()).data,
+    enabled: Boolean(configQuery.data?.enableSelfSignup),
+  })
+
+  const plansQuery = useQuery({
+    queryKey: ['public-membership-plans', homeBranchId],
+    queryFn: async () => (await commercialService.getPlans(homeBranchId!)).data,
+    enabled: Boolean(configQuery.data?.enableSelfSignup && homeBranchId),
+  })
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
   const [payMessage, setPayMessage] = useState<string | null>(null)
   const [paying, setPaying] = useState(false)
@@ -42,6 +50,38 @@ export function SignupPage() {
   useEffect(() => {
     if (initialPlanId > 0) setPlanId(initialPlanId)
   }, [initialPlanId])
+
+  useEffect(() => {
+    if (!plansQuery.data || planId <= 0) return
+    if (!plansQuery.data.some((plan) => plan.id === planId)) setPlanId(0)
+  }, [plansQuery.data, planId])
+
+  useEffect(() => {
+    const branchId = Number(searchParams.get('branchId') || 0)
+    try {
+      const raw = sessionStorage.getItem('gym.signupDraft')
+      if (raw) {
+        const draft = JSON.parse(raw) as {
+          firstName?: string
+          lastName?: string
+          email?: string
+          phone?: string
+          planId?: number
+          homeBranchId?: number
+        }
+        if (draft.firstName) setFirstName(draft.firstName)
+        if (draft.lastName) setLastName(draft.lastName)
+        if (draft.email) setEmail(draft.email)
+        if (draft.phone) setPhone(draft.phone)
+        if (draft.planId) setPlanId(draft.planId)
+        if (draft.homeBranchId) setHomeBranchId(draft.homeBranchId)
+        sessionStorage.removeItem('gym.signupDraft')
+      }
+    } catch {
+      /* ignore */
+    }
+    if (branchId > 0) setHomeBranchId(branchId)
+  }, [searchParams])
 
   const selectedPlan = useMemo(
     () => plansQuery.data?.find((p) => p.id === planId) ?? null,
@@ -57,6 +97,7 @@ export function SignupPage() {
         phone: phone.trim(),
         password,
         planId,
+        homeBranchId,
       }),
     onSuccess: async (response) => {
       const data = response.data
@@ -123,6 +164,15 @@ export function SignupPage() {
     }
     if (planId <= 0) {
       setValidationMessage('Select a membership plan.')
+      return
+    }
+    const branches = branchesQuery.data ?? []
+    if (branches.length === 0) {
+      setValidationMessage('Create a branch to continue.')
+      return
+    }
+    if (branches.length > 1 && !homeBranchId) {
+      setValidationMessage('Select a branch.')
       return
     }
     signupMutation.mutate()
@@ -199,10 +249,28 @@ export function SignupPage() {
               required
             />
 
+            <BranchChoiceField
+              branches={branchesQuery.isLoading ? null : (branchesQuery.data ?? [])}
+              value={homeBranchId}
+              onChange={setHomeBranchId}
+              reason={SIGNUP_BRANCH_REASON}
+              label="Home branch"
+              returnTo="/signup"
+              onBeforeCreateBranch={() => {
+                sessionStorage.setItem(
+                  'gym.signupDraft',
+                  JSON.stringify({ firstName, lastName, email, phone, planId, homeBranchId }),
+                )
+              }}
+            />
+
             <fieldset>
               <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Membership plan
               </legend>
+              {!homeBranchId ? (
+                <p className="text-sm text-slate-400">Select a branch to see plans and fees.</p>
+              ) : null}
               <div className="space-y-2">
                 {(plansQuery.data ?? []).map((plan: PublicMembershipPlan) => (
                   <label

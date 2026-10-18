@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using GymManagement.Core.Branching;
 using GymManagement.Core.DTOs;
 
 using GymManagement.Core.DTOs.Common;
@@ -33,6 +34,8 @@ namespace GymManagement.Infrastructure.Services
         private readonly IMembershipAuditService _audit;
 
         private readonly ApplicationDbContext _db;
+        private readonly IBranchScopeService _scope;
+        private readonly IBranchAssignmentService _branches;
 
 
 
@@ -44,7 +47,9 @@ namespace GymManagement.Infrastructure.Services
 
             IMembershipAuditService audit,
 
-            ApplicationDbContext db)
+            ApplicationDbContext db,
+            IBranchScopeService scope,
+            IBranchAssignmentService branches)
 
         {
 
@@ -55,6 +60,8 @@ namespace GymManagement.Infrastructure.Services
             _audit = audit;
 
             _db = db;
+            _scope = scope;
+            _branches = branches;
 
         }
 
@@ -64,7 +71,10 @@ namespace GymManagement.Infrastructure.Services
 
         {
 
-            var list = await _unitOfWork.UserMemberships.GetAllAsync();
+            var list = (await _unitOfWork.UserMemberships.GetAllAsync()).ToList();
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (!scope.IsUnrestricted)
+                list = list.Where(m => m.UserId == scope.ActorUserId || scope.Includes(m.SellingBranchId)).ToList();
 
             return await MapToDtosAsync(list);
 
@@ -85,6 +95,9 @@ namespace GymManagement.Infrastructure.Services
                 .ThenByDescending(m => m.Id)
 
                 .ToListAsync();
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (!scope.IsUnrestricted && userId != scope.ActorUserId)
+                list = list.Where(m => scope.Includes(m.SellingBranchId)).ToList();
 
             return await MapToDtosAsync(list);
 
@@ -96,7 +109,7 @@ namespace GymManagement.Infrastructure.Services
         {
             var today = DateTime.UtcNow.Date;
             var windowEnd = today.AddDays(14);
-            var operational = OperationalMembershipsQuery();
+            var operational = await ApplySellingBranchScopeAsync(OperationalMembershipsQuery()).ConfigureAwait(false);
             var renewingStatuses = new[]
             {
                 MembershipStatus.Active,
@@ -145,6 +158,7 @@ namespace GymManagement.Infrastructure.Services
             IQueryable<UserMembership> query = _db.UserMemberships
                 .AsNoTracking()
                 .Where(m => !m.IsDeleted);
+            query = await ApplySellingBranchScopeAsync(query).ConfigureAwait(false);
 
             if (membershipId.HasValue && membershipId.Value > 0)
             {
@@ -237,6 +251,26 @@ namespace GymManagement.Infrastructure.Services
                 && m.Status != MembershipStatus.Cancelled
                 && m.Status != MembershipStatus.Transferred);
 
+        private async Task<IQueryable<UserMembership>> ApplySellingBranchScopeAsync(IQueryable<UserMembership> query)
+        {
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (scope.IsUnrestricted)
+                return query;
+            var branchIds = scope.BranchIds.ToArray();
+            var actor = scope.ActorUserId;
+            return query.Where(m =>
+                m.UserId == actor
+                || (m.SellingBranchId != null && branchIds.Contains(m.SellingBranchId.Value)));
+        }
+
+        private async Task<bool> MembershipVisibleAsync(UserMembership membership)
+        {
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            return scope.IsUnrestricted
+                || membership.UserId == scope.ActorUserId
+                || scope.Includes(membership.SellingBranchId);
+        }
+
         public async Task<PagedResultDto<ExpiringMembershipQueueItemDto>> GetExpiringQueueAsync(
             int withinDays,
             int page,
@@ -282,6 +316,7 @@ namespace GymManagement.Infrastructure.Services
                     || _db.MembershipPlans.Any(p => p.Id == m.PlanId && EF.Functions.Like(p.PlanName, likeSearch)));
             }
 
+            query = await ApplySellingBranchScopeAsync(query).ConfigureAwait(false);
             var totalCount = await query.CountAsync();
             var pageItems = await query
                 .OrderBy(m => m.Status == MembershipStatus.Expired ? 0 : 1)
@@ -358,7 +393,7 @@ namespace GymManagement.Infrastructure.Services
 
             var m = await _unitOfWork.UserMemberships.GetByIdAsync(id);
 
-            if (m == null) return null;
+            if (m == null || !await MembershipVisibleAsync(m).ConfigureAwait(false)) return null;
 
             var dtos = await MapToDtosAsync(new[] { m });
 
@@ -430,8 +465,18 @@ namespace GymManagement.Infrastructure.Services
             await MemberAccountReactivation.EnsureActiveForNewMembershipAsync(_unitOfWork, m.UserId);
 
             if (user != null && plan != null)
-
+            {
+                if (user.HomeBranchId is not int homeBranchId)
+                    throw new BadRequestException(GymManagement.Core.Branching.BranchAccessRules.SaleBranchRequiredMessage);
+                var assigned = await _scope.RequireAssignableBranchAsync(homeBranchId, user.OrganizationId);
+                m.SellingBranchId = assigned.BranchId;
+                m.AgreedPrice = await SalePriceAsync(plan.Id, assigned.BranchId, plan.Price);
+                if (string.IsNullOrWhiteSpace(m.AccessScope))
+                    m.AccessScope = nameof(GymManagement.Core.Branching.BranchAccessRules.MembershipAccessScope.HomeOnly);
+                _unitOfWork.UserMemberships.Update(m);
+                await _unitOfWork.SaveChangesAsync();
                 await _membershipPaymentService.EnsureBillingForNewMembershipAsync(user, m, plan);
+            }
 
 
 
@@ -471,7 +516,7 @@ namespace GymManagement.Infrastructure.Services
 
             var m = await _unitOfWork.UserMemberships.GetByIdAsync(id);
 
-            if (m == null) return null;
+            if (m == null || !await MembershipVisibleAsync(m).ConfigureAwait(false)) return null;
 
 
 
@@ -582,6 +627,51 @@ namespace GymManagement.Infrastructure.Services
 
         }
 
+        public async Task<MembershipVisitAccessDto?> GetVisitAccessAsync(int id)
+        {
+            var membership = await _unitOfWork.UserMemberships.GetByIdAsync(id);
+            if (membership == null || !await MembershipVisibleAsync(membership).ConfigureAwait(false))
+                return null;
+            var branchIds = await _db.UserMembershipAccessBranches.AsNoTracking()
+                .Where(a => a.UserMembershipId == id)
+                .Select(a => a.BranchId)
+                .ToListAsync();
+            return new MembershipVisitAccessDto
+            {
+                MembershipId = id,
+                AccessScope = string.IsNullOrWhiteSpace(membership.AccessScope) ? "HomeOnly" : membership.AccessScope,
+                BranchIds = branchIds,
+            };
+        }
+
+        public async Task<MembershipVisitAccessDto> SetVisitAccessAsync(int id, SetMembershipVisitAccessDto dto, int performedByUserId)
+        {
+            var membership = await _unitOfWork.UserMemberships.GetByIdAsync(id)
+                ?? throw new NotFoundException("Membership not found.");
+            if (!await MembershipVisibleAsync(membership).ConfigureAwait(false))
+                throw new NotFoundException("Membership not found.");
+            var decision = BranchAccessRules.NormalizeTransferDecision(dto.AccessScope, false);
+            if (decision == "Unchanged")
+                throw new BadRequestException(BranchAccessRules.TransferAccessDecisionMessage);
+            var before = membership.AccessScope;
+            membership.AccessScope = decision;
+            if (decision == nameof(BranchAccessRules.MembershipAccessScope.Selected))
+            {
+                var ids = BranchAccessRules.DistinctBranchIds(dto.BranchIds ?? new List<int>());
+                if (ids.Count == 0)
+                    throw new BadRequestException("Select the branches this membership may visit.");
+                var existing = await _db.UserMembershipAccessBranches.Where(a => a.UserMembershipId == id).ToListAsync();
+                _db.UserMembershipAccessBranches.RemoveRange(existing);
+                foreach (var branchId in ids)
+                    _db.UserMembershipAccessBranches.Add(new UserMembershipAccessBranch { UserMembershipId = id, BranchId = branchId });
+            }
+
+            _unitOfWork.UserMemberships.Update(membership);
+            await _unitOfWork.SaveChangesAsync();
+            await _audit.LogAsync(id, MembershipAuditAction.Updated, performedByUserId, before, decision);
+            return (await GetVisitAccessAsync(id))!;
+        }
+
         public async Task<UserMembershipDto> RenewAccessAsync(
             int id,
             RenewMembershipAccessDto? dto,
@@ -589,6 +679,8 @@ namespace GymManagement.Infrastructure.Services
         {
             var m = await _unitOfWork.UserMemberships.GetByIdAsync(id)
                 ?? throw new NotFoundException("Membership not found.");
+            if (!await MembershipVisibleAsync(m).ConfigureAwait(false))
+                throw new NotFoundException("Membership not found.");
 
             if (m.Status is MembershipStatus.Voided or MembershipStatus.Transferred)
                 throw new BadRequestException("Voided or transferred memberships cannot be renewed.");
@@ -618,6 +710,7 @@ namespace GymManagement.Infrastructure.Services
             if (plan.DurationDays <= 0)
                 throw new BadRequestException("Could not resolve plan duration.");
 
+            var previousEnd = m.EndDate;
             var oldSnapshot = JsonSerializer.Serialize(new
             {
                 m.PlanId,
@@ -631,7 +724,26 @@ namespace GymManagement.Infrastructure.Services
 
             m.EndDate = m.EndDate.Date.AddDays(plan.DurationDays);
 
+            var member = await _db.Users.AsNoTracking()
+                .Where(u => u.Id == m.UserId)
+                .Select(u => new { u.HomeBranchId, u.OrganizationId })
+                .FirstAsync();
+            var saleBranchId = member.HomeBranchId ?? m.SellingBranchId;
+            if (saleBranchId is not int renewalBranchId)
+                throw new BadRequestException(GymManagement.Core.Branching.BranchAccessRules.SelectBranchMessage);
+            var renewalBranch = await _scope.RequireAssignableBranchAsync(renewalBranchId, member.OrganizationId);
+            var renewalPrice = await SalePriceAsync(plan.Id, renewalBranch.BranchId, plan.Price);
+
             _unitOfWork.UserMemberships.Update(m);
+            _db.MembershipBillingPeriods.Add(new MembershipBillingPeriod
+            {
+                UserMembershipId = m.Id,
+                SellingBranchId = renewalBranch.BranchId,
+                AgreedPrice = renewalPrice,
+                FeeType = "Renewal",
+                PeriodStart = previousEnd,
+                PeriodEnd = m.EndDate,
+            });
             await _unitOfWork.SaveChangesAsync();
 
             await _audit.LogAsync(
@@ -655,7 +767,7 @@ namespace GymManagement.Infrastructure.Services
         public async Task<LastRenewalRevertPreviewDto?> GetLastRenewalRevertPreviewAsync(int membershipId)
         {
             var m = await _unitOfWork.UserMemberships.GetByIdAsync(membershipId);
-            if (m == null) return null;
+            if (m == null || !await MembershipVisibleAsync(m).ConfigureAwait(false)) return null;
 
             var renewedLog = await FindLastRenewedAuditWithSnapshotAsync(membershipId);
             if (renewedLog == null || !TryParseMembershipSnapshot(renewedLog.OldValue, out var snapshot))
@@ -696,6 +808,8 @@ namespace GymManagement.Infrastructure.Services
         {
             var m = await _unitOfWork.UserMemberships.GetByIdAsync(id)
                 ?? throw new NotFoundException("Membership not found.");
+            if (!await MembershipVisibleAsync(m).ConfigureAwait(false))
+                throw new NotFoundException("Membership not found.");
 
             if (m.Status is MembershipStatus.Voided or MembershipStatus.Transferred)
                 throw new BadRequestException("Voided or transferred memberships cannot be reverted.");
@@ -716,6 +830,13 @@ namespace GymManagement.Infrastructure.Services
                 m.EndDate,
                 m.Status,
             });
+
+            var renewalPeriod = await _db.MembershipBillingPeriods
+                .Where(p => p.UserMembershipId == id && p.FeeType == "Renewal" && p.PeriodEnd == m.EndDate)
+                .OrderByDescending(p => p.Id)
+                .FirstOrDefaultAsync();
+            if (renewalPeriod != null)
+                _db.MembershipBillingPeriods.Remove(renewalPeriod);
 
             m.PlanId = snapshot.PlanId;
             m.StartDate = snapshot.StartDate;
@@ -741,6 +862,18 @@ namespace GymManagement.Infrastructure.Services
 
             var dtos = await MapToDtosAsync(new[] { m });
             return dtos.First();
+        }
+
+        private async Task<decimal> SalePriceAsync(int planId, int branchId, decimal catalogPrice)
+        {
+            try
+            {
+                return await _branches.ResolveSalePriceAsync(planId, branchId, catalogPrice);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new BadRequestException(ex.Message);
+            }
         }
 
         private async Task<MembershipAuditLog?> FindLastRenewedAuditWithSnapshotAsync(int membershipId) =>

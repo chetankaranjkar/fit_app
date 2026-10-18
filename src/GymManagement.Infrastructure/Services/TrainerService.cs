@@ -16,15 +16,18 @@ namespace GymManagement.Infrastructure.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _context;
         private readonly ICurrentUserAccessContext _accessContext;
+        private readonly IBranchScopeService _scope;
 
         public TrainerService(
             IUnitOfWork unitOfWork,
             ApplicationDbContext context,
-            ICurrentUserAccessContext accessContext)
+            ICurrentUserAccessContext accessContext,
+            IBranchScopeService scope)
         {
             _unitOfWork = unitOfWork;
             _context = context;
             _accessContext = accessContext;
+            _scope = scope;
         }
 
         public async Task<PagedResultDto<TrainerDto>> GetPagedAsync(
@@ -65,6 +68,8 @@ namespace GymManagement.Infrastructure.Services
                         a.UserId == t.UserId && EF.Functions.Like(a.Email, likeSearch)));
             }
 
+            query = await ApplyTrainerScopeAsync(query).ConfigureAwait(false);
+
             var isAsc = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
             query = (sortBy ?? "name").Trim().ToLowerInvariant() switch
             {
@@ -96,8 +101,9 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<TrainerStatsDto> GetTrainerStatsAsync()
         {
-            var trainers = await _context.Trainers.AsNoTracking()
-                .WhereUserHasTrainerRole(_context)
+            var trainers = await (await ApplyTrainerScopeAsync(
+                    _context.Trainers.AsNoTracking().WhereUserHasTrainerRole(_context))
+                .ConfigureAwait(false))
                 .ToListAsync();
             var total = trainers.Count;
             var active = trainers.Count(i => i.IsActive);
@@ -122,8 +128,9 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<IEnumerable<TrainerDto>> GetAllTrainersAsync()
         {
-            var trainers = await _context.Trainers.AsNoTracking()
-                .WhereUserHasTrainerRole(_context)
+            var trainers = await (await ApplyTrainerScopeAsync(
+                    _context.Trainers.AsNoTracking().WhereUserHasTrainerRole(_context))
+                .ConfigureAwait(false))
                 .ToListAsync();
             var userIds = trainers.Select(i => i.UserId).Distinct().ToList();
             var users = userIds.Count > 0
@@ -138,7 +145,7 @@ namespace GymManagement.Infrastructure.Services
         public async Task<TrainerDto?> GetTrainerByIdAsync(int id)
         {
             var trainer = await _unitOfWork.Trainers.GetByIdAsync(id);
-            if (trainer == null) return null;
+            if (trainer == null || !await TrainerVisibleAsync(trainer).ConfigureAwait(false)) return null;
             var user = await _unitOfWork.Users.GetByIdAsync(trainer.UserId);
             var authUser = (await _unitOfWork.AuthUsers.GetAllAsync()).FirstOrDefault(a => a.UserId == trainer.UserId);
             return MapToDto(trainer, user, authUser?.Email);
@@ -147,7 +154,7 @@ namespace GymManagement.Infrastructure.Services
         public async Task<TrainerDto> CreateTrainerAsync(CreateTrainerDto dto)
         {
             var user = await _unitOfWork.Users.GetByIdAsync(dto.UserId);
-            if (user == null)
+            if (user == null || !await UserVisibleAsync(user).ConfigureAwait(false))
                 throw new NotFoundException("User not found. Create a User first and use their ID.");
 
             var existing = await _unitOfWork.Trainers.FirstOrDefaultAsync(i => i.UserId == dto.UserId);
@@ -185,7 +192,7 @@ namespace GymManagement.Infrastructure.Services
         public async Task<TrainerDto?> UpdateTrainerAsync(int id, UpdateTrainerDto dto)
         {
             var trainer = await _unitOfWork.Trainers.GetByIdAsync(id);
-            if (trainer == null) return null;
+            if (trainer == null || !await TrainerVisibleAsync(trainer).ConfigureAwait(false)) return null;
 
             if (dto.EmployeeCode != null) trainer.EmployeeCode = dto.EmployeeCode;
             if (dto.Specialization != null) trainer.Specialization = dto.Specialization;
@@ -216,7 +223,7 @@ namespace GymManagement.Infrastructure.Services
         public async Task<bool> DeleteTrainerAsync(int id)
         {
             var trainer = await _unitOfWork.Trainers.GetByIdAsync(id);
-            if (trainer == null) return false;
+            if (trainer == null || !await TrainerVisibleAsync(trainer).ConfigureAwait(false)) return false;
 
             _unitOfWork.Trainers.Delete(trainer);
             await _unitOfWork.SaveChangesAsync();
@@ -261,6 +268,56 @@ namespace GymManagement.Infrastructure.Services
             }
 
             return dto;
+        }
+
+        private async Task<IQueryable<Trainer>> ApplyTrainerScopeAsync(IQueryable<Trainer> query)
+        {
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (scope.IsUnrestricted)
+                return query;
+            var ids = scope.BranchIds.ToArray();
+            var actor = scope.ActorUserId;
+            return query.Where(t =>
+                t.UserId == actor
+                || _context.Users.Any(u => u.Id == t.UserId && u.HomeBranchId != null && ids.Contains(u.HomeBranchId.Value))
+                || _context.UserBranchAssignments.Any(a => a.UserId == t.UserId && ids.Contains(a.BranchId)));
+        }
+
+        private async Task<bool> TrainerVisibleAsync(Trainer trainer)
+        {
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (scope.IsUnrestricted)
+                return true;
+            var homeBranchId = await _context.Users.AsNoTracking()
+                .Where(u => u.Id == trainer.UserId)
+                .Select(u => u.HomeBranchId)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+            var extras = await _context.UserBranchAssignments.AsNoTracking()
+                .Where(a => a.UserId == trainer.UserId)
+                .Select(a => a.BranchId)
+                .ToListAsync()
+                .ConfigureAwait(false);
+            if (scope.IncludesUser(trainer.UserId, homeBranchId, extras))
+                return true;
+            if (scope.ActorUserId is not int actor)
+                return false;
+            return await _context.UserInstructors.AsNoTracking()
+                .AnyAsync(a => a.UserId == actor && a.TrainerId == trainer.Id && a.IsActive && !a.IsDeleted)
+                .ConfigureAwait(false);
+        }
+
+        private async Task<bool> UserVisibleAsync(User user)
+        {
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (scope.IsUnrestricted)
+                return true;
+            var extras = await _context.UserBranchAssignments.AsNoTracking()
+                .Where(a => a.UserId == user.Id)
+                .Select(a => a.BranchId)
+                .ToListAsync()
+                .ConfigureAwait(false);
+            return scope.IncludesUser(user.Id, user.HomeBranchId, extras);
         }
     }
 }

@@ -55,6 +55,8 @@ namespace GymManagement.Domain.Entities
         public DateTime? DueReminderLastSentAt { get; set; }
 
         public int? OrganizationId { get; set; }
+        /// <summary>Selling branch copied from the membership when the bill is created. Staff cannot retarget it.</summary>
+        public int? SellingBranchId { get; set; }
 
         /// <summary>Coupon applied to this payment (if any).</summary>
         public int? CouponId { get; set; }
@@ -74,6 +76,7 @@ namespace GymManagement.Domain.Entities
         public UserMembership Membership { get; set; } = null!;
         public Invoice? Invoice { get; set; }
         public Organization? Organization { get; set; }
+        public Branch? SellingBranch { get; set; }
 
         public ICollection<MembershipPaymentTransaction> Transactions { get; set; } =
             new List<MembershipPaymentTransaction>();

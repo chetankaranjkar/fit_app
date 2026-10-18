@@ -1,4 +1,5 @@
 using GymManagement.Core.DTOs.GymOps;
+using GymManagement.Core.Services;
 using GymManagement.Core.Services.GymOps;
 using GymManagement.Domain.Entities.GymOps;
 using GymManagement.Infrastructure.Data;
@@ -9,20 +10,23 @@ namespace GymManagement.Infrastructure.Services.GymOps
     public class MaintenanceLogService : IMaintenanceLogService
     {
         private readonly ApplicationDbContext _db;
+        private readonly IBranchScopeService _scope;
 
-        public MaintenanceLogService(ApplicationDbContext db)
+        public MaintenanceLogService(ApplicationDbContext db, IBranchScopeService scope)
         {
             _db = db;
+            _scope = scope;
         }
 
         public async Task<IEnumerable<MaintenanceLogDto>> GetAllAsync()
         {
+            var scope = await _scope.CurrentAsync();
             var list = await _db.Set<MaintenanceLog>()
                 .AsNoTracking()
                 .Include(m => m.Equipment)
                 .OrderByDescending(m => m.PerformedAt)
                 .ToListAsync();
-            return list.Select(Map);
+            return list.Where(m => scope.Includes(m.BranchId)).Select(Map);
         }
 
         public async Task<MaintenanceLogDto?> GetByIdAsync(int id)
@@ -31,11 +35,16 @@ namespace GymManagement.Infrastructure.Services.GymOps
                 .AsNoTracking()
                 .Include(m => m.Equipment)
                 .FirstOrDefaultAsync(m => m.Id == id);
-            return entity == null ? null : Map(entity);
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId))
+                return null;
+            return Map(entity);
         }
 
         public async Task<MaintenanceLogDto> CreateAsync(CreateMaintenanceLogDto dto)
         {
+            var equipment = await _db.Set<Equipment>().FirstOrDefaultAsync(e => e.Id == dto.EquipmentId);
+            if (equipment == null || !(await _scope.CurrentAsync()).Includes(equipment.BranchId))
+                throw new InvalidOperationException("Equipment not found.");
             var entity = new MaintenanceLog
             {
                 EquipmentId = dto.EquipmentId,
@@ -44,16 +53,13 @@ namespace GymManagement.Infrastructure.Services.GymOps
                 PerformedBy = dto.PerformedBy,
                 Cost = dto.Cost,
                 Description = dto.Description,
-                NextServiceDate = dto.NextServiceDate
+                NextServiceDate = dto.NextServiceDate,
+                BranchId = equipment?.BranchId
             };
             _db.Set<MaintenanceLog>().Add(entity);
 
-            // Bump next-service on parent equipment if provided
-            if (dto.NextServiceDate.HasValue)
-            {
-                var eq = await _db.Set<Equipment>().FirstOrDefaultAsync(e => e.Id == dto.EquipmentId);
-                if (eq != null) eq.NextServiceDate = dto.NextServiceDate;
-            }
+            if (dto.NextServiceDate.HasValue && equipment != null)
+                equipment.NextServiceDate = dto.NextServiceDate;
 
             await _db.SaveChangesAsync();
 
@@ -67,7 +73,7 @@ namespace GymManagement.Infrastructure.Services.GymOps
         public async Task<bool> DeleteAsync(int id)
         {
             var entity = await _db.Set<MaintenanceLog>().FirstOrDefaultAsync(m => m.Id == id);
-            if (entity == null) return false;
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId)) return false;
             entity.IsDeleted = true;
             await _db.SaveChangesAsync();
             return true;

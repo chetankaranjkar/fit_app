@@ -1,6 +1,7 @@
 using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.DTOs.PersonalTraining;
 using GymManagement.Core.Exceptions;
+using GymManagement.Core.Services;
 using GymManagement.Core.Services.PersonalTraining;
 using GymManagement.Domain.Entities.PersonalTraining;
 using GymManagement.Infrastructure.Data;
@@ -12,11 +13,15 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
     {
         private readonly ApplicationDbContext _db;
         private readonly ITrainerScheduleService _scheduleService;
+        private readonly IBranchAssignmentService _branches;
+        private readonly IBranchScopeService _scope;
 
-        public PtSessionService(ApplicationDbContext db, ITrainerScheduleService scheduleService)
+        public PtSessionService(ApplicationDbContext db, ITrainerScheduleService scheduleService, IBranchAssignmentService branches, IBranchScopeService scope)
         {
             _db = db;
             _scheduleService = scheduleService;
+            _branches = branches;
+            _scope = scope;
         }
 
         public async Task<PagedResultDto<PTSessionDto>> SearchAsync(PTSessionFilterDto filter, CancellationToken ct = default)
@@ -35,6 +40,12 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
             if (filter.Status.HasValue) query = query.Where(s => s.Status == filter.Status);
             if (filter.FromUtc.HasValue) query = query.Where(s => s.ScheduledStartUtc >= filter.FromUtc);
             if (filter.ToUtc.HasValue) query = query.Where(s => s.ScheduledStartUtc <= filter.ToUtc);
+            var scope = await _scope.CurrentAsync(ct);
+            if (!scope.IsUnrestricted)
+            {
+                var ids = scope.BranchIds.ToArray();
+                query = query.Where(s => s.BranchId != null && ids.Contains(s.BranchId.Value));
+            }
             if (!string.IsNullOrWhiteSpace(filter.Search))
             {
                 var s = filter.Search.Trim().ToLower();
@@ -63,7 +74,7 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
                 .Include(x => x.Trainer).ThenInclude(t => t.User)
                 .Include(x => x.MemberPTPackage)
                 .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
-            return s == null ? null : Map(s);
+            return s == null || !(await _scope.CurrentAsync(ct)).Includes(s.BranchId) ? null : Map(s);
         }
 
         public async Task<PTSessionDto> BookAsync(BookPTSessionDto dto, int? performedByUserId, CancellationToken ct = default)
@@ -77,6 +88,17 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
             if (!await _scheduleService.IsTrainerAvailableAsync(pkg.TrainerId, dto.ScheduledStartUtc, dto.ScheduledEndUtc, null, ct))
                 throw new ConflictException("Trainer is not available for the selected time slot.");
 
+            var venueBranchId = (await _scope.RequireAssignableBranchAsync(dto.BranchId ?? pkg.SellingBranchId, null, ct)).BranchId;
+            if (venueBranchId is int venue)
+            {
+                if (!await _branches.MembershipAllowsBranchAsync(pkg.UserId, venue, ct))
+                    throw new BadRequestException("This member is not allowed to train at that branch.");
+                var trainer = await _db.Trainers.AsNoTracking().FirstAsync(t => t.Id == pkg.TrainerId, ct);
+                var trainerBranches = await _branches.AuthorizedBranchIdsForActorAsync(trainer.UserId, ct);
+                if (trainerBranches is { Count: > 0 } && !trainerBranches.Contains(venue))
+                    throw new BadRequestException("This trainer is not assigned to that branch.");
+            }
+
             var session = new PTSession
             {
                 MemberPTPackageId = pkg.Id,
@@ -86,6 +108,7 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
                 ScheduledEndUtc = dto.ScheduledEndUtc,
                 Status = PTSessionStatus.Booked,
                 Notes = dto.Notes,
+                BranchId = venueBranchId,
             };
             await _db.PTSessions.AddAsync(session, ct);
             await _db.SaveChangesAsync(ct);

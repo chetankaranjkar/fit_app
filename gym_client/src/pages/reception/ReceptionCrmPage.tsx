@@ -25,6 +25,8 @@ import {
 } from '../../lib/phone'
 import { authService } from '../../services/auth.service'
 import { leadsService } from '../../services/leads.service'
+import { useBranchScope } from '../../features/branch/BranchScopeContext'
+import { BranchChoiceField, LEAD_BRANCH_REASON, MEMBER_BRANCH_REASON } from '../../features/branch/BranchChoiceField'
 import { getDashboardUser } from '../../lib/dashboardUser'
 import type { CreateGymLeadDto, GymLeadDetail, LeadPipelineStatus } from '../../types/leads'
 
@@ -272,6 +274,15 @@ export function ReceptionCrmPage() {
     return Number.isInteger(id) && id > 0 ? id : null
   })
   const [newLeadOpen, setNewLeadOpen] = useState(false)
+  const resumeBranchId = searchParams.get('resume') === 'lead' ? Number(searchParams.get('branchId') || 0) : 0
+  useEffect(() => {
+    if (searchParams.get('resume') !== 'lead') return
+    setNewLeadOpen(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('resume')
+    next.delete('branchId')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     if (!searchParams.has('lead')) return
@@ -279,6 +290,9 @@ export function ReceptionCrmPage() {
     next.delete('lead')
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
+  const [leadBranchFilter, setLeadBranchFilter] = useState('all')
+  const leadScope = useBranchScope()
+  const scopeBranches = leadScope?.branches
   const [followOpen, setFollowOpen] = useState(false)
   const [trialOpen, setTrialOpen] = useState(false)
   const [convertOpen, setConvertOpen] = useState(false)
@@ -508,6 +522,19 @@ export function ReceptionCrmPage() {
               <div>
                 <h2 className="text-lg font-semibold text-white">Pipeline</h2>
                 <p className="text-sm text-slate-500">Drag-free kanban — tap a card to work the record.</p>
+                <label className="mt-2 block text-xs text-slate-400">
+                  Branch
+                  <select
+                    className="mt-1 rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-sm text-white"
+                    value={leadBranchFilter}
+                    onChange={(event) => setLeadBranchFilter(event.target.value)}
+                  >
+                    <option value="all">All branches</option>
+                    {(scopeBranches ?? []).map((branch) => (
+                      <option key={branch.id} value={branch.id}>{branch.name}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
               {kanbanQ.isFetching && <span className="text-xs text-slate-500">Syncing…</span>}
             </div>
@@ -515,7 +542,11 @@ export function ReceptionCrmPage() {
               {(kanbanQ.data?.columns ?? [])
                 .filter((c) => STATUS_ORDER.includes(c.status))
                 .sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status))
-                .map((col) => (
+                .map((col) => {
+                  const visibleLeads = col.leads.filter(
+                    (lead) => leadBranchFilter === 'all' || String(lead.interestedBranchId ?? '') === leadBranchFilter,
+                  )
+                  return (
                   <div
                     key={col.status}
                     className="w-[min(100%,280px)] shrink-0 snap-start rounded-3xl border border-white/10 bg-white/[0.03] p-3 backdrop-blur-xl sm:w-[300px]"
@@ -525,12 +556,12 @@ export function ReceptionCrmPage() {
                         {STATUS_LABEL[col.status]}
                       </span>
                       <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">
-                        {col.leads.length}
+                        {visibleLeads.length}
                       </span>
                     </div>
                     <div className="flex max-h-[min(70vh,560px)] flex-col gap-2 overflow-y-auto pr-1">
                       <AnimatePresence initial={false}>
-                        {col.leads.map((lead) => (
+                        {visibleLeads.map((lead) => (
                           <motion.button
                             key={lead.id}
                             type="button"
@@ -544,6 +575,9 @@ export function ReceptionCrmPage() {
                           >
                             <p className="font-medium text-white">{lead.fullName}</p>
                             {lead.phone && <p className="mt-1 text-xs text-slate-300">{lead.phone}</p>}
+                            {lead.interestedBranchName && (
+                              <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">{lead.interestedBranchName}</p>
+                            )}
                             {lead.leadSource && (
                               <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-400">
                                 {formatLeadSourceDisplay(lead)}
@@ -552,12 +586,13 @@ export function ReceptionCrmPage() {
                           </motion.button>
                         ))}
                       </AnimatePresence>
-                      {!col.leads.length && (
+                      {!visibleLeads.length && (
                         <p className="py-8 text-center text-xs text-slate-600">Empty</p>
                       )}
                     </div>
                   </div>
-                ))}
+                  )
+                })}
             </div>
           </section>
       </DashboardPageContent>
@@ -580,7 +615,12 @@ export function ReceptionCrmPage() {
 
       {canCrm && (
         <>
-          <NewLeadModal open={newLeadOpen} onClose={() => setNewLeadOpen(false)} onCreated={(id) => setSelectedId(id)} />
+          <NewLeadModal
+            open={newLeadOpen}
+            resumeBranchId={resumeBranchId}
+            onClose={() => setNewLeadOpen(false)}
+            onCreated={(id) => setSelectedId(id)}
+          />
           {selectedId != null && leadDetail && leadDetail.status !== 'CONVERTED' && (
             <EditLeadModal
               open={editLeadOpen}
@@ -621,6 +661,8 @@ export function ReceptionCrmPage() {
               <ConvertModal
                 open={convertOpen}
                 leadId={selectedId}
+                interestedBranchId={leadDetail?.interestedBranchId}
+                interestedBranchName={leadDetail?.interestedBranchName}
                 plans={plansQ.data ?? []}
                 onClose={() => setConvertOpen(false)}
                 onSaved={() => {
@@ -664,6 +706,14 @@ function LeadDetailModal({
   onOpenConvert: () => void
   onSetStatus: (s: LeadPipelineStatus) => void
 }) {
+  const qc = useQueryClient()
+  const detailScope = useBranchScope()
+  const assignMu = useMutation({
+    mutationFn: (branchId: number) => leadsService.assignInterestedBranch(lead!.id, branchId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
   if (!open) return null
   return (
     <Modal open={open} onClose={onClose} title={loading ? 'Lead' : lead?.fullName ?? 'Lead'} size="wide" scrollable>
@@ -708,6 +758,25 @@ function LeadDetailModal({
             <div>
               <p className="text-xs text-slate-500">Lead source</p>
               <p>{formatLeadSourceDisplay(lead)}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-xs text-slate-500">Interested branch</p>
+              {lead.interestedBranchName ? (
+                <p>{lead.interestedBranchName}</p>
+              ) : (
+                <div className="mt-1">
+                  <BranchChoiceField
+                    branches={detailScope ? detailScope.branches : null}
+                    onChange={(branchId) => {
+                      if (branchId) assignMu.mutate(branchId)
+                    }}
+                    reason={LEAD_BRANCH_REASON}
+                    label="Interested branch"
+                    defaultBranchId={detailScope?.defaultBranchId}
+                    returnTo="/dashboard/reception"
+                  />
+                </div>
+              )}
             </div>
             <div className="sm:col-span-2">
               <p className="text-xs text-slate-500">Fitness goal</p>
@@ -850,10 +919,12 @@ function TrialRow({
 
 function NewLeadModal({
   open,
+  resumeBranchId,
   onClose,
   onCreated,
 }: {
   open: boolean
+  resumeBranchId?: number
   onClose: () => void
   onCreated: (id: number) => void
 }) {
@@ -870,22 +941,42 @@ function NewLeadModal({
   const [phoneErr, setPhoneErr] = useState<string | null>(null)
   const [emailErr, setEmailErr] = useState<string | null>(null)
   const [ageErr, setAgeErr] = useState<string | null>(null)
+  const [branchErr, setBranchErr] = useState<string | null>(null)
+  const scope = useBranchScope()
+  const branches = scope?.branches ?? []
   const qc = useQueryClient()
 
   useEffect(() => {
     if (!open) return
+    let draft: CreateGymLeadDto | null = null
+    try {
+      const raw = sessionStorage.getItem('gym.leadCreateDraft')
+      if (raw) draft = JSON.parse(raw) as CreateGymLeadDto
+      sessionStorage.removeItem('gym.leadCreateDraft')
+    } catch {
+      draft = null
+    }
     setForm({
       fullName: '',
       gender: 'Other',
       leadSource: '',
       customLeadSource: '',
+      ...draft,
+      interestedBranchId: resumeBranchId && resumeBranchId > 0 ? resumeBranchId : draft?.interestedBranchId,
     })
     setSourceErr(undefined)
     setCustomErr(undefined)
     setPhoneErr(null)
     setEmailErr(null)
     setAgeErr(null)
-  }, [open])
+    setBranchErr(null)
+  }, [open, resumeBranchId])
+
+  useEffect(() => {
+    if (branches.length === 1 && !form.interestedBranchId) {
+      setForm((current) => ({ ...current, interestedBranchId: branches[0].id }))
+    }
+  }, [branches, form.interestedBranchId])
 
   const mu = useMutation({
     mutationFn: () => {
@@ -902,6 +993,7 @@ function NewLeadModal({
         customLeadSource: code === 'OTHER' ? (form.customLeadSource ?? '').trim() || null : null,
         referenceName: form.referenceName || null,
         notes: form.notes || null,
+        interestedBranchId: form.interestedBranchId ?? (branches.length === 1 ? branches[0].id : null),
       }
       return leadsService.create(body)
     },
@@ -930,6 +1022,11 @@ function NewLeadModal({
       setCustomErr('Please specify the source.')
       return
     }
+    if (branches.length > 1 && !form.interestedBranchId) {
+      setBranchErr('Select a branch.')
+      return
+    }
+    setBranchErr(null)
     mu.mutate()
   }
 
@@ -963,6 +1060,24 @@ function NewLeadModal({
             error={sourceErr}
             customError={customErr}
           />
+        </div>
+        <div className="sm:col-span-2">
+          <BranchChoiceField
+            branches={scope ? branches : null}
+            value={form.interestedBranchId}
+            onChange={(branchId) => {
+              setBranchErr(null)
+              setForm((current) => ({ ...current, interestedBranchId: branchId }))
+            }}
+            reason={LEAD_BRANCH_REASON}
+            label="Interested branch"
+            defaultBranchId={scope?.defaultBranchId}
+            returnTo="/dashboard/reception?resume=lead"
+            onBeforeCreateBranch={() => {
+              sessionStorage.setItem('gym.leadCreateDraft', JSON.stringify(form))
+            }}
+          />
+          {branchErr && <p className="mt-1 text-xs text-amber-200">{branchErr}</p>}
         </div>
         <label className="block text-xs font-medium uppercase tracking-wider text-slate-400 sm:col-span-1">
           Reference name
@@ -1306,16 +1421,22 @@ function TrialModal({
 function ConvertModal({
   open,
   leadId,
+  interestedBranchId,
+  interestedBranchName,
   plans,
   onClose,
   onSaved,
 }: {
   open: boolean
   leadId: number
+  interestedBranchId?: number | null
+  interestedBranchName?: string | null
   plans: { id: number; planName: string; durationDays: number; price: number }[]
   onClose: () => void
   onSaved: () => void
 }) {
+  const convertScope = useBranchScope()
+  const [homeBranchId, setHomeBranchId] = useState<number | undefined>(interestedBranchId ?? undefined)
   const [planIdPick, setPlanIdPick] = useState<number | null>(null)
   const [start, setStart] = useState(() => new Date().toISOString().slice(0, 10))
   const [password, setPassword] = useState('')
@@ -1330,6 +1451,7 @@ function ConvertModal({
         planId: resolvedPlanId,
         membershipStartDate: new Date(start).toISOString(),
         password: password || null,
+        homeBranchId: homeBranchId ?? interestedBranchId ?? null,
       }),
     onSuccess: () => onSaved(),
   })
@@ -1337,8 +1459,19 @@ function ConvertModal({
     <Modal open={open} onClose={onClose} title="Convert to member" scrollable>
       <p className="text-xs text-slate-400">
         Creates the member through the same API as <strong>New admission</strong>, assigns the plan, and links this lead.
-        Requires <strong>CREATE_MEMBER</strong>.
+        The home branch starts from this lead&apos;s interested branch.
       </p>
+      <div className="mt-3">
+        <BranchChoiceField
+          branches={convertScope ? convertScope.branches : null}
+          value={homeBranchId ?? interestedBranchId}
+          onChange={setHomeBranchId}
+          reason={MEMBER_BRANCH_REASON}
+          label="Home branch"
+          defaultBranchId={interestedBranchId ?? convertScope?.defaultBranchId}
+          returnTo="/dashboard/reception"
+        />
+      </div>
       <label className="mt-3 block text-xs text-slate-400">
         Plan
         <select

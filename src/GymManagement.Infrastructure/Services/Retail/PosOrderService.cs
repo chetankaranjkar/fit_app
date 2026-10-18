@@ -13,15 +13,18 @@ namespace GymManagement.Infrastructure.Services.Retail
     {
         private readonly ApplicationDbContext _db;
         private readonly ICouponService _couponService;
+        private readonly IBranchScopeService _scope;
 
-        public PosOrderService(ApplicationDbContext db, ICouponService couponService)
+        public PosOrderService(ApplicationDbContext db, ICouponService couponService, IBranchScopeService scope)
         {
             _db = db;
             _couponService = couponService;
+            _scope = scope;
         }
 
         public async Task<IReadOnlyList<PosOrderDto>> GetAllAsync(DateTime? from, DateTime? to, CancellationToken ct = default)
         {
+            var scope = await _scope.CurrentAsync(ct);
             var query = _db.RetailPosOrders.AsNoTracking()
                 .Include(o => o.Items)
                 .Where(o => !o.IsDeleted);
@@ -29,7 +32,7 @@ namespace GymManagement.Infrastructure.Services.Retail
             if (to.HasValue) query = query.Where(o => o.OrderDate <= to.Value);
 
             var list = await query.OrderByDescending(o => o.OrderDate).ToListAsync(ct);
-            return list.Select(MapOrderToDto).ToList();
+            return list.Where(o => scope.Includes(o.BranchId)).Select(MapOrderToDto).ToList();
         }
 
         public async Task<PosOrderDto?> GetByIdAsync(int id, CancellationToken ct = default)
@@ -37,7 +40,9 @@ namespace GymManagement.Infrastructure.Services.Retail
             var o = await _db.RetailPosOrders.AsNoTracking()
                 .Include(x => x.Items)
                 .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
-            return o == null ? null : MapOrderToDto(o);
+            if (o == null || !(await _scope.CurrentAsync(ct)).Includes(o.BranchId))
+                return null;
+            return MapOrderToDto(o);
         }
 
         public async Task<PosOrderDto> CreateOrderAsync(CreatePosOrderDto dto, int? cashierUserId, CancellationToken ct = default)
@@ -75,13 +80,20 @@ namespace GymManagement.Infrastructure.Services.Retail
                         .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
                         .ToDictionaryAsync(p => p.Id, ct);
 
+                    var saleBranchId = (await _scope.RequireAssignableBranchAsync(dto.BranchId, null, ct)).BranchId;
                     foreach (var item in grouped)
                     {
                         if (!products.TryGetValue(item.ProductId, out var p))
                             throw new BadRequestException($"Product #{item.ProductId} not found.");
                         if (p.Status == ProductStatus.Discontinued)
                             throw new BadRequestException($"Product '{p.Name}' is discontinued.");
-                        if (p.StockQuantity < item.Quantity)
+                        var row = await _db.RetailBranchStocks.FirstOrDefaultAsync(s => s.ProductId == p.Id && s.BranchId == saleBranchId, ct);
+                        if (row != null)
+                        {
+                            if (row.Quantity < item.Quantity)
+                                throw new BadRequestException($"Insufficient branch stock for '{p.Name}'.");
+                        }
+                        else if (p.StockQuantity < item.Quantity)
                             throw new BadRequestException($"Insufficient stock for '{p.Name}'. Available: {p.StockQuantity}, requested: {item.Quantity}.");
                     }
 
@@ -99,13 +111,14 @@ namespace GymManagement.Infrastructure.Services.Retail
                         Notes = dto.Notes?.Trim(),
                         Status = PosOrderStatus.Completed,
                         CashierUserId = cashierUserId,
+                        BranchId = saleBranchId,
                     };
 
                     decimal subtotal = 0, taxTotal = 0;
                     foreach (var item in grouped)
                     {
                         var p = products[item.ProductId];
-                        var unitPrice = item.UnitPrice ?? p.SellingPrice;
+                        var unitPrice = p.SellingPrice;
                         var lineDiscount = item.DiscountAmount;
                         var lineSubtotal = Math.Max(0, (unitPrice * item.Quantity) - lineDiscount);
                         var lineTax = Math.Round(lineSubtotal * (p.GstPercent / 100m), 2);
@@ -141,7 +154,7 @@ namespace GymManagement.Infrastructure.Services.Retail
                             MembershipPlanId = 0,
                             InvoiceAmount = grossBeforeCoupon,
                             UserId = dto.CustomerUserId ?? 0,
-                            BranchId = null,
+                            BranchId = dto.BranchId,
                         }, ct);
                         if (!validation.Valid)
                             throw new BadRequestException($"Coupon: {validation.Message}");
@@ -159,8 +172,28 @@ namespace GymManagement.Infrastructure.Services.Retail
                     foreach (var item in grouped)
                     {
                         var p = products[item.ProductId];
-                        p.StockQuantity -= item.Quantity;
-                        if (p.StockQuantity == 0) p.Status = ProductStatus.OutOfStock;
+                        int balance;
+                        if (order.BranchId is int saleBranch)
+                        {
+                            var row = await _db.RetailBranchStocks.FirstOrDefaultAsync(s => s.ProductId == p.Id && s.BranchId == saleBranch, ct);
+                            if (row != null)
+                            {
+                                row.Quantity -= item.Quantity;
+                                balance = row.Quantity;
+                            }
+                            else
+                            {
+                                p.StockQuantity -= item.Quantity;
+                                if (p.StockQuantity == 0) p.Status = ProductStatus.OutOfStock;
+                                balance = p.StockQuantity;
+                            }
+                        }
+                        else
+                        {
+                            p.StockQuantity -= item.Quantity;
+                            if (p.StockQuantity == 0) p.Status = ProductStatus.OutOfStock;
+                            balance = p.StockQuantity;
+                        }
                         p.UpdatedDate = DateTime.UtcNow;
 
                         await _db.RetailInventoryTransactions.AddAsync(new InventoryTransaction
@@ -168,12 +201,13 @@ namespace GymManagement.Infrastructure.Services.Retail
                             ProductId = p.Id,
                             TransactionType = InventoryTransactionType.Sale,
                             Quantity = item.Quantity,
-                            BalanceAfter = p.StockQuantity,
+                            BalanceAfter = balance,
                             UnitPrice = item.UnitPrice ?? p.SellingPrice,
                             TransactionDate = DateTime.UtcNow,
                             ReferenceNumber = order.OrderNumber,
                             PosOrderId = order.Id,
                             PerformedByUserId = cashierUserId,
+                            BranchId = order.BranchId,
                         }, ct);
                     }
                     await _db.SaveChangesAsync(ct);
@@ -224,7 +258,7 @@ namespace GymManagement.Infrastructure.Services.Retail
                 var order = await _db.RetailPosOrders
                     .Include(o => o.Items)
                     .FirstOrDefaultAsync(o => o.Id == orderId && !o.IsDeleted, ct);
-                if (order == null) return false;
+                if (order == null || !(await _scope.CurrentAsync(ct)).Includes(order.BranchId)) return false;
                 if (order.Status == PosOrderStatus.Cancelled) return true;
 
                 // Restore stock
@@ -232,8 +266,27 @@ namespace GymManagement.Infrastructure.Services.Retail
                 {
                     var p = await _db.RetailProducts.FirstOrDefaultAsync(x => x.Id == item.ProductId, ct);
                     if (p == null) continue;
-                    p.StockQuantity += item.Quantity;
-                    if (p.Status == ProductStatus.OutOfStock && p.StockQuantity > 0) p.Status = ProductStatus.Active;
+                    int balance;
+                    if (order.BranchId is int saleBranch)
+                    {
+                        var row = await _db.RetailBranchStocks.FirstOrDefaultAsync(s => s.ProductId == p.Id && s.BranchId == saleBranch, ct);
+                        if (row != null)
+                        {
+                            row.Quantity += item.Quantity;
+                            balance = row.Quantity;
+                        }
+                        else
+                        {
+                            p.StockQuantity += item.Quantity;
+                            balance = p.StockQuantity;
+                        }
+                    }
+                    else
+                    {
+                        p.StockQuantity += item.Quantity;
+                        if (p.Status == ProductStatus.OutOfStock && p.StockQuantity > 0) p.Status = ProductStatus.Active;
+                        balance = p.StockQuantity;
+                    }
                     p.UpdatedDate = DateTime.UtcNow;
 
                     await _db.RetailInventoryTransactions.AddAsync(new InventoryTransaction
@@ -241,13 +294,14 @@ namespace GymManagement.Infrastructure.Services.Retail
                         ProductId = p.Id,
                         TransactionType = InventoryTransactionType.Return,
                         Quantity = item.Quantity,
-                        BalanceAfter = p.StockQuantity,
+                        BalanceAfter = balance,
                         UnitPrice = item.UnitPrice,
                         TransactionDate = DateTime.UtcNow,
                         ReferenceNumber = order.OrderNumber,
                         PosOrderId = order.Id,
                         PerformedByUserId = performedByUserId,
                         Notes = "Order cancelled — stock restored",
+                        BranchId = order.BranchId,
                     }, ct);
                 }
 
@@ -263,16 +317,24 @@ namespace GymManagement.Infrastructure.Services.Retail
         {
             var today = DateTime.UtcNow.Date;
             var monthStart = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var scope = await _scope.CurrentAsync(ct);
+            var unrestricted = scope.IsUnrestricted;
+            var branchIds = scope.BranchIds.ToArray();
 
             var todayOrders = await _db.RetailPosOrders.AsNoTracking()
                 .Where(o => !o.IsDeleted && o.Status == PosOrderStatus.Completed && o.OrderDate >= today)
+                .Where(o => unrestricted || (o.BranchId != null && branchIds.Contains(o.BranchId.Value)))
                 .ToListAsync(ct);
             var monthOrders = await _db.RetailPosOrders.AsNoTracking()
                 .Where(o => !o.IsDeleted && o.Status == PosOrderStatus.Completed && o.OrderDate >= monthStart)
+                .Where(o => unrestricted || (o.BranchId != null && branchIds.Contains(o.BranchId.Value)))
                 .ToListAsync(ct);
 
-            var lowStockCount = await _db.RetailProducts.AsNoTracking()
-                .CountAsync(p => !p.IsDeleted && p.Status != ProductStatus.Discontinued && p.StockQuantity <= p.LowStockThreshold, ct);
+            var lowStockCount = unrestricted
+                ? await _db.RetailProducts.AsNoTracking()
+                    .CountAsync(p => !p.IsDeleted && p.Status != ProductStatus.Discontinued && p.StockQuantity <= p.LowStockThreshold, ct)
+                : await _db.RetailBranchStocks.AsNoTracking()
+                    .CountAsync(s => branchIds.Contains(s.BranchId) && !s.Product.IsDeleted && s.Product.Status != ProductStatus.Discontinued && s.Quantity <= s.ReorderLevel, ct);
 
             var expiringCutoff = today.AddDays(30);
             var expiringSoonCount = await _db.RetailProducts.AsNoTracking()
@@ -280,6 +342,7 @@ namespace GymManagement.Infrastructure.Services.Retail
 
             var topProducts = await _db.RetailPosOrderItems.AsNoTracking()
                 .Where(i => !i.IsDeleted && i.Order.OrderDate >= monthStart && i.Order.Status == PosOrderStatus.Completed)
+                .Where(i => unrestricted || (i.Order.BranchId != null && branchIds.Contains(i.Order.BranchId.Value)))
                 .GroupBy(i => new { i.ProductId, i.ProductName })
                 .Select(g => new TopProductDto
                 {

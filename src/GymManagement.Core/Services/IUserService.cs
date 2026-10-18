@@ -15,7 +15,8 @@ namespace GymManagement.Core.Services
             bool includeBillingSummary = true,
             string? preferredGymTime = null,
             int? assignedToTrainerProfileId = null,
-            bool countOnly = false);
+            bool countOnly = false,
+            int? homeBranchId = null);
         Task<int> GetMembersDirectoryCountAsync(
             bool? isActive = null,
             string? preferredGymTime = null,
@@ -27,6 +28,7 @@ namespace GymManagement.Core.Services
         Task<UserDto> CreateUserAsync(CreateUserDto createUserDto);
         Task<BulkImportMembersResultDto> BulkImportMembersAsync(BulkImportMembersRequestDto request);
         Task<UserDto?> UpdateUserAsync(int id, UpdateUserDto updateUserDto);
+        Task<UserDto?> AssignHomeBranchAsync(int id, int branchId);
         Task<bool> DeleteUserAsync(int id);
         Task AssignRoleAsync(int userId, string roleCode);
         Task RevokeRoleAsync(int userId, string roleCode);

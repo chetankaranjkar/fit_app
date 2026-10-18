@@ -1,6 +1,8 @@
+using GymManagement.Core.Branching;
 using GymManagement.Core.DTOs.Common;
 using GymManagement.Core.DTOs.PersonalTraining;
 using GymManagement.Core.Exceptions;
+using GymManagement.Core.Services;
 using GymManagement.Core.Services.PersonalTraining;
 using GymManagement.Domain.Entities.PersonalTraining;
 using GymManagement.Infrastructure.Data;
@@ -12,11 +14,16 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
     {
         private readonly ApplicationDbContext _db;
         private readonly ITrainerCommissionService _commissionService;
+        private readonly IBranchScopeService _scope;
 
-        public MemberPtPackageService(ApplicationDbContext db, ITrainerCommissionService commissionService)
+        public MemberPtPackageService(
+            ApplicationDbContext db,
+            ITrainerCommissionService commissionService,
+            IBranchScopeService scope)
         {
             _db = db;
             _commissionService = commissionService;
+            _scope = scope;
         }
 
         public async Task<PagedResultDto<MemberPTPackageDto>> SearchAsync(MemberPTPackageFilterDto filter, CancellationToken ct = default)
@@ -59,7 +66,39 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
             var trainerPrice = await _db.PTPackagePrices.AsNoTracking()
                 .FirstOrDefaultAsync(tp => tp.PackageId == dto.PackageId && tp.TrainerId == dto.TrainerId && !tp.IsDeleted && tp.IsActive, ct);
 
-            var unitPrice = trainerPrice?.Price ?? package.Price;
+            var branchPrices = await _db.PTPackageBranchPrices.AsNoTracking()
+                .Where(p => p.PackageId == dto.PackageId)
+                .ToListAsync(ct);
+            var activeBranchExists = await _db.Branches.AsNoTracking().AnyAsync(b => b.IsActive, ct);
+            if (dto.BranchId is not int && activeBranchExists)
+                throw new BadRequestException(BranchAccessRules.SelectBranchMessage);
+            if (dto.BranchId is int requestedBranch)
+                await _scope.RequireAssignableBranchAsync(requestedBranch, null, ct);
+
+            decimal unitPrice;
+            if (branchPrices.Count > 0)
+            {
+                var selected = dto.BranchId is int branchId
+                    ? branchPrices.FirstOrDefault(p => p.BranchId == branchId)
+                    : null;
+                try
+                {
+                    unitPrice = BranchAccessRules.ResolveAvailablePrice(
+                        selected != null,
+                        selected?.IsAvailable ?? false,
+                        selected?.Price,
+                        true,
+                        package.Price);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw new BadRequestException(ex.Message);
+                }
+            }
+            else
+            {
+                unitPrice = trainerPrice?.Price ?? package.Price;
+            }
             var discount = dto.DiscountAmount ?? package.DefaultDiscountAmount;
             var subtotal = Math.Max(0, unitPrice - discount);
             var tax = Math.Round(subtotal * package.TaxPercentage / 100m, 2);
@@ -88,6 +127,7 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
                     PaidAmount = 0,
                     PaymentStatus = PTPaymentStatus.Pending,
                     Notes = dto.Notes,
+                    SellingBranchId = dto.BranchId,
                 };
                 await _db.PTPackageInvoices.AddAsync(invoice, ct);
                 await _db.SaveChangesAsync(ct);
@@ -113,6 +153,7 @@ namespace GymManagement.Infrastructure.Services.PersonalTraining
                     PaymentStatus = PTPaymentStatus.Pending,
                     CouponCode = dto.CouponCode,
                     Notes = dto.Notes,
+                    SellingBranchId = dto.BranchId,
                 };
                 await _db.MemberPTPackages.AddAsync(memberPkg, ct);
                 await _db.SaveChangesAsync(ct);

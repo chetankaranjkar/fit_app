@@ -1,4 +1,5 @@
 using GymManagement.Core.DTOs.LockerMgmt;
+using GymManagement.Core.Services;
 using GymManagement.Core.Services.LockerMgmt;
 using GymManagement.Domain.Entities.LockerMgmt;
 using GymManagement.Infrastructure.Data;
@@ -9,20 +10,25 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
     public class LockerAssignmentService : ILockerAssignmentService
     {
         private readonly ApplicationDbContext _db;
+        private readonly IBranchAssignmentService _branches;
+        private readonly IBranchScopeService _scope;
 
-        public LockerAssignmentService(ApplicationDbContext db)
+        public LockerAssignmentService(ApplicationDbContext db, IBranchAssignmentService branches, IBranchScopeService scope)
         {
             _db = db;
+            _branches = branches;
+            _scope = scope;
         }
 
         public async Task<IEnumerable<LockerAssignmentDto>> GetAllAsync()
         {
+            var scope = await _scope.CurrentAsync();
             var list = await _db.Set<LockerAssignment>()
                 .AsNoTracking()
                 .Include(a => a.Locker)
                 .OrderByDescending(a => a.AssignedDate)
                 .ToListAsync();
-            return list.Select(Map);
+            return list.Where(a => scope.Includes(a.BranchId)).Select(Map);
         }
 
         public async Task<IEnumerable<LockerAssignmentDto>> GetByUserIdAsync(int userId)
@@ -48,6 +54,9 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
                 .OrderByDescending(a => a.AssignedDate)
                 .ToListAsync();
 
+            var scope = await _scope.CurrentAsync();
+            if (!scope.IsUnrestricted && userId != scope.ActorUserId)
+                list = list.Where(a => scope.Includes(a.BranchId)).ToList();
             return list.Select(Map);
         }
 
@@ -57,13 +66,20 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
                 .AsNoTracking()
                 .Include(a => a.Locker)
                 .FirstOrDefaultAsync(a => a.Id == id);
-            return entity == null ? null : Map(entity);
+            if (entity == null)
+                return null;
+            var scope = await _scope.CurrentAsync();
+            if (!scope.IsUnrestricted && entity.UserId != scope.ActorUserId && !scope.Includes(entity.BranchId))
+                return null;
+            return Map(entity);
         }
 
         public async Task<LockerAssignmentDto> CreateAsync(CreateLockerAssignmentDto dto)
         {
             var locker = await _db.Set<Locker>().FirstOrDefaultAsync(l => l.Id == dto.LockerId)
                 ?? throw new InvalidOperationException("Locker not found.");
+            if (!(await _scope.CurrentAsync()).Includes(locker.BranchId))
+                throw new InvalidOperationException("Locker not found.");
 
             string memberName;
             int? userId = null;
@@ -84,13 +100,17 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
                     throw new InvalidOperationException("Member name or user id is required.");
             }
 
+            if (locker.BranchId is int lockerBranch && userId is int memberId && !await _branches.MembershipAllowsBranchAsync(memberId, lockerBranch))
+                throw new InvalidOperationException("This member is not allowed to use a locker at that branch.");
+
             var entity = new LockerAssignment
             {
                 LockerId = dto.LockerId,
                 UserId = userId,
                 MemberName = memberName,
                 AssignedDate = dto.AssignedDate,
-                ExpiryDate = dto.ExpiryDate
+                ExpiryDate = dto.ExpiryDate,
+                BranchId = locker.BranchId
             };
             _db.Set<LockerAssignment>().Add(entity);
 
@@ -111,7 +131,7 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
             var entity = await _db.Set<LockerAssignment>()
                 .Include(a => a.Locker)
                 .FirstOrDefaultAsync(a => a.Id == id);
-            if (entity == null) return false;
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId)) return false;
 
             entity.IsDeleted = true;
 

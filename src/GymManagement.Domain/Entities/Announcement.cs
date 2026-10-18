@@ -6,6 +6,8 @@ namespace GymManagement.Domain.Entities
         public string? Title { get; set; }
         public string? Message { get; set; }
         public int? BranchId { get; set; }
+        /// <summary>OrganizationWide or SelectedBranch. SelectedBranch uses <see cref="BranchId"/>.</summary>
+        public string AudienceScope { get; set; } = "OrganizationWide";
         public int? OrganizationId { get; set; }
         public DateTime? ExpiryDate { get; set; }
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;

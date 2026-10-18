@@ -1,4 +1,6 @@
+using GymManagement.Core.Branching;
 using GymManagement.Core.DTOs.LockerMgmt;
+using GymManagement.Core.Services;
 using GymManagement.Core.Services.LockerMgmt;
 using GymManagement.Domain.Entities.LockerMgmt;
 using GymManagement.Infrastructure.Data;
@@ -9,26 +11,31 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
     public class LockerService : ILockerService
     {
         private readonly ApplicationDbContext _db;
+        private readonly IBranchScopeService _scope;
 
-        public LockerService(ApplicationDbContext db)
+        public LockerService(ApplicationDbContext db, IBranchScopeService scope)
         {
             _db = db;
+            _scope = scope;
         }
 
         public async Task<IEnumerable<LockerDto>> GetAllAsync()
         {
+            var scope = await _scope.CurrentAsync();
             var list = await _db.Set<Locker>()
                 .AsNoTracking()
                 .Where(l => !l.IsDeleted)
                 .OrderBy(l => l.LockerNumber)
                 .ToListAsync();
-            return list.Select(Map);
+            return list.Where(l => scope.Includes(l.BranchId)).Select(Map);
         }
 
         public async Task<LockerDto?> GetByIdAsync(int id)
         {
             var entity = await _db.Set<Locker>().AsNoTracking().FirstOrDefaultAsync(l => l.Id == id);
-            return entity == null ? null : Map(entity);
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId))
+                return null;
+            return Map(entity);
         }
 
         public async Task<LockerDto> CreateAsync(CreateLockerDto dto)
@@ -38,13 +45,13 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
             var status = string.IsNullOrWhiteSpace(dto.Status) ? "AVAILABLE" : dto.Status.Trim();
             var location = dto.Location?.Trim();
 
-            var activeDuplicate = await FindActiveByNumberAsync(lockerNumber);
+            var activeDuplicate = await FindActiveByNumberAsync(lockerNumber, dto.BranchId);
             if (activeDuplicate != null)
-                throw new InvalidOperationException($"Locker number \"{lockerNumber}\" is already in use.");
+                throw new InvalidOperationException($"Locker number \"{lockerNumber}\" is already in use at this branch.");
 
             var recycled = await _db.Set<Locker>()
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(l => l.IsDeleted && l.LockerNumber == lockerNumber);
+                .FirstOrDefaultAsync(l => l.IsDeleted && l.LockerNumber == lockerNumber && l.BranchId == dto.BranchId);
 
             if (recycled != null)
             {
@@ -52,6 +59,7 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
                 recycled.Size = size;
                 recycled.Status = status;
                 recycled.Location = location;
+                recycled.BranchId = (await _scope.RequireAssignableBranchAsync(dto.BranchId, null)).BranchId;
                 await _db.SaveChangesAsync();
                 return Map(recycled);
             }
@@ -61,7 +69,8 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
                 LockerNumber = lockerNumber,
                 Size = size,
                 Status = status,
-                Location = location
+                Location = location,
+                BranchId = (await _scope.RequireAssignableBranchAsync(dto.BranchId, null)).BranchId
             };
             _db.Set<Locker>().Add(entity);
             await _db.SaveChangesAsync();
@@ -71,14 +80,17 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
         public async Task<LockerDto?> UpdateAsync(int id, UpdateLockerDto dto)
         {
             var entity = await _db.Set<Locker>().FirstOrDefaultAsync(l => l.Id == id && !l.IsDeleted);
-            if (entity == null) return null;
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId)) return null;
 
             if (dto.LockerNumber != null)
             {
                 var lockerNumber = NormalizeLockerNumber(dto.LockerNumber);
-                await EnsureLockerNumberAvailableAsync(lockerNumber, excludeId: id);
+                var branchId = dto.BranchId ?? entity.BranchId;
+                await EnsureLockerNumberAvailableAsync(lockerNumber, branchId, excludeId: id);
                 entity.LockerNumber = lockerNumber;
             }
+            if (dto.BranchId.HasValue && dto.BranchId != entity.BranchId)
+                throw new InvalidOperationException("Move a locker with an audited transfer. Editing the locker does not change its branch or past assignments.");
             if (dto.Size != null) entity.Size = dto.Size;
             if (dto.Status != null) entity.Status = dto.Status;
             if (dto.Location != null) entity.Location = dto.Location;
@@ -90,7 +102,7 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
         public async Task<bool> DeleteAsync(int id)
         {
             var entity = await _db.Set<Locker>().FirstOrDefaultAsync(l => l.Id == id);
-            if (entity == null) return false;
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId)) return false;
             entity.IsDeleted = true;
             await _db.SaveChangesAsync();
             return true;
@@ -104,23 +116,22 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
             return normalized;
         }
 
-        private async Task EnsureLockerNumberAvailableAsync(string lockerNumber, int? excludeId = null)
+        private async Task EnsureLockerNumberAvailableAsync(string lockerNumber, int? branchId, int? excludeId = null)
         {
-            var duplicate = await FindActiveByNumberAsync(lockerNumber, excludeId);
+            var duplicate = await FindActiveByNumberAsync(lockerNumber, branchId, excludeId);
             if (duplicate != null)
-                throw new InvalidOperationException($"Locker number \"{lockerNumber}\" is already in use.");
+                throw new InvalidOperationException($"Locker number \"{lockerNumber}\" is already in use at this branch.");
         }
 
-        private async Task<Locker?> FindActiveByNumberAsync(string lockerNumber, int? excludeId = null)
+        private async Task<Locker?> FindActiveByNumberAsync(string lockerNumber, int? branchId, int? excludeId = null)
         {
-            var query = _db.Set<Locker>()
+            var candidates = await _db.Set<Locker>()
                 .IgnoreQueryFilters()
-                .Where(l => !l.IsDeleted && l.LockerNumber == lockerNumber);
-
-            if (excludeId.HasValue)
-                query = query.Where(l => l.Id != excludeId.Value);
-
-            return await query.FirstOrDefaultAsync();
+                .Where(l => !l.IsDeleted && l.LockerNumber == lockerNumber)
+                .ToListAsync();
+            return candidates.FirstOrDefault(l =>
+                (excludeId == null || l.Id != excludeId) &&
+                OperationalBranchRules.LockerNumbersCollide(l.BranchId, l.LockerNumber, branchId, lockerNumber));
         }
 
         private static LockerDto Map(Locker l) => new()
@@ -129,7 +140,8 @@ namespace GymManagement.Infrastructure.Services.LockerMgmt
             LockerNumber = l.LockerNumber,
             Size = l.Size,
             Status = l.Status,
-            Location = l.Location
+            Location = l.Location,
+            BranchId = l.BranchId
         };
     }
 }

@@ -301,6 +301,7 @@ export interface EquipmentInput {
   status: string
   nextServiceDate?: string
   notes?: string
+  branchId?: number
 }
 
 const toApiEquipmentPayload = (input: EquipmentInput): Record<string, unknown> => ({
@@ -314,6 +315,7 @@ const toApiEquipmentPayload = (input: EquipmentInput): Record<string, unknown> =
   status: input.status,
   nextServiceDate: input.nextServiceDate || null,
   notes: input.notes || null,
+  branchId: input.branchId ?? null,
 })
 
 // Mock-mode helper — creates a believable Equipment object for offline demos.

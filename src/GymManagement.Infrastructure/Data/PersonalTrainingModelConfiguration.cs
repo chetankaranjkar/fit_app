@@ -10,6 +10,7 @@ namespace GymManagement.Infrastructure.Data
         {
             ConfigurePTPackage(modelBuilder);
             ConfigurePTPackagePrice(modelBuilder);
+            ConfigurePTPackageBranchPrice(modelBuilder);
             ConfigurePTPackageInvoice(modelBuilder);
             ConfigureMemberPTPackage(modelBuilder);
             ConfigureMemberPTPackageHistory(modelBuilder);
@@ -57,6 +58,18 @@ namespace GymManagement.Infrastructure.Data
             });
         }
 
+        private static void ConfigurePTPackageBranchPrice(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<PTPackageBranchPrice>(entity =>
+            {
+                entity.ToTable("PT_PackageBranchPrices");
+                entity.Property(e => e.Price).HasPrecision(12, 2);
+                entity.HasIndex(e => new { e.PackageId, e.BranchId }).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.HasOne(e => e.Package).WithMany().HasForeignKey(e => e.PackageId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Branch).WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+        }
+
         private static void ConfigurePTPackageInvoice(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<PTPackageInvoice>(entity =>
@@ -77,6 +90,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.TrainerId);
                 entity.HasIndex(e => e.IssueDate);
+                entity.HasIndex(e => e.SellingBranchId);
                 entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.Trainer).WithMany().HasForeignKey(e => e.TrainerId).OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.Package).WithMany().HasForeignKey(e => e.PackageId).OnDelete(DeleteBehavior.Restrict);
@@ -103,6 +117,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.TrainerId);
                 entity.HasIndex(e => e.Status);
                 entity.HasIndex(e => e.ExpiryDate);
+                entity.HasIndex(e => e.SellingBranchId);
                 entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.Trainer).WithMany().HasForeignKey(e => e.TrainerId).OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.Package).WithMany(p => p.MemberPackages).HasForeignKey(e => e.PackageId).OnDelete(DeleteBehavior.Restrict);
@@ -157,6 +172,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.TrainerId);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.ScheduledStartUtc);
+                entity.HasIndex(e => e.BranchId);
                 entity.HasIndex(e => new { e.TrainerId, e.ScheduledStartUtc, e.ScheduledEndUtc });
                 entity.HasOne(e => e.MemberPTPackage).WithMany(p => p.Sessions).HasForeignKey(e => e.MemberPTPackageId).OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
@@ -256,6 +272,7 @@ namespace GymManagement.Infrastructure.Data
         {
             modelBuilder.Entity<PTPackage>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<PTPackagePrice>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<PTPackageBranchPrice>().HasQueryFilter(e => !e.IsDeleted && e.Package != null && !e.Package.IsDeleted);
             modelBuilder.Entity<PTPackageInvoice>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<MemberPTPackage>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<MemberPTPackageHistory>().HasQueryFilter(e => !e.IsDeleted);

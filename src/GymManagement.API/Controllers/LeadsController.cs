@@ -135,6 +135,37 @@ public sealed class LeadsController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    public sealed class AssignBranchRequest
+    {
+        public int BranchId { get; set; }
+    }
+
+    [HttpPut("{id:int}/interested-branch")]
+    [HasPermission(PermissionCodes.LeadsCrm)]
+    public async Task<ActionResult<GymLeadDetailDto>> AssignInterestedBranch(
+        int id,
+        [FromBody] AssignBranchRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var row = await _leads.AssignInterestedBranchAsync(id, request.BranchId, cancellationToken).ConfigureAwait(false);
+            return row == null ? NotFound() : Ok(row);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (ConflictException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id:int}")]
@@ -289,6 +320,10 @@ public sealed class LeadsController : ControllerBase
             return Conflict(new { message = ex.Message });
         }
         catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
         }

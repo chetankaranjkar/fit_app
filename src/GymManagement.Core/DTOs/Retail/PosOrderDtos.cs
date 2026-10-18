@@ -51,6 +51,7 @@ namespace GymManagement.Core.DTOs.Retail
         public string? PaymentReference { get; set; }
         public string? Notes { get; set; }
         public List<CreatePosOrderItemDto> Items { get; set; } = new();
+        public int? BranchId { get; set; }
     }
 
     public sealed class CreatePosOrderItemDto

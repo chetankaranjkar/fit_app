@@ -89,6 +89,7 @@ namespace GymManagement.Core.DTOs.PersonalTraining
         public string? CouponCode { get; set; }
         public decimal? PaidAmount { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class MemberPTPackageFilterDto : GymManagement.Core.DTOs.Common.PagedQueryDto
@@ -178,6 +179,7 @@ namespace GymManagement.Core.DTOs.PersonalTraining
         public DateTime ScheduledStartUtc { get; set; }
         public DateTime ScheduledEndUtc { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class ReschedulePTSessionDto

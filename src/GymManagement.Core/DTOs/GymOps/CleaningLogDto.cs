@@ -15,6 +15,7 @@ namespace GymManagement.Core.DTOs.GymOps
         public string Shift { get; set; } = string.Empty;
         public string? PerformedBy { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
         public List<CleaningTaskItemDto> Tasks { get; set; } = new();
     }
 
@@ -31,6 +32,7 @@ namespace GymManagement.Core.DTOs.GymOps
         public string Shift { get; set; } = string.Empty;
         public string? PerformedBy { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
         public List<CreateCleaningTaskItemDto> Tasks { get; set; } = new();
     }
 

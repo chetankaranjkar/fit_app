@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { couponsService } from '../services/coupons.service'
+import { branchesService } from '../services/branches.service'
 import { formatInr } from '../lib/formatInr'
 import { getApiErrorMessage } from '../lib/apiErrors'
 import type {
@@ -62,6 +63,8 @@ const defaultForm: CreateCouponDto = {
   validTo: '',
   usageLimit: 100,
   perUserLimit: 1,
+  branchScope: 'AllBranches',
+  applicableBranchIds: [],
 }
 
 export function CouponsPage() {
@@ -101,6 +104,12 @@ export function CouponsPage() {
       const { data } = await couponsService.getAnalytics()
       return data
     },
+  })
+
+  const { data: couponBranches = [] } = useQuery({
+    queryKey: ['coupon-branches'],
+    queryFn: async () => (await branchesService.list({ activeOnly: true })).data,
+    enabled: modalOpen,
   })
 
   const { data: usages = [], isLoading: usagesLoading } = useQuery<CouponUsage[]>({
@@ -147,6 +156,8 @@ export function CouponsPage() {
         validTo: new Date(`${form.validTo}T23:59:59`).toISOString(),
         usageLimit: form.usageLimit,
         perUserLimit: form.perUserLimit,
+        branchScope: form.branchScope,
+        applicableBranchIds: form.branchScope === 'SelectedBranches' ? form.applicableBranchIds : [],
       }
       const { data } = await couponsService.update(editing.id, dto)
       return data
@@ -191,6 +202,8 @@ export function CouponsPage() {
       validTo: c.validTo.slice(0, 10),
       usageLimit: c.usageLimit,
       perUserLimit: c.perUserLimit,
+      branchScope: c.branchScope === 'SelectedBranches' ? 'SelectedBranches' : 'AllBranches',
+      applicableBranchIds: c.applicableBranchIds ?? [],
     })
     setFormError(null)
     setModalOpen(true)
@@ -212,6 +225,8 @@ export function CouponsPage() {
     if (new Date(form.validTo) <= new Date(form.validFrom))
       return setFormError('Valid To must be after Valid From.')
     if (form.usageLimit < 1) return setFormError('Usage limit must be at least 1.')
+    if (form.branchScope === 'SelectedBranches' && (form.applicableBranchIds?.length ?? 0) === 0)
+      return setFormError('Select at least one branch, or choose all branches.')
 
     if (editing) updateMutation.mutate()
     else createMutation.mutate()
@@ -429,6 +444,52 @@ export function CouponsPage() {
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             placeholder="Optional description"
           />
+          <div>
+            <label className={labelClass}>Branch scope</label>
+            <select
+              value={form.branchScope ?? 'AllBranches'}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  branchScope: e.target.value as 'SelectedBranches' | 'AllBranches',
+                }))
+              }
+              className={selectClass}
+            >
+              <option value="AllBranches" className="bg-slate-900">All branches, including future branches</option>
+              <option value="SelectedBranches" className="bg-slate-900">Selected branches</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              All branches means every current and future branch in this organization. The coupon is checked against the purchase branch recorded on the bill.
+            </p>
+            {form.branchScope === 'SelectedBranches' ? (
+              <div className="mt-2 space-y-1">
+                {couponBranches.map((branch) => {
+                  const selected = form.applicableBranchIds?.includes(branch.id) ?? false
+                  return (
+                    <label key={branch.id} className="flex items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() =>
+                          setForm((f) => {
+                            const ids = f.applicableBranchIds ?? []
+                            return {
+                              ...f,
+                              applicableBranchIds: selected
+                                ? ids.filter((id) => id !== branch.id)
+                                : [...ids, branch.id],
+                            }
+                          })
+                        }
+                      />
+                      {branch.branchName}
+                    </label>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className={labelClass}>Discount Type</label>

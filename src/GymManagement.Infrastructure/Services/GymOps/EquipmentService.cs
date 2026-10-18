@@ -1,4 +1,5 @@
 using GymManagement.Core.DTOs.GymOps;
+using GymManagement.Core.Services;
 using GymManagement.Core.Services.GymOps;
 using GymManagement.Domain.Entities.GymOps;
 using GymManagement.Infrastructure.Data;
@@ -9,25 +10,30 @@ namespace GymManagement.Infrastructure.Services.GymOps
     public class EquipmentService : IEquipmentService
     {
         private readonly ApplicationDbContext _db;
+        private readonly IBranchScopeService _scope;
 
-        public EquipmentService(ApplicationDbContext db)
+        public EquipmentService(ApplicationDbContext db, IBranchScopeService scope)
         {
             _db = db;
+            _scope = scope;
         }
 
         public async Task<IEnumerable<EquipmentDto>> GetAllAsync()
         {
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
             var list = await _db.Set<Equipment>()
                 .AsNoTracking()
                 .OrderByDescending(e => e.CreatedDate)
                 .ToListAsync();
-            return list.Select(Map);
+            return list.Where(e => scope.Includes(e.BranchId)).Select(Map);
         }
 
         public async Task<EquipmentDto?> GetByIdAsync(int id)
         {
             var entity = await _db.Set<Equipment>().AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
-            return entity == null ? null : Map(entity);
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId))
+                return null;
+            return Map(entity);
         }
 
         public async Task<EquipmentDto> CreateAsync(CreateEquipmentDto dto)
@@ -43,7 +49,8 @@ namespace GymManagement.Infrastructure.Services.GymOps
                 PurchaseCost = dto.PurchaseCost,
                 Status = string.IsNullOrWhiteSpace(dto.Status) ? "OPERATIONAL" : dto.Status,
                 NextServiceDate = dto.NextServiceDate,
-                Notes = dto.Notes
+                Notes = dto.Notes,
+                BranchId = (await _scope.RequireAssignableBranchAsync(dto.BranchId, null)).BranchId
             };
             _db.Set<Equipment>().Add(entity);
             await _db.SaveChangesAsync();
@@ -53,7 +60,7 @@ namespace GymManagement.Infrastructure.Services.GymOps
         public async Task<EquipmentDto?> UpdateAsync(int id, UpdateEquipmentDto dto)
         {
             var entity = await _db.Set<Equipment>().FirstOrDefaultAsync(e => e.Id == id);
-            if (entity == null) return null;
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId)) return null;
 
             if (dto.Name != null) entity.Name = dto.Name;
             if (dto.Category != null) entity.Category = dto.Category;
@@ -73,7 +80,7 @@ namespace GymManagement.Infrastructure.Services.GymOps
         public async Task<bool> DeleteAsync(int id)
         {
             var entity = await _db.Set<Equipment>().FirstOrDefaultAsync(e => e.Id == id);
-            if (entity == null) return false;
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId)) return false;
             entity.IsDeleted = true;
             await _db.SaveChangesAsync();
             return true;
@@ -91,7 +98,8 @@ namespace GymManagement.Infrastructure.Services.GymOps
             PurchaseCost = e.PurchaseCost,
             Status = e.Status,
             NextServiceDate = e.NextServiceDate,
-            Notes = e.Notes
+            Notes = e.Notes,
+            BranchId = e.BranchId
         };
     }
 }

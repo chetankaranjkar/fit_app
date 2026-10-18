@@ -210,6 +210,10 @@ export const userMembershipsService = {
       data: normalizeUserMembership((res.data ?? {}) as Record<string, unknown>),
     }
   },
+  getVisitAccess: (id: number) =>
+    api.get<{ membershipId: number; accessScope: string; branchIds: number[] }>(`/UserMemberships/${id}/visit-access`),
+  setVisitAccess: (id: number, body: { accessScope: string; branchIds?: number[] }) =>
+    api.put<{ membershipId: number; accessScope: string; branchIds: number[] }>(`/UserMemberships/${id}/visit-access`, body),
   renewAccess: async (id: number, body?: { planId?: number }) => {
     const res = await api.post<unknown>(`/UserMemberships/${id}/renew-access`, body ?? {})
     return {

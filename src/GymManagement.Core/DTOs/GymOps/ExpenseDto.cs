@@ -11,6 +11,8 @@ namespace GymManagement.Core.DTOs.GymOps
         public string? Vendor { get; set; }
         public string? ReceiptUrl { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
+        public bool IsOrganizationWide { get; set; }
     }
 
     public class CreateExpenseDto
@@ -23,6 +25,8 @@ namespace GymManagement.Core.DTOs.GymOps
         public string? Vendor { get; set; }
         public string? ReceiptUrl { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
+        public bool IsOrganizationWide { get; set; }
     }
 
     public class UpdateExpenseDto
@@ -35,5 +39,7 @@ namespace GymManagement.Core.DTOs.GymOps
         public string? Vendor { get; set; }
         public string? ReceiptUrl { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
+        public bool? IsOrganizationWide { get; set; }
     }
 }

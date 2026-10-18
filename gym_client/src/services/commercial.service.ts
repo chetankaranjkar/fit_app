@@ -8,6 +8,11 @@ export type PublicCommercialConfig = {
   checkoutBusinessName: string
 }
 
+export type PublicBranchOption = {
+  id: number
+  name: string
+}
+
 export type PublicMembershipPlan = {
   id: number
   planName: string
@@ -23,6 +28,7 @@ export type PublicSignupPayload = {
   phone: string
   password: string
   planId: number
+  homeBranchId?: number
   dateOfBirth?: string
   gender?: string
 }
@@ -110,7 +116,9 @@ export type MemberBillingAccess = {
 
 export const commercialService = {
   getConfig: () => api.get<PublicCommercialConfig>('/public/config'),
-  getPlans: () => api.get<PublicMembershipPlan[]>('/public/membership-plans'),
+  getPlans: (branchId: number) =>
+    api.get<PublicMembershipPlan[]>('/public/membership-plans', { params: { branchId } }),
+  getBranches: () => api.get<PublicBranchOption[]>('/public/branches'),
   signup: (payload: PublicSignupPayload) => api.post<PublicSignupResult>('/public/signup', payload),
   getBillingAccess: () => api.get<MemberBillingAccess>('/me/membership-billing/access'),
   createRazorpayOrder: (membershipPaymentId?: number) =>

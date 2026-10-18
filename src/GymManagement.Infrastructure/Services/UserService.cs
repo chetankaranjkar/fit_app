@@ -29,6 +29,8 @@ namespace GymManagement.Infrastructure.Services
         private readonly IUsernameAvailabilityService _usernameAvailability;
         private readonly IMemberTrainingScheduleService _trainingScheduleService;
         private readonly INotificationEventService _notifications;
+        private readonly IBranchAssignmentService _branches;
+        private readonly IBranchScopeService _scope;
         public UserService(
             IUnitOfWork unitOfWork,
             IMembershipPaymentService membershipPaymentService,
@@ -40,7 +42,9 @@ namespace GymManagement.Infrastructure.Services
             IMobileNumberAvailabilityService mobileAvailability,
             IUsernameAvailabilityService usernameAvailability,
             IMemberTrainingScheduleService trainingScheduleService,
-            INotificationEventService notifications)
+            INotificationEventService notifications,
+            IBranchAssignmentService branches,
+            IBranchScopeService scope)
         {
             _unitOfWork = unitOfWork;
             _membershipPaymentService = membershipPaymentService;
@@ -53,6 +57,8 @@ namespace GymManagement.Infrastructure.Services
             _usernameAvailability = usernameAvailability;
             _trainingScheduleService = trainingScheduleService;
             _notifications = notifications;
+            _branches = branches;
+            _scope = scope;
         }
 
         public async Task<IEnumerable<UserDto>> GetAllUsersAsync(int? assignedToTrainerProfileId = null)
@@ -74,6 +80,21 @@ namespace GymManagement.Infrastructure.Services
             }
 
             var userList = users.ToList();
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (!scope.IsUnrestricted)
+            {
+                var ids = scope.BranchIds.ToArray();
+                var loadedIds = userList.Select(u => u.Id).ToList();
+                var assigned = await _db.UserBranchAssignments.AsNoTracking()
+                    .Where(a => loadedIds.Contains(a.UserId) && ids.Contains(a.BranchId))
+                    .Select(a => a.UserId)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+                var extra = assigned.ToHashSet();
+                userList = userList
+                    .Where(u => scope.IncludesUser(u.Id, u.HomeBranchId, extra.Contains(u.Id) ? ids : Array.Empty<int>()))
+                    .ToList();
+            }
             var userIds = userList.Select(u => u.Id).ToHashSet();
             var allAuth = (await _unitOfWork.AuthUsers.GetAllAsync()).ToList();
             var trainersByUserId = (await _unitOfWork.Trainers.GetAllAsync()).ToDictionary(t => t.UserId, t => t);
@@ -87,14 +108,16 @@ namespace GymManagement.Infrastructure.Services
             var billingByUserId = await GetBillingSummariesByUserIdsAsync(userIds);
             var membershipByUserId = await GetDisplayMembershipsByUserIdsAsync(userIds);
             var trainerAssignmentByUserId = await GetActiveTrainerAssignmentByUserIdsAsync(userIds);
-            return userList.Select(u =>
+            var mapped = userList.Select(u =>
             {
                 var dto = MapToDto(u, authByUserId.GetValueOrDefault(u.Id), trainerUserIds.Contains(u.Id), userTypesByUserId.GetValueOrDefault(u.Id), appRoleNamesByUserId.GetValueOrDefault(u.Id));
                 EnrichWithBillingSummary(dto, billingByUserId.GetValueOrDefault(u.Id));
                 EnrichWithMembershipSummary(dto, membershipByUserId.GetValueOrDefault(u.Id), billingByUserId.GetValueOrDefault(u.Id));
                 EnrichWithTrainerAssignment(dto, trainerAssignmentByUserId.GetValueOrDefault(u.Id));
                 return dto;
-            });
+            }).ToList();
+            await EnrichHomeBranchNamesAsync(mapped).ConfigureAwait(false);
+            return mapped;
         }
 
         public async Task<PagedResultDto<UserDto>> GetUsersPagedAsync(
@@ -106,7 +129,8 @@ namespace GymManagement.Infrastructure.Services
             bool includeBillingSummary = true,
             string? preferredGymTime = null,
             int? assignedToTrainerProfileId = null,
-            bool countOnly = false)
+            bool countOnly = false,
+            int? homeBranchId = null)
         {
             var safePage = page < 1 ? 1 : page;
             var safePageSize = Math.Clamp(pageSize, 1, 200);
@@ -116,7 +140,8 @@ namespace GymManagement.Infrastructure.Services
                 isActive,
                 preferredGymTime,
                 assignedToTrainerProfileId,
-                search)
+                search,
+                homeBranchId)
                 .ConfigureAwait(false);
 
             if (countOnly)
@@ -180,6 +205,7 @@ namespace GymManagement.Infrastructure.Services
                 EnrichWithTrainerAssignment(dto, trainerAssignmentByUserId.GetValueOrDefault(u.Id));
                 return dto;
             }).ToList();
+            await EnrichHomeBranchNamesAsync(items).ConfigureAwait(false);
 
             return new PagedResultDto<UserDto>
             {
@@ -243,9 +269,12 @@ namespace GymManagement.Infrastructure.Services
             bool? isActive,
             string? preferredGymTime,
             int? assignedToTrainerProfileId,
-            string? search)
+            string? search,
+            int? homeBranchId = null)
         {
             IQueryable<User> query = _db.Users.AsNoTracking().Where(u => !u.IsDeleted);
+            if (homeBranchId is int branchId)
+                query = query.Where(u => u.HomeBranchId == branchId);
 
             if (isActive.HasValue)
                 query = query.Where(u => u.IsActive == isActive.Value);
@@ -265,7 +294,20 @@ namespace GymManagement.Infrastructure.Services
                 query = query.ApplyAssignedToTrainerFilter(_db.UserInstructors, assignedToTrainerProfileId.Value);
 
             query = query.ApplyUserSearchFilter(_db.AuthUsers, search);
-            return query;
+            return await ApplyUserScopeAsync(query).ConfigureAwait(false);
+        }
+
+        private async Task<IQueryable<User>> ApplyUserScopeAsync(IQueryable<User> query)
+        {
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (scope.IsUnrestricted)
+                return query;
+            var ids = scope.BranchIds.ToArray();
+            var actor = scope.ActorUserId;
+            return query.Where(u =>
+                u.Id == actor
+                || (u.HomeBranchId != null && ids.Contains(u.HomeBranchId.Value))
+                || _db.UserBranchAssignments.Any(a => a.UserId == u.Id && ids.Contains(a.BranchId)));
         }
 
         private async Task<int?> ResolveMemberRoleIdAsync()
@@ -281,6 +323,17 @@ namespace GymManagement.Infrastructure.Services
         {
             var user = await _unitOfWork.Users.GetByIdAsync(id);
             if (user == null) return null;
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (!scope.IsUnrestricted)
+            {
+                var extras = await _db.UserBranchAssignments.AsNoTracking()
+                    .Where(a => a.UserId == id)
+                    .Select(a => a.BranchId)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+                if (!scope.IncludesUser(id, user.HomeBranchId, extras))
+                    return null;
+            }
 
             var authUser = await _db.AuthUsers.AsNoTracking()
                 .Where(a => !a.IsDeleted && a.UserId == id)
@@ -294,6 +347,7 @@ namespace GymManagement.Infrastructure.Services
             var dto = MapToDto(user, authUser, hasTrainerProfile, userTypes, appRoleNamesByUserId.GetValueOrDefault(id));
             await EnrichUserProfileForEditPrefillAsync(dto, id).ConfigureAwait(false);
             await EnrichProfileIdsAsync(dto, id).ConfigureAwait(false);
+            await EnrichHomeBranchNamesAsync(new[] { dto }).ConfigureAwait(false);
             return dto;
         }
 
@@ -511,6 +565,28 @@ namespace GymManagement.Infrastructure.Services
             await _unitOfWork.Users.AddAsync(user);
             await _unitOfWork.SaveChangesAsync();
 
+            var memberOnly = accountRole == Role.User;
+            var home = await _scope.RequireAssignableBranchAsync(createUserDto.HomeBranchId, user.OrganizationId).ConfigureAwait(false);
+            if (user.OrganizationId == null && home.OrganizationId != null)
+            {
+                user.OrganizationId = home.OrganizationId;
+                await _unitOfWork.SaveChangesAsync();
+            }
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            if (!scope.IsUnrestricted)
+            {
+                foreach (var extra in createUserDto.AdditionalBranchIds ?? new List<int>())
+                {
+                    if (!scope.Includes(extra))
+                        throw new InvalidOperationException(GymManagement.Core.Branching.BranchAccessRules.BranchNotPermittedMessage);
+                }
+            }
+            await _branches.AssignNewOperationalUserAsync(
+                user.Id,
+                home.BranchId,
+                createUserDto.AdditionalBranchIds,
+                memberOnly);
+
             if (willCreateAuth && passwordHash != null)
             {
                 await _unitOfWork.AuthUsers.AddAsync(new AuthUser
@@ -538,6 +614,7 @@ namespace GymManagement.Infrastructure.Services
                     var startDate = createUserDto.MembershipStartDate?.Date ?? DateTime.UtcNow.Date;
                     var endDate = startDate.AddDays(plan.DurationDays);
                     await UserMembershipConflictGuard.EnsureNoActiveMembershipBeforeCreateAsync(_db, user.Id);
+                    var agreed = await _branches.ResolveSalePriceAsync(plan.Id, home.BranchId, plan.Price);
                     var membership = new UserMembership
                     {
                         UserId = user.Id,
@@ -547,6 +624,9 @@ namespace GymManagement.Infrastructure.Services
                         Status = IsTrialMembershipPlan(plan)
                             ? MembershipStatus.Active
                             : MembershipStatus.ActivePendingPayment,
+                        SellingBranchId = user.HomeBranchId,
+                        AgreedPrice = agreed,
+                        AccessScope = nameof(GymManagement.Core.Branching.BranchAccessRules.MembershipAccessScope.HomeOnly),
                     };
                     await _unitOfWork.UserMemberships.AddAsync(membership);
                     try
@@ -641,6 +721,7 @@ namespace GymManagement.Infrastructure.Services
 
             var identities = await LoadBulkImportIdentitiesAsync().ConfigureAwait(false);
             var evaluation = BulkMemberImportEvaluator.Evaluate(members, identities);
+            await ApplyImportBranchesAsync(evaluation).ConfigureAwait(false);
 
             if (request.DryRun || evaluation.Accepted.Count == 0)
             {
@@ -678,6 +759,10 @@ namespace GymManagement.Infrastructure.Services
                     IsActive = dto.IsActive,
                     RegistrationDate = now,
                 };
+                var importedBranch = await _scope.RequireAssignableBranchAsync(dto.HomeBranchId, null).ConfigureAwait(false);
+                user.HomeBranchId = importedBranch.BranchId;
+                if (importedBranch.OrganizationId != null)
+                    user.OrganizationId = importedBranch.OrganizationId;
 
                 var userTypeIds = (dto.UserTypeIds ?? new List<int>())
                     .Where(id => id > 0 && validUserTypeIds.Contains(id))
@@ -867,6 +952,8 @@ namespace GymManagement.Infrastructure.Services
 
         public async Task<UserDto?> UpdateUserAsync(int id, UpdateUserDto updateUserDto)
         {
+            if (await GetUserByIdAsync(id).ConfigureAwait(false) == null)
+                return null;
             var user = await _unitOfWork.Users.GetByIdAsync(id);
             if (user == null) return null;
 
@@ -961,13 +1048,20 @@ namespace GymManagement.Infrastructure.Services
                     var startDate = updateUserDto.MembershipStartDate?.Date ?? DateTime.UtcNow.Date;
                     var endDate = startDate.AddDays(plan.DurationDays);
                     await UserMembershipConflictGuard.EnsureNoActiveMembershipBeforeCreateAsync(_db, id);
+                    if (user.HomeBranchId is not int saleBranchId)
+                        throw new InvalidOperationException(GymManagement.Core.Branching.BranchAccessRules.SaleBranchRequiredMessage);
+                    await _scope.RequireAssignableBranchAsync(saleBranchId, user.OrganizationId);
+                    var agreed = await _branches.ResolveSalePriceAsync(plan.Id, saleBranchId, plan.Price);
                     var membership = new UserMembership
                     {
                         UserId = id,
                         PlanId = plan.Id,
                         StartDate = startDate,
                         EndDate = endDate,
-                        Status = MembershipStatus.Active
+                        Status = MembershipStatus.Active,
+                        SellingBranchId = user.HomeBranchId,
+                        AgreedPrice = agreed,
+                        AccessScope = nameof(GymManagement.Core.Branching.BranchAccessRules.MembershipAccessScope.HomeOnly),
                     };
                     await _unitOfWork.UserMemberships.AddAsync(membership);
                     try
@@ -1019,6 +1113,23 @@ namespace GymManagement.Infrastructure.Services
                 await ApplyAdminLoginIdUpdateAsync(user.Id, loginEmailUpdate);
 
             return await GetUserByIdAsync(id);
+        }
+
+        public async Task<UserDto?> AssignHomeBranchAsync(int id, int branchId)
+        {
+            if (await GetUserByIdAsync(id).ConfigureAwait(false) == null)
+                return null;
+            var user = await _unitOfWork.Users.GetByIdAsync(id);
+            if (user == null)
+                return null;
+            if (user.HomeBranchId != null)
+                throw new InvalidOperationException("This person already has a home branch. Use member transfer to change it.");
+            var assigned = await _scope.RequireAssignableBranchAsync(branchId, user.OrganizationId).ConfigureAwait(false);
+            user.HomeBranchId = assigned.BranchId;
+            if (user.OrganizationId == null && assigned.OrganizationId != null)
+                user.OrganizationId = assigned.OrganizationId;
+            await _unitOfWork.SaveChangesAsync().ConfigureAwait(false);
+            return await GetUserByIdAsync(id).ConfigureAwait(false);
         }
 
         private static string? ResolveLoginId(CreateUserDto dto)
@@ -1220,6 +1331,73 @@ namespace GymManagement.Infrastructure.Services
                 || name.Contains("free");
         }
 
+        private async Task ApplyImportBranchesAsync(BulkMemberImportEvaluator.Evaluation evaluation)
+        {
+            if (evaluation.Accepted.Count == 0)
+                return;
+            var scope = await _scope.CurrentAsync().ConfigureAwait(false);
+            var active = await _db.Branches.AsNoTracking()
+                .Where(b => b.IsActive)
+                .Select(b => b.Id)
+                .ToListAsync()
+                .ConfigureAwait(false);
+            int? preferred = null;
+            if (scope.ActorUserId is int actorId)
+            {
+                preferred = await _db.Users.AsNoTracking()
+                    .Where(u => u.Id == actorId)
+                    .Select(u => u.HomeBranchId)
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false);
+                if (preferred is int id && !scope.Includes(id))
+                    preferred = null;
+            }
+
+            var kept = new List<BulkMemberImportEvaluator.AcceptedRow>();
+            foreach (var row in evaluation.Accepted)
+            {
+                try
+                {
+                    row.Dto.HomeBranchId = scope.ResolveForNewRecord(row.Dto.HomeBranchId, active, preferred);
+                    kept.Add(row);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    var reported = evaluation.Rows.FirstOrDefault(r =>
+                        r.SourceRowNumber == row.SourceRowNumber
+                        && r.Outcome == BulkMemberImportEvaluator.OutcomeAccepted);
+                    if (reported != null)
+                    {
+                        reported.Outcome = BulkMemberImportEvaluator.OutcomeFailed;
+                        reported.Field = "homeBranchId";
+                        reported.Code = "branch_required";
+                        reported.Message = ex.Message;
+                        reported.HowToFix = "Choose an active branch you are allowed to use, or add a homeBranch column.";
+                    }
+                }
+            }
+
+            evaluation.Accepted.Clear();
+            evaluation.Accepted.AddRange(kept);
+        }
+
+        private async Task EnrichHomeBranchNamesAsync(IEnumerable<UserDto> dtos)
+        {
+            var list = dtos as IList<UserDto> ?? dtos.ToList();
+            var ids = list.Where(d => d.HomeBranchId is int).Select(d => d.HomeBranchId!.Value).Distinct().ToList();
+            if (ids.Count == 0)
+                return;
+            var names = await _db.Branches.AsNoTracking()
+                .Where(b => ids.Contains(b.Id))
+                .ToDictionaryAsync(b => b.Id, b => b.BranchName)
+                .ConfigureAwait(false);
+            foreach (var dto in list)
+            {
+                if (dto.HomeBranchId is int id && names.TryGetValue(id, out var name))
+                    dto.HomeBranchName = name;
+            }
+        }
+
         private UserDto MapToDto(User user, AuthUser? authUser = null, bool isInstructorProfile = false, List<UserTypeDto>? userTypes = null, List<string>? appRoleNamesFromUserRoles = null)
         {
             var role = AuthUserRoleHelper.ResolveRoleForUserDto(authUser, isInstructorProfile, userTypes, appRoleNamesFromUserRoles);
@@ -1234,6 +1412,7 @@ namespace GymManagement.Infrastructure.Services
                 DateOfBirth = user.DateOfBirth,
                 Gender = user.Gender,
                 RegistrationDate = user.RegistrationDate,
+                HomeBranchId = user.HomeBranchId,
                 Address = user.Address,
                 EmergencyContact = user.EmergencyContact,
                 EmergencyPhone = user.EmergencyPhone,

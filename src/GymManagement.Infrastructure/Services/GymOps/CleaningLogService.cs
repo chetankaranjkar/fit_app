@@ -1,4 +1,5 @@
 using GymManagement.Core.DTOs.GymOps;
+using GymManagement.Core.Services;
 using GymManagement.Core.Services.GymOps;
 using GymManagement.Domain.Entities.GymOps;
 using GymManagement.Infrastructure.Data;
@@ -9,20 +10,23 @@ namespace GymManagement.Infrastructure.Services.GymOps
     public class CleaningLogService : ICleaningLogService
     {
         private readonly ApplicationDbContext _db;
+        private readonly IBranchScopeService _scope;
 
-        public CleaningLogService(ApplicationDbContext db)
+        public CleaningLogService(ApplicationDbContext db, IBranchScopeService scope)
         {
             _db = db;
+            _scope = scope;
         }
 
         public async Task<IEnumerable<CleaningLogDto>> GetAllAsync()
         {
+            var scope = await _scope.CurrentAsync();
             var list = await _db.Set<CleaningLog>()
                 .AsNoTracking()
                 .Include(l => l.Tasks)
                 .OrderByDescending(l => l.LogDate)
                 .ToListAsync();
-            return list.Select(Map);
+            return list.Where(c => scope.Includes(c.BranchId)).Select(Map);
         }
 
         public async Task<CleaningLogDto?> GetByIdAsync(int id)
@@ -31,7 +35,9 @@ namespace GymManagement.Infrastructure.Services.GymOps
                 .AsNoTracking()
                 .Include(l => l.Tasks)
                 .FirstOrDefaultAsync(l => l.Id == id);
-            return entity == null ? null : Map(entity);
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId))
+                return null;
+            return Map(entity);
         }
 
         public async Task<CleaningLogDto> CreateAsync(CreateCleaningLogDto dto)
@@ -43,6 +49,7 @@ namespace GymManagement.Infrastructure.Services.GymOps
                 Shift = dto.Shift,
                 PerformedBy = dto.PerformedBy,
                 Notes = dto.Notes,
+                BranchId = (await _scope.RequireAssignableBranchAsync(dto.BranchId, null)).BranchId,
                 Tasks = dto.Tasks.Select(t => new CleaningTaskItem
                 {
                     Label = t.Label,
@@ -56,6 +63,9 @@ namespace GymManagement.Infrastructure.Services.GymOps
 
         public async Task<CleaningTaskItemDto?> UpdateTaskAsync(int logId, int taskId, UpdateCleaningTaskDto dto)
         {
+            var log = await _db.Set<CleaningLog>().AsNoTracking().FirstOrDefaultAsync(l => l.Id == logId);
+            if (log == null || !(await _scope.CurrentAsync()).Includes(log.BranchId))
+                return null;
             var task = await _db.Set<CleaningTaskItem>()
                 .FirstOrDefaultAsync(t => t.Id == taskId && t.CleaningLogId == logId);
             if (task == null) return null;
@@ -75,7 +85,7 @@ namespace GymManagement.Infrastructure.Services.GymOps
             var entity = await _db.Set<CleaningLog>()
                 .Include(l => l.Tasks)
                 .FirstOrDefaultAsync(l => l.Id == id);
-            if (entity == null) return false;
+            if (entity == null || !(await _scope.CurrentAsync()).Includes(entity.BranchId)) return false;
             entity.IsDeleted = true;
             foreach (var t in entity.Tasks) t.IsDeleted = true;
             await _db.SaveChangesAsync();
@@ -90,6 +100,7 @@ namespace GymManagement.Infrastructure.Services.GymOps
             Shift = l.Shift,
             PerformedBy = l.PerformedBy,
             Notes = l.Notes,
+            BranchId = l.BranchId,
             Tasks = l.Tasks
                 .Where(t => !t.IsDeleted)
                 .OrderBy(t => t.Id)

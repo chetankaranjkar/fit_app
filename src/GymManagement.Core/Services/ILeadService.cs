@@ -13,6 +13,7 @@ public interface ILeadService
     Task<GymLeadDetailDto?> GetLeadDetailAsync(int id, LeadAccessScope scope, CancellationToken cancellationToken = default);
     Task<GymLeadDetailDto> CreateLeadAsync(CreateGymLeadDto dto, CancellationToken cancellationToken = default);
     Task<GymLeadDetailDto?> UpdateLeadAsync(int id, UpdateGymLeadDto dto, CancellationToken cancellationToken = default);
+    Task<GymLeadDetailDto?> AssignInterestedBranchAsync(int id, int branchId, CancellationToken cancellationToken = default);
     Task<bool> SoftDeleteLeadAsync(int id, CancellationToken cancellationToken = default);
     Task<GymLeadDetailDto?> SetStatusAsync(int id, LeadPipelineStatus status, CancellationToken cancellationToken = default);
     Task<LeadFollowupDto> AddFollowupAsync(

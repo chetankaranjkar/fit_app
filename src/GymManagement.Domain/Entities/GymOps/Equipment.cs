@@ -1,3 +1,5 @@
+using GymManagement.Domain.Entities;
+
 namespace GymManagement.Domain.Entities.GymOps
 {
     /// <summary>
@@ -16,6 +18,8 @@ namespace GymManagement.Domain.Entities.GymOps
         public string Status { get; set; } = "OPERATIONAL"; // OPERATIONAL / UNDER_MAINTENANCE / OUT_OF_ORDER / RETIRED
         public DateTime? NextServiceDate { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
+        public Branch? Branch { get; set; }
 
         public ICollection<MaintenanceLog> MaintenanceLogs { get; set; } = new List<MaintenanceLog>();
     }

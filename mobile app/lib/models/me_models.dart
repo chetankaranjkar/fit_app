@@ -12,6 +12,8 @@ class MeProfile {
   final String? profilePictureUrl;
   final DateTime registrationDate;
   final String? preferredGymTime;
+  final int? homeBranchId;
+  final String? homeBranchName;
   /// Assigned goal weight from UserDetails — not a recorded weigh-in.
   final num? targetWeightKg;
   /// Assigned goal type from UserDetails.
@@ -31,6 +33,8 @@ class MeProfile {
     this.dateOfBirth,
     this.profilePictureUrl,
     this.preferredGymTime,
+    this.homeBranchId,
+    this.homeBranchName,
     this.targetWeightKg,
     this.assignedGoalType,
     this.heightCm,
@@ -49,6 +53,8 @@ class MeProfile {
       profilePictureUrl: json['profilePictureUrl']?.toString(),
       registrationDate: _dt(json['registrationDate']) ?? DateTime.now(),
       preferredGymTime: json['preferredGymTime']?.toString(),
+      homeBranchId: _int(json['homeBranchId']),
+      homeBranchName: json['homeBranchName']?.toString(),
       targetWeightKg: _double(json['targetWeightKg']),
       assignedGoalType: json['assignedGoalType']?.toString(),
       heightCm: _double(json['heightCm']),

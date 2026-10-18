@@ -8,6 +8,12 @@ namespace GymManagement.Core.DTOs
         public string CheckoutBusinessName { get; set; } = "Tiger Fitness";
     }
 
+    public sealed class PublicBranchOptionDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
     public sealed class PublicMembershipPlanDto
     {
         public int Id { get; set; }
@@ -25,6 +31,7 @@ namespace GymManagement.Core.DTOs
         public string Phone { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public int PlanId { get; set; }
+        public int? HomeBranchId { get; set; }
         public DateTime? DateOfBirth { get; set; }
         public string? Gender { get; set; }
     }

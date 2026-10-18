@@ -10,6 +10,7 @@ import { DailyWorkListPanel } from '../../components/dashboard/DailyWorkListPane
 import { hasAnyDailyWorkAccess } from '../../lib/dailyWorkList'
 import { getDashboardUser } from '../../lib/dashboardUser'
 import { dashboardService } from '../../services/dashboard.service'
+import { branchScopeQueryKey, useBranchScope } from '../../features/branch/BranchScopeContext'
 import { usePermission } from '../../features/auth/hooks/usePermission'
 import { authService } from '../../services/auth.service'
 import { canAccessLeadsNav, getStaffFrontDeskNavLinks } from '../../features/auth/navPermissions'
@@ -19,8 +20,9 @@ export function FrontDeskDashboardPage() {
   const canPayments = usePermission(authService.permissionCodes.payments)
   const canUsers = usePermission(authService.permissionCodes.usersAccess)
 
+  const branchScope = useBranchScope()
   const { data: summary } = useQuery({
-    queryKey: ['front-desk-dashboard-summary'],
+    queryKey: ['front-desk-dashboard-summary', branchScopeQueryKey(branchScope)],
     queryFn: async () => (await dashboardService.getSummary()).data,
     staleTime: 30_000,
     refetchInterval: 30_000,

@@ -14,11 +14,13 @@ public sealed class BranchesController : ControllerBase
 {
     private readonly IBranchQrAccessService _branchQr;
     private readonly IBranchCrudService _branchCrud;
+    private readonly ICurrentUserAccessContext _access;
 
-    public BranchesController(IBranchQrAccessService branchQr, IBranchCrudService branchCrud)
+    public BranchesController(IBranchQrAccessService branchQr, IBranchCrudService branchCrud, ICurrentUserAccessContext access)
     {
         _branchQr = branchQr;
         _branchCrud = branchCrud;
+        _access = access;
     }
 
     /// <summary>Full branch rows for admin; use <paramref name="activeOnly"/> true for QR dropdowns.</summary>
@@ -84,7 +86,51 @@ public sealed class BranchesController : ControllerBase
     {
         try
         {
-            await _branchCrud.SoftDeactivateAsync(id, cancellationToken).ConfigureAwait(false);
+            await _branchCrud.SoftDeactivateAsync(id, handlingPolicy: null, actingUserId: null, cancellationToken).ConfigureAwait(false);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    public sealed class CloseBranchRequest
+    {
+        public string? HandlingPolicy { get; set; }
+    }
+
+    [HttpGet("{id:int}/deactivation-preview")]
+    public async Task<ActionResult> DeactivationPreview(int id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var counts = await _branchCrud.PreviewDeactivationAsync(id, cancellationToken).ConfigureAwait(false);
+            return Ok(new
+            {
+                counts.ActiveMembers,
+                counts.HomeUsers,
+                counts.StaffAssignments,
+                counts.OccupiedLockers,
+                counts.EquipmentAssets,
+                counts.StockOnHand,
+                counts.OpenBookings,
+                counts.OutstandingBills,
+                canDeactivateWithoutPolicy = GymManagement.Core.Branching.OperationalBranchRules.CanDeactivate(counts),
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id:int}/close")]
+    public async Task<ActionResult> Close(int id, [FromBody] CloseBranchRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _branchCrud.SoftDeactivateAsync(id, request.HandlingPolicy, _access.ActorProfileUserId, cancellationToken).ConfigureAwait(false);
             return NoContent();
         }
         catch (InvalidOperationException ex)

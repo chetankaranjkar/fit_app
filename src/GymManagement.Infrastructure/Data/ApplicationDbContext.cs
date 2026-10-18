@@ -108,6 +108,11 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<PersonalRecord> PersonalRecords { get; set; }
         public DbSet<UserGoal> UserGoals { get; set; }
         public DbSet<Branch> Branches { get; set; }
+        public DbSet<UserBranchAssignment> UserBranchAssignments { get; set; }
+        public DbSet<MembershipPlanBranchPrice> MembershipPlanBranchPrices { get; set; }
+        public DbSet<UserMembershipAccessBranch> UserMembershipAccessBranches { get; set; }
+        public DbSet<MembershipBillingPeriod> MembershipBillingPeriods { get; set; }
+        public DbSet<MemberBranchTransfer> MemberBranchTransfers { get; set; }
         public DbSet<Message> Messages { get; set; }
         public DbSet<Announcement> Announcements { get; set; }
         public DbSet<UserSupplement> UserSupplements { get; set; }
@@ -134,6 +139,10 @@ namespace GymManagement.Infrastructure.Data
         public DbSet<CleaningLog> GymOpsCleaningLogs { get; set; }
         public DbSet<CleaningTaskItem> GymOpsCleaningTaskItems { get; set; }
         public DbSet<Vendor> GymOpsVendors { get; set; }
+        public DbSet<EquipmentTransfer> GymOpsEquipmentTransfers { get; set; }
+        public DbSet<GymManagement.Domain.Entities.Retail.BranchStock> RetailBranchStocks { get; set; }
+        public DbSet<GymManagement.Domain.Entities.Retail.StockTransfer> RetailStockTransfers { get; set; }
+        public DbSet<BranchClosureRecord> BranchClosureRecords { get; set; }
 
         // Coupon / Promo Code module
         public DbSet<Coupon> Coupons { get; set; }
@@ -150,6 +159,7 @@ namespace GymManagement.Infrastructure.Data
         // Personal Training module (PT_* tables)
         public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTPackage> PTPackages { get; set; }
         public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTPackagePrice> PTPackagePrices { get; set; }
+        public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTPackageBranchPrice> PTPackageBranchPrices { get; set; }
         public DbSet<GymManagement.Domain.Entities.PersonalTraining.PTPackageInvoice> PTPackageInvoices { get; set; }
         public DbSet<GymManagement.Domain.Entities.PersonalTraining.MemberPTPackage> MemberPTPackages { get; set; }
         public DbSet<GymManagement.Domain.Entities.PersonalTraining.MemberPTPackageHistory> MemberPTPackageHistories { get; set; }
@@ -165,6 +175,7 @@ namespace GymManagement.Infrastructure.Data
 
         // Locker Management module (isolated in LockerMgmt namespace, own tables).
         public DbSet<Locker> LockerMgmtLockers { get; set; }
+        public DbSet<LockerTransfer> LockerMgmtTransfers { get; set; }
         public DbSet<LockerAssignment> LockerMgmtAssignments { get; set; }
         public DbSet<LockerAccessLog> LockerMgmtAccessLogs { get; set; }
         public DbSet<LockerMaintenance> LockerMgmtMaintenance { get; set; }
@@ -213,6 +224,11 @@ namespace GymManagement.Infrastructure.Data
                     .WithMany(o => o.Users)
                     .HasForeignKey(e => e.OrganizationId)
                     .OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne(e => e.HomeBranch)
+                    .WithMany()
+                    .HasForeignKey(e => e.HomeBranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => e.HomeBranchId);
             });
 
             // Configure UserDetail
@@ -913,6 +929,11 @@ namespace GymManagement.Infrastructure.Data
                     .HasForeignKey(e => e.LoggedByUserId)
                     .OnDelete(DeleteBehavior.NoAction);
                 entity.HasIndex(e => e.AttendanceDate);
+                entity.HasOne(e => e.Branch)
+                    .WithMany()
+                    .HasForeignKey(e => e.BranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => e.BranchId);
                 entity.HasIndex(e => new { e.UserId, e.AttendanceDate })
                     .IsUnique()
                     .HasFilter("[UserId] IS NOT NULL AND [IsDeleted] = 0");
@@ -975,6 +996,9 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.EndDate).IsRequired();
                 entity.Property(e => e.Status).IsRequired().HasConversion<string>().HasMaxLength(50);
                 entity.Property(e => e.FreezeReason).HasMaxLength(500);
+                entity.Property(e => e.AgreedPrice).HasPrecision(18, 2);
+                entity.Property(e => e.AccessScope).HasMaxLength(32);
+                entity.HasOne(e => e.SellingBranch).WithMany().HasForeignKey(e => e.SellingBranchId).OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.User)
                     .WithMany(u => u.UserMemberships)
                     .HasForeignKey(e => e.UserId)
@@ -1045,6 +1069,8 @@ namespace GymManagement.Infrastructure.Data
                     .HasFilter("[IsDeleted] = 0");
                 entity.HasIndex(e => e.PaymentStatus);
                 entity.HasIndex(e => e.NextDueDate);
+                entity.HasIndex(e => e.SellingBranchId);
+                entity.HasOne(e => e.SellingBranch).WithMany().HasForeignKey(e => e.SellingBranchId).OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.User)
                     .WithMany()
                     .HasForeignKey(e => e.UserId)
@@ -1437,6 +1463,57 @@ namespace GymManagement.Infrastructure.Data
                 entity.ToTable("Branches");
             });
 
+            modelBuilder.Entity<UserBranchAssignment>(entity =>
+            {
+                entity.ToTable("UserBranchAssignments");
+                entity.HasIndex(e => new { e.UserId, e.BranchId })
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
+                entity.HasOne(e => e.User).WithMany(u => u.BranchAssignments).HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Branch).WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<MembershipPlanBranchPrice>(entity =>
+            {
+                entity.ToTable("MembershipPlanBranchPrices");
+                entity.Property(e => e.Price).HasPrecision(18, 2);
+                entity.HasIndex(e => new { e.PlanId, e.BranchId })
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
+                entity.HasOne(e => e.Plan).WithMany().HasForeignKey(e => e.PlanId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Branch).WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<UserMembershipAccessBranch>(entity =>
+            {
+                entity.ToTable("UserMembershipAccessBranches");
+                entity.HasIndex(e => new { e.UserMembershipId, e.BranchId }).IsUnique();
+                entity.HasOne(e => e.UserMembership).WithMany(m => m.AccessBranches).HasForeignKey(e => e.UserMembershipId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Branch).WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<MembershipBillingPeriod>(entity =>
+            {
+                entity.ToTable("MembershipBillingPeriods");
+                entity.Property(e => e.AgreedPrice).HasPrecision(18, 2);
+                entity.Property(e => e.FeeType).HasMaxLength(32);
+                entity.HasOne(e => e.UserMembership).WithMany().HasForeignKey(e => e.UserMembershipId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.MembershipPayment).WithMany().HasForeignKey(e => e.MembershipPaymentId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.SellingBranch).WithMany().HasForeignKey(e => e.SellingBranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<MemberBranchTransfer>(entity =>
+            {
+                entity.ToTable("MemberBranchTransfers");
+                entity.Property(e => e.Reason).HasMaxLength(500);
+                entity.Property(e => e.AccessDecision).HasMaxLength(32);
+                entity.Property(e => e.FinancialDecision).HasMaxLength(32);
+                entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.FromBranch).WithMany().HasForeignKey(e => e.FromBranchId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ToBranch).WithMany().HasForeignKey(e => e.ToBranchId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ActingUser).WithMany().HasForeignKey(e => e.ActingUserId).OnDelete(DeleteBehavior.Restrict);
+            });
+
             modelBuilder.Entity<GymQrCode>(entity =>
             {
                 entity.HasKey(e => e.Id);
@@ -1474,6 +1551,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Title).HasMaxLength(200);
                 entity.Property(e => e.CreatedDate).IsRequired();
+                entity.Property(e => e.AudienceScope).IsRequired().HasMaxLength(32);
                 entity.HasOne(e => e.Branch)
                     .WithMany(b => b.Announcements)
                     .HasForeignKey(e => e.BranchId)
@@ -1740,6 +1818,8 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<UserRole>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<DietPlan>().HasQueryFilter(e => !e.IsDeleted);
             modelBuilder.Entity<UserDietPlan>().HasQueryFilter(e => !e.IsDeleted);
+            modelBuilder.Entity<UserBranchAssignment>().HasQueryFilter(e => !e.IsDeleted && e.User != null && !e.User.IsDeleted);
+            modelBuilder.Entity<MembershipPlanBranchPrice>().HasQueryFilter(e => !e.IsDeleted);
 
             // Lead CRM (gym_leads, lead_followups, lead_trials)
             modelBuilder.Entity<GymLead>(entity =>
@@ -1747,6 +1827,8 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasKey(e => e.Id);
                 entity.ToTable("gym_leads");
                 entity.Property(e => e.FullName).IsRequired().HasMaxLength(200);
+                entity.HasOne(e => e.InterestedBranch).WithMany().HasForeignKey(e => e.InterestedBranchId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => e.InterestedBranchId);
                 entity.Property(e => e.Phone).HasMaxLength(100);
                 entity.Property(e => e.Email).HasMaxLength(256);
                 entity.Property(e => e.Gender).HasMaxLength(32);
@@ -1828,6 +1910,8 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.Notes).HasMaxLength(2000);
                 entity.HasIndex(e => e.Status);
                 entity.HasIndex(e => e.Category);
+                entity.HasIndex(e => e.BranchId);
+                entity.HasOne(e => e.Branch).WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
                 entity.ToTable("GymOps_Equipment");
             });
 
@@ -1844,6 +1928,7 @@ namespace GymManagement.Infrastructure.Data
                     .OnDelete(DeleteBehavior.Cascade);
                 entity.HasIndex(e => e.EquipmentId);
                 entity.HasIndex(e => e.PerformedAt);
+                entity.HasIndex(e => e.BranchId);
                 entity.ToTable("GymOps_MaintenanceLogs");
             });
 
@@ -1859,6 +1944,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.Notes).HasMaxLength(2000);
                 entity.HasIndex(e => e.ExpenseDate);
                 entity.HasIndex(e => e.Category);
+                entity.HasIndex(e => e.BranchId);
                 entity.ToTable("GymOps_Expenses");
             });
 
@@ -1870,6 +1956,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.PerformedBy).HasMaxLength(150);
                 entity.Property(e => e.Notes).HasMaxLength(1000);
                 entity.HasIndex(e => e.LogDate);
+                entity.HasIndex(e => e.BranchId);
                 entity.ToTable("GymOps_CleaningLogs");
             });
 
@@ -1908,6 +1995,63 @@ namespace GymManagement.Infrastructure.Data
             modelBuilder.Entity<CleaningTaskItem>().HasQueryFilter(t => !t.IsDeleted && t.CleaningLog != null && !t.CleaningLog.IsDeleted);
             modelBuilder.Entity<Vendor>().HasQueryFilter(e => !e.IsDeleted);
 
+            modelBuilder.Entity<LockerTransfer>(entity =>
+            {
+                entity.ToTable("LockerMgmt_Transfers");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Reason).IsRequired().HasMaxLength(500);
+                entity.HasIndex(e => e.LockerId);
+                entity.HasIndex(e => e.EffectiveDate);
+                entity.HasOne(e => e.Locker).WithMany().HasForeignKey(e => e.LockerId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.FromBranch).WithMany().HasForeignKey(e => e.FromBranchId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ToBranch).WithMany().HasForeignKey(e => e.ToBranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<EquipmentTransfer>(entity =>
+            {
+                entity.ToTable("GymOps_EquipmentTransfers");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Reason).IsRequired().HasMaxLength(500);
+                entity.HasIndex(e => e.EquipmentId);
+                entity.HasIndex(e => e.EffectiveDate);
+                entity.HasOne(e => e.Equipment).WithMany().HasForeignKey(e => e.EquipmentId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.FromBranch).WithMany().HasForeignKey(e => e.FromBranchId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ToBranch).WithMany().HasForeignKey(e => e.ToBranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.BranchStock>(entity =>
+            {
+                entity.ToTable("Retail_BranchStocks");
+                entity.Property(e => e.Quantity);
+                entity.HasIndex(e => new { e.ProductId, e.BranchId }).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Branch).WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.BranchStock>()
+                .HasQueryFilter(e => !e.IsDeleted && e.Product != null && !e.Product.IsDeleted);
+
+            modelBuilder.Entity<GymManagement.Domain.Entities.Retail.StockTransfer>(entity =>
+            {
+                entity.ToTable("Retail_StockTransfers");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Reason).IsRequired().HasMaxLength(500);
+                entity.HasIndex(e => e.ProductId);
+                entity.HasIndex(e => e.EffectiveDate);
+                entity.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.FromBranch).WithMany().HasForeignKey(e => e.FromBranchId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ToBranch).WithMany().HasForeignKey(e => e.ToBranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<BranchClosureRecord>(entity =>
+            {
+                entity.ToTable("BranchClosureRecords");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.HandlingPolicy).IsRequired().HasMaxLength(2000);
+                entity.Property(e => e.CountsSnapshot).IsRequired().HasMaxLength(2000);
+                entity.HasIndex(e => e.BranchId);
+                entity.HasOne(e => e.Branch).WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+            });
+
             // -----------------------------------------------------------------
             // Locker Management module (isolated; own tables under LockerMgmt_* prefix)
             // -----------------------------------------------------------------
@@ -1918,7 +2062,9 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.Size).IsRequired().HasMaxLength(20);
                 entity.Property(e => e.Status).IsRequired().HasMaxLength(30);
                 entity.Property(e => e.Location).HasMaxLength(150);
-                entity.HasIndex(e => e.LockerNumber).IsUnique().HasFilter("[IsDeleted] = 0");
+                entity.HasIndex(e => new { e.BranchId, e.LockerNumber }).IsUnique().HasFilter("[IsDeleted] = 0 AND [BranchId] IS NOT NULL");
+                entity.HasIndex(e => e.LockerNumber).IsUnique().HasFilter("[IsDeleted] = 0 AND [BranchId] IS NULL");
+                entity.HasIndex(e => e.BranchId);
                 entity.HasIndex(e => e.Status);
                 entity.HasQueryFilter(e => !e.IsDeleted);
                 entity.ToTable("LockerMgmt_Lockers");
@@ -1939,6 +2085,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.LockerId);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.ExpiryDate);
+                entity.HasIndex(e => e.BranchId);
                 entity.ToTable("LockerMgmt_Assignments");
             });
 
@@ -1991,6 +2138,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.Property(e => e.MaximumDiscountAmount).HasPrecision(12, 2);
                 entity.Property(e => e.ApplicableMembershipIds).HasMaxLength(2000);
                 entity.Property(e => e.ApplicableBranchIds).HasMaxLength(2000);
+                entity.Property(e => e.BranchScope).IsRequired().HasMaxLength(32).HasDefaultValue("AllBranches");
                 entity.Property(e => e.ApplicableUserTypes).HasMaxLength(2000);
                 entity.Property(e => e.Status).IsRequired().HasConversion<string>().HasMaxLength(20);
                 entity.HasIndex(e => e.Status);
@@ -2125,6 +2273,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.ProductId);
                 entity.HasIndex(e => e.TransactionDate);
                 entity.HasIndex(e => e.PosOrderId);
+                entity.HasIndex(e => e.BranchId);
                 entity.HasOne(e => e.Product)
                     .WithMany(p => p.InventoryTransactions)
                     .HasForeignKey(e => e.ProductId)
@@ -2156,6 +2305,7 @@ namespace GymManagement.Infrastructure.Data
                 entity.HasIndex(e => e.OrderDate);
                 entity.HasIndex(e => e.Status);
                 entity.HasIndex(e => e.CustomerUserId);
+                entity.HasIndex(e => e.BranchId);
                 entity.ToTable("Retail_PosOrders");
             });
 

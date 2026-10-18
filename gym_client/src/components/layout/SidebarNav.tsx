@@ -218,9 +218,8 @@ const ADMIN_NAV: readonly AdminNavEntry[] = [
     id: 'access',
     label: 'Access & QR',
     icon: 'qrDoor',
-    collapsedHref: '/dashboard/access/scan',
+    collapsedHref: '/dashboard/access/branches',
     children: [
-      { path: '/dashboard/access/scan', label: 'Scan to enter' },
       { path: '/dashboard/access/branches', label: 'Branches', visible: authService.hasQrOwnerAccess },
       { path: '/dashboard/access/owner-qr', label: 'Owner QR', visible: authService.hasQrOwnerAccess },
     ],

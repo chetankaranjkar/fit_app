@@ -183,7 +183,6 @@ const TRAINER_ALLOWED_PREFIXES = [
   '/dashboard',
   '/dashboard/users',
   '/dashboard/attendance',
-  '/dashboard/access/scan',
   '/dashboard/training',
   '/dashboard/diet-plans',
   '/dashboard/supplements/master',
@@ -211,6 +210,10 @@ export function matchesAnyAllowedPrefix(pathname: string, prefixes: string[]): b
 }
 
 export function isPathAllowedForRole(pathname: string, role: DashboardRole): boolean {
+  if (matchesAllowedPrefix(pathname, '/dashboard/access/scan') && role !== 'member') {
+    return false
+  }
+
   if (role === 'admin') {
     return pathname.startsWith('/dashboard') || pathname.startsWith('/help')
   }

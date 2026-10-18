@@ -91,13 +91,6 @@ export function FrontDeskDashboardPage() {
             ) : null}
             <QuickAction
               role="admin"
-              to="/dashboard/access/scan"
-              label="QR check-in"
-              description="Venue scan test"
-              icon={<span className="text-lg">▣</span>}
-            />
-            <QuickAction
-              role="admin"
               to="/dashboard/attendance"
               label="Attendance"
               description="Today's log"

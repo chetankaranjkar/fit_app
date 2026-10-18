@@ -407,12 +407,6 @@ export function ReceptionCrmPage() {
                     New admission
                   </Button>
                   <Link
-                    to="/dashboard/access/scan"
-                    className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
-                  >
-                    Scan QR
-                  </Link>
-                  <Link
                     to="/dashboard/user-memberships"
                     className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
                   >

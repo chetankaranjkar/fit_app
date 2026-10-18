@@ -101,6 +101,11 @@ public sealed class GymQrService : IGymQrService
         if (!memberActive)
             return Fail("Member profile was not found.");
 
+        if (!await HasMemberRoleAsync(memberUserId, cancellationToken).ConfigureAwait(false))
+        {
+            return Fail("QR check-in is only available to gym members.", "members_only");
+        }
+
         var qrRow = await _db.GymQrCodes
             .Include(q => q.Branch)
             .FirstOrDefaultAsync(
@@ -155,18 +160,15 @@ public sealed class GymQrService : IGymQrService
         if (duplicate)
             return Fail("A QR check-in was already recorded in the last 5 minutes.");
 
-        if (!await IsMembershipGateExemptAsync(memberUserId, cancellationToken).ConfigureAwait(false))
+        var denial = await EvaluateMembershipForCheckInAsync(memberUserId, nowUtc, cancellationToken)
+            .ConfigureAwait(false);
+        if (denial != null)
         {
-            var denial = await EvaluateMembershipForCheckInAsync(memberUserId, nowUtc, cancellationToken)
-                .ConfigureAwait(false);
-            if (denial != null)
-            {
-                _logger.LogInformation(
-                    "QR scan rejected for user {MemberId}: membership gate ({Code}).",
-                    memberUserId,
-                    denial.ErrorCode);
-                return denial;
-            }
+            _logger.LogInformation(
+                "QR scan rejected for user {MemberId}: membership gate ({Code}).",
+                memberUserId,
+                denial.ErrorCode);
+            return denial;
         }
 
         var notes = $"lat:{request.Latitude:F6}|lng:{request.Longitude:F6}|token:{token}|distM:{meters:F1}";
@@ -208,16 +210,7 @@ public sealed class GymQrService : IGymQrService
         };
     }
 
-    private static readonly string[] MembershipGateExemptRoles =
-    {
-        ApplicationRoleCodes.Admin,
-        ApplicationRoleCodes.Trainer,
-        ApplicationRoleCodes.Staff,
-        ApplicationRoleCodes.Receptionist,
-        ApplicationRoleCodes.Accountant,
-    };
-
-    private async Task<bool> IsMembershipGateExemptAsync(int userId, CancellationToken cancellationToken)
+    private async Task<bool> HasMemberRoleAsync(int userId, CancellationToken cancellationToken)
     {
         return await _db.UserRoles.AsNoTracking()
             .Where(ur => ur.UserId == userId && !ur.IsDeleted)
@@ -227,7 +220,7 @@ public sealed class GymQrService : IGymQrService
                 r => r.Id,
                 (_, role) => role.Name)
             .AnyAsync(
-                name => MembershipGateExemptRoles.Contains(name),
+                name => name == ApplicationRoleCodes.Member,
                 cancellationToken)
             .ConfigureAwait(false);
     }

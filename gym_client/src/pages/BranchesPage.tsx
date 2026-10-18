@@ -488,11 +488,9 @@ export function BranchesPage() {
                     Use my current location
                   </Button>
                   <p className="text-xs text-slate-500">
-                    Fills latitude &amp; longitude (WGS84) from this device — same idea as{' '}
-                    <Link className="text-sky-300 underline underline-offset-2 hover:text-sky-200" to="/dashboard/access/scan">
-                      Scan to enter
-                    </Link>
-                    . You still need to click {isAdding ? 'Create branch' : 'Save changes'}.
+                    Fills latitude &amp; longitude (WGS84) from this device. Members use these
+                    coordinates when they scan the branch QR. You still need to click{' '}
+                    {isAdding ? 'Create branch' : 'Save changes'}.
                   </p>
                   {previewCoords ? (
                     <LocationPreviewMap

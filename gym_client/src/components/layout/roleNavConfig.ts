@@ -51,7 +51,6 @@ export const ROLE_NAV: Record<DashboardRole, NavItem[]> = {
     { path: '/dashboard', label: 'Dashboard', icon: 'dashboard', section: 'overview' },
     { path: '/dashboard/users', label: 'Members', icon: 'users', section: 'members' },
     { path: '/dashboard/attendance', label: 'Attendance', icon: 'attendance', section: 'attendance' },
-    { path: '/dashboard/access/scan', label: 'Check-in', icon: 'scan', section: 'attendance' },
   ],
   member: [
     { path: '/dashboard/member/portal', label: 'Home', icon: 'dashboard' },

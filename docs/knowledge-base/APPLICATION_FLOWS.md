@@ -711,7 +711,7 @@ Void and refund (history page) recalculate the bill through `BillingCalculationS
 
 ## 12b. QR attendance check-in (membership gate)
 
-**Goal:** Block gym entry via QR when membership is missing or not valid — protects revenue without blocking staff who scan for testing.
+**Goal:** Block gym entry via QR unless the signed-in user has the MEMBER role and a valid membership. Admin, trainer, and staff accounts cannot check in on this flow.
 
 | Step | API | UI |
 |------|-----|-----|
@@ -724,7 +724,7 @@ Void and refund (history page) recalculate the bill through `BillingCalculationS
 |----------------|--------------------------------------------------|
 | `Active`, `ActivePendingPayment`, `PartialPayment` with `EndDate >= today` | No membership row; `Expired`; `Frozen`; `Voided` / `Cancelled` / `Transferred`; past `EndDate` |
 
-**Exempt roles** (gate skipped): `ADMIN`, `TRAINER`, `STAFF`, `RECEPTIONIST`, `ACCOUNTANT`.
+**Who can scan:** only users with the `MEMBER` application role. Other roles are rejected with `errorCode: members_only` before the membership check. A person who also has MEMBER can check in from the member view; the membership gate still applies.
 
 **Rules:** `UserMembershipRules.AllowsGymCheckIn` in `GymManagement.Core/Validation/UserMembershipRules.cs`.
 

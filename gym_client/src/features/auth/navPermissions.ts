@@ -52,7 +52,6 @@ export function getStaffFrontDeskAllowedPrefixes(): string[] {
     '/dashboard/attendance',
     '/dashboard/users',
     '/dashboard/user-memberships',
-    '/dashboard/access/scan',
     '/dashboard/profile',
     '/dashboard/payments/collect',
     '/help',
@@ -83,7 +82,6 @@ export function getStaffFrontDeskNavLinks(): StaffFrontDeskNavLink[] {
   }
 
   links.push({ path: '/dashboard/attendance', label: 'Attendance', section: 'attendance' })
-  links.push({ path: '/dashboard/access/scan', label: 'Check-in', section: 'attendance' })
 
   return links
 }

@@ -71,6 +71,32 @@ void main() {
     expect(snapshot.stepsToday, 4200);
     expect(snapshot.latestWeight?.kilograms, 70);
     expect(snapshot.workouts.first.activity, 'Running');
+    expect(snapshot.hasWearableVitals, isFalse);
+  });
+
+  test('normalizes heart rate and SpO2 and orders wearable vitals newest first', () {
+    expect(heartRateBpm(72.4), 72);
+    expect(heartRateBpm(10), isNull);
+    expect(bloodOxygenPercent(0.97), closeTo(97, 0.01));
+    expect(bloodOxygenPercent(98), 98);
+    expect(bloodOxygenPercent(0.2), isNull);
+
+    final snapshot = snapshotFromReadings(
+      steps: const [],
+      weights: const [],
+      workouts: const [],
+      heartRates: [
+        PhoneHeartRateReading(bpm: 68, recordedAt: DateTime(2026, 10, 1, 8)),
+        PhoneHeartRateReading(bpm: 74, recordedAt: DateTime(2026, 10, 4, 9)),
+      ],
+      bloodOxygen: [
+        PhoneBloodOxygenReading(percent: 96, recordedAt: DateTime(2026, 10, 2)),
+        PhoneBloodOxygenReading(percent: 98, recordedAt: DateTime(2026, 10, 4, 10)),
+      ],
+    );
+    expect(snapshot.hasWearableVitals, isTrue);
+    expect(snapshot.latestHeartRate?.bpm, 74);
+    expect(snapshot.latestBloodOxygen?.percent, 98);
   });
 
   testWidgets('shows steps, weight, and workouts from Health Connect', (tester) async {
@@ -94,10 +120,39 @@ void main() {
     expect(find.text('70.4 kg'), findsWidgets);
     expect(find.text('Strength Training'), findsOneWidget);
     expect(find.text('Save latest to weigh-ins'), findsOneWidget);
+    expect(find.text('Heart rate'), findsNothing);
+    expect(find.text('Oxygen level'), findsNothing);
+  });
+
+  testWidgets('shows heart rate and oxygen only when wearable readings exist', (tester) async {
+    final source = _FakeHealthSource(withVitals: true);
+    await tester.pumpWidget(
+      TickerMode(
+        enabled: false,
+        child: ProviderScope(
+          overrides: [
+            phoneHealthSourceProvider.overrideWithValue(source),
+            bodyMetricsProvider.overrideWith((ref) async => const <MeBodyMetricLog>[]),
+          ],
+          child: const CupertinoApp(home: PhoneHealthScreen()),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Heart rate'), findsOneWidget);
+    expect(find.text('72 bpm'), findsWidgets);
+    expect(find.text('Oxygen level'), findsOneWidget);
+    expect(find.text('97%'), findsWidgets);
   });
 }
 
 class _FakeHealthSource implements PhoneHealthSource {
+  _FakeHealthSource({this.withVitals = false});
+
+  final bool withVitals;
+
   @override
   Future<bool> hasReadAccess() async => true;
 
@@ -121,6 +176,12 @@ class _FakeHealthSource implements PhoneHealthSource {
           energyKcal: 320,
         ),
       ],
+      heartRates: withVitals
+          ? [PhoneHeartRateReading(bpm: 72, recordedAt: now.subtract(const Duration(minutes: 20)))]
+          : const [],
+      bloodOxygen: withVitals
+          ? [PhoneBloodOxygenReading(percent: 97, recordedAt: now.subtract(const Duration(minutes: 15)))]
+          : const [],
     );
   }
 

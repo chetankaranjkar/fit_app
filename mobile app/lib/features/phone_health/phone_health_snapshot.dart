@@ -34,11 +34,28 @@ class PhoneWorkoutReading {
   Duration get duration => end.difference(start);
 }
 
+class PhoneHeartRateReading {
+  const PhoneHeartRateReading({required this.bpm, required this.recordedAt});
+
+  final int bpm;
+  final DateTime recordedAt;
+}
+
+class PhoneBloodOxygenReading {
+  const PhoneBloodOxygenReading({required this.percent, required this.recordedAt});
+
+  /// SpO2 as 0–100.
+  final double percent;
+  final DateTime recordedAt;
+}
+
 class PhoneHealthSnapshot {
   const PhoneHealthSnapshot({
     required this.steps,
     required this.weights,
     required this.workouts,
+    this.heartRates = const [],
+    this.bloodOxygen = const [],
   });
 
   /// Oldest day first, including today.
@@ -50,9 +67,21 @@ class PhoneHealthSnapshot {
   /// Newest first.
   final List<PhoneWorkoutReading> workouts;
 
+  /// Newest first. Empty when no wearable (e.g. Fitbit Air) shared HR into Health Connect.
+  final List<PhoneHeartRateReading> heartRates;
+
+  /// Newest first. Empty when no SpO2 samples are available.
+  final List<PhoneBloodOxygenReading> bloodOxygen;
+
   int? get stepsToday => steps.isEmpty ? null : steps.last.count;
 
   PhoneWeightReading? get latestWeight => weights.isEmpty ? null : weights.first;
+
+  PhoneHeartRateReading? get latestHeartRate => heartRates.isEmpty ? null : heartRates.first;
+
+  PhoneBloodOxygenReading? get latestBloodOxygen => bloodOxygen.isEmpty ? null : bloodOxygen.first;
+
+  bool get hasWearableVitals => heartRates.isNotEmpty || bloodOxygen.isNotEmpty;
 }
 
 double? weightKilograms({required num numericValue, required HealthDataUnit unit}) {
@@ -113,16 +142,42 @@ bool weightAlreadyRecorded({
   return false;
 }
 
+/// Normalizes SpO2 from Health Connect (fraction 0–1 or percent 0–100).
+double? bloodOxygenPercent(num numericValue) {
+  final value = numericValue.toDouble();
+  if (value <= 0) return null;
+  if (value <= 1) {
+    final asPercent = value * 100;
+    if (asPercent < 50 || asPercent > 100) return null;
+    return asPercent;
+  }
+  if (value > 100) return null;
+  if (value < 50) return null;
+  return value;
+}
+
+int? heartRateBpm(num numericValue) {
+  final bpm = numericValue.round();
+  if (bpm < 30 || bpm > 250) return null;
+  return bpm;
+}
+
 PhoneHealthSnapshot snapshotFromReadings({
   required List<DailyStepCount> steps,
   required List<PhoneWeightReading> weights,
   required List<PhoneWorkoutReading> workouts,
+  List<PhoneHeartRateReading> heartRates = const [],
+  List<PhoneBloodOxygenReading> bloodOxygen = const [],
 }) {
   final sortedWeights = [...weights]..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
   final sortedWorkouts = [...workouts]..sort((a, b) => b.start.compareTo(a.start));
+  final sortedHr = [...heartRates]..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
+  final sortedO2 = [...bloodOxygen]..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
   return PhoneHealthSnapshot(
     steps: steps,
     weights: sortedWeights.take(12).toList(),
     workouts: sortedWorkouts.take(20).toList(),
+    heartRates: sortedHr.take(24).toList(),
+    bloodOxygen: sortedO2.take(24).toList(),
   );
 }

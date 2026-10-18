@@ -27,9 +27,13 @@ class HealthConnectSource implements PhoneHealthSource {
     HealthDataType.STEPS,
     HealthDataType.WEIGHT,
     HealthDataType.WORKOUT,
+    HealthDataType.HEART_RATE,
+    HealthDataType.BLOOD_OXYGEN,
   ];
 
   static const readAccess = <HealthDataAccess>[
+    HealthDataAccess.READ,
+    HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
@@ -80,13 +84,20 @@ class HealthConnectSource implements PhoneHealthSource {
     }
 
     final points = await _health.getHealthDataFromTypes(
-      types: const [HealthDataType.WEIGHT, HealthDataType.WORKOUT],
+      types: const [
+        HealthDataType.WEIGHT,
+        HealthDataType.WORKOUT,
+        HealthDataType.HEART_RATE,
+        HealthDataType.BLOOD_OXYGEN,
+      ],
       startTime: todayStart.subtract(const Duration(days: 30)),
       endTime: local,
     );
 
     final weights = <PhoneWeightReading>[];
     final workouts = <PhoneWorkoutReading>[];
+    final heartRates = <PhoneHeartRateReading>[];
+    final bloodOxygen = <PhoneBloodOxygenReading>[];
     for (final point in points) {
       if (point.type == HealthDataType.WEIGHT && point.value is NumericHealthValue) {
         final numeric = (point.value as NumericHealthValue).numericValue;
@@ -103,9 +114,23 @@ class HealthConnectSource implements PhoneHealthSource {
             energyKcal: workout.totalEnergyBurned,
           ),
         );
+      } else if (point.type == HealthDataType.HEART_RATE && point.value is NumericHealthValue) {
+        final bpm = heartRateBpm((point.value as NumericHealthValue).numericValue);
+        if (bpm == null) continue;
+        heartRates.add(PhoneHeartRateReading(bpm: bpm, recordedAt: point.dateFrom));
+      } else if (point.type == HealthDataType.BLOOD_OXYGEN && point.value is NumericHealthValue) {
+        final percent = bloodOxygenPercent((point.value as NumericHealthValue).numericValue);
+        if (percent == null) continue;
+        bloodOxygen.add(PhoneBloodOxygenReading(percent: percent, recordedAt: point.dateFrom));
       }
     }
 
-    return snapshotFromReadings(steps: steps, weights: weights, workouts: workouts);
+    return snapshotFromReadings(
+      steps: steps,
+      weights: weights,
+      workouts: workouts,
+      heartRates: heartRates,
+      bloodOxygen: bloodOxygen,
+    );
   }
 }

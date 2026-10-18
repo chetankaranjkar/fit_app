@@ -172,7 +172,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'Steps, weight, and workouts from Health Connect',
+                                      'Steps, weight, workouts, and wearable vitals from Health Connect',
                                       style: AppType.caption.copyWith(
                                         color: AppColors.resolveTextSecondary(context),
                                       ),

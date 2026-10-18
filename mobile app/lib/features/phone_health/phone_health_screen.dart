@@ -75,7 +75,8 @@ class _PhoneHealthScreenState extends ConsumerState<PhoneHealthScreen> {
       if (!granted) {
         setState(() {
           _phase = _HealthPhase.consent;
-          _message = 'Health Connect did not grant read access. Allow steps, weight, and exercise, then try again.';
+          _message =
+              'Health Connect did not grant read access. Allow steps, weight, exercise, heart rate, and blood oxygen, then try again.';
         });
         return;
       }
@@ -156,7 +157,7 @@ class _PhoneHealthScreenState extends ConsumerState<PhoneHealthScreen> {
               padding: const EdgeInsets.all(AppSpacing.lg),
               children: [
                 Text(
-                  'Steps, weight, and workouts that Google Fit shares through Health Connect. These stay separate from gym check-ins and assigned workout sessions.',
+                  'Steps, weight, and workouts from Google Fit via Health Connect. Heart rate and oxygen appear only when a wearable such as Fitbit Air has shared those readings. Gym check-ins and assigned sessions stay separate.',
                   style: AppType.subhead.copyWith(color: AppColors.resolveTextSecondary(context), height: 1.35),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -181,7 +182,8 @@ class _PhoneHealthScreenState extends ConsumerState<PhoneHealthScreen> {
         return [
           const EmptyState(
             title: 'Health Connect is not available',
-            message: 'Install Health Connect, then allow Google Fit to write steps, weight, and workouts into it.',
+            message:
+                'Install Health Connect, then allow Google Fit (and Fitbit Air, if you use one) to write health data into it.',
           ),
           const SizedBox(height: AppSpacing.md),
           AppButton(
@@ -197,7 +199,8 @@ class _PhoneHealthScreenState extends ConsumerState<PhoneHealthScreen> {
           ],
           const EmptyState(
             title: 'Connect Google Fit',
-            message: 'Tiger Fitness reads steps, weight, and exercise sessions. It does not write workouts back to Google Fit.',
+            message:
+                'PulseFit reads steps, weight, exercise, and wearable heart rate / oxygen when available. It does not write workouts back to Google Fit.',
           ),
           const SizedBox(height: AppSpacing.md),
           AppButton(label: 'Allow health data', onTap: _connect),
@@ -218,6 +221,18 @@ class _PhoneHealthScreenState extends ConsumerState<PhoneHealthScreen> {
         }
         return [
           _StepsCard(steps: snapshot.steps, today: snapshot.stepsToday),
+          if (snapshot.heartRates.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xl),
+            const SectionHeader(title: 'Heart rate'),
+            const SizedBox(height: AppSpacing.md),
+            _HeartRateCard(readings: snapshot.heartRates),
+          ],
+          if (snapshot.bloodOxygen.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xl),
+            const SectionHeader(title: 'Oxygen level'),
+            const SizedBox(height: AppSpacing.md),
+            _BloodOxygenCard(readings: snapshot.bloodOxygen),
+          ],
           const SizedBox(height: AppSpacing.xl),
           const SectionHeader(title: 'Weight'),
           const SizedBox(height: AppSpacing.md),
@@ -281,6 +296,102 @@ class _StepsCard extends StatelessWidget {
                 ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeartRateCard extends StatelessWidget {
+  const _HeartRateCard({required this.readings});
+
+  final List<PhoneHeartRateReading> readings;
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = readings.first;
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Latest', style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context))),
+          const SizedBox(height: 4),
+          Text(
+            '${latest.bpm} bpm',
+            style: AppType.largeTitle.copyWith(color: AppColors.resolveText(context)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            DateFormat('MMM d, h:mm a').format(latest.recordedAt.toLocal()),
+            style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          for (final row in readings.take(6))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      DateFormat('MMM d, h:mm a').format(row.recordedAt.toLocal()),
+                      style: AppType.subhead.copyWith(color: AppColors.resolveText(context)),
+                    ),
+                  ),
+                  Text(
+                    '${row.bpm} bpm',
+                    style: AppType.subhead.copyWith(color: AppColors.resolveTextSecondary(context)),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BloodOxygenCard extends StatelessWidget {
+  const _BloodOxygenCard({required this.readings});
+
+  final List<PhoneBloodOxygenReading> readings;
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = readings.first;
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Latest SpO₂', style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context))),
+          const SizedBox(height: 4),
+          Text(
+            '${latest.percent.round()}%',
+            style: AppType.largeTitle.copyWith(color: AppColors.resolveText(context)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            DateFormat('MMM d, h:mm a').format(latest.recordedAt.toLocal()),
+            style: AppType.caption.copyWith(color: AppColors.resolveTextSecondary(context)),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          for (final row in readings.take(6))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      DateFormat('MMM d, h:mm a').format(row.recordedAt.toLocal()),
+                      style: AppType.subhead.copyWith(color: AppColors.resolveText(context)),
+                    ),
+                  ),
+                  Text(
+                    '${row.percent.round()}%',
+                    style: AppType.subhead.copyWith(color: AppColors.resolveTextSecondary(context)),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

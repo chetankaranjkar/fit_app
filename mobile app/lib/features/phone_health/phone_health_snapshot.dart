@@ -49,6 +49,15 @@ class PhoneBloodOxygenReading {
   final DateTime recordedAt;
 }
 
+/// Active calories from Health Connect. A long bucket is prorated onto the workout window.
+class PhoneCalorieSample {
+  const PhoneCalorieSample({required this.kilocalories, required this.start, required this.end});
+
+  final double kilocalories;
+  final DateTime start;
+  final DateTime end;
+}
+
 class PhoneHealthSnapshot {
   const PhoneHealthSnapshot({
     required this.steps,
@@ -56,6 +65,7 @@ class PhoneHealthSnapshot {
     required this.workouts,
     this.heartRates = const [],
     this.bloodOxygen = const [],
+    this.calories = const [],
   });
 
   /// Oldest day first, including today.
@@ -72,6 +82,9 @@ class PhoneHealthSnapshot {
 
   /// Newest first. Empty when no SpO2 samples are available.
   final List<PhoneBloodOxygenReading> bloodOxygen;
+
+  /// Newest first.
+  final List<PhoneCalorieSample> calories;
 
   int? get stepsToday => steps.isEmpty ? null : steps.last.count;
 
@@ -168,16 +181,78 @@ PhoneHealthSnapshot snapshotFromReadings({
   required List<PhoneWorkoutReading> workouts,
   List<PhoneHeartRateReading> heartRates = const [],
   List<PhoneBloodOxygenReading> bloodOxygen = const [],
+  List<PhoneCalorieSample> calories = const [],
+  int heartRateLimit = 24,
 }) {
   final sortedWeights = [...weights]..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
   final sortedWorkouts = [...workouts]..sort((a, b) => b.start.compareTo(a.start));
   final sortedHr = [...heartRates]..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
   final sortedO2 = [...bloodOxygen]..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
+  final sortedKcal = [...calories]..sort((a, b) => b.start.compareTo(a.start));
   return PhoneHealthSnapshot(
     steps: steps,
     weights: sortedWeights.take(12).toList(),
     workouts: sortedWorkouts.take(20).toList(),
-    heartRates: sortedHr.take(24).toList(),
-    bloodOxygen: sortedO2.take(24).toList(),
+    heartRates: sortedHr.take(heartRateLimit).toList(),
+    bloodOxygen: sortedO2.take(heartRateLimit).toList(),
+    calories: sortedKcal.take(heartRateLimit).toList(),
+  );
+}
+
+class BandSessionMeasures {
+  const BandSessionMeasures({
+    this.averageBpm,
+    this.maxBpm,
+    this.oxygenPercent,
+    this.activeKcal,
+  });
+
+  final int? averageBpm;
+  final int? maxBpm;
+  final double? oxygenPercent;
+  final int? activeKcal;
+
+  bool get hasAny => averageBpm != null || oxygenPercent != null || (activeKcal != null && activeKcal! > 0);
+}
+
+bool _inWindow(DateTime at, DateTime start, DateTime end) {
+  final t = at.toUtc();
+  return !t.isBefore(start.toUtc()) && !t.isAfter(end.toUtc());
+}
+
+double _overlapKcal(PhoneCalorieSample sample, DateTime start, DateTime end) {
+  final sampleStart = sample.start.toUtc();
+  var sampleEnd = sample.end.toUtc();
+  if (!sampleEnd.isAfter(sampleStart)) {
+    sampleEnd = sampleStart.add(const Duration(minutes: 1));
+  }
+  final windowStart = start.toUtc();
+  final windowEnd = end.toUtc();
+  final overlapStart = sampleStart.isAfter(windowStart) ? sampleStart : windowStart;
+  final overlapEnd = sampleEnd.isBefore(windowEnd) ? sampleEnd : windowEnd;
+  if (!overlapEnd.isAfter(overlapStart)) return 0;
+  final sampleMs = sampleEnd.difference(sampleStart).inMilliseconds;
+  final overlapMs = overlapEnd.difference(overlapStart).inMilliseconds;
+  if (sampleMs <= 0) return sample.kilocalories;
+  return sample.kilocalories * overlapMs / sampleMs;
+}
+
+/// Heart rate, SpO2, and active calories that fall inside [start]–[end].
+BandSessionMeasures measuresDuring({
+  required DateTime start,
+  required DateTime end,
+  required List<PhoneHeartRateReading> heartRates,
+  required List<PhoneBloodOxygenReading> bloodOxygen,
+  required List<PhoneCalorieSample> calories,
+}) {
+  final hr = heartRates.where((row) => _inWindow(row.recordedAt, start, end)).toList();
+  final oxygen = bloodOxygen.where((row) => _inWindow(row.recordedAt, start, end)).toList()
+    ..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
+  final kcal = calories.fold<double>(0, (sum, sample) => sum + _overlapKcal(sample, start, end));
+  return BandSessionMeasures(
+    averageBpm: hr.isEmpty ? null : (hr.map((row) => row.bpm).reduce((a, b) => a + b) / hr.length).round(),
+    maxBpm: hr.isEmpty ? null : hr.map((row) => row.bpm).reduce((a, b) => a > b ? a : b),
+    oxygenPercent: oxygen.isEmpty ? null : oxygen.first.percent,
+    activeKcal: kcal < 1 ? null : kcal.round(),
   );
 }

@@ -99,8 +99,44 @@ void main() {
     expect(snapshot.latestBloodOxygen?.percent, 98);
   });
 
+  test('workout window keeps band readings from the session and prorates long calorie buckets', () {
+    final start = DateTime.utc(2026, 10, 19, 6, 10);
+    final end = start.add(const Duration(minutes: 70));
+    final measures = measuresDuring(
+      start: start,
+      end: end,
+      heartRates: [
+        PhoneHeartRateReading(bpm: 110, recordedAt: start.add(const Duration(minutes: 5))),
+        PhoneHeartRateReading(bpm: 150, recordedAt: start.add(const Duration(minutes: 40))),
+        PhoneHeartRateReading(bpm: 60, recordedAt: start.subtract(const Duration(hours: 3))),
+      ],
+      bloodOxygen: [
+        PhoneBloodOxygenReading(percent: 97, recordedAt: start.add(const Duration(minutes: 20))),
+      ],
+      calories: [
+        PhoneCalorieSample(
+          kilocalories: 240,
+          start: start.add(const Duration(minutes: 10)),
+          end: start.add(const Duration(minutes: 40)),
+        ),
+        PhoneCalorieSample(
+          kilocalories: 1440,
+          start: DateTime.utc(2026, 10, 19),
+          end: DateTime.utc(2026, 10, 20),
+        ),
+      ],
+    );
+    expect(measures.averageBpm, 130);
+    expect(measures.maxBpm, 150);
+    expect(measures.oxygenPercent, 97);
+    expect(measures.activeKcal, greaterThan(240));
+    expect(measures.activeKcal, lessThan(400));
+  });
+
   testWidgets('shows steps, weight, and workouts from Health Connect', (tester) async {
     final source = _FakeHealthSource();
+    await tester.binding.setSurfaceSize(const Size(800, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       TickerMode(
         enabled: false,
@@ -120,8 +156,10 @@ void main() {
     expect(find.text('70.4 kg'), findsWidgets);
     expect(find.text('Strength Training'), findsOneWidget);
     expect(find.text('Save latest to weigh-ins'), findsOneWidget);
-    expect(find.text('Heart rate'), findsNothing);
-    expect(find.text('Oxygen level'), findsNothing);
+    expect(find.text('Heart rate'), findsOneWidget);
+    expect(find.text('No heart rate from the band'), findsOneWidget);
+    expect(find.text('Oxygen level'), findsOneWidget);
+    expect(find.text('No oxygen reading from the band'), findsOneWidget);
   });
 
   testWidgets('shows heart rate and oxygen only when wearable readings exist', (tester) async {
@@ -163,7 +201,11 @@ class _FakeHealthSource implements PhoneHealthSource {
   Future<void> promptInstall() async {}
 
   @override
-  Future<PhoneHealthSnapshot> read({required DateTime now}) async {
+  Future<PhoneHealthSnapshot> read({
+    required DateTime now,
+    DateTime? vitalsFrom,
+    DateTime? vitalsTo,
+  }) async {
     final today = DateTime(now.year, now.month, now.day);
     return PhoneHealthSnapshot(
       steps: [DailyStepCount(day: today, count: 8421)],

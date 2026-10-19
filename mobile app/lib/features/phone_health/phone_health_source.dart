@@ -14,7 +14,13 @@ abstract class PhoneHealthSource {
 
   Future<bool> requestReadAccess();
 
-  Future<PhoneHealthSnapshot> read({required DateTime now});
+  /// [vitalsFrom] and [vitalsTo] limit heart rate, oxygen, and active calories.
+  /// The Google Fit screen omits them and reads the last 30 days.
+  Future<PhoneHealthSnapshot> read({
+    required DateTime now,
+    DateTime? vitalsFrom,
+    DateTime? vitalsTo,
+  });
 }
 
 class HealthConnectSource implements PhoneHealthSource {
@@ -29,9 +35,11 @@ class HealthConnectSource implements PhoneHealthSource {
     HealthDataType.WORKOUT,
     HealthDataType.HEART_RATE,
     HealthDataType.BLOOD_OXYGEN,
+    HealthDataType.ACTIVE_ENERGY_BURNED,
   ];
 
   static const readAccess = <HealthDataAccess>[
+    HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
@@ -71,33 +79,42 @@ class HealthConnectSource implements PhoneHealthSource {
   }
 
   @override
-  Future<PhoneHealthSnapshot> read({required DateTime now}) async {
+  Future<PhoneHealthSnapshot> read({
+    required DateTime now,
+    DateTime? vitalsFrom,
+    DateTime? vitalsTo,
+  }) async {
     await _ensureConfigured();
     final local = now.toLocal();
     final todayStart = DateTime(local.year, local.month, local.day);
+    final windowed = vitalsFrom != null && vitalsTo != null;
     final steps = <DailyStepCount>[];
-    for (var offset = 6; offset >= 0; offset--) {
-      final start = todayStart.subtract(Duration(days: offset));
-      final end = offset == 0 ? local : start.add(const Duration(days: 1));
-      final count = await _health.getTotalStepsInInterval(start, end);
-      steps.add(DailyStepCount(day: start, count: count));
+    if (!windowed) {
+      for (var offset = 6; offset >= 0; offset--) {
+        final start = todayStart.subtract(Duration(days: offset));
+        final end = offset == 0 ? local : start.add(const Duration(days: 1));
+        final count = await _health.getTotalStepsInInterval(start, end);
+        steps.add(DailyStepCount(day: start, count: count));
+      }
     }
 
     final points = await _health.getHealthDataFromTypes(
-      types: const [
-        HealthDataType.WEIGHT,
-        HealthDataType.WORKOUT,
+      types: [
+        if (!windowed) HealthDataType.WEIGHT,
+        if (!windowed) HealthDataType.WORKOUT,
         HealthDataType.HEART_RATE,
         HealthDataType.BLOOD_OXYGEN,
+        HealthDataType.ACTIVE_ENERGY_BURNED,
       ],
-      startTime: todayStart.subtract(const Duration(days: 30)),
-      endTime: local,
+      startTime: windowed ? vitalsFrom : todayStart.subtract(const Duration(days: 30)),
+      endTime: windowed ? vitalsTo : local,
     );
 
     final weights = <PhoneWeightReading>[];
     final workouts = <PhoneWorkoutReading>[];
     final heartRates = <PhoneHeartRateReading>[];
     final bloodOxygen = <PhoneBloodOxygenReading>[];
+    final calories = <PhoneCalorieSample>[];
     for (final point in points) {
       if (point.type == HealthDataType.WEIGHT && point.value is NumericHealthValue) {
         final numeric = (point.value as NumericHealthValue).numericValue;
@@ -122,6 +139,10 @@ class HealthConnectSource implements PhoneHealthSource {
         final percent = bloodOxygenPercent((point.value as NumericHealthValue).numericValue);
         if (percent == null) continue;
         bloodOxygen.add(PhoneBloodOxygenReading(percent: percent, recordedAt: point.dateFrom));
+      } else if (point.type == HealthDataType.ACTIVE_ENERGY_BURNED && point.value is NumericHealthValue) {
+        final kcal = (point.value as NumericHealthValue).numericValue.toDouble();
+        if (kcal <= 0) continue;
+        calories.add(PhoneCalorieSample(kilocalories: kcal, start: point.dateFrom, end: point.dateTo));
       }
     }
 
@@ -131,6 +152,8 @@ class HealthConnectSource implements PhoneHealthSource {
       workouts: workouts,
       heartRates: heartRates,
       bloodOxygen: bloodOxygen,
+      calories: calories,
+      heartRateLimit: windowed ? 800 : 24,
     );
   }
 }

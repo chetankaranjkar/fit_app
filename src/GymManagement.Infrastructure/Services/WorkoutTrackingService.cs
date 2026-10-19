@@ -267,9 +267,11 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         session.CompletionPercent = completion;
         session.TotalVolume = volume;
         session.CaloriesBurned = caloriesBurned;
-        session.DurationMinutes = session.SessionStartUtc.HasValue
-            ? (int?)Math.Max(1, (now - session.SessionStartUtc.Value).TotalMinutes)
-            : session.DurationMinutes;
+        session.DurationMinutes = MemberWorkoutHistoryRules.TrainingDurationMinutes(
+                sets.Where(s => s.IsCompleted).Select(s => s.CompletedAt))
+            ?? (session.SessionStartUtc.HasValue
+                ? (int?)Math.Max(1, (now - session.SessionStartUtc.Value).TotalMinutes)
+                : session.DurationMinutes);
         session.UpdatedDate = now;
 
         await SyncWorkoutLogsFromSessionAsync(session, sets, ct);
@@ -513,6 +515,7 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
                     IsCompleted = e.IsCompleted,
                     ActualWeight = e.ActualWeight,
                     ActualReps = e.ActualReps,
+                    CompletedAt = e.CompletedAt,
                 })
                 .ToListAsync(ct);
 
@@ -558,7 +561,11 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
                 PlanName = planName,
                 OccurredAtUtc = MemberWorkoutHistoryRules.OccurredUtc(session.SessionStartUtc, session.SessionDate),
                 Status = MemberWorkoutHistoryRules.NormalizeStatus(session.Status, session.IsCompleted),
-                DurationMinutes = MemberWorkoutHistoryRules.DurationMinutes(session.DurationMinutes, session.SessionStartUtc, session.SessionEndUtc),
+                DurationMinutes = MemberWorkoutHistoryRules.ResolveDurationMinutes(
+                    sessionSets.Where(s => s.IsCompleted).Select(s => s.CompletedAt),
+                    session.DurationMinutes,
+                    session.SessionStartUtc,
+                    session.SessionEndUtc),
                 CompletedSets = work.CompletedSets,
                 TotalSets = work.TotalSets,
                 TotalVolume = work.Volume,
@@ -655,7 +662,11 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         return new WorkoutSessionDetailDto
         {
             Session = mapped,
-            DurationMinutes = MemberWorkoutHistoryRules.DurationMinutes(session.DurationMinutes, session.SessionStartUtc, session.SessionEndUtc),
+            DurationMinutes = MemberWorkoutHistoryRules.ResolveDurationMinutes(
+                sets.Where(s => s.IsCompleted).Select(s => s.CompletedAt),
+                session.DurationMinutes,
+                session.SessionStartUtc,
+                session.SessionEndUtc),
             CompletedExercises = completedExercises,
             TotalVolume = work.Volume,
             AdherencePercent = adherence,
@@ -994,6 +1005,7 @@ public sealed class WorkoutTrackingService : IWorkoutTrackingService
         public bool IsCompleted { get; set; }
         public decimal? ActualWeight { get; set; }
         public int? ActualReps { get; set; }
+        public DateTime? CompletedAt { get; set; }
     }
 
     private sealed class LegacySetRow

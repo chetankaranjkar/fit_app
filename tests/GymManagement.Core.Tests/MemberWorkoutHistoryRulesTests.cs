@@ -55,6 +55,23 @@ public sealed class MemberWorkoutHistoryRulesTests
     }
 
     [Fact]
+    public void Training_duration_is_the_span_of_logged_sets_not_how_long_the_screen_stayed_open()
+    {
+        var first = new DateTime(2026, 10, 19, 6, 4, 0, DateTimeKind.Utc);
+        var last = first.AddMinutes(68);
+        var openedHoursEarlier = first.AddHours(-9);
+
+        Assert.Null(MemberWorkoutHistoryRules.TrainingDurationMinutes(new DateTime?[] { null }));
+        Assert.Equal(1, MemberWorkoutHistoryRules.TrainingDurationMinutes(new DateTime?[] { first }));
+        Assert.Equal(68, MemberWorkoutHistoryRules.TrainingDurationMinutes(new DateTime?[] { last, null, first }));
+        Assert.Equal(68, MemberWorkoutHistoryRules.ResolveDurationMinutes(
+            new DateTime?[] { first, last },
+            storedMinutes: 557,
+            startUtc: openedHoursEarlier,
+            endUtc: last.AddHours(8)));
+    }
+
+    [Fact]
     public void History_volume_ignores_mirrored_logs_and_does_not_treat_missing_weight_as_zero()
     {
         var tracked = new[]

@@ -72,4 +72,31 @@ public static class MemberWorkoutHistoryRules
             return Math.Max(1, (int)(endUtc.Value - startUtc.Value).TotalMinutes);
         return null;
     }
+
+    /// <summary>
+    /// Minutes from the first logged set to the last. Opening the workout, or finishing it later, does not extend this.
+    /// </summary>
+    public static int? TrainingDurationMinutes(IEnumerable<DateTime?> completedAtUtc)
+    {
+        DateTime? first = null;
+        DateTime? last = null;
+        foreach (var at in completedAtUtc)
+        {
+            if (!at.HasValue) continue;
+            if (first == null || at.Value < first) first = at.Value;
+            if (last == null || at.Value > last) last = at.Value;
+        }
+
+        if (first == null || last == null) return null;
+        var minutes = (int)Math.Round((last.Value - first.Value).TotalMinutes, MidpointRounding.AwayFromZero);
+        return Math.Max(1, minutes);
+    }
+
+    /// <summary>Prefer the logged-set span. Stored start-to-finish minutes are only a fallback.</summary>
+    public static int? ResolveDurationMinutes(
+        IEnumerable<DateTime?> completedAtUtc,
+        int? storedMinutes,
+        DateTime? startUtc,
+        DateTime? endUtc) =>
+        TrainingDurationMinutes(completedAtUtc) ?? DurationMinutes(storedMinutes, startUtc, endUtc);
 }

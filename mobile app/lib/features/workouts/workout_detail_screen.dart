@@ -20,11 +20,12 @@ import '../../widgets/press_scale.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
 import 'logic/recorded_work.dart';
+import 'logic/session_duration.dart';
 import 'logic/set_completion_validator.dart';
 import 'logic/today_workout_gate.dart';
 import 'workout_derived_metrics.dart';
 import 'package:flutter/services.dart';
-import 'widgets/plan_set_completion_row.dart';
+import 'widgets/workout_band_card.dart';
 import 'workout_flow_launcher.dart';
 import 'workout_session_launcher.dart';
 
@@ -305,9 +306,11 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
             if (set.isCompleted) PerformedSet(weight: set.actualWeight, reps: set.actualReps),
       ],
     );
-    final duration = session.startTimeUtc == null
-        ? null
-        : DateTime.now().toUtc().difference(session.startTimeUtc!.toUtc()).inMinutes;
+    final duration = trainingDurationMinutes([
+      for (final group in session.exercises)
+        for (final set in group.sets)
+          if (set.isCompleted) set.completedAt,
+    ]);
     final partial = session.completedSets < session.totalSets;
     return [
       if (partial) 'Partial completion',
@@ -481,6 +484,8 @@ class _WorkoutDetailBodyState extends ConsumerState<_WorkoutDetailBody> {
                           _completionSummary(_session!),
                           style: FitnessText.body(context),
                         ),
+                        const SizedBox(height: AppSpacing.sm),
+                        WorkoutBandCard(session: _session!),
                       ],
                       const SizedBox(height: AppSpacing.sm),
                     ],

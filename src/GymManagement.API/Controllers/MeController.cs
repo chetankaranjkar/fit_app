@@ -1185,16 +1185,16 @@ namespace GymManagement.API.Controllers
             });
         }
 
-        private async Task<Dictionary<int, GymManagement.Core.Workouts.RecordedWork>> LoadPerformedWorkAsync(
+        private async Task<Dictionary<int, (GymManagement.Core.Workouts.RecordedWork Work, int? TrainingMinutes)>> LoadPerformedWorkAsync(
             IReadOnlyList<int> sessionIds,
             CancellationToken cancellationToken)
         {
             if (sessionIds.Count == 0)
-                return new Dictionary<int, GymManagement.Core.Workouts.RecordedWork>();
+                return new Dictionary<int, (GymManagement.Core.Workouts.RecordedWork Work, int? TrainingMinutes)>();
 
             var trackedRows = await _db.WorkoutSessionExercises.AsNoTracking()
                 .Where(x => sessionIds.Contains(x.WorkoutSessionId))
-                .Select(x => new { x.WorkoutSessionId, x.IsCompleted, x.ActualWeight, x.ActualReps })
+                .Select(x => new { x.WorkoutSessionId, x.IsCompleted, x.ActualWeight, x.ActualReps, x.CompletedAt })
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
             var logs = await _db.WorkoutLogs.AsNoTracking()
@@ -1203,7 +1203,7 @@ namespace GymManagement.API.Controllers
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            var result = new Dictionary<int, GymManagement.Core.Workouts.RecordedWork>();
+            var result = new Dictionary<int, (GymManagement.Core.Workouts.RecordedWork Work, int? TrainingMinutes)>();
             foreach (var id in sessionIds)
             {
                 var tracked = trackedRows.Where(x => x.WorkoutSessionId == id).ToList();
@@ -1215,8 +1215,11 @@ namespace GymManagement.API.Controllers
                     .Where(x => x.WorkoutSessionId == id)
                     .Select(x => new GymManagement.Core.Workouts.PerformedSet(x.WeightUsed, x.RepsDone))
                     .ToList();
-                result[id] = GymManagement.Core.Workouts.RecordedWork.FromSources(
-                    tracked.Count > 0, tracked.Count, trackedCompleted, logSets);
+                result[id] = (
+                    GymManagement.Core.Workouts.RecordedWork.FromSources(
+                        tracked.Count > 0, tracked.Count, trackedCompleted, logSets),
+                    GymManagement.Core.Workouts.MemberWorkoutHistoryRules.TrainingDurationMinutes(
+                        tracked.Where(x => x.IsCompleted).Select(x => x.CompletedAt)));
             }
 
             return result;
@@ -1225,16 +1228,17 @@ namespace GymManagement.API.Controllers
         private static MeWorkoutSessionSummaryDto MapSessionSummary(
             WorkoutSession ws,
             IReadOnlyDictionary<int, string> planNames,
-            IReadOnlyDictionary<int, GymManagement.Core.Workouts.RecordedWork> facts)
+            IReadOnlyDictionary<int, (GymManagement.Core.Workouts.RecordedWork Work, int? TrainingMinutes)> facts)
         {
-            facts.TryGetValue(ws.Id, out var work);
+            facts.TryGetValue(ws.Id, out var fact);
+            var work = fact.Work;
             return new MeWorkoutSessionSummaryDto
             {
                 SessionId = ws.Id,
                 WorkoutPlanId = ws.WorkoutPlanId,
                 PlanName = ws.WorkoutPlanId.HasValue && planNames.TryGetValue(ws.WorkoutPlanId.Value, out var n) ? n : string.Empty,
                 SessionDateUtc = ws.SessionDate,
-                DurationMinutes = ws.DurationMinutes,
+                DurationMinutes = fact.TrainingMinutes ?? ws.DurationMinutes,
                 SetsLogged = work.CompletedSets,
                 TotalSets = work.TotalSets,
                 RecordedVolume = work.Volume,

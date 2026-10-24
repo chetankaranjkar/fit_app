@@ -90,6 +90,10 @@ test.describe('Persona navigation @nav', () => {
     await signInAs(page, { appRoles: ['ADMIN'], permissions: ADMIN_PERMISSIONS })
     await page.goto('/dashboard/profile')
 
+    await expect(page.locator('aside a[href="/dashboard/profile"]')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Open account menu', exact: true })).toHaveCount(1)
+
     const sections = await readSidebarSections(page)
     expect(Object.keys(sections)).toEqual([
       'Overview',

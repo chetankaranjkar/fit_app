@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { authService } from '../../services/auth.service'
+import { Link, useLocation } from 'react-router-dom'
 import { useDashboardRole } from '../../features/auth/DashboardRoleContext'
 import {
   ROLE_BRAND,
@@ -167,7 +166,6 @@ export function RoleSidebar({
         : ROLE_NAV[role]
   const groups = role === 'trainer' ? getTrainerNavGroups() : ROLE_NAV_GROUPS[role]
   const { pathname } = useLocation()
-  const navigate = useNavigate()
 
   const isActive = (path: string) => {
     if (path === '/dashboard' || path === '/dashboard/member/portal') {
@@ -194,16 +192,6 @@ export function RoleSidebar({
       }
     }
   }, [pathname, role])
-
-  const handleLogout = async () => {
-    try {
-      await authService.logout()
-    } catch {
-      /* ignore */
-    }
-    authService.clearSession()
-    navigate('/login', { replace: true })
-  }
 
   const onNavigate = () => onCloseMobile()
 
@@ -323,17 +311,7 @@ export function RoleSidebar({
 
       <div className="border-t border-white/[0.06] p-3">
         {!collapsed && <p className="mb-2 truncate px-2 text-xs text-slate-500">{userName}</p>}
-        <button
-          type="button"
-          onClick={() => void handleLogout()}
-          aria-label="Sign out"
-          className={[
-            'w-full rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white',
-            collapsed ? 'px-2' : '',
-          ].join(' ')}
-        >
-          {collapsed ? '⎋' : 'Sign out'}
-        </button>
+
         <button
           type="button"
           onClick={onToggleCollapse}

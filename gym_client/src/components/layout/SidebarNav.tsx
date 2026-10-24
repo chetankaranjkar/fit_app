@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { authService } from '../../services/auth.service'
 import {
   canAccessAttendanceNav,
@@ -357,7 +357,6 @@ export function SidebarNav({
   onCloseMobile,
 }: SidebarNavProps) {
   const location = useLocation()
-  const navigate = useNavigate()
   const { pathname } = location
   const staffFrontDesk = isStaffFrontDeskOnly()
   const entries = staffFrontDesk ? getFrontDeskNav() : getVisibleAdminNav()
@@ -380,16 +379,6 @@ export function SidebarNav({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- groups derive from session; re-run on navigation only
   }, [pathname])
-
-  const handleLogout = async () => {
-    try {
-      await authService.logout()
-    } catch {
-      // Intentionally ignore API logout failure; local session clear still applies.
-    }
-    authService.clearSession()
-    navigate('/login', { replace: true })
-  }
 
   const activeBase =
     'bg-[linear-gradient(135deg,rgba(59,130,246,0.25),rgba(168,85,247,0.25))] text-white shadow-[0_0_0_1px_rgba(148,163,184,0.12)_inset]'
@@ -583,75 +572,6 @@ export function SidebarNav({
             ))}
           </div>
 
-          {/* Bottom: Help Center + Profile + Logout */}
-          <div className="mt-2 flex shrink-0 flex-col gap-1 border-t border-white/5 pt-3">
-            <Link
-              to="/help"
-              {...linkPrefetchProps('/help')}
-              onClick={handleNavClick}
-              title={collapsed ? 'Help Center' : undefined}
-              aria-label={collapsed ? 'Help Center' : undefined}
-              aria-current={pathname.startsWith('/help') ? 'page' : undefined}
-              className={linkClass('/help')}
-            >
-              <span
-                className={
-                  pathname.startsWith('/help')
-                    ? 'text-white'
-                    : 'text-slate-400 group-hover:text-white'
-                }
-              >
-                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                  />
-                </svg>
-              </span>
-              {!collapsed && <span>Help Center</span>}
-            </Link>
-            <Link
-              to="/dashboard/profile"
-              {...linkPrefetchProps('/dashboard/profile')}
-              onClick={handleNavClick}
-              title={collapsed ? 'Profile' : undefined}
-              aria-label={collapsed ? 'Profile' : undefined}
-              aria-current={pathname === '/dashboard/profile' ? 'page' : undefined}
-              className={linkClass('/dashboard/profile')}
-            >
-              <span
-                className={
-                  pathname === '/dashboard/profile'
-                    ? 'text-white'
-                    : 'text-slate-400 group-hover:text-white'
-                }
-              >
-                {iconMap.profile}
-              </span>
-              {!collapsed && <span>Profile</span>}
-            </Link>
-            <button
-              type="button"
-              onClick={handleLogout}
-              title={collapsed ? 'Logout' : undefined}
-              aria-label="Logout"
-              className={`group flex w-full items-center rounded-xl py-2.5 text-sm font-medium text-slate-300 transition hover:bg-pink-500/10 hover:text-pink-300 ${
-                collapsed ? 'justify-center px-2' : 'gap-3 px-3'
-              }`}
-            >
-              <svg
-                className="size-5 shrink-0 text-slate-400 group-hover:text-pink-300"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1z" />
-              </svg>
-              {!collapsed && <span>Logout</span>}
-            </button>
-          </div>
         </nav>
     </aside>
   )

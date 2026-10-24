@@ -10,6 +10,7 @@ import type { MeNotification } from '../../services/me.service'
 import type { DashboardAlert } from '../../services/dashboard.service'
 import { GlobalSearch } from './GlobalSearch'
 import { ThemeToggle } from './ThemeToggle'
+import { AccountMenu } from './AccountMenu'
 
 interface TopNavbarProps {
   userName: string
@@ -40,13 +41,6 @@ export function TopNavbar({
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [expiryLabel, setExpiryLabel] = useState<string | null>(null)
   const [isExpiringSoon, setIsExpiringSoon] = useState(false)
-  const initials = userName
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-
   useEffect(() => {
     const decodeExpiry = (token: string): number | null => {
       try {
@@ -316,38 +310,10 @@ export function TopNavbar({
           ) : null}
         </div>
 
-        {/* Settings */}
-        <button
-          type="button"
-          onClick={() => navigate('/dashboard/profile')}
-          className="hidden size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white sm:inline-flex"
-          aria-label="Settings"
-        >
-          <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317a1.724 1.724 0 013.35 0 1.724 1.724 0 002.591 1.07 1.724 1.724 0 012.37 2.37 1.724 1.724 0 001.07 2.59 1.724 1.724 0 010 3.35 1.724 1.724 0 00-1.07 2.591 1.724 1.724 0 01-2.37 2.37 1.724 1.724 0 00-2.591 1.07 1.724 1.724 0 01-3.35 0 1.724 1.724 0 00-2.59-1.07 1.724 1.724 0 01-2.37-2.37 1.724 1.724 0 00-1.07-2.591 1.724 1.724 0 010-3.35 1.724 1.724 0 001.07-2.59 1.724 1.724 0 012.37-2.37 1.724 1.724 0 002.59-1.07z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
-
         {/* Persona + user (grouped) */}
         <div className="flex items-center gap-1 sm:gap-1.5">
           <PersonaSwitcher />
-          <button
-            type="button"
-            onClick={() => navigate('/dashboard/profile')}
-            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 py-1 pl-1 pr-2 text-left transition hover:bg-white/10 sm:pr-3"
-          >
-            <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#3b82f6,#a855f7)] text-[11px] font-bold text-white">
-              {userAvatarUrl ? (
-                <img src={userAvatarUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                initials || 'U'
-              )}
-            </span>
-            <span className="hidden max-w-40 truncate text-xs font-semibold text-white sm:inline">
-              {userName}
-            </span>
-          </button>
+          <AccountMenu userName={userName} userAvatarUrl={userAvatarUrl} onOpen={() => setNotificationsOpen(false)} />
         </div>
       </div>
     </header>

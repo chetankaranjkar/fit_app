@@ -921,6 +921,8 @@ The `other` persona (STAFF / RECEPTIONIST / ACCOUNTANT) renders these links in `
 
 **Sections (in order):** Overview · Members · Memberships & Billing · Coaching · Attendance & Access · Retail · Operations · Reports · Settings. Defined once in `gym_client/src/features/auth/navSections.ts` (`NAV_SECTIONS`, `groupBySection`). Empty sections are hidden; collapsed sidebar shows a divider instead of the heading.
 
+**Account navigation (2026-10-24):** The top-right user name/avatar opens the shared `AccountMenu` on desktop and mobile: **Profile & account settings** (`/dashboard/profile`), **Help Center** (`/help`), then a divider and **Log out**. Help Center and logout actions have moved out of the sidebars; the duplicate admin Profile footer link and navbar settings gear are removed. The member’s existing Profile navigation stays available. Page help remains a floating contextual action. The account menu supports arrow keys, Home/End, Escape with focus restoration, and dismissal on outside click, focus departure or navigation. Logout uses the existing auth service, blocks repeated submissions while pending, clears the local session even if the server request fails, and redirects to login. Opening the account menu closes notifications.
+
 **Admin persona (`SidebarNav.tsx`, `ADMIN_NAV`)** — URLs unchanged; each entry keeps its existing visibility helper:
 
 | Section | Entries | Visibility |

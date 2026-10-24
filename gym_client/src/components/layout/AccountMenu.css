@@ -1,0 +1,18 @@
+.account-menu { position: relative; }
+.account-menu-trigger { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 10px 4px 4px; border: 1px solid var(--dashboard-border); border-radius: 12px; background: var(--dashboard-surface-muted); color: var(--dashboard-text); cursor: pointer; }
+.account-menu-trigger:hover, .account-menu-trigger[aria-expanded="true"] { border-color: #7096d5; }
+.account-menu-avatar { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; overflow: hidden; border-radius: 9px; background: linear-gradient(135deg,#3b82f6,#a855f7); color: white; font-size: 11px; font-weight: 700; }
+.account-menu-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.account-menu-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+.account-menu-panel { position: absolute; right: 0; top: calc(100% + 10px); z-index: 50; width: min(280px,calc(100vw - 24px)); padding: 6px; border: 1px solid var(--dashboard-border); border-radius: 15px; background: var(--dashboard-surface); color: var(--dashboard-text); box-shadow: 0 16px 48px #0003; }
+.account-menu-heading { padding: 10px 12px 14px; margin-bottom: 5px; border-bottom: 1px solid var(--dashboard-border); }
+.account-menu-heading p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.account-menu-heading span { display: block; margin-top: 4px; font-size: 11px; color: var(--dashboard-muted); }
+.account-menu-panel [role="menuitem"] { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 44px; padding: 11px 12px; border-radius: 9px; text-align: left; font-size: 12px; color: var(--dashboard-text); cursor: pointer; }
+.account-menu-panel [role="menuitem"]:is(:hover,:focus-visible) { background: var(--dashboard-surface-muted); outline: 2px solid #7096d5; outline-offset: -2px; }
+.account-menu-trigger:focus-visible { outline: 2px solid #7096d5; outline-offset: 3px; }
+.account-menu-divider { height: 1px; margin: 6px 8px; background: var(--dashboard-border); }
+.account-menu-panel .account-menu-logout { color: #fda4af; }
+html[data-theme="light"] .account-menu-panel .account-menu-logout { color: #be123c; }
+.account-menu-panel [role="menuitem"]:disabled { cursor: wait; opacity: .65; }
+@media(max-width:639px) { .account-menu-name { display: none; } }

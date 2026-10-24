@@ -41,8 +41,8 @@ class AppShell extends StatelessWidget {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      AppColors.bgDark.withValues(alpha: 0),
-                      AppColors.bgDark.withValues(alpha: isDark ? 0.72 : 0.35),
+                      AppColors.resolveBg(context).withValues(alpha: 0),
+                      AppColors.resolveBg(context).withValues(alpha: 0.95),
                     ],
                   ),
                 ),

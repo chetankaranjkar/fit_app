@@ -12,7 +12,7 @@
 | [USER_GUIDE.md](../USER_GUIDE.md) | End-user operations |
 | [README.md](./README.md) | Knowledge-base index |
 
-**Last updated:** 2026-10-19 (account profile settings redesign; owner QR console and workout session review presentation; profile diet assignment member selection and dismissal; member creation, membership collection handoffs, and receipt completion).
+**Last updated:** 2026-10-24 (Help Center and contextual page guides; mobile Home/Workouts/Diet design refresh; account profile settings redesign; owner QR console and workout session review presentation; profile diet assignment member selection and dismissal; member creation, membership collection handoffs, and receipt completion).
 
 **Section map:** [README.md](./README.md#application_flows-section-map). Scheduled work / evidence labels: [PRODUCT_BACKLOG.md](../PRODUCT_BACKLOG.md).
 
@@ -305,17 +305,27 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 
 **Mobile health & assigned supplements (PulseFit):** No extra bottom tab. **Profile → Health profile** (`/profile/health`) is the member’s own assessment: `GET/PUT /api/HealthProfile/me` (same fields as web). HTTP 404 on own GET shows an empty form (web member page). **Profile → Assigned supplements** and Nutrition **Assigned supplements** card (`/profile/supplements`) are **read-only** `GET /api/MemberSupplements/me` (coach-assigned protocol: name, dosage, timing, dates, coach, instructions — not a purchase history). There is no member write API for assignments. HTTP 403 → access denied copy with no other member’s name; empty list → no protocol yet. Clients never send another `userId` (no `/HealthProfile/user/{id}` or `/MemberSupplements/user/{id}` from the app). Tests: `mobile app/test/health_and_supplements_test.dart`.
 
+### Mobile member design refresh (2026-10-19)
+
+Home, Workouts, and Diet use solid neutral cards, a quiet background, system typography, and orange primary actions. Shared `GlassCard` retains its API but no longer applies backdrop blur. The five-tab bar uses readable labels, selected-tab semantics, theme-aware colours, and a height that grows with text scaling; content padding uses the same occupied-height calculation.
+
+- **Home:** prominent Scan button → existing scanner; one shared `TodayWorkoutCard` → overview/warmup/live flow, resume, or completed read-only detail. Membership/payment stays on its existing handoff. Week attendance, schedule and notifications remain; duplicate training stats and the extra three-stat row are removed.
+- **Workouts:** `TodayWorkoutCard` reuses `todayWorkoutActionProvider` and the existing Home action resolver/TodayWorkoutGate. A pending template/session check shows a skeleton rather than a premature Start. Today’s template supplies exercises and target sets/reps; other assigned plans open existing detail routes. Rest/unscheduled/empty templates do not display a session Start. The decorative hero, attendance-derived recovery/completion metrics, carousel and extra floating action dock are removed from this screen.
+- **Diet:** assigned daily targets → expandable assigned meals with visible food summaries → compact water log → assigned-food search, supplements and coach/plan notes. No consumed-calorie ring or “No meals logged today” panel is shown. Search retains assigned-plan filtering; unavailable barcode/AI preview chips are removed. Water reuses the per-user/local-day store and undo, explicitly labels the goal estimated and logs device-local. Missing macro values remain absent.
+
+These are presentation changes; assigned workout/diet data, payment handoffs, session recovery and water persistence reuse existing services. Mockup member names, photos, exercises and food values are not inserted into production screens.
+
 ### 9c. Mobile diet, food search, and workout tips (PulseFit)
 
-**Assigned vs recorded:** The Nutrition tab shows the coach **assigned** diet from `GET /api/me/diet-plan` (plan name, planned calories/macros, assigned meals/foods, optional plan `description` and assignment `assignmentNotes`). There is **no** meal-log / food-diary / consume API. The app must not present planned numbers as consumed, eaten, or adherence. Empty states: **no assigned plan** vs **plan assigned but no meals logged** (`No meals logged today` — meal logging is not supported). Meal swipe-to-log was removed because it did not persist.
+**Assigned vs recorded:** The Diet tab shows the coach **assigned** diet from `GET /api/me/diet-plan` (plan name, planned calories/macros, assigned meals/foods, optional plan `description` and assignment `assignmentNotes`). There is **no** meal-log / food-diary / consume API. The app must not present planned numbers as consumed, eaten, or adherence. Empty states distinguish **no assigned plan** from **an assigned plan with no meals configured**. The screen does not show a meal-logging status because meal logging is not supported. Meal swipe-to-log was removed because it did not persist.
 
 **Food search:** Search filters foods on the assigned plan only (same payload as `/api/me/diet-plan`). Not a public food database and not retail POS barcodes. Matches show **planned** kcal/macros from the meal item.
 
-**Unavailable previews:** Barcode scan and AI suggest stay on the diet panel as disabled **Preview — not available**. There is no nutrition barcode endpoint for members (`GET` retail `by-barcode` is POS inventory). The app does not invent analyze-macros results.
+**Unavailable features:** Barcode scan and AI suggest are omitted from the diet panel. There is no nutrition barcode endpoint for members (`GET` retail `by-barcode` is POS inventory). The app does not invent analyze-macros results.
 
-**Workout tip:** Workouts tab card is **Workout tip**, not Neural Coach or personalized AI. If the featured assigned program has a `description`, that text is shown as from the assigned plan; otherwise a general tip. Phase 9 exercise/AI APIs are staff-only and are not used here.
+**Workout tip (legacy shared component):** `WorkoutAiCoachCard` uses **Workout tip**, not Neural Coach or personalized AI; the redesigned Workouts landing screen omits this secondary card. If the featured assigned program has a `description`, that text is shown as from the assigned plan; otherwise a general tip. Phase 9 exercise/AI APIs are staff-only and are not used here.
 
-**Plain labels:** Member-facing copy uses **Nutrition**, **Water** (Today / Goal), **meals**, and **plan** — not Nutrition OS, Hydration Matrix, fluid equilibrium, or meal modules. Workouts hero is **Today's workout**, not Command Center.
+**Plain labels:** Member-facing copy uses **Diet**, **Water** (Today / Goal), **meals**, and **plan** — not Nutrition OS, Hydration Matrix, fluid equilibrium, or meal modules. The primary workout card is **Today’s workout**.
 
 **Web:** `/dashboard/member/diet` uses the same assigned-targets-not-diary wording.
 
@@ -331,21 +341,31 @@ Summary: `POST /api/Auth/login` → JWT with roles + permission claims → `Perm
 
 **Offline:** last successful `/me/dashboard`, workout plans, billing, and session templates are cached (`MeResponseCache`, `WorkoutTemplateCache`). Home shows an offline hint with last-known membership/workout. Scan stays disabled until the device is online. Scanner failure reasons and the Android/iOS device checklist are in **§12b**.
 
-**Secondary:** week attendance strip, compact schedule (2 items → Workouts), notifications row → `/notifications`. Training stats reuse `WorkoutDashboardCard` without a second Resume/Start CTA. Sync chip stays in the nav bar.
+**Secondary:** week attendance strip, compact schedule (2 items → Workouts), notifications row → `/notifications`. Home omits duplicate training stats; recorded workout analytics remain available in Progress. Sync chip stays in the nav bar.
 
 **Tests:** `mobile app/test/home_today_actions_test.dart`.
 
 ### 9f. Mobile accessibility (PulseFit)
 
-Shared helpers: `AppA11y` / `AppText` (`lib/theme/app_a11y.dart`), `AppIconButton` (48dp + Semantics), `AppButton`, `AppKeyboardInset`, `showPermissionRationaleDialog` (**Open settings** / **Not now**; Android back pops the dialog). System permission sheets are not restylable. Help WebView already pops the Flutter route (`InAppWebScreen` `PopScope`). Decorative tickers (water wave, scanner line, press-scale) stop when `MediaQuery.disableAnimations` / Reduce Motion is on.
+Shared helpers: `AppA11y` / `AppText` (`lib/theme/app_a11y.dart`), `AppIconButton` (48dp + Semantics), `AppButton`, `AppKeyboardInset`, `showPermissionRationaleDialog` (**Open settings** / **Not now**; Android back pops the dialog). System permission sheets are not restylable. Help WebView already pops the Flutter route (`InAppWebScreen` `PopScope`). The water card no longer uses a decorative wave. Remaining decorative tickers (scanner line, press-scale) stop when `MediaQuery.disableAnimations` / Reduce Motion is on.
 
-**Tests:** `mobile app/test/accessibility_layout_test.dart` (320pt width, textScaler 1.5–2.0; primary CTAs still found).
+**Tests:** `mobile app/test/accessibility_layout_test.dart` (320pt width, textScaler 1.5–2.0; primary CTAs still found) and `mobile app/test/mobile_redesign_test.dart` (Home/Workouts/Diet in dark/light themes at 390pt and 320pt with 2× text, water add/undo, pending session state). Optional `flutter test --dart-define=CAPTURE_MOBILE_PREVIEWS=true test/mobile_redesign_test.dart` writes implemented-screen previews with fixture member data to `mobile app/build/redesign-previews/`. These renders are not evidence of physical-device or production testing.
 
 **Manual leftover (TalkBack / VoiceOver on a device):** tab bar labels, live workout set steppers, camera capture chrome, Razorpay native sheet, biometric system prompt, and QR frame (camera preview is not a Flutter semantics tree).
 
 ---
 
 ## 10. Reuse catalog (avoid duplication)
+
+### Web Help Center and contextual guidance (2026-10-24)
+
+`/help` is an authenticated knowledge library with six topics, task-based search across all topics, popular searches, a starter guide, FAQs, and an article reader. Category, search and article selection are preserved in URL parameters; `/help/category/:categoryId` and `/help/article/:articleId` still redirect into the reader. Legacy built-in article IDs resolve to expanded maintained guides. The initial library shows eight guides with a View all action; selecting a topic or searching shows all matching guides. Search includes guide steps and troubleshooting text, and a new search clears the category filter. Browser navigation synchronizes the search field.
+
+`modules/help/data/helpGuides.ts` supplies a shared bundled guide catalog for the Help Center and page drawer, covering member, billing, training/nutrition, operations, retail, locker, settings and member-portal routes. `helpApi.service.ts` merges additional API categories/articles while using the maintained catalog for known modules and legacy built-in IDs; bundled guides remain available if help API requests fail. This does not change backend authorization or account access.
+
+**Page help**, inline help, and the `?` shortcut open the same contextual drawer with numbered steps, a Good to know note, related guides, and a link to the corresponding full article. The drawer reuses `SlideOverPanel` for focus trapping, Escape dismissal, focus restoration and body scroll locking. `routeModuleMap.ts` uses the catalog's route mappings plus aliases, including specific member health/supplement routes. `HelpArticleBody` renders safe text, bold emphasis, headings and semantic lists without injecting HTML. `help.css` provides responsive layouts and follows the existing account light/dark preference through `useDashboardTheme`. No guide link grants permissions to a screen.
+
+Regression coverage: `gym_client/tests/e2e/help-center.spec.ts` checks cross-topic search, reading and back navigation, empty/missing states, legacy links, drawer keyboard behavior, route coverage and mobile overflow.
 
 ### Frontend (`gym_client/src`)
 

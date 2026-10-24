@@ -12,6 +12,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/glass_card.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/skeleton_shimmer.dart';
 import '../../widgets/press_scale.dart';
 import '../../workout_sync/models/workout_sync_enums.dart';
 import '../workouts/workout_flow_launcher.dart';
@@ -24,65 +26,70 @@ final todayAssignedTemplateProvider =
   return ref.watch(workoutSessionTemplateProvider(plans.first.id).future);
 });
 
-/// Scan, today’s workout, and membership/payment — derived from existing providers.
+/// Shared presentation state for Home and Workouts; no parallel session logic.
+final todayWorkoutActionProvider =
+    Provider.autoDispose<HomeWorkoutAction?>((ref) {
+  ref.watch(workoutSyncRefreshProvider);
+  final plans = ref.watch(workoutPlansProvider);
+  final template = ref.watch(todayAssignedTemplateProvider);
+  final active = ref.watch(activeWorkoutProvider);
+  final today = ref.watch(todayWorkoutProvider);
+  final sync = ref.watch(syncStatusProvider).valueOrNull;
+  final offline = sync != null &&
+      (sync.displayState == WorkoutSyncDisplayState.offline ||
+          !sync.hasDeviceNetwork);
+  final decision = today.valueOrNull;
+  final session = decision?.action == TodayWorkoutAction.resume
+      ? decision?.session
+      : active.valueOrNull;
+  final completed = decision?.isClosed == true ? decision?.session : null;
+  if (session == null &&
+      completed == null &&
+      (plans.isLoading ||
+          template.isLoading ||
+          today.isLoading ||
+          active.isLoading)) {
+    return null;
+  }
+  return resolveHomeWorkoutAction(
+    plans: plans.valueOrNull ?? const [],
+    template: template.valueOrNull,
+    activeSession: session,
+    completedToday: completed,
+    templateLoadFailed: template.hasError || today.hasError || active.hasError,
+    offline: offline,
+  );
+});
+
+/// Scan, today's workout, and membership/payment from existing providers.
 class HomeTodayActions extends ConsumerWidget {
   const HomeTodayActions({super.key, this.dashboard});
-
   final MeDashboard? dashboard;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sync = ref.watch(syncStatusProvider).valueOrNull;
     final offline = sync != null &&
-        (sync.displayState == WorkoutSyncDisplayState.offline || !sync.hasDeviceNetwork);
-    final membership = dashboard?.membership;
-    final billing = ref.watch(billingAccessProvider);
-    final payment = ref.watch(onlinePaymentSummaryProvider);
-    final plansAsync = ref.watch(workoutPlansProvider);
-    final templateAsync = ref.watch(todayAssignedTemplateProvider);
-    final activeAsync = ref.watch(activeWorkoutProvider);
-    final todayAsync = ref.watch(todayWorkoutProvider);
-    ref.watch(workoutSyncRefreshProvider);
-
-    final plans = plansAsync.valueOrNull ?? const <MeWorkoutPlanSummary>[];
-    final templateFailed = templateAsync.hasError;
-    final template = templateAsync.valueOrNull;
-    final decision = todayAsync.valueOrNull;
-    final active = decision?.action == TodayWorkoutAction.resume
-        ? decision?.session
-        : activeAsync.valueOrNull;
-    final completed = decision?.action == TodayWorkoutAction.viewCompleted ? decision?.session : null;
-
-    final actions = resolveHomePrimaryActions(
-      membership: membership,
-      billing: billing.valueOrNull,
-      payment: payment.valueOrNull,
-      plans: plans,
-      template: template,
-      activeSession: active,
-      completedToday: completed,
-      templateLoadFailed: templateFailed,
-      offline: offline,
-      usingCachedData: dashboard?.isStale == true || offline,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (actions.usingCachedData) ...[
-          const _OfflineHint(),
-          const SizedBox(height: AppSpacing.md),
-        ],
-        _CheckInCard(action: actions.checkIn),
+        (sync.displayState == WorkoutSyncDisplayState.offline ||
+            !sync.hasDeviceNetwork);
+    final billing = ref.watch(billingAccessProvider).valueOrNull;
+    final payment = ref.watch(onlinePaymentSummaryProvider).valueOrNull;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (dashboard?.isStale == true || offline) ...[
+        const _OfflineHint(),
         const SizedBox(height: AppSpacing.md),
-        _WorkoutCard(action: actions.workout),
-        const SizedBox(height: AppSpacing.md),
-        _MembershipIssueCard(
-          action: actions.membership,
-          pendingAmount: payment.valueOrNull?.outstandingAmount ?? billing.valueOrNull?.pendingAmount,
-        ),
       ],
-    );
+      _CheckInCard(action: resolveHomeCheckInAction(offline: offline)),
+      const SizedBox(height: AppSpacing.md),
+      const TodayWorkoutCard(),
+      const SizedBox(height: AppSpacing.md),
+      _MembershipIssueCard(
+        action: resolveHomeMembershipAction(
+            membership: dashboard?.membership,
+            billing: billing,
+            payment: payment),
+        pendingAmount: payment?.outstandingAmount ?? billing?.pendingAmount,
+      ),
+    ]);
   }
 }
 
@@ -93,16 +100,19 @@ class _OfflineHint extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassCard(
       key: const Key('home-offline-hint'),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
       tint: AppColors.orange.withValues(alpha: 0.12),
       child: Row(
         children: [
-          const Icon(CupertinoIcons.wifi_slash, color: AppColors.orange, size: 18),
+          const Icon(CupertinoIcons.wifi_slash,
+              color: AppColors.orange, size: 18),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               'Showing last-known membership and workout. Check-in needs a connection.',
-              style: AppType.footnote.copyWith(color: AppColors.resolveText(context)),
+              style: AppType.footnote
+                  .copyWith(color: AppColors.resolveText(context)),
             ),
           ),
         ],
@@ -118,54 +128,110 @@ class _CheckInCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PrimaryActionCard(
-      testKey: const Key('home-scan-cta'),
-      icon: CupertinoIcons.qrcode_viewfinder,
-      title: action.title,
-      detail: action.detail,
-      cta: action.enabled ? 'Scan' : null,
-      enabled: action.enabled,
-      highlighted: action.enabled,
-      onTap: action.enabled ? () => context.push(kHomeScannerRoute) : null,
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      AppButton(
+        key: const Key('home-scan-cta'),
+        label: action.title,
+        icon: CupertinoIcons.qrcode_viewfinder,
+        onTap: action.enabled ? () => context.push(kHomeScannerRoute) : null,
+      ),
+      if (!action.enabled) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text(action.detail,
+            style: AppType.footnote
+                .copyWith(color: AppColors.resolveTextSecondary(context))),
+      ],
+    ]);
   }
 }
 
-class _WorkoutCard extends ConsumerWidget {
-  const _WorkoutCard({required this.action});
+/// One primary workout action, preserving scheduled/rest/offline/completed states.
+class TodayWorkoutCard extends ConsumerStatefulWidget {
+  const TodayWorkoutCard({super.key});
+  @override
+  ConsumerState<TodayWorkoutCard> createState() => _TodayWorkoutCardState();
+}
 
-  final HomeWorkoutAction action;
+class _TodayWorkoutCardState extends ConsumerState<TodayWorkoutCard> {
+  bool _opening = false;
+  Future<void> _open(HomeWorkoutAction action) async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    try {
+      if (action.kind == HomeWorkoutKind.completed && action.plan != null) {
+        context.push('/workouts/${action.plan!.id}', extra: action.plan);
+      } else if (action.kind == HomeWorkoutKind.resume &&
+          action.session != null) {
+        context.push('/workouts/live', extra: action.session);
+      } else if (action.plan != null) {
+        await launchFullWorkoutFlow(context, ref, plan: action.plan!);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      await showCupertinoDialog<void>(
+          context: context,
+          builder: (c) => CupertinoAlertDialog(
+                title: const Text('Unable to open workout'),
+                content: const Text(
+                    'Check your connection and try again. Your saved workout is kept on this device.'),
+                actions: [
+                  CupertinoDialogAction(
+                      onPressed: () => Navigator.pop(c),
+                      child: const Text('OK'))
+                ],
+              ));
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return _PrimaryActionCard(
-      testKey: const Key('home-workout-cta'),
-      icon: action.kind == HomeWorkoutKind.restDay
-          ? CupertinoIcons.moon_stars_fill
-          : CupertinoIcons.flame_fill,
-      title: action.title,
-      detail: action.detail,
-      cta: action.cta,
-      enabled: action.canLaunch,
-      highlighted: action.canLaunch,
-      onTap: !action.canLaunch
-          ? null
-          : () async {
-              if (action.kind == HomeWorkoutKind.completed) {
-                final plan = action.plan;
-                if (plan == null) return;
-                context.push('/workouts/${plan.id}', extra: plan);
-                return;
-              }
-              if (action.kind == HomeWorkoutKind.resume && action.session != null) {
-                context.push('/workouts/live', extra: action.session);
-                return;
-              }
-              final plan = action.plan;
-              if (plan == null) return;
-              await launchFullWorkoutFlow(context, ref, plan: plan);
-            },
-    );
+  Widget build(BuildContext context) {
+    final action = ref.watch(todayWorkoutActionProvider);
+    if (action == null) return const SkeletonBlock(height: 170);
+    final label = switch (action.kind) {
+      HomeWorkoutKind.start => 'Start workout',
+      HomeWorkoutKind.resume => 'Resume workout',
+      _ => action.cta,
+    };
+    return GlassCard(
+        key: const Key('home-workout-cta'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+                action.kind == HomeWorkoutKind.start
+                    ? 'Today’s workout'
+                    : action.title,
+                style: AppType.footnote.copyWith(color: AppColors.accent)),
+            const SizedBox(height: AppSpacing.sm),
+            if (action.plan != null)
+              Text(action.plan!.planName,
+                  style: AppType.title3
+                      .copyWith(color: AppColors.resolveText(context))),
+            const SizedBox(height: AppSpacing.sm),
+            Text(action.detail,
+                style: AppType.subhead
+                    .copyWith(color: AppColors.resolveTextSecondary(context))),
+            if (action.canLaunch && label != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(
+                  label: label,
+                  isLoading: _opening,
+                  icon: action.kind == HomeWorkoutKind.completed
+                      ? CupertinoIcons.checkmark_circle
+                      : CupertinoIcons.play_fill,
+                  onTap: () => _open(action)),
+            ] else if (action.plan != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => context.push('/workouts/${action.plan!.id}',
+                      extra: action.plan),
+                  child: const Text('View assigned plan')),
+            ],
+          ],
+        ));
   }
 }
 
@@ -177,8 +243,12 @@ class _MembershipIssueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var detail = action.detail;
-    if (action.isPayOutstanding && pendingAmount != null && pendingAmount! > 0) {
+    var detail = action.kind == HomeMembershipKind.current
+        ? '${action.title} · ${action.detail}'
+        : action.detail;
+    if (action.isPayOutstanding &&
+        pendingAmount != null &&
+        pendingAmount! > 0) {
       detail = '${Fmt.currency(pendingAmount!)} is due. ${action.detail}';
     }
 
@@ -187,7 +257,9 @@ class _MembershipIssueCard extends StatelessWidget {
       icon: action.isPayOutstanding
           ? CupertinoIcons.money_dollar_circle_fill
           : CupertinoIcons.creditcard_fill,
-      title: action.title,
+      title: action.kind == HomeMembershipKind.current
+          ? 'Membership active'
+          : action.title,
       detail: detail,
       cta: action.cta,
       enabled: true,
@@ -225,7 +297,7 @@ class _PrimaryActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = warn ? AppColors.orange : AppColors.accent;
     final child = GlassCard(
-      tint: highlighted ? accent.withValues(alpha: 0.12) : null,
+      tint: warn ? accent.withValues(alpha: 0.06) : null,
       child: Opacity(
         opacity: enabled ? 1 : 0.55,
         child: Row(
@@ -236,8 +308,11 @@ class _PrimaryActionCard extends StatelessWidget {
               height: 44,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                gradient: highlighted && enabled ? AppColors.primaryGradient : null,
-                color: highlighted && enabled ? null : accent.withValues(alpha: 0.18),
+                gradient:
+                    highlighted && enabled ? AppColors.primaryGradient : null,
+                color: highlighted && enabled
+                    ? null
+                    : accent.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: Icon(
@@ -253,7 +328,8 @@ class _PrimaryActionCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
+                    style: AppType.headline
+                        .copyWith(color: AppColors.resolveText(context)),
                   ),
                   const SizedBox(height: 4),
                   Text(

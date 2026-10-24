@@ -32,21 +32,21 @@ class AppColors {
   static const Color orange      = Color(0xFFFF9500); // Alias
 
   // ── Dark surfaces ────────────────────────────────────────────────────────
-  static const Color bgDark            = Color(0xFF0D0D0F);
+  static const Color bgDark            = Color(0xFF111214);
   static const Color bgDarkDeep        = Color(0xFF050510); // React parity
-  static const Color surfaceDark       = Color(0xFF1A1A1F);
-  static const Color surfaceDarkAlt    = Color(0xFF202033);
+  static const Color surfaceDark       = Color(0xFF1C1E21);
+  static const Color surfaceDarkAlt    = Color(0xFF25282D);
   static const Color textDark          = Color(0xFFFFFFFF);
   static const Color textDarkSecondary = Color(0xFFC7C7CC);
-  static const Color borderDark        = Color(0xFF3A3A52);
+  static const Color borderDark        = Color(0xFF34373D);
 
   // ── Light surfaces (warm-tinted) ─────────────────────────────────────────
-  static const Color bgLight            = Color(0xFFF5F0EB);
+  static const Color bgLight            = Color(0xFFF5F6F7);
   static const Color surfaceLight       = Color(0xFFFFFFFF);
-  static const Color surfaceLightAlt    = Color(0xFFF5EDE6);
+  static const Color surfaceLightAlt    = Color(0xFFF0F1F3);
   static const Color textLight          = Color(0xFF1C1C1E);
   static const Color textLightSecondary = Color(0xFF6E6E73);
-  static const Color borderLight        = Color(0xFFE8DDD5);
+  static const Color borderLight        = Color(0xFFDFE2E6);
 
   // ── Gradient presets ─────────────────────────────────────────────────────
 
@@ -82,7 +82,7 @@ class AppColors {
 
   /// App background gradient — near-black to charcoal.
   static const LinearGradient darkGradient = LinearGradient(
-    colors: [Color(0xFF0D0D0F), Color(0xFF1A1A1F)],
+    colors: [Color(0xFF111214), Color(0xFF1C1E21)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );

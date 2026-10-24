@@ -12,6 +12,7 @@ export function SlideOverPanel({
   children,
   footer,
   widthClass = 'max-w-[440px]',
+  className = '',
 }: {
   open: boolean
   onClose: () => void
@@ -20,6 +21,7 @@ export function SlideOverPanel({
   children: ReactNode
   footer?: ReactNode
   widthClass?: string
+  className?: string
 }) {
   const titleId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
@@ -86,7 +88,7 @@ export function SlideOverPanel({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`absolute inset-y-0 right-0 flex w-full ${widthClass} flex-col overflow-hidden border-l border-white/10 bg-[rgba(11,11,26,0.96)] shadow-[-30px_0_60px_-20px_rgba(0,0,0,0.8)] outline-none`}
+        className={`absolute inset-y-0 right-0 flex w-full ${widthClass} flex-col overflow-hidden border-l border-white/10 bg-[rgba(11,11,26,0.96)] shadow-[-30px_0_60px_-20px_rgba(0,0,0,0.8)] outline-none ${className}`}
       >
         <header className="flex items-start justify-between gap-3 border-b border-white/5 px-6 py-5">
           <div className="min-w-0">

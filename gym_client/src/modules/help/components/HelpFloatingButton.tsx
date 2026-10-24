@@ -20,11 +20,12 @@ export function HelpFloatingButton() {
       whileHover={{ scale: 1.06 }}
       whileTap={{ scale: 0.95 }}
       onClick={() => openDrawer(resolvedModuleKey)}
-      className="fixed bottom-4 right-4 z-[190] flex size-9 items-center justify-center rounded-xl border border-white/12 bg-[linear-gradient(135deg,rgba(59,130,246,0.28),rgba(168,85,247,0.28))] text-white/95 shadow-md shadow-black/25 backdrop-blur-sm dark:border-white/10 dark:shadow-black/40"
+      className="help-floating fixed bottom-4 right-4 z-[190] flex min-h-11 items-center justify-center gap-2 rounded-full px-4 shadow-lg"
       aria-label="Open help for this page"
       title="Help (keyboard ? )"
     >
       <CircleHelp className="size-4" strokeWidth={2} />
+      <span className="text-xs font-semibold">Page help</span>
     </motion.button>
   )
 }

@@ -141,22 +141,26 @@ List<Override> _overrides({
       if (active != null &&
           active.status.toLowerCase() != 'completed' &&
           !active.pendingCompleteSync) {
-        return TodayWorkoutDecision(action: TodayWorkoutAction.resume, session: active);
+        return TodayWorkoutDecision(
+            action: TodayWorkoutAction.resume, session: active);
       }
       if (active != null) {
-        return TodayWorkoutDecision(action: TodayWorkoutAction.viewCompleted, session: active);
+        return TodayWorkoutDecision(
+            action: TodayWorkoutAction.viewCompleted, session: active);
       }
       return const TodayWorkoutDecision(action: TodayWorkoutAction.start);
     }),
     workoutSyncRefreshProvider.overrideWith((ref) {}),
     billingAccessProvider.overrideWith(
       (ref) async =>
-          billing ?? const MeBillingAccess(accessBlocked: false, pendingAmount: 0),
+          billing ??
+          const MeBillingAccess(accessBlocked: false, pendingAmount: 0),
     ),
     onlinePaymentSummaryProvider.overrideWith(
       (ref) async => payment ?? _paySummary(),
     ),
-    syncStatusProvider.overrideWith((ref) => Stream.value(_sync(offline: offline))),
+    syncStatusProvider
+        .overrideWith((ref) => Stream.value(_sync(offline: offline))),
   ];
 }
 
@@ -206,7 +210,8 @@ void main() {
     test('outstanding uses Pay outstanding, not renew', () {
       final actions = resolveHomePrimaryActions(
         membership: _membership(),
-        payment: _paySummary(need: MemberPaymentNeed.settleOutstanding, amount: 1200),
+        payment: _paySummary(
+            need: MemberPaymentNeed.settleOutstanding, amount: 1200),
         plans: const [],
       );
       expect(actions.membership.kind, HomeMembershipKind.outstanding);
@@ -217,7 +222,8 @@ void main() {
     test('frozen does not offer pay to unfreeze', () {
       final actions = resolveHomePrimaryActions(
         membership: _membership(status: 'Frozen'),
-        payment: _paySummary(need: MemberPaymentNeed.settleOutstanding, amount: 500),
+        payment:
+            _paySummary(need: MemberPaymentNeed.settleOutstanding, amount: 500),
         plans: const [],
       );
       expect(actions.membership.kind, HomeMembershipKind.frozen);
@@ -288,8 +294,8 @@ void main() {
         overrides: _overrides(template: _template(rest: true)),
       );
       expect(find.text('Rest day'), findsOneWidget);
-      expect(find.text('Start'), findsNothing);
-      expect(find.text('Resume'), findsNothing);
+      expect(find.text('Start workout'), findsNothing);
+      expect(find.text('Resume workout'), findsNothing);
     });
 
     testWidgets('no plan shows empty copy without Start', (tester) async {
@@ -298,14 +304,15 @@ void main() {
         overrides: _overrides(plans: const [], template: null),
       );
       expect(find.text('No workout assigned'), findsOneWidget);
-      expect(find.text('Start'), findsNothing);
+      expect(find.text('Start workout'), findsNothing);
     });
 
     testWidgets('outstanding shows Pay outstanding CTA', (tester) async {
       await _pumpActions(
         tester,
         overrides: _overrides(
-          payment: _paySummary(need: MemberPaymentNeed.settleOutstanding, amount: 1500),
+          payment: _paySummary(
+              need: MemberPaymentNeed.settleOutstanding, amount: 1500),
         ),
       );
       expect(find.text('Pay outstanding balance'), findsOneWidget);
@@ -317,8 +324,8 @@ void main() {
         tester,
         overrides: _overrides(template: _template(), active: _active()),
       );
-      expect(find.text('Resume'), findsOneWidget);
-      expect(find.text('Start'), findsNothing);
+      expect(find.text('Resume workout'), findsOneWidget);
+      expect(find.text('Start workout'), findsNothing);
     });
 
     testWidgets('assigned plan without session shows Start', (tester) async {
@@ -326,8 +333,8 @@ void main() {
         tester,
         overrides: _overrides(template: _template()),
       );
-      expect(find.text('Start'), findsOneWidget);
-      expect(find.text('Resume'), findsNothing);
+      expect(find.text('Start workout'), findsOneWidget);
+      expect(find.text('Resume workout'), findsNothing);
     });
 
     testWidgets('offline hint and disabled scan', (tester) async {

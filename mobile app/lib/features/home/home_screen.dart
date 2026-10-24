@@ -17,10 +17,8 @@ import '../../widgets/glass_card.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/skeleton_shimmer.dart';
-import '../../widgets/stat_tile.dart';
 import '../../widgets/premium_background.dart';
 import '../shell/shell_layout_metrics.dart';
-import '../workouts/widgets/workout_dashboard_card.dart';
 import '../../providers/sync_status_provider.dart';
 import '../../providers/workout_tracking_providers.dart';
 import '../../widgets/sync_status_chip.dart';
@@ -43,7 +41,8 @@ class HomeScreen extends ConsumerWidget {
           SafeArea(
             bottom: false,
             child: CustomScrollView(
-              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics()),
               slivers: [
                 const CupertinoSliverNavigationBar(
                   largeTitle: Text('Today'),
@@ -56,6 +55,8 @@ class HomeScreen extends ConsumerWidget {
                     ref.invalidate(dashboardProvider);
                     ref.invalidate(workoutTrackingDashboardProvider);
                     ref.invalidate(activeWorkoutProvider);
+                    ref.invalidate(todayWorkoutProvider);
+                    ref.invalidate(workoutSessionTemplateProvider);
                     ref.invalidate(billingAccessProvider);
                     ref.invalidate(onlinePaymentSummaryProvider);
                     ref.invalidate(workoutPlansProvider);
@@ -64,7 +65,8 @@ class HomeScreen extends ConsumerWidget {
                   },
                 ),
                 dashboard.when(
-                  loading: () => const SliverToBoxAdapter(child: _HomeSkeleton()),
+                  loading: () =>
+                      const SliverToBoxAdapter(child: _HomeSkeleton()),
                   error: (e, _) => SliverFillRemaining(
                     hasScrollBody: false,
                     child: ErrorStateView(
@@ -85,10 +87,6 @@ class HomeScreen extends ConsumerWidget {
                         const SizedBox(height: AppSpacing.lg),
                         HomeTodayActions(dashboard: data),
                         const SizedBox(height: AppSpacing.lg),
-                        _StatsRow(attendance: data.attendance, metric: data.latestBodyMetric),
-                        const SizedBox(height: AppSpacing.lg),
-                        const WorkoutDashboardCard(showSessionCta: false),
-                        const SizedBox(height: AppSpacing.xl),
                         SectionHeader(
                           title: 'This week',
                           action: 'Progress',
@@ -110,7 +108,8 @@ class HomeScreen extends ConsumerWidget {
                             children: [
                               for (final s in data.upcomingSchedule.take(2))
                                 Padding(
-                                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                                  padding: const EdgeInsets.only(
+                                      bottom: AppSpacing.md),
                                   child: _ScheduleTile(schedule: s),
                                 ),
                             ],
@@ -134,7 +133,8 @@ class HomeScreen extends ConsumerWidget {
               top: topPad + 6,
               child: _CheckInSuccessBanner(
                 state: checkIn,
-                onDismiss: () => ref.read(checkInBannerProvider.notifier).state = null,
+                onDismiss: () =>
+                    ref.read(checkInBannerProvider.notifier).state = null,
               ),
             ),
         ],
@@ -153,11 +153,13 @@ class _CheckInSuccessBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassCard(
       radius: AppRadius.lg,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
       tint: AppColors.success.withValues(alpha: 0.12),
       child: Row(
         children: [
-          const Icon(CupertinoIcons.checkmark_seal_fill, color: AppColors.success, size: 26),
+          const Icon(CupertinoIcons.checkmark_seal_fill,
+              color: AppColors.success, size: 26),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -165,11 +167,13 @@ class _CheckInSuccessBanner extends StatelessWidget {
               children: [
                 Text(
                   state.title,
-                  style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
+                  style: AppType.headline
+                      .copyWith(color: AppColors.resolveText(context)),
                 ),
                 Text(
                   state.subtitle,
-                  style: AppType.footnote.copyWith(color: AppColors.resolveTextSecondary(context)),
+                  style: AppType.footnote
+                      .copyWith(color: AppColors.resolveTextSecondary(context)),
                 ),
               ],
             ),
@@ -207,7 +211,8 @@ class _NotificationsLink extends StatelessWidget {
     return PressScale(
       onTap: onTap,
       child: GlassCard(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         child: Row(
           children: [
             const Icon(CupertinoIcons.bell, color: AppColors.accent, size: 20),
@@ -218,7 +223,8 @@ class _NotificationsLink extends StatelessWidget {
                 children: [
                   Text(
                     'Notifications',
-                    style: AppType.headline.copyWith(color: AppColors.resolveText(context)),
+                    style: AppType.headline
+                        .copyWith(color: AppColors.resolveText(context)),
                   ),
                   Text(
                     subtitle,
@@ -229,7 +235,8 @@ class _NotificationsLink extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(CupertinoIcons.chevron_right, size: 16, color: AppColors.resolveTextSecondary(context)),
+            Icon(CupertinoIcons.chevron_right,
+                size: 16, color: AppColors.resolveTextSecondary(context)),
           ],
         ),
       ),
@@ -253,8 +260,9 @@ class _Greeting extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$greeting, $firstName 👋',
-                style: AppType.title2.copyWith(color: AppColors.resolveText(context)),
+                '$greeting, $firstName',
+                style: AppType.title2
+                    .copyWith(color: AppColors.resolveText(context)),
               ),
               const SizedBox(height: 4),
               Text(
@@ -266,73 +274,22 @@ class _Greeting extends StatelessWidget {
             ],
           ),
         ),
-        // Avatar badge with gradient border
+        // Member initials
         Container(
           width: 46,
           height: 46,
           decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
+            color: AppColors.accent.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.accent.withValues(alpha: 0.35),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
           ),
           child: Center(
             child: Text(
               profile.initials,
               style: AppType.headline.copyWith(
-                color: CupertinoColors.white,
-                fontWeight: FontWeight.w800,
+                color: AppColors.accent,
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-        ),
-      ],
-    ).animate().fadeIn(duration: 320.ms).slideY(begin: 0.05, end: 0, curve: Curves.easeOutCubic);
-  }
-}
-
-
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.attendance, required this.metric});
-  final MeAttendanceSummary attendance;
-  final MeBodyMetricSummary? metric;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: StatTile(
-            label: 'This month',
-            value: attendance.totalThisMonth.toString(),
-            suffix: 'visits',
-            icon: CupertinoIcons.calendar,
-            color: AppColors.accent,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: StatTile(
-            label: 'Streak',
-            value: attendance.currentStreakDays.toString(),
-            suffix: attendance.currentStreakDays == 1 ? 'day' : 'days',
-            icon: CupertinoIcons.flame_fill,
-            color: AppColors.gold,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: StatTile(
-            label: 'Weight',
-            value: metric?.weight == null ? '-' : metric!.weight!.toStringAsFixed(1),
-            suffix: metric?.weight == null ? '' : 'kg',
-            icon: CupertinoIcons.gauge,
-            color: AppColors.success,
           ),
         ),
       ],
@@ -392,9 +349,8 @@ class _DayDot extends StatelessWidget {
             gradient: day.visited ? AppColors.primaryGradient : null,
             color: day.visited ? null : baseColor.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(10),
-            border: isToday
-                ? Border.all(color: AppColors.accent, width: 2)
-                : null,
+            border:
+                isToday ? Border.all(color: AppColors.accent, width: 2) : null,
             boxShadow: day.visited
                 ? [
                     BoxShadow(
@@ -406,8 +362,8 @@ class _DayDot extends StatelessWidget {
                 : null,
           ),
           child: day.visited
-              ? const Icon(CupertinoIcons.check_mark, size: 14,
-                  color: CupertinoColors.white)
+              ? const Icon(CupertinoIcons.check_mark,
+                  size: 14, color: CupertinoColors.white)
               : null,
         ),
       ],
@@ -459,15 +415,16 @@ class _ScheduleTile extends StatelessWidget {
                 children: [
                   Text(
                     schedule.title,
-                    style: AppType.headline.copyWith(
-                        color: AppColors.resolveText(context)),
+                    style: AppType.headline
+                        .copyWith(color: AppColors.resolveText(context)),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     [
                       if (schedule.dayOfWeek != null) schedule.dayOfWeek,
                       if (schedule.startTime != null) schedule.startTime,
-                      if (schedule.trainerName != null) 'with ${schedule.trainerName}',
+                      if (schedule.trainerName != null)
+                        'with ${schedule.trainerName}',
                     ].whereType<String>().join(' · '),
                     style: AppType.footnote.copyWith(
                       color: AppColors.resolveTextSecondary(context),

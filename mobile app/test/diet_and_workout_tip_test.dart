@@ -95,7 +95,8 @@ void main() {
 
     test('empty-state copy distinguishes no plan vs no logs', () {
       expect(DietCopy.noDietPlanTitle, isNot(DietCopy.noMealsLoggedToday));
-      expect(DietCopy.noDietPlanMessage.toLowerCase(), contains('not assigned'));
+      expect(
+          DietCopy.noDietPlanMessage.toLowerCase(), contains('not assigned'));
       expect(DietCopy.noMealsLoggedToday.toLowerCase(), contains('logged'));
       expect(DietCopy.assignedDiet.toLowerCase(), contains('assigned'));
       expect(DietCopy.plannedDailyTarget.toLowerCase(), contains('planned'));
@@ -125,7 +126,8 @@ void main() {
     });
   });
 
-  testWidgets('preview-unavailable is visible; food search uses assigned plan', (tester) async {
+  testWidgets('food search only exposes available assigned-plan actions',
+      (tester) async {
     await tester.pumpWidget(
       CupertinoApp(
         home: CupertinoPageScaffold(
@@ -135,9 +137,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(DietCopy.previewUnavailable), findsWidgets);
-    expect(find.text('Scan barcode'), findsOneWidget);
-    expect(find.text('AI suggest'), findsOneWidget);
+    expect(find.text(DietCopy.previewUnavailable), findsNothing);
+    expect(find.text('Scan barcode'), findsNothing);
+    expect(find.text('AI suggest'), findsNothing);
     expect(find.text('Analyze macros (preview)'), findsNothing);
     expect(find.textContaining('NEURAL'), findsNothing);
 
@@ -151,7 +153,8 @@ void main() {
     expect(find.textContaining('meal module'), findsNothing);
   });
 
-  testWidgets('planned-only hero does not show consumed totals', (tester) async {
+  testWidgets('planned-only hero does not show consumed totals',
+      (tester) async {
     await tester.pumpWidget(
       CupertinoApp(
         home: CupertinoPageScaffold(
@@ -162,13 +165,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(DietCopy.assignedDiet.toUpperCase()), findsOneWidget);
-    expect(find.text(DietCopy.plannedDailyTarget.toUpperCase()), findsOneWidget);
+    expect(
+        find.text(DietCopy.plannedDailyTarget.toUpperCase()), findsOneWidget);
     expect(find.text('kcal assigned'), findsOneWidget);
     expect(find.textContaining('consumed'), findsNothing);
     expect(find.textContaining('Consumed'), findsNothing);
   });
 
-  testWidgets('workout tip card does not claim Neural Coach AI', (tester) async {
+  testWidgets('workout tip card does not claim Neural Coach AI',
+      (tester) async {
     await tester.pumpWidget(
       const CupertinoApp(
         home: CupertinoPageScaffold(

@@ -60,7 +60,7 @@ export function HelpTooltip({ helpKey, label = 'More info', className = '' }: He
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.15 }}
-                className="pointer-events-none fixed z-[220] max-w-[min(18rem,calc(100vw-1.5rem))] rounded-xl border border-white/10 bg-[rgba(15,23,42,0.96)] px-3 py-2 text-xs leading-snug text-slate-100 shadow-xl shadow-black/40 backdrop-blur-md dark:border-white/10"
+                className="help-ui help-tooltip pointer-events-none fixed z-[220] max-w-[min(18rem,calc(100vw-1.5rem))] rounded-xl px-4 py-3 text-xs leading-relaxed shadow-xl"
                 style={{ top: coords.top, left: coords.left }}
               >
                 {isFetching ? (

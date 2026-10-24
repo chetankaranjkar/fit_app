@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import '../../../theme/app_a11y.dart';
 
 import '../../../models/me_models.dart';
 import '../../../theme/app_colors.dart';
@@ -9,7 +9,8 @@ import '../../../widgets/fitness_text.dart';
 import '../../../widgets/glass_card.dart';
 
 class DietMealTimelineCard extends StatefulWidget {
-  const DietMealTimelineCard({super.key, required this.meal, required this.index});
+  const DietMealTimelineCard(
+      {super.key, required this.meal, required this.index});
 
   final MeDietMeal meal;
   final int index;
@@ -28,9 +29,8 @@ class _DietMealTimelineCardState extends State<DietMealTimelineCard> {
     final plannedLine = kcal > 0 ? 'Planned $kcal kcal' : 'Assigned meal';
 
     return GlassCard(
-      radius: 26,
+      radius: AppRadius.lg,
       padding: const EdgeInsets.all(AppSpacing.md),
-      tint: AppColors.neonPurple.withValues(alpha: 0.05),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -42,11 +42,12 @@ class _DietMealTimelineCardState extends State<DietMealTimelineCard> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  gradient: AppColors.neonGradient,
+                  color: AppColors.accent.withValues(alpha: 0.12),
                 ),
                 child: Text(
                   '${widget.index + 1}',
-                  style: FitnessText.metric(context, size: 16).copyWith(color: CupertinoColors.white),
+                  style: FitnessText.metric(context, size: 16)
+                      .copyWith(color: AppColors.accent),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -56,11 +57,16 @@ class _DietMealTimelineCardState extends State<DietMealTimelineCard> {
                   children: [
                     Text(meal.mealName, style: FitnessText.title(context)),
                     Text(plannedLine, style: FitnessText.body(context)),
+                    if (meal.items.isNotEmpty)
+                      Text(meal.items.map((item) => item.foodName).join(', '),
+                          style: FitnessText.body(context)),
                   ],
                 ),
               ),
               AppIconButton(
-                icon: _open ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
+                icon: _open
+                    ? CupertinoIcons.chevron_up
+                    : CupertinoIcons.chevron_down,
                 semanticLabel: _open ? 'Hide meal foods' : 'Show meal foods',
                 onPressed: () => setState(() => _open = !_open),
                 color: AppColors.resolveTextSecondary(context),
@@ -74,7 +80,8 @@ class _DietMealTimelineCardState extends State<DietMealTimelineCard> {
               child: Column(
                 children: [
                   if (meal.items.isEmpty)
-                    Text('No foods listed on this assigned meal.', style: FitnessText.body(context))
+                    Text('No foods listed on this assigned meal.',
+                        style: FitnessText.body(context))
                   else
                     ...meal.items.map(
                       (it) => Padding(
@@ -86,40 +93,46 @@ class _DietMealTimelineCardState extends State<DietMealTimelineCard> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(it.foodName, style: FitnessText.title(context).copyWith(fontSize: 15)),
+                                  Text(it.foodName,
+                                      style: FitnessText.title(context)
+                                          .copyWith(fontSize: 15)),
                                   if (it.quantity.isNotEmpty)
-                                    Text(it.quantity, style: FitnessText.body(context)),
+                                    Text(it.quantity,
+                                        style: FitnessText.body(context)),
                                 ],
                               ),
                             ),
                             if (it.calories != null)
                               Text(
                                 '${it.calories} planned',
-                                style: FitnessText.chip(context, color: AppColors.accent),
+                                style: FitnessText.chip(context,
+                                    color: AppColors.accent),
                               ),
                           ],
                         ),
                       ),
                     ),
                   const SizedBox(height: AppSpacing.sm),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
                       _MiniMacro('P', itProtein(meal), AppColors.neonCyan),
-                      const SizedBox(width: 6),
                       _MiniMacro('C', itCarbs(meal), AppColors.neonBlueLite),
-                      const SizedBox(width: 6),
                       _MiniMacro('F', itFats(meal), AppColors.neonPurpleLite),
                     ],
                   ),
                 ],
               ),
             ),
-            crossFadeState: _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 260),
+            crossFadeState:
+                _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration:
+                AppA11y.motion(context, const Duration(milliseconds: 260)),
           ),
         ],
       ),
-    ).animate(delay: (widget.index * 40).ms).fadeIn(duration: 320.ms).slideX(begin: 0.03, end: 0);
+    );
   }
 
   static int itProtein(MeDietMeal m) =>

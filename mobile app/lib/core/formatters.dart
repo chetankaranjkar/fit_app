@@ -47,5 +47,5 @@ class Fmt {
   }
 
   static String weekdayWithDate(DateTime d) =>
-      '${weekday(d)} � ${dateShort(d)} � ${DateFormat.y().format(d.toLocal())}';
+      '${weekday(d)} · ${dateShort(d)} · ${DateFormat.y().format(d.toLocal())}';
 }

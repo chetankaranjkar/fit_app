@@ -132,7 +132,8 @@ HomeMembershipAction resolveHomeMembershipAction({
     return const HomeMembershipAction(
       kind: HomeMembershipKind.missing,
       title: 'No membership on file',
-      detail: 'Ask the front desk to add a plan. Paying a bill does not start a membership.',
+      detail:
+          'Ask the front desk to add a plan. Paying a bill does not start a membership.',
       cta: 'View membership',
       emphasize: true,
     );
@@ -153,7 +154,8 @@ HomeMembershipAction resolveHomeMembershipAction({
     return const HomeMembershipAction(
       kind: HomeMembershipKind.pending,
       title: 'Awaiting gym review',
-      detail: 'Your membership is waiting on gym approval. Access stays closed until they finish.',
+      detail:
+          'Your membership is waiting on gym approval. Access stays closed until they finish.',
       cta: 'View membership',
       emphasize: true,
     );
@@ -238,16 +240,19 @@ HomeWorkoutAction resolveHomeWorkoutAction({
   }
 
   final saved = completedToday != null &&
-      (completedToday.pendingCompleteSync || completedToday.status.toLowerCase() == 'completed');
+      (completedToday.pendingCompleteSync ||
+          completedToday.status.toLowerCase() == 'completed');
   if (saved) {
     return HomeWorkoutAction(
       kind: HomeWorkoutKind.completed,
       title: 'Completed today',
       detail: [
-        if (completedToday.planName != null && completedToday.planName!.trim().isNotEmpty)
+        if (completedToday.planName != null &&
+            completedToday.planName!.trim().isNotEmpty)
           completedToday.planName!.trim(),
         '${completedToday.completedSets}/${completedToday.totalSets} sets',
-        if (completedToday.pendingCompleteSync) 'Saved on device — waiting to sync',
+        if (completedToday.pendingCompleteSync)
+          'Saved on device — waiting to sync',
       ].join(' · '),
       cta: 'View workout',
       plan: _planFor(plans, completedToday.workoutPlanId),
@@ -259,7 +264,8 @@ HomeWorkoutAction resolveHomeWorkoutAction({
     return const HomeWorkoutAction(
       kind: HomeWorkoutKind.noPlan,
       title: 'No workout assigned',
-      detail: 'Ask your coach or the front desk to assign a plan. There is nothing to start today.',
+      detail:
+          'Ask your coach or the front desk to assign a plan. There is nothing to start today.',
     );
   }
 
@@ -281,7 +287,8 @@ HomeWorkoutAction resolveHomeWorkoutAction({
     return HomeWorkoutAction(
       kind: HomeWorkoutKind.noPlan,
       title: 'No workout scheduled today',
-      detail: 'Your assigned plan has no session for today. Open Workouts to review the full plan.',
+      detail:
+          'Your assigned plan has no session for today. Open Workouts to review the full plan.',
       plan: plan,
     );
   }
@@ -290,7 +297,8 @@ HomeWorkoutAction resolveHomeWorkoutAction({
     return HomeWorkoutAction(
       kind: HomeWorkoutKind.noPlan,
       title: 'No workout assigned today',
-      detail: 'This plan has no exercises for today. Ask your coach if you expected a session.',
+      detail:
+          'This plan has no exercises for today. Ask your coach if you expected a session.',
       plan: plan,
     );
   }
@@ -310,8 +318,9 @@ HomeWorkoutAction resolveHomeWorkoutAction({
     kind: HomeWorkoutKind.start,
     title: 'Start today’s workout',
     detail: [
-      plan.planName,
-      if (template?.todayDayName != null && template!.todayDayName!.trim().isNotEmpty)
+      '${template?.exercises.length ?? plan.exerciseCount} exercises',
+      if (template?.todayDayName != null &&
+          template!.todayDayName!.trim().isNotEmpty)
         template.todayDayName!.trim(),
       if (plan.durationMinutes != null) '${plan.durationMinutes} min',
     ].join(' · '),

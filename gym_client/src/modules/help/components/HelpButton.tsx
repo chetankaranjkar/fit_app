@@ -24,7 +24,7 @@ export function HelpButton({ moduleKey, className = '', size = 'default' }: Help
     <button
       type="button"
       onClick={() => openDrawer(moduleKey)}
-      className={`inline-flex ${box} items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white ${className}`}
+      className={`help-inline inline-flex ${box} items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white ${className}`}
       aria-label="Explain this page"
       title="Explain this page (?)"
     >

@@ -1,4 +1,5 @@
 import { api } from '../../lib/api'
+import { guideForModule, helpCategories, helpGuides, legacyGuideModules } from './data/helpGuides'
 import type {
   HelpArticleDetail,
   HelpArticleListItem,
@@ -105,6 +106,8 @@ export async function fetchTooltip(helpKey: string): Promise<HelpTooltipResponse
 }
 
 export async function fetchModuleArticle(moduleKey: string): Promise<HelpModuleArticleResponse> {
+  const guide = guideForModule(moduleKey)
+  if (guide) return { moduleKey, title: guide.title, description: guide.summary ?? '', bullets: guide.steps }
   const key = encodeURIComponent(moduleKey)
   try {
     const { data } = await api.get<Record<string, unknown>>(`help/articles/module/${key}`)
@@ -139,13 +142,17 @@ export async function fetchCategories(): Promise<HelpCategory[]> {
   try {
     const { data } = await api.get<unknown>('help/categories')
     const arr = Array.isArray(data) ? data : []
-    return arr.map((x) => mapCategory(x as Record<string, unknown>)).sort((a, b) => a.sortOrder - b.sortOrder)
+    const merged = new Map(arr.map((x) => { const c = mapCategory(x as Record<string, unknown>); return [c.id, c] }))
+    helpCategories.forEach((c) => merged.set(c.id, c))
+    return [...merged.values()].sort((a, b) => a.sortOrder - b.sortOrder)
   } catch {
-    return [...dummyCategories].sort((a, b) => a.sortOrder - b.sortOrder)
+    return [...helpCategories, ...dummyCategories.filter((c) => !helpCategories.some((h) => h.id === c.id))]
   }
 }
 
 export async function fetchArticles(categoryId?: string, search?: string): Promise<HelpArticleListItem[]> {
+  const local = helpGuides.filter((g) => (!categoryId || g.categoryId === categoryId) &&
+    (!search?.trim() || `${g.title} ${g.summary} ${g.bodyMarkdown}`.toLowerCase().includes(search.trim().toLowerCase())))
   try {
     const { data } = await api.get<unknown>('help/articles', {
       params: {
@@ -154,7 +161,8 @@ export async function fetchArticles(categoryId?: string, search?: string): Promi
       },
     })
     const arr = Array.isArray(data) ? data : []
-    return arr.map((x) => mapArticleListItem(x as Record<string, unknown>))
+    return [...local, ...arr.map((x) => mapArticleListItem(x as Record<string, unknown>))
+      .filter((a) => !legacyGuideModules[a.id] && !helpGuides.some((g) => g.id === a.id))]
   } catch {
     let list = [...dummyArticleList]
     if (categoryId) list = list.filter((a) => a.categoryId === categoryId)
@@ -164,11 +172,13 @@ export async function fetchArticles(categoryId?: string, search?: string): Promi
         (a) => a.title.toLowerCase().includes(s) || (a.summary?.toLowerCase().includes(s) ?? false),
       )
     }
-    return list
+    return [...local, ...list.filter((a) => !legacyGuideModules[a.id])]
   }
 }
 
 export async function fetchArticleById(id: string): Promise<HelpArticleDetail | null> {
+  const guide = helpGuides.find((g) => g.id === id) ?? guideForModule(legacyGuideModules[id.toLowerCase()])
+  if (guide) return guide
   const key = encodeURIComponent(id)
   try {
     const { data } = await api.get<Record<string, unknown>>(`help/articles/${key}`)

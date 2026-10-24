@@ -33,11 +33,9 @@ class AppButton extends StatelessWidget {
 
     Color? solidBg;
     Color foreground;
-    bool useGradient = false;
 
     switch (style) {
       case AppButtonStyle.primary:
-        useGradient = true;
         foreground = CupertinoColors.white;
         solidBg = AppColors.accent;
         break;
@@ -56,7 +54,8 @@ class AppButton extends StatelessWidget {
     }
 
     final content = isLoading
-        ? const CupertinoActivityIndicator(color: CupertinoColors.white, radius: 11)
+        ? const CupertinoActivityIndicator(
+            color: CupertinoColors.white, radius: 11)
         : Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -80,38 +79,26 @@ class AppButton extends StatelessWidget {
           );
 
     final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
-    final minH = math.max(AppA11y.minTouchTarget, 54.0 * (scale > 1.2 ? 1.1 : 1.0));
+    final minH =
+        math.max(AppA11y.minTouchTarget, 54.0 * (scale > 1.2 ? 1.1 : 1.0));
 
     return Semantics(
       button: true,
       enabled: !disabled,
       label: label,
       child: PressScale(
-      onTap: disabled ? null : onTap,
-      child: AnimatedContainer(
-        duration: AppA11y.motion(context, AppMotion.fast),
-        constraints: BoxConstraints(minHeight: minH),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          gradient: (useGradient && !disabled) ? AppColors.primaryGradient : null,
-          color: useGradient
-              ? (disabled ? AppColors.accent.withValues(alpha: 0.45) : null)
-              : (disabled
-                  ? solidBg.withValues(alpha: 0.55)
-                  : solidBg),
-          boxShadow: (useGradient && !disabled)
-              ? [
-                  BoxShadow(
-                    color: AppColors.accent.withValues(alpha: 0.45),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
+        onTap: disabled ? null : onTap,
+        child: AnimatedContainer(
+          duration: AppA11y.motion(context, AppMotion.fast),
+          constraints: BoxConstraints(minHeight: minH),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            color: disabled ? solidBg.withValues(alpha: 0.45) : solidBg,
+          ),
+          child: Center(child: content),
         ),
-        child: Center(child: content),
-      ),
       ),
     );
   }

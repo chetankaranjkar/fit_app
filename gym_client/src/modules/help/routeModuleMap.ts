@@ -1,3 +1,5 @@
+import { helpGuides } from './data/helpGuides'
+
 /**
  * Maps URL paths to backend `module_key` for help articles & walkthroughs.
  * Longest prefix wins (e.g. `/dashboard/users/12` → members, not dashboard).
@@ -35,16 +37,24 @@ const PREFIX_TO_MODULE: [string, string][] = [
   ['/dashboard/trainers', 'trainers'],
   ['/dashboard/roles', 'roles'],
   ['/dashboard/security', 'security'],
-  ['/dashboard/profile', 'dashboard'],
+  ['/dashboard/profile', 'profile'],
   ['/dashboard/member/portal', 'member_portal'],
   ['/dashboard', 'dashboard'],
   ['/help', 'help_center'],
 ]
 
-const SORTED = [...PREFIX_TO_MODULE].sort((a, b) => b[0].length - a[0].length)
+const SORTED = [...helpGuides.map((g): [string, string] => [g.path, g.moduleKey]), ...PREFIX_TO_MODULE,
+['/dashboard/training/workout-categories', 'workout_plans'],
+['/dashboard/training/exercises-premium', 'exercises'],
+['/dashboard/training/workout-studio', 'workout_plans'],
+['/dashboard/training/workout-plan-builder', 'workout_plans'],
+['/dashboard/training/member-workouts', 'workout_assignments'],
+].sort((a, b) => b[0].length - a[0].length)
 
 export function pathnameToModuleKey(pathname: string): string {
   const p = (pathname.replace(/\/+$/, '') || '/').split('?')[0] ?? '/'
+  if (/^\/dashboard\/users\/[^/]+\/health-profile(?:\/|$)/.test(p)) return 'health_profile'
+  if (/^\/dashboard\/users\/[^/]+\/supplements(?:\/|$)/.test(p)) return 'member_supplements'
   for (const [prefix, key] of SORTED) {
     if (p === prefix || p.startsWith(prefix + '/')) return key
   }

@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../models/me_models.dart';
 import '../../../theme/app_colors.dart';
@@ -36,13 +35,13 @@ class _DietIntelPanelCompactState extends State<DietIntelPanelCompact> {
     final query = _controller.text.trim();
 
     return GlassCard(
-      radius: 26,
+      radius: AppRadius.lg,
       padding: const EdgeInsets.all(AppSpacing.md),
-      tint: AppColors.neonPurple.withValues(alpha: 0.06),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(DietCopy.searchAssignedFoods.toUpperCase(), style: FitnessText.label(context)),
+          Text(DietCopy.searchAssignedFoods.toUpperCase(),
+              style: FitnessText.label(context)),
           const SizedBox(height: 4),
           Text(DietCopy.notLoggedIntake, style: FitnessText.body(context)),
           const SizedBox(height: AppSpacing.sm),
@@ -52,21 +51,6 @@ class _DietIntelPanelCompactState extends State<DietIntelPanelCompact> {
             style: FitnessText.body(context),
             onChanged: _onQuery,
             onSubmitted: _onQuery,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _UnavailableChip(
-                label: 'Scan barcode',
-                detail: DietCopy.previewUnavailable,
-              ),
-              _UnavailableChip(
-                label: 'AI suggest',
-                detail: DietCopy.previewUnavailable,
-              ),
-            ],
           ),
           if (query.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
@@ -82,7 +66,7 @@ class _DietIntelPanelCompactState extends State<DietIntelPanelCompact> {
           ],
         ],
       ),
-    ).animate().fadeIn(duration: 400.ms);
+    );
   }
 }
 
@@ -95,55 +79,25 @@ class _AssignedFoodResult extends StatelessWidget {
   Widget build(BuildContext context) {
     final macros = <String>[];
     if (match.calories != null) macros.add('${match.calories} kcal planned');
-    if (match.proteinGrams != null) macros.add('P ${match.proteinGrams!.round()}g');
+    if (match.proteinGrams != null) {
+      macros.add('P ${match.proteinGrams!.round()}g');
+    }
     if (match.carbsGrams != null) macros.add('C ${match.carbsGrams!.round()}g');
     if (match.fatsGrams != null) macros.add('F ${match.fatsGrams!.round()}g');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(match.foodName, style: FitnessText.title(context).copyWith(fontSize: 15)),
+        Text(match.foodName,
+            style: FitnessText.title(context).copyWith(fontSize: 15)),
         Text(
           '${match.mealName}${match.quantity.isNotEmpty ? ' · ${match.quantity}' : ''}',
           style: FitnessText.body(context),
         ),
         if (macros.isNotEmpty)
-          Text(macros.join(' · '), style: FitnessText.chip(context, color: AppColors.neonCyan)),
+          Text(macros.join(' · '),
+              style: FitnessText.chip(context, color: AppColors.accent)),
       ],
-    );
-  }
-}
-
-class _UnavailableChip extends StatelessWidget {
-  const _UnavailableChip({required this.label, required this.detail});
-
-  final String label;
-  final String detail;
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: 0.55,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceDarkAlt.withValues(alpha: 0.75),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: FitnessText.body(context).copyWith(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-            Text(
-              detail,
-              style: FitnessText.label(context),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

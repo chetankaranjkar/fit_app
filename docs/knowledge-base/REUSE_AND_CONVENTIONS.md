@@ -85,3 +85,9 @@ Companion to [APPLICATION_FLOWS.md](./APPLICATION_FLOWS.md). Check this **before
 - [ ] Photo upload uses `ProfilePhotoEditor`?
 - [ ] Query invalidation list documented in PR?
 - [ ] Updated [APPLICATION_FLOWS.md](./APPLICATION_FLOWS.md) § if flow is new?
+
+## Mobile member UI
+
+- Home and Workouts share `TodayWorkoutCard` / `todayWorkoutActionProvider` (`mobile app/lib/features/home/home_today_actions.dart`), the Home action resolver, and `TodayWorkoutGate`. Reuse them for Start/Resume/Completed/Rest states rather than deriving new session state in a decorative widget.
+- Use `AppColors`, `AppType` / `FitnessText`, `AppButton` and `GlassCard` for neutral, theme-aware surfaces and primary actions. `GlassCard` now renders a solid surface; do not introduce per-card backdrop blurs.
+- Shell content padding and tab-bar height must use `ShellLayoutMetrics` together so large text and system insets keep the last list item reachable.

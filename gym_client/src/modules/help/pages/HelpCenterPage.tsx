@@ -1,216 +1,105 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Search } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Check, ChevronRight, Clock3, Compass, CreditCard, Dumbbell, LifeBuoy, Search, Settings2, ShieldCheck, Users, Wrench, X } from 'lucide-react'
 import { authService } from '../../../services/auth.service'
+import { useDashboardTheme } from '../../../lib/dashboardTheme'
 import { HelpButton } from '../components/HelpButton'
+import { HelpArticleBody } from '../components/HelpArticleBody'
 import { useHelpArticleDetail, useHelpArticles, useHelpCategories } from '../hooks/useHelp'
+import { helpGuides, readingMinutes } from '../data/helpGuides'
 
-function renderMarkdownLite(md: string) {
-  const lines = md.split('\n')
-  return lines.map((line, i) => {
-    const t = line.trim()
-    if (t.startsWith('## ')) {
-      return (
-        <h3 key={i} className="mt-4 text-base font-semibold text-white first:mt-0">
-          {t.slice(3)}
-        </h3>
-      )
-    }
-    if (!t) return <div key={i} className="h-2" />
-    return (
-      <p key={i} className="text-sm leading-relaxed text-slate-300">
-        {line}
-      </p>
-    )
-  })
-}
+const icons = { 'getting-started': Compass, 'members-access': Users, billing: CreditCard, training: Dumbbell, operations: Wrench, settings: Settings2 }
+const faqs = [
+  ['Why can’t I see a page or action?', 'The screens and actions you see depend on your role and permissions. Ask your gym administrator to check your account access.'],
+  ['Does collecting a payment renew gym access?', 'A payment settles a balance. Membership start and end dates determine access, so use the renewal workflow when access needs extending.'],
+  ['Why is a workout or diet plan missing?', 'A plan in the library must be assigned to a member before it appears as their prescribed plan. Ask the coach to check the member’s assignment.'],
+  ['What should I do if QR check-in fails?', 'Check camera permissions and scan the QR for the correct branch. Read the rejection reason and ask the front desk to review membership dates and payment standing.'],
+]
 
 export function HelpCenterPage() {
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const categoryId = searchParams.get('category') ?? ''
-  const articleParam = searchParams.get('article') ?? ''
-  const qParam = searchParams.get('q') ?? ''
-  const [qInput, setQInput] = useState(qParam)
-
-  const { data: categories = [], isLoading: catLoading } = useHelpCategories()
-  const selectedCategory = useMemo(() => {
-    if (categoryId) return categoryId
-    const first = categories[0]?.id
-    return first ?? ''
-  }, [categoryId, categories])
-
-  const { data: articles = [], isLoading: artLoading } = useHelpArticles(
-    selectedCategory || undefined,
-    qParam || undefined,
-  )
-  const { data: articleDetail, isLoading: detailLoading } = useHelpArticleDetail(
-    articleParam || null,
-  )
+  useDashboardTheme()
+  const [params, setParams] = useSearchParams()
+  const category = params.get('category') ?? ''
+  const articleId = params.get('article') ?? ''
+  const query = params.get('q') ?? ''
+  const [input, setInput] = useState(query)
+  const [showAll, setShowAll] = useState(false)
+  const articleRef = useRef<HTMLElement>(null)
+  const { data: categories = [], isLoading: categoriesLoading } = useHelpCategories()
+  const { data: articles = [], isLoading, isError, refetch } = useHelpArticles(category || undefined, query || undefined)
+  const { data: article, isLoading: articleLoading } = useHelpArticleDetail(articleId || null)
+  const selectedGuide = helpGuides.find((g) => g.id === articleId)
+  const categoryName = categories.find((c) => c.id === category)?.name
 
   useEffect(() => {
-    if (!authService.getAccessToken()) {
-      navigate('/login', { replace: true, state: { from: '/help' } })
-    }
+    if (!authService.getAccessToken()) navigate('/login', { replace: true, state: { from: '/help' } })
   }, [navigate])
+  useEffect(() => { setInput(query) }, [query])
+  useEffect(() => { if (articleId) articleRef.current?.focus() }, [articleId])
 
-  useEffect(() => {
-    if (!categories.length || categoryId) return
-    setSearchParams(new URLSearchParams({ category: categories[0]!.id }), { replace: true })
-  }, [categories, categoryId, setSearchParams])
-
-  const setCategory = (id: string) => {
-    const next = new URLSearchParams(searchParams)
-    next.set('category', id)
-    next.delete('article')
-    setSearchParams(next)
+  function update(values: Record<string, string>) {
+    const next = new URLSearchParams(params)
+    Object.entries(values).forEach(([key, value]) => { if (value) next.set(key, value); else next.delete(key) })
+    setParams(next)
+  }
+  function search(value: string) {
+    // A new search spans the whole library, even after browsing a topic.
+    update({ q: value.trim(), category: '', article: '' })
   }
 
-  const setArticle = (id: string) => {
-    const next = new URLSearchParams(searchParams)
-    next.set('article', id)
-    setSearchParams(next)
-  }
+  return <div className="help-ui help-center">
+    <a className="help-skip" href="#help-main">Skip to help content</a>
+    <header className="help-header"><div className="help-container flex flex-wrap items-center justify-between gap-3">
+      <Link to="/help" className="flex items-center gap-3" aria-label="Help Center home"><span className="help-brand"><LifeBuoy className="size-6" /></span><span className="text-base font-semibold tracking-tight">Tiger Fitness <span className="help-muted mx-2 font-normal">/</span> Help Center</span></Link>
+      <div className="flex items-center gap-3"><Link className="help-back" to="/dashboard"><ArrowLeft className="size-4" /> Back to dashboard</Link><HelpButton moduleKey="help_center" size="sm" /></div>
+    </div></header>
+    <main id="help-main" className="help-container pb-24" tabIndex={-1}>
+      <section className="help-hero">
+        <span className="help-eyebrow"><span className="help-dot" /> YOUR GYM, MADE SIMPLER</span>
+        <h1>How can we help you?</h1>
+        <p>Clear answers. Practical guides. A smoother day at your gym.</p>
+        <form className="help-search" role="search" onSubmit={(e) => { e.preventDefault(); search(input) }}>
+          <Search className="size-5 shrink-0" aria-hidden="true" /><input aria-label="Search all help guides" placeholder="Search memberships, payments, workouts…" value={input} onChange={(e) => setInput(e.target.value)} data-help-ignore-shortcut />
+          {input && <button className="help-clear" type="button" aria-label="Clear search" onClick={() => { setInput(''); search('') }}><X className="size-4" /></button>}
+          <button className="help-primary" type="submit">Search <ArrowRight className="size-4" /></button>
+        </form>
+        <div className="help-popular"><span>Popular searches</span>{['Renewal', 'Receipt', 'QR', 'Workout'].map((term) => <button key={term} onClick={() => search(term)}>{term}<ArrowUpRight className="size-3" /></button>)}</div>
+      </section>
 
-  const submitSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    const next = new URLSearchParams(searchParams)
-    if (qInput.trim()) next.set('q', qInput.trim())
-    else next.delete('q')
-    setSearchParams(next)
-  }
+      {!articleId && !category && !query && <section className="help-start">
+        <span className="help-start-icon"><BookOpen className="size-6" /></span><div className="min-w-0 flex-1"><span className="help-eyebrow">NEW HERE?</span><h2>Start with the essentials</h2><p>Get oriented, add your first member, and understand the daily workflow.</p></div>
+        <button className="help-secondary" onClick={() => update({ article: 'guide-members' })}>Explore the guide <ArrowRight className="size-4" /></button>
+      </section>}
 
-  return (
-    <div className="relative min-h-screen bg-[#070712] text-slate-100">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden opacity-90"
-      >
-        <div className="absolute -top-24 left-0 size-[28rem] rounded-full bg-blue-600/15 blur-3xl" />
-        <div className="absolute bottom-0 right-0 size-[24rem] rounded-full bg-violet-600/12 blur-3xl" />
+      <div className="help-workspace">
+        <aside className="help-sidebar"><p className="help-eyebrow mb-4">BROWSE BY TOPIC</p><nav aria-label="Help topics">
+          <button aria-current={!category ? 'page' : undefined} className={!category ? 'active' : ''} onClick={() => { setShowAll(true); update({ category: '', article: '' }) }}><BookOpen className="size-4" /><span>All guides</span><span className="help-count">{helpGuides.length}</span></button>
+          {categoriesLoading && <p role="status">Loading topics…</p>}
+          {categories.map((c) => { const Icon = icons[c.id as keyof typeof icons] ?? BookOpen; return <button key={c.id} aria-current={category === c.id ? 'page' : undefined} className={category === c.id ? 'active' : ''} onClick={() => update({ category: c.id, article: '' })}><Icon className="size-4 shrink-0" /><span>{c.name}</span><ChevronRight className="ml-auto size-3 shrink-0" /></button> })}
+        </nav><div className="help-sidebar-note"><ShieldCheck className="mb-3 size-5" /><h3>Help on every page</h3><p>Open the Help button or press <kbd>?</kbd> for a guide to the screen you’re using.</p></div></aside>
+
+        <section className="min-w-0" ref={articleRef} tabIndex={-1} aria-label={articleId ? 'Guide reader' : 'Help library'}>
+          {articleId ? <>
+            <button className="help-back mb-5" onClick={() => update({ article: '' })}><ArrowLeft className="size-4" /> Back to guides</button>
+            {articleLoading && <p role="status" className="help-panel p-8">Loading guide…</p>}
+            {!articleLoading && !article && <div className="help-panel p-8"><h2 className="text-xl font-semibold">This guide couldn’t be found</h2><p className="help-muted mt-2">Choose a topic or search the library to find another guide.</p></div>}
+            {article && <article className="help-panel help-reader"><div className="help-eyebrow flex flex-wrap items-center gap-2"><BookOpen className="size-4" />{categories.find((c) => c.id === article.categoryId)?.name ?? 'Guide'}<span>·</span><Clock3 className="size-3" />{readingMinutes(article.bodyMarkdown)} min read</div><h2>{article.title}</h2><p className="help-reader-summary">{article.summary}</p><HelpArticleBody markdown={article.bodyMarkdown} /><div className="help-reader-end"><Check className="size-4" /><span>You’re ready for the next step. Return to your page to continue.</span></div></article>}
+            {selectedGuide && <div className="mt-6"><h3 className="mb-3 text-sm font-semibold">Related guides</h3>{helpGuides.filter((g) => g.categoryId === selectedGuide.categoryId && g.id !== selectedGuide.id).slice(0, 3).map((g) => <button key={g.id} className="help-related w-full" onClick={() => update({ article: g.id })}>{g.title}<ArrowRight className="size-4" /></button>)}</div>}
+          </> : <>
+            <div className="help-section-title"><div><span className="help-eyebrow">THE KNOWLEDGE LIBRARY</span><h2>{query ? `Results for “${query}”` : categoryName ?? 'A guide for every part of your gym'}</h2><p>{query ? 'Search titles, descriptions and step-by-step guidance.' : categories.find((c) => c.id === category)?.description ?? 'Choose a topic, or jump into the task you’re working on.'}</p></div>{(category || query) && <button className="help-back" onClick={() => update({ category: '', q: '', article: '' })}>Reset filters <X className="size-3" /></button>}</div>
+            {!category && !query && <div className="help-topic-grid">{categories.map((c) => { const Icon = icons[c.id as keyof typeof icons] ?? BookOpen; return <button className="help-topic-card" key={c.id} onClick={() => update({ category: c.id, article: '' })}><span className={`help-topic-icon tone-${c.sortOrder % 6}`}><Icon className="size-5" /></span><h3>{c.name}</h3><p>{c.description}</p><span className="help-topic-link">Explore topic <ArrowRight className="size-4" /></span></button> })}</div>}
+            <div className="help-list-heading"><h3>{category || query ? 'Guides' : 'Explore the guides'}</h3><span className="help-muted text-xs" role="status">{isLoading ? 'Loading…' : `${articles.length} guides`}</span></div>
+            {isError && <div role="alert" className="help-panel p-5">Guides couldn’t be loaded. <button className="underline" onClick={() => void refetch()}>Try again</button></div>}
+            {isLoading && <div className="help-panel p-8" role="status">Finding your guides…</div>}
+            {!isLoading && articles.length === 0 && <div className="help-empty help-panel"><Search className="mx-auto mb-4 size-7" /><h3>No guides found</h3><p>Try a shorter phrase such as “payment”, “member” or “plan”.</p><button className="help-secondary mt-5" onClick={() => { setInput(''); update({ q: '', category: '' }) }}>Browse all guides</button></div>}
+            <div className="help-article-list">{(category || query || showAll ? articles : articles.slice(0, 8)).map((a) => <button key={a.id} onClick={() => update({ article: a.id })}><span className="help-list-icon"><BookOpen className="size-4" /></span><span className="min-w-0 flex-1"><span className="help-article-title">{a.title}</span><span className="help-article-summary">{a.summary}</span></span><ArrowUpRight className="size-4 shrink-0" /></button>)}</div>
+            {!category && !query && !showAll && articles.length > 8 && <button className="help-secondary mt-5" onClick={() => setShowAll(true)}>View all {articles.length} guides <ArrowRight className="size-4" /></button>}
+          </>}
+        </section>
       </div>
-
-      <header className="sticky top-0 z-20 border-b border-white/5 bg-[rgba(7,7,18,0.75)] px-4 py-4 backdrop-blur-xl sm:px-8">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link
-              to="/dashboard"
-              className="rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-white/5"
-            >
-              ← Dashboard
-            </Link>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Help Center</p>
-              <h1 className="text-lg font-bold text-white">Guides for gym owners</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <HelpButton moduleKey="help_center" size="sm" />
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 lg:flex-row lg:px-8">
-        <aside className="w-full shrink-0 space-y-3 lg:w-56">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Categories</p>
-          <nav className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-2 shadow-lg shadow-black/20">
-            {catLoading && <p className="px-3 py-2 text-sm text-slate-400">Loading…</p>}
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCategory(c.id)}
-                className={`rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
-                  selectedCategory === c.id
-                    ? 'bg-gradient-to-r from-blue-500/25 to-violet-500/20 text-white shadow-inner shadow-white/5'
-                    : 'text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        <main className="min-w-0 flex-1 space-y-4">
-          <form
-            onSubmit={submitSearch}
-            className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 shadow-md shadow-black/20"
-          >
-            <Search className="size-4 text-slate-500" />
-            <input
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-              placeholder="Search articles…"
-              className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
-              data-help-ignore-shortcut
-            />
-            <button
-              type="submit"
-              className="rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/15"
-            >
-              Search
-            </button>
-          </form>
-
-          <div className="grid min-h-[420px] gap-4 lg:grid-cols-5">
-            <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 shadow-lg shadow-black/25 lg:col-span-2">
-              <h2 className="text-sm font-semibold text-white">Articles</h2>
-              <p className="mt-1 text-xs text-slate-500">In “{categories.find((c) => c.id === selectedCategory)?.name ?? '—'}”</p>
-              <ul className="mt-4 space-y-1">
-                {artLoading && <li className="text-sm text-slate-400">Loading…</li>}
-                {!artLoading &&
-                  articles.map((a) => (
-                    <li key={a.id}>
-                      <button
-                        type="button"
-                        onClick={() => setArticle(a.id)}
-                        className={`w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${
-                          articleParam === a.id
-                            ? 'bg-white/10 text-white'
-                            : 'text-slate-300 hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="font-medium">{a.title}</span>
-                        {a.summary ? (
-                          <span className="mt-0.5 block text-xs text-slate-500">{a.summary}</span>
-                        ) : null}
-                      </button>
-                    </li>
-                  ))}
-                {!artLoading && articles.length === 0 && (
-                  <li className="text-sm text-slate-400">No articles match your filters.</li>
-                )}
-              </ul>
-            </section>
-
-            <motion.section
-              layout
-              className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-xl shadow-black/30 lg:col-span-3"
-            >
-              {!articleParam && (
-                <p className="text-sm text-slate-400">Select an article to read the full guide.</p>
-              )}
-              {articleParam && detailLoading && <p className="text-sm text-slate-400">Loading article…</p>}
-              {articleParam && !detailLoading && !articleDetail && (
-                <p className="text-sm text-amber-200/90">Article not found.</p>
-              )}
-              {articleDetail && (
-                <article>
-                  <h2 className="text-xl font-bold text-white">{articleDetail.title}</h2>
-                  {articleDetail.summary && (
-                    <p className="mt-2 text-sm text-slate-400">{articleDetail.summary}</p>
-                  )}
-                  <div className="mt-6 space-y-2 border-t border-white/5 pt-6">
-                    {renderMarkdownLite(articleDetail.bodyMarkdown)}
-                  </div>
-                </article>
-              )}
-            </motion.section>
-          </div>
-        </main>
-      </div>
-    </div>
-  )
+      {!articleId && <section className="help-faq"><span className="help-eyebrow">QUICK ANSWERS</span><h2>A few things you might be wondering</h2><div className="mt-6">{faqs.map(([question, answer]) => <details key={question}><summary>{question}<ChevronRight className="size-4 shrink-0" /></summary><p>{answer}</p></details>)}</div></section>}
+      <footer className="help-support"><LifeBuoy className="size-6 shrink-0" /><div><h2>Still need a hand?</h2><p>Contact your gym administrator with the page name, what you tried, and the error shown. Keep passwords, OTPs and private member details out of screenshots.</p></div></footer>
+    </main>
+  </div>
 }
